@@ -505,20 +505,85 @@ to operate during pause" semantic.
 
 ## What's NOT done yet
 
-1. **`ITokenFactory.sol`** — singular factory with three create methods
-   (`createDefault`, `createStablecoin`, `createSecurity`). Each takes
-   a struct including `capabilities`, `initialSupply`, `policyId`,
-   name/symbol/decimals, etc. Per-variant address prefixes encoded by
-   the factory at deployment.
-
-2. **Reference Solidity implementations** of all three token variants
+1. **Reference Solidity implementations** of all three token variants
    plus the factory and registry (`DefaultToken.sol`, `Stablecoin.sol`,
    `SecurityToken.sol`, `TokenFactory.sol`, `PolicyRegistry.sol`).
    Will be the biggest files in the repo.
 
-3. **`StdPrecompiles.sol`** equivalent — constants for the policy
+2. **`StdPrecompiles.sol`** equivalent — constants for the policy
    registry, factory, and per-variant token address prefixes (TBD
    addresses).
+
+---
+
+## Notes on ITokenFactory unilateral choices
+
+A few non-obvious things I picked while drafting that you should react
+to:
+
+### Per-variant deterministic address scheme
+
+`(variant, creator, salt) → address`. Variant is encoded in the address
+prefix so `variantOf(token)` is a pure address-shape decode, no SLOAD.
+Implies we reserve three address prefix ranges (one per variant) at
+the chain config level. Specific prefix bytes are TBD; the interface
+just promises determinism + variant-recoverability.
+
+### Initial supply mints bypass policy and capability checks
+
+For Default and Stablecoin, `initialSupply` is minted to
+`initialSupplyRecipient` atomically at creation. This bypasses BOTH
+the policy check (the recipient does not need to satisfy
+`isAuthorizedMintRecipient` on `transferPolicyId`) AND the `MINTABLE`
+capability check (the bootstrap mint works even on a token where
+`MINTABLE = false`).
+
+Rationale: the policy and capability checks govern ongoing operation;
+the initial mint is a one-time bootstrap configured by the creator
+who is taking responsibility for the initial allocation. This makes
+"fixed-supply meme coin" easy to express (set `MINTABLE = false`,
+mint 1B at creation, done) without requiring temporary capability
+gymnastics.
+
+If you'd rather have the initial mint go through the same checks as
+runtime mints, easy to flip. Worth thinking about.
+
+### Security tokens have NO `initialSupply` parameter
+
+Security tokens use `create` (rate-limited) and `adminMint` (cold-path
+batch with announcement coupling) for issuance. Bootstrap flow is:
+
+1. Factory creates the security token with no supply.
+2. Admin configures the create() rate limit for one or more issuers
+   via `configureCreateRateLimit`.
+3. Issuers call `create()` to mint to allocation recipients.
+
+Or the admin can use `adminMint` for a one-shot batch mint with an
+announcement. Either path works; both produce more audit-trail than a
+silent bootstrap mint.
+
+### `defaultAdminDelay` configurable at creation
+
+Each token's two-step admin transfer delay is set per-token at
+creation via `defaultAdminDelay`. Different tokens can have different
+delays based on their security posture (a stablecoin might want hours;
+a memecoin might want zero). Admin can change later via
+`changeDefaultAdminDelay` if the token's `ADMIN_MUTABLE` capability
+is on.
+
+### `predict*Address` does not depend on params other than `(creator, salt)`
+
+The predicted address is stable across changes to name / symbol /
+admin / capabilities / etc. — only `(variant, creator, salt)`
+contributes. This lets callers compute the address before deciding
+all the params, and lets pre-funding flows work without committing
+to params upfront.
+
+### Factory is permissionless
+
+Anyone can call any create method. There is no `DEPLOYER_ROLE` or
+similar; the factory itself has no admin. Each created token has its
+own independent admin and is fully self-governing thereafter.
 
 ---
 
