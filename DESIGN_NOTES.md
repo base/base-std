@@ -1,382 +1,514 @@
 # Design Notes & Open Questions
 
-Decisions, assumptions, and open questions accumulated while drafting the
-v1 interfaces in `src/interfaces/`. Each item here is something to either
-confirm with the team, defer to a follow-up, or change before this branch
-gets pushed.
+Decisions, rationale, and open questions for the v1 interfaces in
+`src/interfaces/`. Two sections:
 
-Organized by file + topic. Items marked **OPEN** need your input. Items
-marked **ASSUMED** are decisions I made unilaterally; flag any you want
-to revisit. Items marked **VERIFY** flag ambiguity in the source docs
-that I want to disambiguate before going further.
+- **[Design Rationale](#design-rationale)**: settled decisions and the
+  reasoning behind them. Read this before reviewing the code if you want
+  the "why" before the "what."
+- **[Open Questions](#open-questions)**: items still requiring input,
+  flagged inline so you can scan and respond.
 
 ---
 
-## IDefaultToken.sol
+## Design Rationale
 
-### ASSUMED: `renounceRole` is exempt from `ADMIN_MUTABLE`
+### Cross-cutting decisions
 
-Even on a token with `ADMIN_MUTABLE` off, role holders can voluntarily
-renounce their own role. Rationale: this is the only way for a freshly
-deployed memecoin (with admin role granted to deployer for setup) to
-truly reach a no-admin state. Renunciation is always defensive (you can
-only revoke yourself), so it's safe to allow.
+#### Capabilities bitfield (immutable feature flags)
 
-If you'd rather make `renounceRole` ALSO gated by `ADMIN_MUTABLE` (so
-that an immutable token with an admin role granted at creation keeps
-that admin forever), trivial change.
+Every B-20 token exposes an immutable `capabilities()` bitfield, set at
+creation by the factory. Each bit corresponds to one optional feature.
+Functions whose bit is unset revert with `FeatureDisabled`, regardless
+of role state.
 
-### ASSUMED: Default `transferPolicyId = 1` (always-allow), not 0 (always-reject)
+**Why this exists.** Role renunciation alone is not strong enough for
+honest signaling. An issuer who claims "this token cannot be paused"
+might have renounced `PAUSE_ROLE` today but kept `DEFAULT_ADMIN_ROLE`,
+allowing them to grant `PAUSE_ROLE` to anyone tomorrow. An integrator
+checking for non-pausability would have to recursively analyze the role
+admin tree and the current admin holder to be sure. Capabilities collapse
+this into one immutable read: if the bit is unset, the function reverts
+forever, no exceptions.
 
-A Default token should "just work" out of the box. Setting policy to
-always-reject by default would break naive integrators.
+The bitfield is immutable per token (set once, never changed). New
+features ship as new bits in higher positions; bits are append-only
+across versions and never repurposed.
 
-The wiki `ISecurityToken` spec defaults to `transferPolicyId = 0`
-(paranoid by default for securities). Matches my intuition: security
-tokens should NOT transfer until the issuer explicitly configures
-compliance.
+**Bit ranges per variant** to avoid collisions across the variant ABIs:
+- Default-token bits: `1 << 0` through `1 << 15`
+- Security-token bits: `1 << 16` through `1 << 23`
+- Stablecoin-token bits: `1 << 24` through `1 << 31`
 
-So **OPEN**: do we default `ISecurityToken` to `transferPolicyId = 0`
-at creation (overriding the IDefaultToken default of 1)? My lean: yes,
-and the security factory's `createSecurity` method should require an
-explicit policy ID at creation rather than letting it default.
+This leaves headroom in each range for v2 / v3 additions.
 
-### ASSUMED: Permit overload with `bytes signature` accepts BOTH EOA and contract owners
+#### Default IS Core (variant inheritance, no separate ICoreToken)
 
-The `(v, r, s)` form is the canonical EIP-2612 path for EOA owners. The
-`bytes signature` form is the new ERC-1271-compat path. I made the
-`bytes` form accept both: if `owner.code.length == 0`, treat the bytes
-as 65-byte packed `(r, s, v)`; otherwise call ERC-1271. Means callers
-don't need to pre-check the owner's code state.
+`IStablecoin` and `ISecurityToken` both extend `IDefaultToken` directly
+as siblings. There is no separate `ICoreToken` interface. The Default
+token IS the canonical "ERC-20 + memos + roles + permits + policy + pause
++ URI + supply cap" surface that every variant inherits.
 
-If you'd prefer strict separation (the bytes form is contract-only,
-EOAs MUST use the `(v, r, s)` form), small change.
+**Why.** Predictable variant ABIs (every B-20 token has at least the
+Default surface), no parallel interface to keep in sync, and the
+practical observation that there is no realistic case where a B-20 token
+would NOT want any of the Default features. Tokens that want to
+permanently disable specific Default features use the capabilities
+bitfield to opt out at creation.
 
-### OPEN: Should there be a `MEMOS_REQUIRED` capability bit?
+#### Single source of truth for compliance: external Policy Registry
 
-You were unsure. Use case: a stablecoin issuer (or institutional
-default-token issuer) wants every transfer / mint / burn to carry a
-non-zero memo for off-chain audit trail. With the bit set, the
-non-memo'd functions revert with `FeatureDisabled`.
+All B-20 tokens delegate transfer authorization to the policy engine
+via `transferPolicyId`. There is no internal blocklist on the token
+itself. Sanctions lists, KYC allowlists, jurisdiction restrictions, and
+similar compliance rules all live in the policy registry as
+whitelist/blacklist/compound policies.
+
+**Why.** Composability across tokens (one Coinbase-managed sanctions
+blacklist policy serves every stablecoin AND every security AND every
+default token that opts in), single auditable source for compliance
+state, and no duplication of mechanism. CCS uses an internal blocklist;
+we deliberately diverge to centralize this.
+
+The token-level `BURN_BLOCKED` capability bit is still per-token. It
+controls whether the issuer can force-burn balance from policy-blocked
+addresses (sanctions seizure flow). See "Freeze vs. seize" below.
+
+#### Memos as sibling functions, not optional parameters
+
+`transfer` / `transferWithMemo`, `mint` / `mintWithMemo`, `burn` /
+`burnWithMemo` are paired. The non-memo variants are byte-for-byte
+ERC-20 compatible. The `WithMemo` variants are B-20 extensions.
+
+**Why not a single function with optional `bytes32 memo`?** ERC-20
+selector compatibility. Existing wallets, indexers, and contracts that
+call `transfer(address, uint256)` need to keep working without
+modification. Adding an unused `bytes32` parameter changes the selector.
+The sibling pair pattern preserves the ERC-20 selector for the
+non-memo'd path and offers the memo'd alternative under a different
+selector.
+
+The non-memo'd Transfer event is ALSO emitted on memo'd transfers (so
+ERC-20 indexers see all token movement) along with the additional
+`TransferWithMemo` event for indexers that want the memo. Same pattern
+for mint/burn.
+
+#### No third-party dependencies
+
+The repo does not import OpenZeppelin, Tempo, Solady, or any other
+third-party library. Reference implementations are written from scratch.
+The reasoning, captured in the README: it's too easy to absorb someone
+else's interface decisions wholesale instead of reaching our own
+opinions. We can read prior art freely; we just don't link it.
+
+This means the reference implementations will reimplement things like
+EIP-712, ECDSA, ERC-1271 dispatch, and OZ-style RBAC by hand. Treat
+those as illustrative, not gas-optimal.
+
+### Roles & Admin model
+
+#### MINT_ROLE and BURN_ROLE are separate
+
+`IDefaultToken` exposes `MINT_ROLE` and `BURN_ROLE` as distinct role
+identifiers. Originally combined as `ISSUER_ROLE` (TIP-20 convention),
+we split them after reading CDP Custom Stablecoin (CCS), which has
+them separate.
+
+**Why.** Operational separation of concerns: a treasury team might be
+authorized to mint (issuance) without being able to burn (redemption is
+a different process), and vice versa. Compromise of one role does not
+compromise the other. The split costs essentially nothing on the
+interface surface and gives genuine ops authority granularity. Tokens
+that want unified mint+burn authority just grant both roles to the
+same address.
+
+`burnBlocked` remains under `BURN_BLOCKED_ROLE` (separate from
+`BURN_ROLE`). The two operations have very different blast radii: `burn`
+destroys the caller's own balance; `burnBlocked` destroys someone else's
+balance.
+
+#### PAUSE_ROLE and UNPAUSE_ROLE are separate
+
+Same pattern as TIP-20. Pause authority can be delegated to a 24/7 ops
+team for emergency response without granting unpause authority. Unpause
+is typically a more deliberate action requiring senior sign-off.
+
+#### Two-step admin transfer with delay
+
+`DEFAULT_ADMIN_ROLE` is the single most powerful role on a token. It
+controls all other role assignments. An accidental transfer to a wrong
+address (typo, key error, contract that can't accept) permanently
+bricks all admin operations. To prevent this, we adopt the OZ
+`AccessControlDefaultAdminRulesUpgradeable` pattern, also used by CCS.
+
+The mechanism:
+- Admin transfer is a TWO-step process. The current admin calls
+  `beginDefaultAdminTransfer(newAdmin)`, scheduling the transfer.
+- The new admin must call `acceptDefaultAdminTransfer()` after a
+  configurable `defaultAdminDelay` elapses.
+- The current admin can `cancelDefaultAdminTransfer` at any time before
+  acceptance.
+- `grantRole(DEFAULT_ADMIN_ROLE, ...)` and `revokeRole(DEFAULT_ADMIN_ROLE, ...)`
+  REVERT — the only valid transfer path is the two-step flow.
+
+The delay protects against key compromise. If an attacker steals the
+admin key and immediately schedules a transfer to themselves, the
+legitimate admin has `defaultAdminDelay` seconds to detect it and call
+`cancelDefaultAdminTransfer`. There is also a `defaultAdminDelayIncreaseWait`
+floor that prevents an admin from "instantly" extending the delay to
+trap a rightful owner.
+
+`renounceRole(DEFAULT_ADMIN_ROLE)` is allowed but is itself scheduled
+through the same mechanism (with `newAdmin == address(0)`).
+
+#### User-defined roles supported
+
+Beyond the named role identifiers, the generic `grantRole(bytes32, address)`
+accepts any `bytes32` value. Issuers can compute their own role hashes
+(`keccak256("MY_CUSTOM_ROLE")`) and use them for external integrations.
+The token itself only checks the named roles internally; user-defined
+roles have no built-in effect on token functions but can be consumed by
+wrapper contracts.
+
+### Stablecoin-specific design
+
+#### Per-minter rate limiting (`STABLECOIN_MINT_RATE_LIMITED`)
+
+The single most distinctive feature CCS has over a vanilla ERC-20.
+Each address holding `MINT_ROLE` has an independent rate-limit
+configuration: a maximum capacity that replenishes linearly over a
+configurable interval. `mint` calls consume from the caller's
+remaining capacity.
+
+**Why this matters for stablecoins specifically:**
+- **Risk management.** If a minter key is compromised, the blast radius
+  is bounded by their configured rate limit, not the entire supply cap.
+- **Multi-party governance.** Different minters can have different
+  quotas reflecting different operational responsibilities (e.g. CDP
+  team has $X/day; treasury has $Y/day).
+- **Operational compliance.** Per-team minting budgets enforce
+  business-process boundaries on chain.
+
+Default tokens typically have one issuer or none, and don't need this.
+That's why the bit lives in the stablecoin range, not the default range.
+
+`grantMinterRoleWithLimit` is an atomic combo: grants `MINT_ROLE` and
+configures the rate limit in one transaction. Avoids the race where a
+freshly-granted minter has the role but no limit configured and reverts
+on first mint attempt. Pattern from CCS.
+
+`MINT_RATE_LIMIT_ROLE` is held separately from `DEFAULT_ADMIN_ROLE` so
+the authority that GRANTS minter access can be distinct from the
+authority that TUNES per-minter quotas.
+
+#### ERC-3009 Transfer With Authorization (`STABLECOIN_AUTHORIZATIONS`)
+
+Gasless and front-run-resistant transfers. The user signs an EIP-712
+authorization off-chain; anyone (or specifically the recipient) submits
+it on-chain. USDC has had this for years; it is essentially the price
+of admission for stablecoins that want to be used in payment apps.
+
+**Distinct from EIP-2612 permit:**
+- Permit sets allowances; ERC-3009 directly executes transfers.
+- Permit uses sequential nonces; ERC-3009 uses random 32-byte nonces
+  so multiple authorizations can be in flight concurrently.
+- Permit has no time-window beyond a deadline; ERC-3009 has both
+  `validAfter` and `validBefore` for scheduled-payment use cases.
+- ERC-3009's `receiveWithAuthorization` is front-run-resistant: only
+  `to` can submit. Useful when the payer signs for a specific recipient
+  and wants no relayer to be able to redirect.
+- `cancelAuthorization` lets the signer void an unused authorization
+  preemptively. Permit has no equivalent.
+
+Both are useful, complementary primitives. We expose both.
+
+#### Currency identifier
+
+`currency()` is an immutable string set at creation, identifying the
+reference asset the stablecoin tracks (USD, EUR, BTC, etc.). Useful for
+DEX routing, fee categorization, and wallet display.
+
+Convention follows ISO-4217 codes for fiat / commodity references and
+asset symbols for non-ISO references. See the function's docstring for
+the full convention.
+
+#### Freeze vs. seize philosophy
+
+CCS does NOT have a force-burn function. The strongest action against a
+malicious holder is `blocklist`, which freezes the address's balance
+without destroying it. This is the "freeze, never seize" philosophy.
+
+Tangor / Coinbase Tokenized Securities DOES have force-burn (called
+`burnBlocked` in our interface). Sanctions enforcement requires the
+ability to actually destroy the balance, not just freeze it.
+
+We support both via the `BURN_BLOCKED` capability bit. The
+`STANDARD_STABLECOIN` preset OMITS `BURN_BLOCKED` to default to the CCS
+philosophy. Issuers who want force-burn capability OR `BURN_BLOCKED` in
+at creation. The `STANDARD_EQUITY` preset INCLUDES `BURN_BLOCKED` to
+default to the Tangor philosophy.
+
+### Security-specific design
+
+#### Three issuance paths: `create`, `adminMint`, and inherited `mint`
+
+Securities have legally meaningful semantics around supply changes that
+do not map cleanly to ERC-20's `mint`. We expose three issuance paths:
+
+- **`create(address to, uint256 amount)`**: the standard compliance-
+  friendly issuance path. Single-recipient, rate-limited per caller,
+  policy-checked. Distinct from `mint` because the legal definition of
+  "creation" of a security is operationally distinct from arbitrary
+  supply changes.
+- **`adminMint(announcementId, recipients[], amounts[])`**: cold-path
+  batch mint with announcement coupling. Used for unusual or emergency
+  issuance (stock dividend distribution, recapitalization, error
+  correction).
+- **Inherited `mint(address, uint256)`**: typically DISABLED on
+  security tokens via setting `MINTABLE = false` in capabilities.
+  Issuers use `create` and `adminMint` instead.
+
+The `STANDARD_EQUITY` preset reflects this: `MINTABLE` and `BURNABLE`
+are off; `SECURITY_CREATABLE` and `SECURITY_ADMIN_BATCH` are on.
+
+#### User redemption (`redeem`)
+
+A holder calls `redeem(amount)` to destroy their tokens in exchange
+for off-chain settlement to their brokerage account. This is distinct
+from `burn` because it's user-initiated AND it triggers an off-chain
+commitment from the issuer.
+
+Gated on a separate `redeemPolicyId` (see below).
+
+#### Brokerage allowlist via separate `redeemPolicyId`
+
+Each security token holds two policy IDs:
+- `transferPolicyId`: gates transfers and mints. Typically a compound
+  policy (e.g. KYC'd recipients, sanctions-blacklisted senders).
+- `redeemPolicyId`: gates `redeem` callers. Typically a simple
+  whitelist of brokerage-verified accounts. Coinbase manages this list
+  by being the policy admin in the registry.
+
+**Why separate IDs?** Transfer-eligibility and redeem-eligibility are
+different sets in practice. Retail can hold and trade a tokenized
+security without being able to redeem to brokerage; redemption requires
+KYC + brokerage account connection that not all holders have. Putting
+both behind the same policy would force every holder to be brokerage-
+verified.
+
+#### Announcement coupling for metadata changes
+
+Every state-changing operation that affects security identity (share
+ratio updates, name/symbol changes, identifier updates, admin
+mint/burn) must be paired with an `Announcement(id)` event emitted
+earlier in the same transaction. The token enforces this via transient
+storage at the implementation level.
+
+**Why on-chain enforcement, not just off-chain audit policy?** Strong
+audit-trail invariant: it is impossible for a security token to change
+identity without simultaneously emitting an announcement. Indexers,
+exchanges, and wallets can rely on the chain itself to guarantee this.
+The cost is a small transient-storage write per call; the benefit is
+that audit reconstruction is mechanical rather than requiring trust in
+the issuer's operational discipline.
+
+Per the user-stories doc, the announcement URI itself is event-only
+(not stored on-chain). Indexers must scan event logs to retrieve URIs
+for a given announcement.
+
+#### Share ratio for split-safe accounting
+
+A security token's underlying ERC-20 balance is the "raw" balance.
+Holders' "share" count is `balance * denominator / numerator`. Stock
+splits and reverse splits change the ratio; raw balances NEVER change.
+
+**Why.** A naive stock-split implementation that mints additional
+tokens to every holder would break every smart contract that holds
+the token (lending pools, AMMs, bridges, vaults) because those
+contracts only know their deposit amount, not the post-split share
+count. The ratio approach keeps raw balances stable so every smart
+contract holder remains correct without modification; only the
+displayed share count changes.
+
+Wallets and integrators call `sharesOf(account)` instead of
+`balanceOf(account)` for display purposes.
+
+---
+
+## Open Questions
+
+Items below need your input. Status legend:
+- 🟡 **OPEN**: needs decision
+- ✅ **RESOLVED**: confirmed and reflected in current code; kept for context
+- 🔴 **VERIFY**: ambiguity in source docs; resolved one way but worth confirming
+
+### IDefaultToken
+
+#### 🟡 OPEN: Should there be a `MEMOS_REQUIRED` capability bit?
+
+Use case: a stablecoin issuer wants every transfer / mint / burn to
+carry a non-zero memo for off-chain audit trail. With the bit set, the
+non-memo'd `transfer` / `mint` / `burn` revert with `FeatureDisabled`.
 
 Cost: one extra capability bit, one extra runtime check on each
 non-memo path.
 
-My lean: **add it now**. Bit is cheap, and it's the kind of thing that
-would be painful to add later for a hypothetical compliance-required
-issuer. Suggested bit: `1 << 8`. Not added in current draft; flag if
-you want it.
+My lean: **add it**. Bit is cheap; it would be painful to add later.
+Suggested bit position: `1 << 8`. Not added in current draft.
 
-### ASSUMED: Both `Transfer` (ERC-20) AND custom events emitted on every operation
+#### ✅ RESOLVED: `renounceRole` exempt from `ADMIN_MUTABLE`
 
-A memo'd transfer emits BOTH `Transfer(from, to, amount)` AND
-`TransferWithMemo(from, to, amount, memo)`. Mints emit BOTH
-`Transfer(0, to, amount)` AND `Mint(to, amount)`. Etc.
+Even on a token with `ADMIN_MUTABLE` off, role holders can voluntarily
+renounce. For `DEFAULT_ADMIN_ROLE`, renunciation is scheduled through
+the same two-step delay mechanism (with `newAdmin == address(0)`).
 
-Slight redundancy in event log gas cost (~750 gas per extra topic) but
-preserves indexer compatibility: anything listening for ERC-20 Transfer
-events sees all token movement.
+#### ✅ RESOLVED: Default `transferPolicyId = 1` (always-allow)
 
-If you'd rather skip the extra event when the memo'd path is taken (so
-a memo'd transfer emits ONLY `TransferWithMemo`, not `Transfer`),
-slight change. But that breaks ERC-20 indexer compat.
+Default tokens default to always-allow at creation; security tokens
+default to always-reject (paranoid) per their own surface (factory
+parameter). Reflected in design intent; not yet enforced by interface
+since defaults live in the impl/factory.
 
-### VERIFY: The user stories doc says "Pausing prevents transfers. Pausing does not prevent mints, burns, and token configuration changes."
+#### 🔴 VERIFY: Pause does NOT block mints/burns/admin actions
 
-I implemented this exactly. It's a deviation from typical OpenZeppelin
-`Pausable` semantics where pause blocks ALL state changes. The user
-stories are explicit so I went with the user stories interpretation.
+User stories doc is explicit; I went with that. Tangor's `pausedBurn`
+function (which bypasses pause for admin burns) suggests they had a
+"pause blocks everything" model and needed an escape hatch. Worth
+confirming with Conner that the user-stories interpretation is the
+intended one.
 
-Worth confirming with Conner that this is intentional. The Tangor
-reference impl on `feat/commodity` has its own carve-out (`pausedBurn`
-function explicitly bypasses pause for admin burns), suggesting the
-"pause blocks everything" model needed escape hatches.
+### Capabilities
 
----
+#### 🟡 OPEN: Are `STANDARD_EQUITY`, `STANDARD_STABLECOIN`, `FIXED_SUPPLY` the right preset names / contents?
 
-## Capabilities.sol
+Preset values:
+- `STANDARD_STABLECOIN` includes per-minter rate limiting and ERC-3009;
+  OMITS `BURN_BLOCKED` (CCS-style freeze philosophy).
+- `STANDARD_EQUITY` includes `BURN_BLOCKED` (Tangor-style sanctions
+  enforcement) and the security-specific bits.
+- `FIXED_SUPPLY` is for default tokens with one-shot issuance.
 
-### ASSUMED: Bit number ranges per variant
+Worth verifying these match what real issuers (CCS, Tangor, Coinbase
+Wrapped Assets) would actually want.
 
-- Default token bits: `1 << 0` through `1 << 15` (8 used, 8 reserved)
-- Security token bits: `1 << 16` through `1 << 23` (5 used, 3 reserved)
-- Stablecoin bits (when added): I'd suggest `1 << 24` through `1 << 31`
+### IStablecoin
 
-This keeps each variant in its own well-defined range. Append-only
-within ranges (never re-purpose a published bit). Lots of headroom in
-each range; we'll never run out.
+#### ✅ RESOLVED: Per-minter rate limiting added
 
-### OPEN: Should `BURN_BLOCKED` be its own bit, or folded into `BURNABLE`?
+Reflects CCS pattern. `MINT_RATE_LIMIT_ROLE` configures, `MINT_ROLE`
+mints. `grantMinterRoleWithLimit` atomic helper avoids first-mint
+race.
 
-You said "not sure yet." I split them. Rationale: a memecoin issuer
-might want general `burn` permanently disabled (fixed supply) but want
-`burnBlocked` enabled for sanctions enforcement. Or the opposite: open
-self-burn but no force-burns ever. Splitting captures both.
+#### ✅ RESOLVED: ERC-3009 added
 
-Cost: one extra bit. Trivial.
+Full surface (transfer, receive, cancel) with both ECDSA and ERC-1271
+sig variants.
 
-If you'd rather merge them, fold `BURN_BLOCKED` semantics into
-`BURNABLE` and remove the bit. Easy change.
+#### 🟡 OPEN: Reserve attestation accessor?
 
-### OPEN: Are `STANDARD_EQUITY` and `FIXED_SUPPLY` the right preset names / contents?
+Could add `reserveURI() returns (string)` for proof-of-reserves data,
+or rely on contractURI's off-chain JSON. Not added in current draft.
 
-I added `STANDARD_EQUITY` as a preset for security tokens that's the
-"everything except inherited mint/burn" combo. It's long and I don't
-love the name. Alternatives:
+#### 🟡 OPEN: Yield distribution / rebase?
 
-- `EQUITY_DEFAULT`
-- `FULL_EQUITY`
-- Drop the preset entirely and let the security factory have a default
+For yield-bearing stablecoins like Base USD's planned design. Mechanics
+are complex (rebase storage, snapshot timing, indexer compatibility).
+Defer to dedicated design pass; not added.
 
-The `FIXED_SUPPLY` preset (PAUSABLE | ADMIN_MUTABLE | POLICY_MUTABLE |
-URI_MUTABLE) is for default tokens with one-shot issuance. Worth
-verifying this matches what an issuer like Coinbase Wrapped Assets
-would actually want.
+### ISecurityToken
 
----
+#### ✅ RESOLVED: `redeemPolicyId` separate from `transferPolicyId`
 
-## IStablecoin.sol
+Per the architectural recommendation. Brokerage allowlist managed via
+the policy registry (Coinbase as policy admin).
 
-### ASSUMED: Stablecoin variant adds ONLY `currency()` for v1
+#### ✅ RESOLVED: Per-caller create rate limit configured via `DEFAULT_ADMIN_ROLE`
 
-You said "I think there's probably more stuff" but didn't enumerate.
-Without CDP Custom Stablecoin access yet, I went minimal: one
-addition. Leaves room to grow without breaking anything.
+Adopted the Tangor pattern (admin authority configures issuer quotas).
+Could split out as `RATE_LIMIT_ADMIN_ROLE` later if needed.
 
-The single addition (`currency()`) is genuinely stablecoin-specific
-and well-justified by Tempo precedent + DEX/routing utility.
+#### 🔴 VERIFY: Announcement URI is event-only, not stored on-chain
 
-### OPEN: What else should IStablecoin add?
+User stories doc says event-only; wiki spec has on-chain getter. I
+went with user stories. Indexers must scan logs to retrieve URIs.
 
-Candidates I considered and deferred, ranked by my read of importance:
+#### 🟡 OPEN: Should `Announcement` event index `id` for filterability?
 
-1. **Reserve attestation accessor.** `function reserveURI() external
-   view returns (string memory);` — pointer to off-chain
-   proof-of-reserves data. Useful for transparent-reserve stablecoins.
-   Could also live in the contract URI's off-chain JSON, so maybe not
-   needed as a dedicated function. **Worth discussing.**
+Currently `caller` is indexed; `id` is not. Indexers filtering by raw
+string `id` would benefit from a separate `bytes32 indexed idHash`
+field. Not added; flag if wanted.
 
-2. **Master Minter pattern (Circle-style).** Two-tier role structure:
-   `MASTER_MINTER_ROLE` can grant per-minter allowances; `MINTER`s
-   have quota that depletes as they mint. Significant addition (~5
-   functions, per-minter state). Not in user stories. **Defer to v2
-   unless Tangor / CCS explicitly need it.**
-
-3. **Per-account `freeze` / `unfreeze`.** Distinct from burn-blocked:
-   freeze stops an account from sending without destroying their
-   balance, useful for compliance investigations. Could be done via a
-   compound policy with a sender-blacklist instead, so probably
-   redundant with the policy engine. **Skip.**
-
-4. **Yield distribution (auto-rebase or manual).** For yield-bearing
-   stablecoins like Base USD's planned design. The mechanics are
-   complex (rebase storage, snapshot timing, indexer compatibility).
-   **Significant work; defer to dedicated design pass.**
-
-I would NOT add any of these without explicit user-story sign-off.
-Want me to draft any of them as proposals?
-
----
-
-## ISecurityToken.sol
-
-### ASSUMED: Security tokens disable inherited `mint` / `burn` via capability bits
-
-The user stories distinguish "Mint and Burn" (Core, requires ISSUER_ROLE)
-from "Create" (Security, rate-limited compliant path) and "Admin Mint"
-(Security, cold-path batch with announcement coupling). I read this as:
-security tokens shouldn't expose the inherited single-account `mint` /
-`burn` from IDefaultToken; they should use `create` and `adminMint` /
-`adminBurn` instead.
-
-So a security token typically has:
-- `MINTABLE = false` (inherited `mint` reverts)
-- `BURNABLE = false` (inherited `burn` reverts)
-- `BURN_BLOCKED = true` (sanctions enforcement)
-- `SECURITY_CREATABLE = true` (compliant issuance via `create`)
-- `SECURITY_ADMIN_BATCH = true` (cold-path `adminMint` / `adminBurn`)
-- `SECURITY_REDEEMABLE = true` (user-side `redeem`)
-
-**This is reflected in the `STANDARD_EQUITY` preset.**
-
-If you'd rather have security tokens KEEP `mint` / `burn` inherited
-(with stricter behavior — e.g., add announcement coupling at the impl
-level), the interface stays the same; just flip the recommended bits.
-But I think the "use the security-specific names" approach is clearer
-for integrators.
-
-### OPEN: `redeem` brokerage allowlist as a separate `redeemPolicyId`
-
-I went with this from the previous conversation: each security token
-has a `redeemPolicyId` (separate from `transferPolicyId`) pointing at
-a policy registry whitelist. Coinbase manages the allowlist by being
-the admin of that policyId.
-
-Two design implications worth confirming:
-
-1. **`redeemPolicyId` is a single uint64 in token state, mutable by
-   admin.** I added `redeemPolicyId()` getter and
-   `setRedeemPolicyId(uint64)` setter. The setter is gated by
-   `DEFAULT_ADMIN_ROLE` only; I did NOT add a `REDEEM_POLICY_MUTABLE`
-   capability bit because I figured this is a critical operational
-   lever the issuer should always be able to update. Confirm.
-
-2. **What happens if `redeemPolicyId == 0` (always-reject)?** Then
-   nobody can redeem. That's the safest default for newly created
-   securities — the issuer must explicitly set a policy when ready.
-
-### ASSUMED: Per-caller create rate limit is a simple `(maxAmount, interval)` pair
-
-`createAllowance(caller)` returns the remaining quota; allowance
-replenishes linearly over `interval`. This matches Tangor's
-`RateLimit` mixin shape.
-
-Open detail: how is this configured? I exposed
-`configureCreateRateLimit(caller, maxAmount, interval)` gated by
-`DEFAULT_ADMIN_ROLE`. So the admin sets per-issuer quotas. Confirm
-that's the right authority (vs. e.g. a separate `RATE_LIMIT_ADMIN_ROLE`).
-
-### VERIFY: Announcement URI storage — on-chain or event-only?
-
-The user stories say:
-> "We don't store, announcement URI's on contract, just annotated on events"
-
-The wiki `ISecurityToken` spec says:
-> `function announcementURI(string id) external view returns (string memory);`
-
-These contradict. **I followed the user stories** (no on-chain URI
-storage; URI lives in event only) since it's the more recent / active
-working doc. So my interface has NO `announcementURI` view function.
-
-Implication: indexers need to scan event logs to retrieve the URI for
-a given announcement; not directly queryable from contract storage.
-
-If we want on-chain queryability, add the storage and the getter and
-add the URI to a per-token mapping. Not a hard change; just a tradeoff
-between gas (write the URI to storage) vs. integration friction (need
-an indexer to fetch).
-
-### OPEN: Should `Announcement` event index `id`?
-
-I made `caller` indexed but `id` and other fields not indexed. If
-indexers commonly want to filter by `id`, indexing it would help. But
-`id` is a string and Solidity indexes strings as their hash, which
-makes indexer-side filtering by raw string value awkward.
-
-If you want to filter by `id`, the convention is to make a separate
-indexed field that's the keccak hash of the id. Could change to:
-```solidity
-event Announcement(address indexed caller, bytes32 indexed idHash, string id, string description, string uri);
-```
-
-Not in current draft. Flag if wanted.
-
-### OPEN: Atomic vs. partial-success semantics on `adminMint` / `adminBurn`
+#### 🟡 OPEN: `adminMint` / `adminBurn` should accept `totalAmount` parameter for sum validation?
 
 Tangor's batch operations validate `totalAmount` matches the sum of
-allocations and revert atomically on any failure. I documented "reverts
-atomically if any single recipient fails" in the docstrings but didn't
-add a `totalAmount` parameter to the function signature. Should I?
+allocations. I omitted from current draft. Adds defense-in-depth
+against caller-side off-by-one bugs at the cost of one extra parameter.
 
-Pros of `totalAmount`: catches caller-side bugs (off-by-one in batch
-construction) at the contract layer rather than discovering after a
-partial mint.
+#### 🟡 OPEN: `adminBurn` can affect any account (not just policy-blocked) given announcement coupling
 
-Cons: extra parameter, slight gas, redundant with validation the
-caller already did (presumably).
+Powerful primitive: anyone with `BURN_BLOCKED_ROLE` + a posted
+announcement can destroy any holder's balance. Use cases for
+non-blocked accounts: liquidations, reverse tender settlements,
+accounting corrections. Worth explicit confirmation.
 
-My lean: omit. The atomic-revert behavior is documented; the caller
-can compute their own total client-side. But Tangor includes it, so
-maybe consistency with their pattern is preferable.
+#### 🟡 OPEN: `share ratio` initial value at creation
 
-### OPEN: Should `adminBurn` also work for general account burns, not just sanctions?
+Tangor uses `1_000_000_000 / 1_000_000_000` (large 1:1, fractional
+headroom). Wiki spec uses `1 / 1`. Factory/impl decision; not in
+interface. My lean: 1:1.
 
-Right now I have:
-- `burnBlocked(from, amount)` — inherited from IDefaultToken; force-burn
-  from a policy-blocked address.
-- `adminBurn(announcementId, accounts[], amounts[])` — cold-path batch
-  burn from any account, requires announcement.
+#### 🟡 OPEN: `pausedBurn` separate function vs. `adminBurn` always bypassing pause?
 
-These overlap. `adminBurn` could be used to seize from a
-non-policy-blocked address (since it doesn't check the policy). Is
-that a feature or a bug?
-
-Use case for `adminBurn` on non-blocked addresses: liquidations,
-reverse tender offers, accounting corrections. These are legitimate.
-But it's a powerful primitive — anyone with `BURN_BLOCKED_ROLE` can
-destroy any holder's balance with an announcement.
-
-My lean: **leave it as documented** (adminBurn can affect any account
-with announcement coupling). The role gate is the security boundary.
-The announcement provides the audit trail. Confirm with you / Conner.
-
-### OPEN: `share ratio` initialization
-
-The interface assumes a security token starts with some share ratio.
-What's the default at creation if the issuer doesn't specify? Tangor
-uses `1_000_000_000 / 1_000_000_000` (a large 1:1 to give headroom for
-fractional updates without precision loss). The wiki spec uses `1 / 1`.
-
-My interface doesn't take a position; this is a factory/impl decision.
-Worth flagging because the choice affects how splits work numerically.
-My lean: **use 1:1 default, big numbers only when needed**. Simpler
-mental model.
-
-### OPEN: `pausedBurn` — separate function or a flag on `adminBurn`?
-
-User stories: "Admin Burn ... Can burn when paused." I made `adminBurn`
-*always* bypass the pause check (even when not paused, it just doesn't
-look at pause state). Alternative: have `pausedBurn` as a separate
-function that can ONLY be called when paused.
-
-Tangor does the latter (separate `pausedBurn`). I went with the former
-for simplicity. If you prefer Tangor's pattern, add a separate
-`pausedBurn` function and remove the pause-bypass from `adminBurn`.
+Tangor has a separate `pausedBurn`. Current design: `adminBurn` always
+bypasses pause. Simpler but less explicit about the "this is intended
+to operate during pause" semantic.
 
 ---
 
 ## What's NOT done yet
 
-1. **`ITokenFactory.sol`** — the singular factory with three create
-   methods. Each method takes a struct including `capabilities`,
-   `initialSupply`, `policyId`, `name`/`symbol`/`decimals`, etc. I
-   need your sign-off on the interfaces above before writing this; the
-   factory's signature space is mostly determined by what each variant
-   needs at creation time.
+1. **`ITokenFactory.sol`** — singular factory with three create methods
+   (`createDefault`, `createStablecoin`, `createSecurity`). Each takes
+   a struct including `capabilities`, `initialSupply`, `policyId`,
+   name/symbol/decimals, etc. Per-variant address prefixes encoded by
+   the factory at deployment.
 
-2. **`IPolicyRegistry.sol`** — the policy engine interface. Adapted
-   from Tempo's TIP-403 + TIP-1015 with our additions (no virtual
-   address rejection logic, no receive policies / TIP-1028 escrow
-   integration). Will be its own commit.
+2. **`IPolicyRegistry.sol`** — TIP-403 + TIP-1015 adapted. No virtual
+   addresses, no escrow / receive policies (per scope-cut decision).
 
 3. **Reference Solidity implementations** of all three token variants
    (`DefaultToken.sol`, `Stablecoin.sol`, `SecurityToken.sol`,
-   `TokenFactory.sol`, `PolicyRegistry.sol`). These will be the
-   biggest files in the repo.
+   `TokenFactory.sol`, `PolicyRegistry.sol`). Will be the biggest
+   files in the repo.
 
-4. **`StdPrecompiles.sol`** equivalent — the constants file mapping
-   precompile addresses for the policy registry, factory, and the
-   per-variant token address prefixes (TBD addresses).
+4. **`StdPrecompiles.sol`** equivalent — constants for the policy
+   registry, factory, and per-variant token address prefixes (TBD
+   addresses).
 
 ---
 
 ## Summary of bits I want explicit confirmation on
 
-If you read nothing else, scan and give me a thumbs up / thumbs down
-on these:
+After your "yes to all" on the CCS-derived additions, the remaining
+items needing your input:
 
 1. `MEMOS_REQUIRED` capability bit — add now or defer? (My lean: add)
-2. `BURN_BLOCKED` as separate bit from `BURNABLE` — keep split or merge?
-3. `IStablecoin` minimal (just `currency()`) for v1 — ok?
-4. Security tokens default to `transferPolicyId = 0` at creation — ok?
-5. `redeem` brokerage allowlist as separate `redeemPolicyId` per the
-   recommendation from previous conversation — ok?
-6. Announcement URI is event-only, not stored on-chain (per user stories) — ok?
-7. `adminBurn` can affect any account (not just policy-blocked) given
-   announcement coupling — ok?
-8. Indexed `id` on `Announcement` event for filterability — add?
-9. Per-caller create rate limit configured via `DEFAULT_ADMIN_ROLE` —
-   ok or want a separate `RATE_LIMIT_ADMIN_ROLE`?
+2. Preset contents (`STANDARD_STABLECOIN`, `STANDARD_EQUITY`,
+   `FIXED_SUPPLY`) — confirm reasonable defaults?
+3. Reserve attestation accessor on IStablecoin — add or defer to
+   off-chain JSON?
+4. Indexed `bytes32 idHash` on `Announcement` event — add for
+   filterability?
+5. `adminMint` / `adminBurn` `totalAmount` parameter for sum
+   validation — add?
+6. `adminBurn` semantics — confirm it can affect any account, gated by
+   `BURN_BLOCKED_ROLE` + announcement coupling, NOT restricted to
+   policy-blocked addresses?
+7. `share ratio` default at creation — 1:1 or 1e9:1e9?
+8. `pausedBurn` as a separate function vs. `adminBurn` always
+   bypassing pause?
+9. The pause-doesn't-block-mints/burns interpretation (per user
+   stories) — confirm?
 
 Once you weigh in, I'll iterate the interfaces, then write
 `ITokenFactory` + `IPolicyRegistry`, then start on reference impls.
