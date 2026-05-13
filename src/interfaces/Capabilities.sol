@@ -53,6 +53,38 @@ library Capabilities {
     uint256 internal constant URI_MUTABLE = 1 << 7;
 
     /*//////////////////////////////////////////////////////////////
+                       Security-token bits (16..23)
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice On a Security token, `create()` is callable. When unset, the
+    ///         compliant issuance path is permanently disabled (the token's
+    ///         supply is effectively frozen except for `adminMint` /
+    ///         `adminBurn`, if those are also enabled).
+    uint256 internal constant SECURITY_CREATABLE = 1 << 16;
+
+    /// @notice On a Security token, `redeem()` is callable. When unset,
+    ///         off-chain redemption via the security-specific path is
+    ///         permanently disabled (holders can still self-burn via the
+    ///         inherited `burn` if `BURNABLE` is set).
+    uint256 internal constant SECURITY_REDEEMABLE = 1 << 17;
+
+    /// @notice On a Security token, `updateShareRatio()` is callable. When
+    ///         unset, the token-to-share ratio set at creation (typically
+    ///         1:1) is permanent. Useful for securities that will never
+    ///         split (most ETFs, single-class commodities).
+    uint256 internal constant SHARE_RATIO_MUTABLE = 1 << 18;
+
+    /// @notice On a Security token, `updateName` / `updateSymbol` /
+    ///         `updateSecurityIdentifier` are callable. When unset, the
+    ///         identifying metadata set at creation is permanent.
+    uint256 internal constant SECURITY_METADATA_MUTABLE = 1 << 19;
+
+    /// @notice On a Security token, `adminMint()` and `adminBurn()` are
+    ///         callable. When unset, the cold-path batch operations are
+    ///         permanently disabled.
+    uint256 internal constant SECURITY_ADMIN_BATCH = 1 << 20;
+
+    /*//////////////////////////////////////////////////////////////
                                 Presets
     //////////////////////////////////////////////////////////////*/
 
@@ -75,4 +107,14 @@ library Capabilities {
     ///         a one-time issuance event followed by ongoing operational
     ///         governance.
     uint256 internal constant FIXED_SUPPLY = PAUSABLE | ADMIN_MUTABLE | POLICY_MUTABLE | URI_MUTABLE;
+
+    /// @notice Standard equity-style security token: supports compliant
+    ///         issuance via `create`, user redemption via `redeem`,
+    ///         share-ratio updates (for splits), all metadata updates, and
+    ///         cold-path admin batch operations. Inherited mint/burn paths
+    ///         are disabled in favor of the security-specific functions;
+    ///         BURN_BLOCKED stays on for sanctions enforcement.
+    uint256 internal constant STANDARD_EQUITY = PAUSABLE | BURN_BLOCKED | ADMIN_MUTABLE | POLICY_MUTABLE | CAP_MUTABLE
+        | URI_MUTABLE | SECURITY_CREATABLE | SECURITY_REDEEMABLE | SHARE_RATIO_MUTABLE | SECURITY_METADATA_MUTABLE
+        | SECURITY_ADMIN_BATCH;
 }
