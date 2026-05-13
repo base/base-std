@@ -280,6 +280,44 @@ commitment from the issuer.
 
 Gated on a separate `redeemPolicyId` (see below).
 
+#### Policy engine scope: TIP-403 + TIP-1015 parity, no callback or richer guards in v1
+
+We considered four levels of policy sophistication for v1:
+
+1. **Pure set membership** (TIP-403): WHITELIST, BLACKLIST.
+2. **+ Compound policies** (TIP-1015): asymmetric sender / recipient /
+   mint-recipient slots referencing simple policies.
+3. **+ Callback policies**: a fourth policy type that defers the
+   authorization decision to a designated contract via `staticcall`.
+   Solves time-, oracle-, lockup-, jurisdiction-, attestation-based
+   rules without bloating the precompile.
+4. **+ Modular guards / hooks**: the Modular ERC20 vision. Per-operation
+   guard arrays, custom storage per guard, etc.
+
+We ship **Levels 1 + 2 only** in v1.
+
+The case for adding callback (Level 3) was real (richer rules without
+chain bloat, small interface delta). But the forward-compat argument is
+weak: even if we reserved the `CALLBACK` enum value now, the actual
+implementation requires a hardfork — same as just adding it later.
+Enum extensions are backward-compatible (existing values keep their
+meanings), so consumers don't break when callback is added in a future
+hardfork. Conclusion: defer to a future hardfork if real demand
+emerges.
+
+The user-stories doc explicitly lists three types (allowlist, blocklist,
+compound). Conner has consistently steered toward "fork Tempo cleanly."
+Our v1 matches that exactly.
+
+**Rules that v1 DOES NOT support and would need future work:**
+- Per-tx amount limits (callback signature lacks the amount)
+- Counterparty-dependent rules ("X can only send to Y")
+- Anything depending on per-transfer context
+
+For these, issuers wrap the precompile in a Solidity contract that does
+the rich check before/after calling through to the registry. Standard
+pattern; no chain change needed.
+
 #### Brokerage allowlist via separate `redeemPolicyId`
 
 Each security token holds two policy IDs:
@@ -473,15 +511,12 @@ to operate during pause" semantic.
    name/symbol/decimals, etc. Per-variant address prefixes encoded by
    the factory at deployment.
 
-2. **`IPolicyRegistry.sol`** — TIP-403 + TIP-1015 adapted. No virtual
-   addresses, no escrow / receive policies (per scope-cut decision).
+2. **Reference Solidity implementations** of all three token variants
+   plus the factory and registry (`DefaultToken.sol`, `Stablecoin.sol`,
+   `SecurityToken.sol`, `TokenFactory.sol`, `PolicyRegistry.sol`).
+   Will be the biggest files in the repo.
 
-3. **Reference Solidity implementations** of all three token variants
-   (`DefaultToken.sol`, `Stablecoin.sol`, `SecurityToken.sol`,
-   `TokenFactory.sol`, `PolicyRegistry.sol`). Will be the biggest
-   files in the repo.
-
-4. **`StdPrecompiles.sol`** equivalent — constants for the policy
+3. **`StdPrecompiles.sol`** equivalent — constants for the policy
    registry, factory, and per-variant token address prefixes (TBD
    addresses).
 
