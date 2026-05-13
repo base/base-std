@@ -36,6 +36,10 @@ interface IDefaultToken {
     error PermitExpired();
     error InvalidSignature();
     error FeatureDisabled(uint256 capability);
+    error EnforcedDefaultAdminRules();
+    error InvalidDefaultAdmin(address account);
+    error EnforcedDefaultAdminDelay(uint48 schedule);
+    error NoPendingDefaultAdmin();
 
     /*//////////////////////////////////////////////////////////////
                                 EVENTS
@@ -63,16 +67,30 @@ interface IDefaultToken {
 
     event ContractURIUpdated();
 
+    event DefaultAdminTransferScheduled(address indexed newAdmin, uint48 acceptSchedule);
+    event DefaultAdminTransferCanceled();
+    event DefaultAdminDelayChangeScheduled(uint48 newDelay, uint48 effectSchedule);
+    event DefaultAdminDelayChangeCanceled();
+
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The default top-level admin role. Holders may grant or revoke any
-    ///         role, including granting and revoking themselves.
+    /// @notice The default top-level admin role. The admin manages all other
+    ///         roles. The DEFAULT_ADMIN_ROLE itself can only be transferred via
+    ///         the two-step `beginDefaultAdminTransfer` / `acceptDefaultAdminTransfer`
+    ///         flow with a configurable delay; `grantRole` and `revokeRole`
+    ///         REVERT when called for `DEFAULT_ADMIN_ROLE`.
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 
-    /// @notice Required to call `mint` / `mintWithMemo` and `burn` / `burnWithMemo`.
-    function ISSUER_ROLE() external view returns (bytes32);
+    /// @notice Required to call `mint` / `mintWithMemo`. Held separately from
+    ///         BURN_ROLE so issuance and destruction authority can be split
+    ///         across teams (e.g. treasury team mints, redemption team burns).
+    function MINT_ROLE() external view returns (bytes32);
+
+    /// @notice Required to call `burn` / `burnWithMemo`. See MINT_ROLE for
+    ///         rationale on the split.
+    function BURN_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `pause`. Held separately from UNPAUSE_ROLE so
     ///         emergency-stop authority can be delegated to a 24/7 ops team
@@ -150,7 +168,7 @@ interface IDefaultToken {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Mints `amount` to `to`. Requires `MINTABLE` capability and
-    ///         `ISSUER_ROLE`. Subject to the token's transfer policy: the
+    ///         `MINT_ROLE`. Subject to the token's transfer policy: the
     ///         recipient must satisfy `isAuthorizedMintRecipient` on the
     ///         active policy.
     /// @dev    Emits both `Transfer(address(0), to, amount)` (ERC-20) and
@@ -162,7 +180,7 @@ interface IDefaultToken {
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external;
 
     /// @notice Burns `amount` from the caller's balance. Requires `BURNABLE`
-    ///         capability and `ISSUER_ROLE`.
+    ///         capability and `BURN_ROLE`.
     /// @dev    Emits both `Transfer(caller, address(0), amount)` and
     ///         `Burn(caller, amount)`.
     function burn(uint256 amount) external;
@@ -197,20 +215,102 @@ interface IDefaultToken {
 
     /// @notice Grants `role` to `account`. Requires `ADMIN_MUTABLE`
     ///         capability and the admin role for `role` (see `getRoleAdmin`).
+    /// @dev    REVERTS with `EnforcedDefaultAdminRules` when `role` is
+    ///         `DEFAULT_ADMIN_ROLE`. Use `beginDefaultAdminTransfer` for
+    ///         that role.
     function grantRole(bytes32 role, address account) external;
 
     /// @notice Revokes `role` from `account`. Requires `ADMIN_MUTABLE`
     ///         capability and the admin role for `role`.
+    /// @dev    REVERTS with `EnforcedDefaultAdminRules` when `role` is
+    ///         `DEFAULT_ADMIN_ROLE`. The default admin can only voluntarily
+    ///         exit via `renounceRole`.
     function revokeRole(bytes32 role, address account) external;
 
     /// @notice Caller revokes `role` from themselves. Always permitted, even
     ///         when `ADMIN_MUTABLE` is unset, so role holders can voluntarily
     ///         exit a frozen role configuration.
+    /// @dev    Permitted for `DEFAULT_ADMIN_ROLE` and ALSO subject to the
+    ///         configured `defaultAdminDelay`: a default-admin renunciation
+    ///         is scheduled and only takes effect after the delay elapses.
+    ///         Implementations should use the same scheduling machinery as
+    ///         `beginDefaultAdminTransfer` (with `newAdmin == address(0)`).
     function renounceRole(bytes32 role) external;
 
     /// @notice Sets the admin role for `role`. Requires `ADMIN_MUTABLE`
     ///         capability and the current admin role for `role`.
+    /// @dev    REVERTS with `EnforcedDefaultAdminRules` when `role` is
+    ///         `DEFAULT_ADMIN_ROLE`; the default admin's admin role is
+    ///         always itself.
     function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external;
+
+    /*//////////////////////////////////////////////////////////////
+                          TWO-STEP DEFAULT ADMIN
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The current holder of `DEFAULT_ADMIN_ROLE`. The default admin
+    ///         is always exactly one address (or `address(0)` after a
+    ///         completed renunciation).
+    function defaultAdmin() external view returns (address);
+
+    /// @notice Returns the address that has been scheduled to receive
+    ///         `DEFAULT_ADMIN_ROLE` and the block timestamp at which the
+    ///         transfer becomes acceptable. Returns `(address(0), 0)` if no
+    ///         transfer is scheduled.
+    function pendingDefaultAdmin() external view returns (address newAdmin, uint48 acceptSchedule);
+
+    /// @notice The current delay (in seconds) that applies to a default-admin
+    ///         transfer or renunciation. A scheduled transfer becomes
+    ///         acceptable `defaultAdminDelay()` seconds after `beginDefaultAdminTransfer`.
+    function defaultAdminDelay() external view returns (uint48);
+
+    /// @notice Returns the next scheduled delay value and the block timestamp
+    ///         at which it takes effect. Returns `(0, 0)` if no delay change
+    ///         is scheduled.
+    function pendingDefaultAdminDelay() external view returns (uint48 newDelay, uint48 effectSchedule);
+
+    /// @notice The minimum wait (in seconds) before a delay-INCREASE takes
+    ///         effect. Delay decreases are subject to the current delay;
+    ///         delay increases are subject to whichever is greater of the
+    ///         current delay or this floor. Prevents an admin from defending
+    ///         a key compromise by instantaneously extending the delay to
+    ///         lock out the rightful owner.
+    function defaultAdminDelayIncreaseWait() external view returns (uint48);
+
+    /// @notice Schedules a transfer of `DEFAULT_ADMIN_ROLE` to `newAdmin`.
+    ///         The transfer becomes acceptable `defaultAdminDelay()` seconds
+    ///         after this call; until then `newAdmin` may call
+    ///         `acceptDefaultAdminTransfer`. The current admin may
+    ///         `cancelDefaultAdminTransfer` at any time before acceptance.
+    /// @dev    Requires `DEFAULT_ADMIN_ROLE`. Setting `newAdmin == address(0)`
+    ///         schedules a renunciation. Calling again replaces any prior
+    ///         pending transfer with the new one (resets the delay clock).
+    function beginDefaultAdminTransfer(address newAdmin) external;
+
+    /// @notice Cancels any pending default-admin transfer. Requires
+    ///         `DEFAULT_ADMIN_ROLE`. No-op if no transfer is pending.
+    function cancelDefaultAdminTransfer() external;
+
+    /// @notice Accepts the pending default-admin transfer. Caller MUST be
+    ///         the address scheduled via `beginDefaultAdminTransfer`, and
+    ///         the current `block.timestamp` must be at or after the
+    ///         scheduled `acceptSchedule`. Atomically transfers
+    ///         `DEFAULT_ADMIN_ROLE` from the previous admin to the caller.
+    /// @dev    Reverts with `NoPendingDefaultAdmin` if no transfer is
+    ///         pending, with `EnforcedDefaultAdminDelay` if called before
+    ///         the schedule, or with `Unauthorized` if called by anyone
+    ///         other than the pending admin.
+    function acceptDefaultAdminTransfer() external;
+
+    /// @notice Schedules a change to `defaultAdminDelay`. Requires
+    ///         `DEFAULT_ADMIN_ROLE`. Decreases take effect after the
+    ///         current delay elapses; increases take effect after the
+    ///         greater of the current delay or `defaultAdminDelayIncreaseWait`.
+    function changeDefaultAdminDelay(uint48 newDelay) external;
+
+    /// @notice Cancels any pending delay change. Requires `DEFAULT_ADMIN_ROLE`.
+    ///         No-op if no change is pending.
+    function rollbackDefaultAdminDelay() external;
 
     /*//////////////////////////////////////////////////////////////
                                   PAUSE

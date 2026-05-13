@@ -85,6 +85,26 @@ library Capabilities {
     uint256 internal constant SECURITY_ADMIN_BATCH = 1 << 20;
 
     /*//////////////////////////////////////////////////////////////
+                       Stablecoin-token bits (24..31)
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice On a Stablecoin token, per-minter rate limiting is enforced
+    ///         on `mint()` / `mintWithMemo()`. `configureMinter`,
+    ///         `grantMinterRoleWithLimit`, `currentMintLimit`, and
+    ///         `mintRateLimitConfig` are callable. When unset, the
+    ///         stablecoin still has `MINT_ROLE` gating but no rate limiting:
+    ///         a holder of MINT_ROLE may mint freely up to the inherited
+    ///         `supplyCap`.
+    uint256 internal constant STABLECOIN_MINT_RATE_LIMITED = 1 << 24;
+
+    /// @notice On a Stablecoin token, ERC-3009 `transferWithAuthorization`,
+    ///         `receiveWithAuthorization`, and `cancelAuthorization` are
+    ///         callable. When unset, the gasless-transfer surface is
+    ///         permanently disabled (holders fall back to ERC-20 + EIP-2612
+    ///         permit).
+    uint256 internal constant STABLECOIN_AUTHORIZATIONS = 1 << 25;
+
+    /*//////////////////////////////////////////////////////////////
                                 Presets
     //////////////////////////////////////////////////////////////*/
 
@@ -117,4 +137,14 @@ library Capabilities {
     uint256 internal constant STANDARD_EQUITY = PAUSABLE | BURN_BLOCKED | ADMIN_MUTABLE | POLICY_MUTABLE | CAP_MUTABLE
         | URI_MUTABLE | SECURITY_CREATABLE | SECURITY_REDEEMABLE | SHARE_RATIO_MUTABLE | SECURITY_METADATA_MUTABLE
         | SECURITY_ADMIN_BATCH;
+
+    /// @notice Standard payment-rail stablecoin: supports rate-limited mint
+    ///         (per-minter quotas), burn, ERC-3009 gasless transfers, pause,
+    ///         and full admin / policy / URI mutability. Does NOT include
+    ///         BURN_BLOCKED (matches the "freeze, never seize" philosophy
+    ///         of CDP Custom Stablecoin and similar). Issuers who want
+    ///         force-burn for sanctions enforcement can OR `BURN_BLOCKED`
+    ///         in at creation.
+    uint256 internal constant STANDARD_STABLECOIN = PAUSABLE | MINTABLE | BURNABLE | ADMIN_MUTABLE | POLICY_MUTABLE
+        | CAP_MUTABLE | URI_MUTABLE | STABLECOIN_MINT_RATE_LIMITED | STABLECOIN_AUTHORIZATIONS;
 }
