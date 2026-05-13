@@ -1,4 +1,4 @@
-# base-std
+# Base Standards
 
 Standard library for Base-native protocols. Defines the Solidity interfaces
 and reference implementations for protocol primitives that are (or are
