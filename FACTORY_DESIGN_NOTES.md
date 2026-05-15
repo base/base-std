@@ -57,16 +57,56 @@ The sequencer can prefetch / cache the registry aggressively. The
 predictable. We just use a registry lookup instead of an address-shape
 decode.
 
+## Resolved decisions
+
+### Address derivation algorithm
+
+Implementation detail; not specified at the interface level. Standard
+CREATE2-style hash of `(variant derivation domain, creator, salt)`
+producing a 20-byte address. **There is no fancy prefix scheme** (per
+the address-prefix discussion above; we can't reserve prefixes on
+Base). The Rust precompile implementation picks the exact derivation
+function; what's locked at the interface level is determinism (`predict*Address`
+returns the address `create*` would assign) and the variant-domain
+separation (Default / Stablecoin share a domain; Security uses a
+different domain).
+
+### Capability bit validation at creation
+
+Factory validates the capability bitfield at creation and reverts with
+`InvalidCapabilities` if any bit is set that isn't valid for the chosen
+variant. For Default and Stablecoin tokens, only `PAUSABLE` and
+`CAP_MUTABLE` are currently valid. For Security tokens, the additional
+security-specific bits in `Capabilities` (16..23 range) are also valid.
+
+### `transferPolicyId` default at creation
+
+Required at creation but no implicit default. Recommended values:
+
+- **Pass `1` (always-allow)** for tokens that don't need compliance
+  gating. This is the typical default for memecoins and similar.
+- **Pass `0` (always-reject)** to start the token in a soft-paused
+  state where transfers fail until the admin sets a real policy via
+  `changeTransferPolicyId`. Useful when the policy isn't yet
+  configured at creation.
+- **Pass any existing custom policy ID** to apply that policy from
+  creation.
+
+The factory does not auto-default to `1` because we want the choice
+to be explicit; passing `0` accidentally is a foot-gun (the token
+would be silently unusable), so callers should know what they're
+doing.
+
 ## Other decisions baked into the current draft
 
 - **Three creation methods** (one per variant), not the unified
   `createToken(...variant...)` from the PRD. Diverges from PRD wording
   in favor of typed per-variant params; happy to revert if the team
-  prefers the unified shape.
+  prefers the unified shape. (See open question #4 below.)
 - **`TokenVariant` enum has no `STABLECOIN` value.** Stablecoin and
   Default share the same address derivation and the same `DEFAULT`
   variant marker. Sub-case is detected via `isStablecoin(token)` (which
-  checks `currency() != ""`).
+  checks `currency() != ""`). (See open question #3 below.)
 - **Default and Stablecoin share address space.** Same `(creator, salt)`
   pair maps to one token of either variant; calling `createDefault`
   precludes `createStablecoin` at the same slot and vice versa.
@@ -90,39 +130,48 @@ decode.
 
 ## Open questions to take to the team
 
-1. **`transferPolicyId` required vs default.** Currently required to
-   force an explicit compliance choice at creation. Tradeoff: more
-   friction for memecoins / simple tokens that don't need compliance.
-   Alternative: optional, defaults to policy ID `1` (always-allow).
+### 1. Bootstrap mint policy bypass vs apply
 
-2. **Bootstrap mint policy bypass vs apply.** Current draft bypasses
-   the transfer policy check on the initial mint at creation (the
-   policy referenced by `transferPolicyId` may not authorize the
-   recipient yet). Alternative: require the policy to authorize the
-   recipient at bootstrap, which is tighter but requires the policy
-   to be created BEFORE the token (awkward chicken-and-egg).
+Current draft bypasses the transfer policy check on the initial mint at
+creation (the policy referenced by `transferPolicyId` may legitimately
+not authorize the recipient yet at creation). Argument for applying:
+**fail-fast sanity check on setup**. If the issuer mints to an address
+that the policy then can't authorize for transfers, that supply is
+stuck and the token has to be redeployed. Catching this at creation is
+nice. Argument against: **mint and transfer policies can differ**.
+Compound policies have separate `senderPolicyId` and
+`mintRecipientPolicyId` slots, so an address might legitimately be
+authorized to receive mints but not to send transfers (or vice versa).
+The bootstrap mint check should probably be against the
+`mintRecipientPolicyId` slot specifically, not the full transfer check.
 
-3. **Two-step "renounce last admin" pattern.** Not in v1. The
-   last-admin guard in `IDefaultToken` prevents the LAST admin from
-   renouncing. Issuers who want to evolve from admin-controlled to
-   admin-less mid-life have no clean path. Worth a separate design
-   discussion.
+Lean: apply the `mintRecipientPolicyId` check at bootstrap. Keep open
+pending team discussion on whether the friction is worth it.
 
-4. **Drop `STABLECOIN` from the enum entirely vs keep it.** Current
-   draft drops it because Default and Stablecoin share both the
-   address derivation and the variant marker. Worth team confirmation.
+### 2. Two-step "renounce last admin" pattern
 
-5. **Three separate functions vs one unified `createToken(variant, ...)`.**
-   PRD wording implies unified. Current draft uses separate per-variant
-   functions for clearer typing and per-variant params structs. Worth
-   team confirmation.
+Not in v1. The last-admin guard in `IDefaultToken.renounceRole`
+prevents the LAST admin from renouncing, which means tokens cannot
+evolve from admin-controlled to admin-less mid-life. Real use case:
+**a token might need active admin oversight for an initial setup
+period (mintable while bootstrapping, configuring policies, etc.) and
+then need to renounce admin control once the setup is done**.
 
-6. **Address derivation algorithm.** Implementation-level decision.
-   Should be salt-domain-separated so that Default / Stablecoin and
-   Security derivations are uniquely keyed even with the same
-   `(creator, salt)` input. Lock down before reference impl.
+Lean: we probably need this. Mechanism would be a delay-protected
+two-step renounce on `IDefaultToken` (something like
+`beginRenounceLastAdmin` → wait → `acceptRenounceLastAdmin`). Worth a
+separate design discussion before adding.
 
-7. **Capability bit validation at creation.** Factory should reject
-   capability bitfields with bits not valid for the chosen variant
-   (e.g. security-specific bits on a Default token). Straightforward
-   but worth confirming the validation rules.
+### 3. Drop `STABLECOIN` from the enum entirely vs keep it
+
+Current draft drops it because Default and Stablecoin share both the
+address derivation and the variant marker. Stablecoin is detected
+via `isStablecoin(token)` (one external call into the token's
+`currency()` accessor). Worth team confirmation that this collapse is
+desirable.
+
+### 4. Three separate functions vs one unified `createToken(variant, ...)`
+
+PRD wording implies unified. Current draft uses separate per-variant
+functions for clearer typing and per-variant params structs. Worth
+team confirmation.

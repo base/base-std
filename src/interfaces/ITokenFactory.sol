@@ -95,13 +95,20 @@ interface ITokenFactory {
     ///                               admin to renounce.
     /// @param capabilities           Immutable capability bitfield. See
     ///                               `Capabilities` for the bit
-    ///                               definitions. Currently only
-    ///                               `PAUSABLE` and `CAP_MUTABLE` are
-    ///                               valid for Default-variant tokens.
+    ///                               definitions. The factory validates
+    ///                               that only bits valid for this
+    ///                               variant are set; reverts with
+    ///                               `InvalidCapabilities` otherwise.
+    ///                               For Default tokens, only `PAUSABLE`
+    ///                               and `CAP_MUTABLE` are valid.
     /// @param transferPolicyId       Initial value of `transferPolicyId`.
-    ///                               OPEN DESIGN QUESTION (see
-    ///                               FACTORY_DESIGN_NOTES.md): required
-    ///                               or default-to-always-allow?
+    ///                               Required field; caller MUST pass a
+    ///                               value. The recommended default for
+    ///                               tokens without compliance needs is
+    ///                               policy ID `1` (always-allow). Pass
+    ///                               policy ID `0` (always-reject) to
+    ///                               start in a soft-paused state until
+    ///                               compliance is configured.
     /// @param supplyCap              Initial value of `supplyCap`. Use
     ///                               `type(uint256).max` for no cap.
     ///                               To make the token permanently
@@ -253,8 +260,10 @@ interface ITokenFactory {
     error InvalidSupplyCap();
 
     /// @notice The provided capability bitfield contains bits that are
-    ///         not valid for this variant (e.g. setting a security-
-    ///         specific bit on a Default token).
+    ///         not valid for this variant. The factory validates that:
+    ///         (a) only currently-defined bits are set (no reserved /
+    ///         future bits), and (b) only variant-appropriate bits are
+    ///         set (e.g. `ASSET_*` bits only on Security tokens).
     error InvalidCapabilities(uint256 capabilities);
 
     /// @notice A extra metadata `type` was the empty string.
