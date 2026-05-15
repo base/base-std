@@ -10,68 +10,73 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         top.
 /// @dev    Bits are append-only across protocol versions. Once a bit's meaning
 ///         is published, it cannot be reused or repurposed; new features get
-///         new higher-numbered bits. Default-token bits start at `1 << 0`;
-///         variants (Stablecoin, Security, ...) may define additional bits in
-///         their own ranges to avoid collisions.
+///         new higher-numbered bits. Default-token bits live in 0..15;
+///         variants (Security 16..23, Stablecoin 24..31) define additional
+///         bits in their own ranges to avoid collisions.
+///
+///         Granular pause control (which operations can be paused while the
+///         token is in a partial-pause state) is governed by `PauseVectors`,
+///         not by capability bits. A token whose `PAUSABLE` capability is
+///         unset cannot be paused at all; a token whose `PAUSABLE` is set
+///         can be paused on any combination of vectors. Capability bits
+///         govern whether a function exists at all; pause vectors govern
+///         which existing functions are temporarily halted.
 library Capabilities {
     /*//////////////////////////////////////////////////////////////
-                         Default token bits (0..15)
+                         Default-token bits (0..15)
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice `pause()` and `unpause()` are callable.
+    /// @notice `pause(uint256)` and `unpause()` are callable. When unset,
+    ///         the token can never be paused: `pause` reverts with
+    ///         `FeatureDisabled`, `paused()` always returns 0.
     uint256 internal constant PAUSABLE = 1 << 0;
 
-    /// @notice `mint()` and `mintWithMemo()` are callable.
-    uint256 internal constant MINTABLE = 1 << 1;
+    /// @notice `setSupplyCap(uint256)` is callable. When unset, the
+    ///         supply cap set at creation is permanent.
+    uint256 internal constant CAP_MUTABLE = 1 << 1;
 
-    /// @notice `burn()` and `burnWithMemo()` are callable.
-    uint256 internal constant BURNABLE = 1 << 2;
-
-    /// @notice `burnBlocked()` is callable. Gated separately from `BURNABLE`
-    ///         so issuers can permit normal burns while disabling
-    ///         compliance-style force-burns, or vice versa.
-    uint256 internal constant BURN_BLOCKED = 1 << 3;
-
-    /// @notice `grantRole`, `revokeRole`, and `setRoleAdmin` are callable.
-    ///         When unset, the role configuration written by the factory at
-    ///         creation is permanent. Holders may still `renounceRole`
-    ///         themselves; renunciation is always allowed.
-    uint256 internal constant ADMIN_MUTABLE = 1 << 4;
-
-    /// @notice `changeTransferPolicyId()` is callable. When unset, the policy
-    ///         ID set at creation is permanent. Note: the membership of the
-    ///         referenced policy can still change because that is controlled
-    ///         by the policy admin in the registry, not by the token.
-    uint256 internal constant POLICY_MUTABLE = 1 << 5;
-
-    /// @notice `setSupplyCap()` is callable. When unset, the supply cap set
-    ///         at creation is permanent.
-    uint256 internal constant CAP_MUTABLE = 1 << 6;
-
-    /// @notice `setContractURI()` is callable. When unset, the contract URI
-    ///         set at creation is permanent.
-    uint256 internal constant URI_MUTABLE = 1 << 7;
+    // Bits 2..15 reserved for future Default-token capabilities.
+    //
+    // Note that several capability bits from earlier drafts have been
+    // removed because the team decided their underlying behavior should
+    // simply not exist in the protocol surface, OR because the desired
+    // guarantee can be expressed using existing primitives without a
+    // dedicated bit:
+    //   - MINTABLE: removed. Tokens that want "fixed supply forever"
+    //     achieve it by setting `supplyCap == initialSupply` at creation
+    //     with `CAP_MUTABLE` unset; `mint` then always reverts with
+    //     `SupplyCapExceeded`. Tokens that want "no minting right now
+    //     but maybe later" simply leave `MINT_ROLE` ungranted.
+    //   - BURNABLE: burn is unconditionally available; tokens that don't
+    //     want burns simply never grant BURN_ROLE. Per the PRD, there is
+    //     no irreversible-disable opt-out for burn at the protocol level.
+    //   - BURN_BLOCKED: force-burn from policy-blocked addresses is not
+    //     in the Default surface at all; sanctions seizure is a
+    //     periphery / variant concern.
+    //   - ADMIN_MUTABLE: role management is always available per the
+    //     OZ AccessControl pattern adopted in this draft.
+    //   - POLICY_MUTABLE: admin can always swap the transfer policy ID
+    //     (the policy itself can also evolve via its own admin in the
+    //     registry).
+    //   - URI_MUTABLE: contract URI updates are always available to
+    //     admin; an issuer that wants a fixed URI simply never updates it.
 
     /*//////////////////////////////////////////////////////////////
-                       Security-token bits (16..23)
+                       Security-variant bits (16..23)
     //////////////////////////////////////////////////////////////*/
 
     /// @notice On a Security token, `create()` is callable. When unset, the
-    ///         compliant issuance path is permanently disabled (the token's
-    ///         supply is effectively frozen except for `adminMint` /
-    ///         `adminBurn`, if those are also enabled).
+    ///         compliant issuance path is permanently disabled.
     uint256 internal constant SECURITY_CREATABLE = 1 << 16;
 
     /// @notice On a Security token, `redeem()` is callable. When unset,
     ///         off-chain redemption via the security-specific path is
-    ///         permanently disabled (holders can still self-burn via the
-    ///         inherited `burn` if `BURNABLE` is set).
+    ///         permanently disabled.
     uint256 internal constant SECURITY_REDEEMABLE = 1 << 17;
 
     /// @notice On a Security token, `updateShareRatio()` is callable. When
     ///         unset, the token-to-share ratio set at creation (typically
-    ///         1:1) is permanent. Useful for securities that will never
-    ///         split (most ETFs, single-class commodities).
+    ///         1:1) is permanent.
     uint256 internal constant SHARE_RATIO_MUTABLE = 1 << 18;
 
     /// @notice On a Security token, `updateName` / `updateSymbol` /
@@ -85,66 +90,56 @@ library Capabilities {
     uint256 internal constant SECURITY_ADMIN_BATCH = 1 << 20;
 
     /*//////////////////////////////////////////////////////////////
-                       Stablecoin-token bits (24..31)
+                       Stablecoin-variant bits (24..31)
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice On a Stablecoin token, per-minter rate limiting is enforced
-    ///         on `mint()` / `mintWithMemo()`. `configureMinter`,
-    ///         `grantMinterRoleWithLimit`, `currentMintLimit`, and
-    ///         `mintRateLimitConfig` are callable. When unset, the
-    ///         stablecoin still has `MINT_ROLE` gating but no rate limiting:
-    ///         a holder of MINT_ROLE may mint freely up to the inherited
-    ///         `supplyCap`.
-    uint256 internal constant STABLECOIN_MINT_RATE_LIMITED = 1 << 24;
-
-    /// @notice On a Stablecoin token, ERC-3009 `transferWithAuthorization`,
-    ///         `receiveWithAuthorization`, and `cancelAuthorization` are
-    ///         callable. When unset, the gasless-transfer surface is
-    ///         permanently disabled (holders fall back to ERC-20 + EIP-2612
-    ///         permit).
-    uint256 internal constant STABLECOIN_AUTHORIZATIONS = 1 << 25;
+    // The Stablecoin variant currently has no variant-specific
+    // capability bits. Bits 24..31 are reserved for future stablecoin
+    // additions.
+    //
+    // Earlier drafts defined STABLECOIN_MINT_RATE_LIMITED (per-minter
+    // rate limiting) and STABLECOIN_AUTHORIZATIONS (ERC-3009). Both
+    // were removed when the corresponding surface moved out of
+    // `IStablecoin` to EVM periphery contracts. See `IStablecoin` for
+    // the rationale.
 
     /*//////////////////////////////////////////////////////////////
                                 Presets
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Every Default-token feature enabled. The standard configuration
-    ///         for tokens that expect to operate under active governance:
-    ///         stablecoins, wrapped assets, institutional-issued tokens.
-    uint256 internal constant ALL = type(uint256).max;
+    /// @notice All currently-defined optional features enabled. Useful as
+    ///         the maximum-capability baseline for tokens under active
+    ///         governance.
+    uint256 internal constant ALL = PAUSABLE | CAP_MUTABLE | SECURITY_CREATABLE | SECURITY_REDEEMABLE
+        | SHARE_RATIO_MUTABLE | SECURITY_METADATA_MUTABLE | SECURITY_ADMIN_BATCH;
 
     /// @notice Zero optional features. The token is a permissioned-free
     ///         ERC-20 with permit and memo support and nothing else: no
-    ///         admin, no pause, no further mints or burns after the initial
-    ///         supply, no policy changes, no URI changes. Supply is whatever
-    ///         was minted at creation, locked forever. Suitable for
-    ///         permissionless meme coins and similar credibly-neutral tokens.
+    ///         pause, no cap updates. Combined with
+    ///         `supplyCap == initialSupply` at creation, this is the
+    ///         "fixed supply forever" memecoin shape: future mints
+    ///         always revert because the cap can never be raised.
     uint256 internal constant IMMUTABLE_MEMECOIN = 0;
 
-    /// @notice Admin can pause, change the transfer policy, manage roles, and
-    ///         update the contract URI, but supply is permanently fixed (no
-    ///         further mints or burns of any kind). Suitable for tokens with
-    ///         a one-time issuance event followed by ongoing operational
+    /// @notice Pausable, permanently-fixed supply. The supply cap (set
+    ///         to initial supply at creation) is locked and admin can
+    ///         pause and manage roles. No further mints are possible
+    ///         because the cap can never be raised. Suitable for tokens
+    ///         with a one-time issuance followed by ongoing operational
     ///         governance.
-    uint256 internal constant FIXED_SUPPLY = PAUSABLE | ADMIN_MUTABLE | POLICY_MUTABLE | URI_MUTABLE;
+    uint256 internal constant FIXED_SUPPLY = PAUSABLE;
 
     /// @notice Standard equity-style security token: supports compliant
     ///         issuance via `create`, user redemption via `redeem`,
     ///         share-ratio updates (for splits), all metadata updates, and
-    ///         cold-path admin batch operations. Inherited mint/burn paths
-    ///         are disabled in favor of the security-specific functions;
-    ///         BURN_BLOCKED stays on for sanctions enforcement.
-    uint256 internal constant STANDARD_EQUITY = PAUSABLE | BURN_BLOCKED | ADMIN_MUTABLE | POLICY_MUTABLE | CAP_MUTABLE
-        | URI_MUTABLE | SECURITY_CREATABLE | SECURITY_REDEEMABLE | SHARE_RATIO_MUTABLE | SECURITY_METADATA_MUTABLE
-        | SECURITY_ADMIN_BATCH;
+    ///         cold-path admin batch operations. Pausable; supply cap
+    ///         mutable.
+    uint256 internal constant STANDARD_EQUITY = PAUSABLE | CAP_MUTABLE | SECURITY_CREATABLE | SECURITY_REDEEMABLE
+        | SHARE_RATIO_MUTABLE | SECURITY_METADATA_MUTABLE | SECURITY_ADMIN_BATCH;
 
-    /// @notice Standard payment-rail stablecoin: supports rate-limited mint
-    ///         (per-minter quotas), burn, ERC-3009 gasless transfers, pause,
-    ///         and full admin / policy / URI mutability. Does NOT include
-    ///         BURN_BLOCKED (matches the "freeze, never seize" philosophy
-    ///         of CDP Custom Stablecoin and similar). Issuers who want
-    ///         force-burn for sanctions enforcement can OR `BURN_BLOCKED`
-    ///         in at creation.
-    uint256 internal constant STANDARD_STABLECOIN = PAUSABLE | MINTABLE | BURNABLE | ADMIN_MUTABLE | POLICY_MUTABLE
-        | CAP_MUTABLE | URI_MUTABLE | STABLECOIN_MINT_RATE_LIMITED | STABLECOIN_AUTHORIZATIONS;
+    /// @notice Standard payment-rail stablecoin: pausable, supply cap
+    ///         mutable. Per-minter rate limiting and ERC-3009 are not
+    ///         on the protocol surface; issuers add them via periphery
+    ///         contracts that hold `MINT_ROLE` on the precompile.
+    uint256 internal constant STANDARD_STABLECOIN = PAUSABLE | CAP_MUTABLE;
 }
