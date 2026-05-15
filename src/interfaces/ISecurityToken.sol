@@ -109,9 +109,7 @@ interface ISecurityToken is IDefaultToken {
     /// @notice A security identifier (ISIN, CUSIP, FIGI, etc.) was set,
     ///         changed, or removed. `value` is the empty string on
     ///         removal.
-    event SecurityIdentifierUpdated(
-        address indexed caller, string announcementId, string identifierType, string value
-    );
+    event SecurityIdentifierUpdated(address indexed caller, string announcementId, string identifierType, string value);
 
     /// @notice Supply created via the compliant issuance path.
     event Created(address indexed to, uint256 amount);
@@ -240,11 +238,8 @@ interface ISecurityToken is IDefaultToken {
     ///         `announcementId`. Subject to the inherited `supplyCap`.
     ///         Reverts atomically if any single recipient fails;
     ///         partial mints are not possible.
-    function adminMint(
-        string calldata announcementId,
-        address[] calldata recipients,
-        uint256[] calldata amounts
-    ) external;
+    function adminMint(string calldata announcementId, address[] calldata recipients, uint256[] calldata amounts)
+        external;
 
     /// @notice Cold-path batch burn. Used for cold-path corporate
     ///         actions (reverse-tender settlement, mass-corrections
@@ -256,11 +251,7 @@ interface ISecurityToken is IDefaultToken {
     ///         `announcementId`. Reverts atomically if any single
     ///         account lacks sufficient balance; partial burns are not
     ///         possible.
-    function adminBurn(
-        string calldata announcementId,
-        address[] calldata accounts,
-        uint256[] calldata amounts
-    ) external;
+    function adminBurn(string calldata announcementId, address[] calldata accounts, uint256[] calldata amounts) external;
 
     /*//////////////////////////////////////////////////////////////
                        SECURITY IDENTIFIERS
