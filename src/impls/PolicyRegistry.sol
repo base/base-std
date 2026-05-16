@@ -12,7 +12,7 @@ import {PolicySlot} from "./PolicySlot.sol";
 ///      is never zero), and COMPOUND always has type byte = 2 (so packed is never zero).
 ///
 ///      Authorization cost: at most 2 SLOADs for any policy. For a compound policy,
-///      one SLOAD reads the packed slot (yielding all four child IDs), and one SLOAD
+///      one SLOAD reads the packed slot (yielding all four constituent IDs), and one SLOAD
 ///      reads the relevant constituent's member set. Compound constituents cannot themselves be
 ///      COMPOUND (enforced at creation), so evaluation never goes deeper.
 contract PolicyRegistry is IPolicyRegistry {
@@ -215,13 +215,14 @@ contract PolicyRegistry is IPolicyRegistry {
         if (packed == 0) revert PolicyNotFound();
     }
 
-    // Validates that policyId is a legal compound constituent: must exist and must not
-    // itself be COMPOUND. Built-in IDs 0 and 1 are always valid.
+    // Validates that policyId is a legal compound constituent: must exist and must be
+    // WHITELIST or BLACKLIST. Built-in IDs 0 and 1 are always valid.
     function _requireConstituent(uint64 policyId) internal view {
         if (policyId < FIRST_CUSTOM_ID) return;
         uint256 packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
-        if (packed.decodeType() == PolicyType.COMPOUND) revert ConstituentIsCompound();
+        PolicyType policyType = packed.decodeType();
+        if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert ConstituentIsCompound();
     }
 
     // Resolves an authorization check for a single role slot. The shift selects
