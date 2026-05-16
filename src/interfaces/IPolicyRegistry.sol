@@ -4,16 +4,18 @@ pragma solidity >=0.8.20 <0.9.0;
 /// @title IPolicyRegistry
 /// @notice Singleton registry of transfer-authorization policies for B-20
 ///         tokens. Each B-20 token holds a single `transferPolicyId`
-///         pointing into this registry; on every transfer or mint, the
-///         token consults the registry to determine whether the involved
+///         pointing into this registry; on every transfer, mint, or redeem,
+///         the token consults the registry to determine whether the involved
 ///         addresses are authorized.
 ///
-///         Three policy types are supported in v1:
+///         Five policy types are defined:
 ///         - WHITELIST: only listed addresses are authorized.
 ///         - BLACKLIST: all addresses except listed ones are authorized.
-///         - COMPOUND: references three simple policies, one for senders,
-///           one for recipients, one for mint recipients. Lets a single
-///           policy ID carry asymmetric rules.
+///         - COMPOUND: references four constituent policies, one each for
+///           senders, recipients, mint recipients, and redeemers. Lets a
+///           single policy ID carry asymmetric per-role rules.
+///         - ALWAYS_REJECT: built-in; all authorization queries return false.
+///         - ALWAYS_ALLOW: built-in; all authorization queries return true.
 ///
 /// @dev    Adapted from Tempo TIP-403 + TIP-1015 with three deliberate
 ///         omissions: no virtual-address rejection logic (no TIP-1022 on
@@ -41,27 +43,15 @@ interface IPolicyRegistry {
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Policy type discriminator.
-    /// @param WHITELIST An address is authorized only if it is in the policy's set.
-    /// @param BLACKLIST An address is authorized unless it is in the policy's set.
-    /// @param COMPOUND  The policy carries no member set of its own. It
-    ///                  references three simple policies and delegates the
-    ///                  per-role check.
+    /// @notice Policy type discriminator. ALWAYS_REJECT and ALWAYS_ALLOW are
+    ///         reserved for the built-in IDs (0 and 1) and cannot be assigned
+    ///         to created policies.
     enum PolicyType {
         WHITELIST,     // 0: address-set membership; authorized if in set
         BLACKLIST,     // 1: address-set membership; authorized if NOT in set
         COMPOUND,      // 2: per-role slots delegating to constituent policies
         ALWAYS_REJECT, // 3: built-in; all authorization queries return false
         ALWAYS_ALLOW   // 4: built-in; all authorization queries return true
-    }
-
-    /// @notice Top-level data for any policy (simple or compound).
-    /// @param policyType The type of the policy.
-    /// @param admin      The address that may modify this policy. Zero for
-    ///                   COMPOUND policies (they are structurally immutable).
-    struct PolicyData {
-        PolicyType policyType;
-        address admin;
     }
 
     /// @notice Constituent policy IDs for a compound policy. Each slot maps to one
