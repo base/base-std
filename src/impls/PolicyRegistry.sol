@@ -42,10 +42,12 @@ contract PolicyRegistry is IPolicyRegistry {
                            POLICY CREATION
     //////////////////////////////////////////////////////////////*/
 
+    /// @inheritdoc IPolicyRegistry
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId) {
         newPolicyId = _createPolicy(admin, policyType);
     }
 
+    /// @inheritdoc IPolicyRegistry
     function createPolicyWithAccounts(address admin, PolicyType policyType, address[] calldata accounts)
         external
         returns (uint64 newPolicyId)
@@ -64,6 +66,7 @@ contract PolicyRegistry is IPolicyRegistry {
         }
     }
 
+    /// @inheritdoc IPolicyRegistry
     function createCompoundPolicy(
         uint64 senderPolicyId,
         uint64 recipientPolicyId,
@@ -86,16 +89,18 @@ contract PolicyRegistry is IPolicyRegistry {
                          POLICY ADMINISTRATION
     //////////////////////////////////////////////////////////////*/
 
+    /// @inheritdoc IPolicyRegistry
     function setPolicyAdmin(uint64 policyId, address newAdmin) external {
         if (newAdmin == address(0)) revert ZeroAddress();
         uint256 packed = _requireExists(policyId);
-        PolicyType pt = packed.decodeType();
-        if (pt == PolicyType.COMPOUND) revert IncompatiblePolicyType();
+        PolicyType policyType = packed.decodeType();
+        if (policyType == PolicyType.COMPOUND) revert IncompatiblePolicyType();
         if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
-        _policyData[policyId] = PolicySlot.encodeSimple(pt, newAdmin);
+        _policyData[policyId] = PolicySlot.encodeSimple(policyType, newAdmin);
         emit PolicyAdminUpdated(policyId, msg.sender, newAdmin);
     }
 
+    /// @inheritdoc IPolicyRegistry
     function modifyPolicyWhitelist(uint64 policyId, address account, bool allowed) external {
         uint256 packed = _requireExists(policyId);
         if (packed.decodeType() != PolicyType.WHITELIST) revert IncompatiblePolicyType();
@@ -104,6 +109,7 @@ contract PolicyRegistry is IPolicyRegistry {
         emit WhitelistUpdated(policyId, msg.sender, account, allowed);
     }
 
+    /// @inheritdoc IPolicyRegistry
     function modifyPolicyBlacklist(uint64 policyId, address account, bool restricted) external {
         uint256 packed = _requireExists(policyId);
         if (packed.decodeType() != PolicyType.BLACKLIST) revert IncompatiblePolicyType();
@@ -119,7 +125,7 @@ contract PolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address user) external view returns (bool) {
         return _checkRole(policyId, user, PolicySlot.SENDER_SHIFT)
-            && _checkRole(policyId, user, PolicySlot.RECIP_SHIFT);
+            && _checkRole(policyId, user, PolicySlot.RECIPIENT_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -129,7 +135,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorizedRecipient(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicySlot.RECIP_SHIFT);
+        return _checkRole(policyId, user, PolicySlot.RECIPIENT_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -146,22 +152,28 @@ contract PolicyRegistry is IPolicyRegistry {
                            POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
 
+    /// @inheritdoc IPolicyRegistry
     function policyIdCounter() external view returns (uint64) {
         return _counter;
     }
 
+    /// @inheritdoc IPolicyRegistry
     function policyExists(uint64 policyId) external view returns (bool) {
         return _exists(policyId);
     }
 
+    /// @inheritdoc IPolicyRegistry
     function policyData(uint64 policyId) external view returns (PolicyType policyType, address admin) {
         if (!_exists(policyId)) revert PolicyNotFound();
+        // Built-ins have no stored slot; return WHITELIST as a conventional placeholder
+        // since the interface specifies the type is implementation-defined for IDs 0 and 1.
         if (policyId < FIRST_CUSTOM_ID) return (PolicyType.WHITELIST, address(0));
         uint256 packed = _policyData[policyId];
         policyType = packed.decodeType();
         admin = policyType == PolicyType.COMPOUND ? address(0) : packed.decodeAdmin();
     }
 
+    /// @inheritdoc IPolicyRegistry
     function compoundPolicyData(uint64 policyId)
         external
         view
@@ -170,7 +182,7 @@ contract PolicyRegistry is IPolicyRegistry {
         uint256 packed = _requireExists(policyId);
         if (packed.decodeType() != PolicyType.COMPOUND) revert IncompatiblePolicyType();
         senderPolicyId = packed.decodeIdAt(PolicySlot.SENDER_SHIFT);
-        recipientPolicyId = packed.decodeIdAt(PolicySlot.RECIP_SHIFT);
+        recipientPolicyId = packed.decodeIdAt(PolicySlot.RECIPIENT_SHIFT);
         mintRecipientPolicyId = packed.decodeIdAt(PolicySlot.MINT_SHIFT);
         redeemerPolicyId = packed.decodeIdAt(PolicySlot.REDEEM_SHIFT);
     }
@@ -224,17 +236,17 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyId == ALWAYS_ALLOW_ID) return true;
 
         uint256 packed = _policyData[policyId];
-        PolicyType pt = packed.decodeType();
+        PolicyType policyType = packed.decodeType();
 
-        uint64 effectiveId = policyId;
-        if (pt == PolicyType.COMPOUND) {
-            effectiveId = packed.decodeIdAt(shift);
-            if (effectiveId == ALWAYS_REJECT_ID) return false;
-            if (effectiveId == ALWAYS_ALLOW_ID) return true;
-            packed = _policyData[effectiveId];
-            pt = packed.decodeType();
+        if (policyType == PolicyType.COMPOUND) {
+            uint64 childId = packed.decodeIdAt(shift);
+            if (childId == ALWAYS_REJECT_ID) return false;
+            if (childId == ALWAYS_ALLOW_ID) return true;
+            packed = _policyData[childId];
+            policyType = packed.decodeType();
+            return policyType == PolicyType.WHITELIST ? _members[childId][user] : !_members[childId][user];
         }
 
-        return pt == PolicyType.WHITELIST ? _members[effectiveId][user] : !_members[effectiveId][user];
+        return policyType == PolicyType.WHITELIST ? _members[policyId][user] : !_members[policyId][user];
     }
 }

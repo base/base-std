@@ -35,8 +35,8 @@ library PolicySlot {
     uint256 internal constant ID_MASK = (uint256(1) << ID_BITS) - 1;
 
     uint256 internal constant SENDER_SHIFT = 8;
-    uint256 internal constant RECIP_SHIFT = SENDER_SHIFT + ID_BITS; // 70
-    uint256 internal constant MINT_SHIFT = RECIP_SHIFT + ID_BITS; // 132
+    uint256 internal constant RECIPIENT_SHIFT = SENDER_SHIFT + ID_BITS; // 70
+    uint256 internal constant MINT_SHIFT = RECIPIENT_SHIFT + ID_BITS; // 132
     uint256 internal constant REDEEM_SHIFT = MINT_SHIFT + ID_BITS; // 194
 
     function encodeSimple(IPolicyRegistry.PolicyType policyType, address policyAdmin) internal pure returns (uint256) {
@@ -49,7 +49,7 @@ library PolicySlot {
         returns (uint256)
     {
         return uint256(IPolicyRegistry.PolicyType.COMPOUND) | (uint256(sender) << SENDER_SHIFT)
-            | (uint256(recipient) << RECIP_SHIFT) | (uint256(mintRecipient) << MINT_SHIFT)
+            | (uint256(recipient) << RECIPIENT_SHIFT) | (uint256(mintRecipient) << MINT_SHIFT)
             | (uint256(redeemer) << REDEEM_SHIFT);
     }
 
