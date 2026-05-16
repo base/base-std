@@ -21,7 +21,7 @@ import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 ///          [69:8]    senderPolicyId        (62 bits)
 ///          [7:0]     PolicyType = 2
 ///
-///      Child policy IDs are stored as 62 bits rather than 64. This lets the type
+///      Constituent policy IDs are stored as 62 bits rather than 64. This lets the type
 ///      byte plus all four IDs fit in exactly one 256-bit slot (8 + 4*62 = 256).
 ///      Policy IDs are uint64 in the interface but packed as 62 bits in compound slots.
 ///      _policyIdCounter would need to reach 2^62 (~4.6e18) for truncation to occur,
@@ -62,7 +62,7 @@ library PolicySlot {
         return address(uint160(packed >> 8));
     }
 
-    // Extracts the child policy ID at the given shift offset.
+    // Extracts the constituent policy ID at the given shift offset.
     function decodeIdAt(uint256 packed, uint256 shift) internal pure returns (uint64) {
         // forge-lint: disable-next-line(unsafe-typecast)
         return uint64((packed >> shift) & ID_MASK);

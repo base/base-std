@@ -63,7 +63,7 @@ interface IPolicyRegistry {
     }
 
     /// @notice Constituent policy IDs for a compound policy. Each slot maps to one
-    ///         transfer role; the referenced policy is evaluated against the address
+    ///         transfer role; the constituent policy is evaluated against the address
     ///         fulfilling that role. Slots may reference any simple policy (WHITELIST,
     ///         BLACKLIST) or a built-in ID. Use ID `1` (always-allow) for any slot
     ///         with no constraint, or `0` (always-reject) to hard-block a role.
@@ -156,15 +156,15 @@ interface IPolicyRegistry {
         external
         returns (uint64 newPolicyId);
 
-    /// @notice Creates a new compound policy referencing four child policy IDs,
-    ///         one per transfer role. Compound policies are immutable: child IDs
+    /// @notice Creates a new compound policy referencing four constituent policy IDs,
+    ///         one per transfer role. Compound policies are immutable: constituent IDs
     ///         cannot be changed after creation, and there is no admin. To rotate
     ///         the configuration, create a new compound policy and re-point the
     ///         token's `transferPolicyId`.
-    /// @dev    Permissionless. Each child MUST exist and MUST NOT be COMPOUND.
+    /// @dev    Permissionless. Each constituent MUST exist and MUST NOT be COMPOUND.
     ///         Built-in IDs (0 and 1) are always valid. Reverts with
     ///         `PolicyNotFound` for unknown IDs and `ConstituentIsCompound` if
-    ///         any child is itself COMPOUND.
+    ///         any constituent is itself COMPOUND.
     function createCompoundPolicy(
         uint64 senderPolicyId,
         uint64 recipientPolicyId,

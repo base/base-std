@@ -13,7 +13,7 @@ import {PolicySlot} from "./PolicySlot.sol";
 ///
 ///      Authorization cost: at most 2 SLOADs for any policy. For a compound policy,
 ///      one SLOAD reads the packed slot (yielding all four child IDs), and one SLOAD
-///      reads the relevant child's member set. Compound children cannot themselves be
+///      reads the relevant constituent's member set. Compound constituents cannot themselves be
 ///      COMPOUND (enforced at creation), so evaluation never goes deeper.
 contract PolicyRegistry is IPolicyRegistry {
     using PolicySlot for uint256;
@@ -216,7 +216,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (packed == 0) revert PolicyNotFound();
     }
 
-    // Validates that policyId is a legal compound child: must exist and must not
+    // Validates that policyId is a legal compound constituent: must exist and must not
     // itself be COMPOUND. Built-in IDs 0 and 1 are always valid.
     function _requireConstituent(uint64 policyId) internal view {
         if (policyId < FIRST_CUSTOM_ID) return;
@@ -239,12 +239,12 @@ contract PolicyRegistry is IPolicyRegistry {
         PolicyType policyType = packed.decodeType();
 
         if (policyType == PolicyType.COMPOUND) {
-            uint64 childId = packed.decodeIdAt(shift);
-            if (childId == ALWAYS_REJECT_ID) return false;
-            if (childId == ALWAYS_ALLOW_ID) return true;
-            packed = _policyData[childId];
+            uint64 constituentId = packed.decodeIdAt(shift);
+            if (constituentId == ALWAYS_REJECT_ID) return false;
+            if (constituentId == ALWAYS_ALLOW_ID) return true;
+            packed = _policyData[constituentId];
             policyType = packed.decodeType();
-            return policyType == PolicyType.WHITELIST ? _members[childId][user] : !_members[childId][user];
+            return policyType == PolicyType.WHITELIST ? _members[constituentId][user] : !_members[constituentId][user];
         }
 
         return policyType == PolicyType.WHITELIST ? _members[policyId][user] : !_members[policyId][user];
