@@ -165,9 +165,8 @@ contract PolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function policyData(uint64 policyId) external view returns (PolicyType policyType, address admin) {
         if (!_exists(policyId)) revert PolicyNotFound();
-        // Built-ins have no stored slot; return WHITELIST as a conventional placeholder
-        // since the interface specifies the type is implementation-defined for IDs 0 and 1.
-        if (policyId < FIRST_CUSTOM_ID) return (PolicyType.WHITELIST, address(0));
+        if (policyId == ALWAYS_REJECT_ID) return (PolicyType.ALWAYS_REJECT, address(0));
+        if (policyId == ALWAYS_ALLOW_ID) return (PolicyType.ALWAYS_ALLOW, address(0));
         uint256 packed = _policyData[policyId];
         policyType = packed.decodeType();
         admin = policyType == PolicyType.COMPOUND ? address(0) : packed.decodeAdmin();
