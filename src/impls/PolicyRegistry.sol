@@ -48,7 +48,7 @@ contract PolicyRegistry is IPolicyRegistry {
     // BLACKLIST: member == true means the address is restricted.
     mapping(uint64 policyId => mapping(address account => bool)) private _members;
 
-    uint64 private _counter;
+    uint64 private _counter = FIRST_CUSTOM_ID;
 
     /*//////////////////////////////////////////////////////////////
                                CONSTANTS
@@ -68,36 +68,18 @@ contract PolicyRegistry is IPolicyRegistry {
     uint256 private constant REDEEM_SHIFT = MINT_SHIFT + ID_BITS; // 194
 
     /*//////////////////////////////////////////////////////////////
-                             CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
-
-    constructor() {
-        _counter = FIRST_CUSTOM_ID;
-    }
-
-    /*//////////////////////////////////////////////////////////////
                            POLICY CREATION
     //////////////////////////////////////////////////////////////*/
 
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId) {
-        if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert InvalidPolicyType();
-        if (admin == address(0)) revert ZeroAddress();
-        newPolicyId = _nextPolicyId();
-        _policyData[newPolicyId] = _encodeSimple(policyType, admin);
-        emit PolicyCreated(newPolicyId, msg.sender, policyType);
-        emit PolicyAdminUpdated(newPolicyId, msg.sender, admin);
+        newPolicyId = _createSimple(admin, policyType);
     }
 
     function createPolicyWithAccounts(address admin, PolicyType policyType, address[] calldata accounts)
         external
         returns (uint64 newPolicyId)
     {
-        if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert InvalidPolicyType();
-        if (admin == address(0)) revert ZeroAddress();
-        newPolicyId = _nextPolicyId();
-        _policyData[newPolicyId] = _encodeSimple(policyType, admin);
-        emit PolicyCreated(newPolicyId, msg.sender, policyType);
-        emit PolicyAdminUpdated(newPolicyId, msg.sender, admin);
+        newPolicyId = _createSimple(admin, policyType);
         bool isWhitelist = policyType == PolicyType.WHITELIST;
         mapping(address => bool) storage members = _members[newPolicyId];
         for (uint256 i = 0; i < accounts.length; ++i) {
@@ -135,7 +117,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     function setPolicyAdmin(uint64 policyId, address newAdmin) external {
         if (newAdmin == address(0)) revert ZeroAddress();
-        uint256 packed = _loadCustom(policyId);
+        uint256 packed = _requireExists(policyId);
         PolicyType pt = _decodeType(packed);
         if (pt == PolicyType.COMPOUND) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
@@ -144,7 +126,7 @@ contract PolicyRegistry is IPolicyRegistry {
     }
 
     function modifyPolicyWhitelist(uint64 policyId, address account, bool allowed) external {
-        uint256 packed = _loadCustom(policyId);
+        uint256 packed = _requireExists(policyId);
         if (_decodeType(packed) != PolicyType.WHITELIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _members[policyId][account] = allowed;
@@ -152,7 +134,7 @@ contract PolicyRegistry is IPolicyRegistry {
     }
 
     function modifyPolicyBlacklist(uint64 policyId, address account, bool restricted) external {
-        uint256 packed = _loadCustom(policyId);
+        uint256 packed = _requireExists(policyId);
         if (_decodeType(packed) != PolicyType.BLACKLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _members[policyId][account] = restricted;
@@ -213,7 +195,7 @@ contract PolicyRegistry is IPolicyRegistry {
         view
         returns (uint64 senderPolicyId, uint64 recipientPolicyId, uint64 mintRecipientPolicyId, uint64 redeemerPolicyId)
     {
-        uint256 packed = _loadCustom(policyId);
+        uint256 packed = _requireExists(policyId);
         if (_decodeType(packed) != PolicyType.COMPOUND) revert IncompatiblePolicyType();
         // forge-lint: disable-next-line(unsafe-typecast)
         senderPolicyId = uint64((packed >> SENDER_SHIFT) & ID_MASK);
@@ -233,14 +215,22 @@ contract PolicyRegistry is IPolicyRegistry {
         id = _counter++;
     }
 
+    function _createSimple(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
+        if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert InvalidPolicyType();
+        if (admin == address(0)) revert ZeroAddress();
+        newPolicyId = _nextPolicyId();
+        _policyData[newPolicyId] = _encodeSimple(policyType, admin);
+        emit PolicyCreated(newPolicyId, msg.sender, policyType);
+        emit PolicyAdminUpdated(newPolicyId, msg.sender, admin);
+    }
+
     function _exists(uint64 policyId) internal view returns (bool) {
         return policyId < FIRST_CUSTOM_ID || _policyData[policyId] != 0;
     }
 
-    // Loads the packed slot for a custom policy ID, reverting if it does not exist.
-    // Built-in IDs (0, 1) are intentionally excluded: they have no mutable state
-    // and cannot be administered.
-    function _loadCustom(uint64 policyId) internal view returns (uint256 packed) {
+    // Loads and returns the packed slot for a custom policy ID, reverting if it does
+    // not exist. Built-in IDs (0, 1) are excluded: they have no mutable state.
+    function _requireExists(uint64 policyId) internal view returns (uint256 packed) {
         if (policyId < FIRST_CUSTOM_ID) revert PolicyNotFound();
         packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
