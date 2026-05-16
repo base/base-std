@@ -89,25 +89,25 @@ contract PolicyRegistry is IPolicyRegistry {
     function setPolicyAdmin(uint64 policyId, address newAdmin) external {
         if (newAdmin == address(0)) revert ZeroAddress();
         uint256 packed = _requireExists(policyId);
-        PolicyType pt = packed.policyType();
+        PolicyType pt = packed.decodeType();
         if (pt == PolicyType.COMPOUND) revert IncompatiblePolicyType();
-        if (packed.admin() != msg.sender) revert Unauthorized();
+        if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
         _policyData[policyId] = PolicySlot.encodeSimple(pt, newAdmin);
         emit PolicyAdminUpdated(policyId, msg.sender, newAdmin);
     }
 
     function modifyPolicyWhitelist(uint64 policyId, address account, bool allowed) external {
         uint256 packed = _requireExists(policyId);
-        if (packed.policyType() != PolicyType.WHITELIST) revert IncompatiblePolicyType();
-        if (packed.admin() != msg.sender) revert Unauthorized();
+        if (packed.decodeType() != PolicyType.WHITELIST) revert IncompatiblePolicyType();
+        if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
         _members[policyId][account] = allowed;
         emit WhitelistUpdated(policyId, msg.sender, account, allowed);
     }
 
     function modifyPolicyBlacklist(uint64 policyId, address account, bool restricted) external {
         uint256 packed = _requireExists(policyId);
-        if (packed.policyType() != PolicyType.BLACKLIST) revert IncompatiblePolicyType();
-        if (packed.admin() != msg.sender) revert Unauthorized();
+        if (packed.decodeType() != PolicyType.BLACKLIST) revert IncompatiblePolicyType();
+        if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
         _members[policyId][account] = restricted;
         emit BlacklistUpdated(policyId, msg.sender, account, restricted);
     }
@@ -158,8 +158,8 @@ contract PolicyRegistry is IPolicyRegistry {
         if (!_exists(policyId)) revert PolicyNotFound();
         if (policyId < FIRST_CUSTOM_ID) return (PolicyType.WHITELIST, address(0));
         uint256 packed = _policyData[policyId];
-        policyType = packed.policyType();
-        admin = policyType == PolicyType.COMPOUND ? address(0) : packed.admin();
+        policyType = packed.decodeType();
+        admin = policyType == PolicyType.COMPOUND ? address(0) : packed.decodeAdmin();
     }
 
     function compoundPolicyData(uint64 policyId)
@@ -168,11 +168,11 @@ contract PolicyRegistry is IPolicyRegistry {
         returns (uint64 senderPolicyId, uint64 recipientPolicyId, uint64 mintRecipientPolicyId, uint64 redeemerPolicyId)
     {
         uint256 packed = _requireExists(policyId);
-        if (packed.policyType() != PolicyType.COMPOUND) revert IncompatiblePolicyType();
-        senderPolicyId = packed.idAt(PolicySlot.SENDER_SHIFT);
-        recipientPolicyId = packed.idAt(PolicySlot.RECIP_SHIFT);
-        mintRecipientPolicyId = packed.idAt(PolicySlot.MINT_SHIFT);
-        redeemerPolicyId = packed.idAt(PolicySlot.REDEEM_SHIFT);
+        if (packed.decodeType() != PolicyType.COMPOUND) revert IncompatiblePolicyType();
+        senderPolicyId = packed.decodeIdAt(PolicySlot.SENDER_SHIFT);
+        recipientPolicyId = packed.decodeIdAt(PolicySlot.RECIP_SHIFT);
+        mintRecipientPolicyId = packed.decodeIdAt(PolicySlot.MINT_SHIFT);
+        redeemerPolicyId = packed.decodeIdAt(PolicySlot.REDEEM_SHIFT);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -210,7 +210,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyId < FIRST_CUSTOM_ID) return;
         uint256 packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
-        if (packed.policyType() == PolicyType.COMPOUND) revert ConstituentIsCompound();
+        if (packed.decodeType() == PolicyType.COMPOUND) revert ConstituentIsCompound();
     }
 
     // Resolves an authorization check for a single role slot. The shift selects
@@ -224,15 +224,15 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyId == ALWAYS_ALLOW_ID) return true;
 
         uint256 packed = _policyData[policyId];
-        PolicyType pt = packed.policyType();
+        PolicyType pt = packed.decodeType();
 
         uint64 effectiveId = policyId;
         if (pt == PolicyType.COMPOUND) {
-            effectiveId = packed.idAt(shift);
+            effectiveId = packed.decodeIdAt(shift);
             if (effectiveId == ALWAYS_REJECT_ID) return false;
             if (effectiveId == ALWAYS_ALLOW_ID) return true;
             packed = _policyData[effectiveId];
-            pt = packed.policyType();
+            pt = packed.decodeType();
         }
 
         return pt == PolicyType.WHITELIST ? _members[effectiveId][user] : !_members[effectiveId][user];
