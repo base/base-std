@@ -48,9 +48,11 @@ interface IPolicyRegistry {
     ///                  references three simple policies and delegates the
     ///                  per-role check.
     enum PolicyType {
-        WHITELIST,
-        BLACKLIST,
-        COMPOUND
+        WHITELIST,     // 0: address-set membership; authorized if in set
+        BLACKLIST,     // 1: address-set membership; authorized if NOT in set
+        COMPOUND,      // 2: per-role slots delegating to constituent policies
+        ALWAYS_REJECT, // 3: built-in; all authorization queries return false
+        ALWAYS_ALLOW   // 4: built-in; all authorization queries return true
     }
 
     /// @notice Top-level data for any policy (simple or compound).
@@ -239,11 +241,9 @@ interface IPolicyRegistry {
     ///         exist; custom IDs (>=2) exist iff they have been created.
     function policyExists(uint64 policyId) external view returns (bool);
 
-    /// @notice Returns the type and admin of `policyId`.
-    /// @dev    For COMPOUND policies, `admin` is `address(0)`. For built-in
-    ///         policies, `admin` is `address(0)` and `policyType` is
-    ///         implementation-defined (the built-ins are not categorized as
-    ///         WHITELIST or BLACKLIST since they have no member set).
+    /// @notice Returns the type and admin of `policyId`. For COMPOUND policies,
+    ///         `admin` is `address(0)`. For built-in IDs, `admin` is `address(0)`
+    ///         and `policyType` is `ALWAYS_REJECT` (ID 0) or `ALWAYS_ALLOW` (ID 1).
     ///         Reverts with `PolicyNotFound` for unknown policy IDs.
     function policyData(uint64 policyId) external view returns (PolicyType policyType, address admin);
 
