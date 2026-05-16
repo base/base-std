@@ -39,8 +39,8 @@ library PolicySlot {
     uint256 internal constant MINT_SHIFT = RECIP_SHIFT + ID_BITS; // 132
     uint256 internal constant REDEEM_SHIFT = MINT_SHIFT + ID_BITS; // 194
 
-    function encodeSimple(IPolicyRegistry.PolicyType pt, address adm) internal pure returns (uint256) {
-        return uint256(pt) | (uint256(uint160(adm)) << 8);
+    function encodeSimple(IPolicyRegistry.PolicyType policyType, address policyAdmin) internal pure returns (uint256) {
+        return uint256(policyType) | (uint256(uint160(policyAdmin)) << 8);
     }
 
     function encodeCompound(uint64 sender, uint64 recipient, uint64 mintRecipient, uint64 redeemer)
@@ -53,17 +53,17 @@ library PolicySlot {
             | (uint256(redeemer) << REDEEM_SHIFT);
     }
 
-    function policyType(uint256 packed) internal pure returns (IPolicyRegistry.PolicyType) {
+    function decodeType(uint256 packed) internal pure returns (IPolicyRegistry.PolicyType) {
         return IPolicyRegistry.PolicyType(packed & TYPE_MASK);
     }
 
-    function admin(uint256 packed) internal pure returns (address) {
+    function decodeAdmin(uint256 packed) internal pure returns (address) {
         // forge-lint: disable-next-line(unsafe-typecast)
         return address(uint160(packed >> 8));
     }
 
     // Extracts the child policy ID at the given shift offset.
-    function idAt(uint256 packed, uint256 shift) internal pure returns (uint64) {
+    function decodeIdAt(uint256 packed, uint256 shift) internal pure returns (uint64) {
         // forge-lint: disable-next-line(unsafe-typecast)
         return uint64((packed >> shift) & ID_MASK);
     }
