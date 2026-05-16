@@ -3,7 +3,7 @@ pragma solidity >=0.8.20 <0.9.0;
 
 import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 
-/// @title PolicyDataLayout
+/// @title PolicySlot
 /// @notice Internal library for encoding and decoding packed policy storage slots.
 ///
 /// @dev Each policy is stored as a single uint256. The low 8 bits are always the
@@ -29,7 +29,7 @@ import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 ///
 ///      All functions are internal so they are inlined at compile time with no
 ///      runtime overhead.
-library PolicyDataLayout {
+library PolicySlot {
     uint256 internal constant TYPE_MASK = 0xFF;
     uint256 internal constant ID_BITS = 62;
     uint256 internal constant ID_MASK = (uint256(1) << ID_BITS) - 1;
