@@ -28,7 +28,7 @@ contract PolicyRegistry is IPolicyRegistry {
     // BLACKLIST: member == true means the address is restricted.
     mapping(uint64 policyId => mapping(address account => bool)) private _members;
 
-    uint64 private _counter = FIRST_CUSTOM_ID;
+    uint64 private _counter = FIRST_USER_POLICY_ID;
 
     /*//////////////////////////////////////////////////////////////
                                CONSTANTS
@@ -36,7 +36,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     uint64 private constant ALWAYS_REJECT_ID = 0;
     uint64 private constant ALWAYS_ALLOW_ID = 1;
-    uint64 private constant FIRST_CUSTOM_ID = 2;
+    uint64 private constant FIRST_USER_POLICY_ID = 2;
 
     /*//////////////////////////////////////////////////////////////
                            POLICY CREATION
@@ -204,13 +204,13 @@ contract PolicyRegistry is IPolicyRegistry {
     }
 
     function _exists(uint64 policyId) internal view returns (bool) {
-        return policyId < FIRST_CUSTOM_ID || _policyData[policyId] != 0;
+        return policyId < FIRST_USER_POLICY_ID || _policyData[policyId] != 0;
     }
 
     // Loads and returns the packed slot for a custom policy ID, reverting if it does
     // not exist. Built-in IDs (0, 1) are excluded: they have no mutable state.
     function _requireExists(uint64 policyId) internal view returns (uint256 packed) {
-        if (policyId < FIRST_CUSTOM_ID) revert PolicyNotFound();
+        if (policyId < FIRST_USER_POLICY_ID) revert PolicyNotFound();
         packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
     }
@@ -218,7 +218,7 @@ contract PolicyRegistry is IPolicyRegistry {
     // Validates that policyId is a legal compound constituent: must exist and must be
     // WHITELIST or BLACKLIST. Built-in IDs 0 and 1 are always valid.
     function _requireConstituent(uint64 policyId) internal view {
-        if (policyId < FIRST_CUSTOM_ID) return;
+        if (policyId < FIRST_USER_POLICY_ID) return;
         uint256 packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
         PolicyType policyType = packed.decodeType();
