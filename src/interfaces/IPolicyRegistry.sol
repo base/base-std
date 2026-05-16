@@ -88,10 +88,10 @@ interface IPolicyRegistry {
     /// @notice The referenced policy ID does not exist (and is not built-in).
     error PolicyNotFound();
 
-    /// @notice A compound policy attempted to reference another compound
-    ///         policy as a constituent. Only simple policies (WHITELIST,
-    ///         BLACKLIST) and the built-in IDs (0, 1) are valid constituents.
-    error PolicyNotSimple();
+    /// @notice A compound policy attempted to reference another compound policy
+    ///         as a constituent. Only WHITELIST, BLACKLIST, and built-in IDs
+    ///         (0, 1) are valid constituents.
+    error ConstituentIsCompound();
 
     /// @notice The operation is incompatible with the policy's type. For
     ///         example, calling `modifyPolicyWhitelist` on a BLACKLIST
@@ -110,8 +110,8 @@ interface IPolicyRegistry {
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted when a new simple (WHITELIST or BLACKLIST) policy is
-    ///         created. For compound policies, see `CompoundPolicyCreated`.
+    /// @notice Emitted when a new WHITELIST or BLACKLIST policy is created.
+    ///         For compound policies, see `CompoundPolicyCreated`.
     event PolicyCreated(uint64 indexed policyId, address indexed creator, PolicyType policyType);
 
     /// @notice Emitted when a new compound policy is created.
@@ -140,10 +140,10 @@ interface IPolicyRegistry {
                             POLICY CREATION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Creates a new simple (WHITELIST or BLACKLIST) policy.
-    /// @dev    Permissionless. Reverts with `InvalidPolicyType` if
-    ///         `policyType` is `COMPOUND` (use `createCompoundPolicy`),
-    ///         and with `ZeroAddress` if `admin` is `address(0)`.
+    /// @notice Creates a new WHITELIST or BLACKLIST policy.
+    /// @dev    Permissionless. Reverts with `InvalidPolicyType` if `policyType`
+    ///         is `COMPOUND` (use `createCompoundPolicy`), and with `ZeroAddress`
+    ///         if `admin` is `address(0)`.
     /// @param admin       The address authorized to modify this policy.
     /// @param policyType  WHITELIST or BLACKLIST.
     /// @return newPolicyId The newly assigned policy ID.
@@ -156,16 +156,15 @@ interface IPolicyRegistry {
         external
         returns (uint64 newPolicyId);
 
-    /// @notice Creates a new compound policy referencing four constituent
-    ///         simple policies, one per transfer role. Compound policies are
-    ///         structurally immutable: constituent IDs cannot be changed after
-    ///         creation, and there is no admin. To rotate the configuration,
-    ///         create a new compound policy and re-point the consuming
+    /// @notice Creates a new compound policy referencing four child policy IDs,
+    ///         one per transfer role. Compound policies are immutable: child IDs
+    ///         cannot be changed after creation, and there is no admin. To rotate
+    ///         the configuration, create a new compound policy and re-point the
     ///         token's `transferPolicyId`.
-    /// @dev    Permissionless. Each constituent MUST exist and MUST NOT be a
-    ///         COMPOUND policy. Built-in IDs (0 and 1) are always valid
-    ///         constituents. Reverts with `PolicyNotFound` for unknown IDs
-    ///         and `PolicyNotSimple` if any constituent is itself COMPOUND.
+    /// @dev    Permissionless. Each child MUST exist and MUST NOT be COMPOUND.
+    ///         Built-in IDs (0 and 1) are always valid. Reverts with
+    ///         `PolicyNotFound` for unknown IDs and `ConstituentIsCompound` if
+    ///         any child is itself COMPOUND.
     function createCompoundPolicy(
         uint64 senderPolicyId,
         uint64 recipientPolicyId,
@@ -177,9 +176,9 @@ interface IPolicyRegistry {
                           POLICY ADMINISTRATION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Transfers admin rights for a simple policy. Caller must be
-    ///         the current admin. Reverts on COMPOUND policies (they have
-    ///         no admin).
+    /// @notice Transfers admin rights for a WHITELIST or BLACKLIST policy.
+    ///         Caller must be the current admin. Reverts on COMPOUND policies
+    ///         (they have no admin).
     function setPolicyAdmin(uint64 policyId, address newAdmin) external;
 
     /// @notice Adds or removes an account from a WHITELIST policy. Caller
@@ -205,9 +204,9 @@ interface IPolicyRegistry {
     function isAuthorized(uint64 policyId, address user) external view returns (bool);
 
     /// @notice Whether `user` is authorized as a transfer sender under
-    ///         `policyId`. For simple policies this is equivalent to a
-    ///         single membership check; for compound policies it delegates
-    ///         to the policy's `senderPolicyId`.
+    ///         `policyId`. For WHITELIST/BLACKLIST policies this is a single
+    ///         membership check; for compound policies it delegates to the
+    ///         policy's `senderPolicyId`.
     function isAuthorizedSender(uint64 policyId, address user) external view returns (bool);
 
     /// @notice Whether `user` is authorized as a transfer recipient under
@@ -216,15 +215,15 @@ interface IPolicyRegistry {
     function isAuthorizedRecipient(uint64 policyId, address user) external view returns (bool);
 
     /// @notice Whether `user` is authorized as a mint recipient under
-    ///         `policyId`. Distinct from `isAuthorizedRecipient` for
-    ///         compound policies, which carry separate sender / recipient
-    ///         / mint-recipient slots. For simple policies this returns
-    ///         the same result as `isAuthorizedRecipient`.
+    ///         `policyId`. Distinct from `isAuthorizedRecipient` for compound
+    ///         policies, which carry separate per-role slots. For WHITELIST/
+    ///         BLACKLIST policies this returns the same result as
+    ///         `isAuthorizedRecipient`.
     function isAuthorizedMintRecipient(uint64 policyId, address user) external view returns (bool);
 
     /// @notice Whether `user` is authorized as a redeemer under `policyId`.
     ///         For compound policies, delegates to the policy's `redeemerPolicyId`.
-    ///         For simple policies, equivalent to `isAuthorizedRecipient`.
+    ///         For WHITELIST/BLACKLIST policies, equivalent to `isAuthorizedRecipient`.
     function isAuthorizedRedeemer(uint64 policyId, address user) external view returns (bool);
 
     /*//////////////////////////////////////////////////////////////

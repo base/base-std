@@ -2,7 +2,7 @@
 pragma solidity >=0.8.20 <0.9.0;
 
 import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
-import {PolicyDataLayout} from "./PolicyDataLayout.sol";
+import {PolicySlot} from "./PolicySlot.sol";
 
 /// @title PolicyRegistry
 /// @notice Implementation of the IPolicyRegistry precompile interface.
@@ -16,7 +16,7 @@ import {PolicyDataLayout} from "./PolicyDataLayout.sol";
 ///      reads the relevant child's member set. Compound children cannot themselves be
 ///      COMPOUND (enforced at creation), so evaluation never goes deeper.
 contract PolicyRegistry is IPolicyRegistry {
-    using PolicyDataLayout for uint256;
+    using PolicySlot for uint256;
 
     /*//////////////////////////////////////////////////////////////
                                  STORAGE
@@ -43,14 +43,14 @@ contract PolicyRegistry is IPolicyRegistry {
     //////////////////////////////////////////////////////////////*/
 
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId) {
-        newPolicyId = _createSimple(admin, policyType);
+        newPolicyId = _createPolicy(admin, policyType);
     }
 
     function createPolicyWithAccounts(address admin, PolicyType policyType, address[] calldata accounts)
         external
         returns (uint64 newPolicyId)
     {
-        newPolicyId = _createSimple(admin, policyType);
+        newPolicyId = _createPolicy(admin, policyType);
         bool isWhitelist = policyType == PolicyType.WHITELIST;
         mapping(address => bool) storage members = _members[newPolicyId];
         for (uint256 i = 0; i < accounts.length; ++i) {
@@ -70,13 +70,13 @@ contract PolicyRegistry is IPolicyRegistry {
         uint64 mintRecipientPolicyId,
         uint64 redeemerPolicyId
     ) external returns (uint64 newPolicyId) {
-        _requireSimpleConstituent(senderPolicyId);
-        _requireSimpleConstituent(recipientPolicyId);
-        _requireSimpleConstituent(mintRecipientPolicyId);
-        _requireSimpleConstituent(redeemerPolicyId);
+        _requireConstituent(senderPolicyId);
+        _requireConstituent(recipientPolicyId);
+        _requireConstituent(mintRecipientPolicyId);
+        _requireConstituent(redeemerPolicyId);
         newPolicyId = _nextPolicyId();
         _policyData[newPolicyId] =
-            PolicyDataLayout.encodeCompound(senderPolicyId, recipientPolicyId, mintRecipientPolicyId, redeemerPolicyId);
+            PolicySlot.encodeCompound(senderPolicyId, recipientPolicyId, mintRecipientPolicyId, redeemerPolicyId);
         emit CompoundPolicyCreated(
             newPolicyId, msg.sender, senderPolicyId, recipientPolicyId, mintRecipientPolicyId, redeemerPolicyId
         );
@@ -92,7 +92,7 @@ contract PolicyRegistry is IPolicyRegistry {
         PolicyType pt = packed.policyType();
         if (pt == PolicyType.COMPOUND) revert IncompatiblePolicyType();
         if (packed.admin() != msg.sender) revert Unauthorized();
-        _policyData[policyId] = PolicyDataLayout.encodeSimple(pt, newAdmin);
+        _policyData[policyId] = PolicySlot.encodeSimple(pt, newAdmin);
         emit PolicyAdminUpdated(policyId, msg.sender, newAdmin);
     }
 
@@ -118,28 +118,28 @@ contract PolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicyDataLayout.SENDER_SHIFT)
-            && _checkRole(policyId, user, PolicyDataLayout.RECIP_SHIFT);
+        return _checkRole(policyId, user, PolicySlot.SENDER_SHIFT)
+            && _checkRole(policyId, user, PolicySlot.RECIP_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorizedSender(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicyDataLayout.SENDER_SHIFT);
+        return _checkRole(policyId, user, PolicySlot.SENDER_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorizedRecipient(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicyDataLayout.RECIP_SHIFT);
+        return _checkRole(policyId, user, PolicySlot.RECIP_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorizedMintRecipient(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicyDataLayout.MINT_SHIFT);
+        return _checkRole(policyId, user, PolicySlot.MINT_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorizedRedeemer(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicyDataLayout.REDEEM_SHIFT);
+        return _checkRole(policyId, user, PolicySlot.REDEEM_SHIFT);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -169,10 +169,10 @@ contract PolicyRegistry is IPolicyRegistry {
     {
         uint256 packed = _requireExists(policyId);
         if (packed.policyType() != PolicyType.COMPOUND) revert IncompatiblePolicyType();
-        senderPolicyId = packed.idAt(PolicyDataLayout.SENDER_SHIFT);
-        recipientPolicyId = packed.idAt(PolicyDataLayout.RECIP_SHIFT);
-        mintRecipientPolicyId = packed.idAt(PolicyDataLayout.MINT_SHIFT);
-        redeemerPolicyId = packed.idAt(PolicyDataLayout.REDEEM_SHIFT);
+        senderPolicyId = packed.idAt(PolicySlot.SENDER_SHIFT);
+        recipientPolicyId = packed.idAt(PolicySlot.RECIP_SHIFT);
+        mintRecipientPolicyId = packed.idAt(PolicySlot.MINT_SHIFT);
+        redeemerPolicyId = packed.idAt(PolicySlot.REDEEM_SHIFT);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -183,11 +183,11 @@ contract PolicyRegistry is IPolicyRegistry {
         id = _counter++;
     }
 
-    function _createSimple(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
+    function _createPolicy(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
         if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert InvalidPolicyType();
         if (admin == address(0)) revert ZeroAddress();
         newPolicyId = _nextPolicyId();
-        _policyData[newPolicyId] = PolicyDataLayout.encodeSimple(policyType, admin);
+        _policyData[newPolicyId] = PolicySlot.encodeSimple(policyType, admin);
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, msg.sender, admin);
     }
@@ -204,13 +204,13 @@ contract PolicyRegistry is IPolicyRegistry {
         if (packed == 0) revert PolicyNotFound();
     }
 
-    // Validates that policyId is a legal compound constituent: must exist and must
-    // not itself be COMPOUND. Built-in IDs 0 and 1 are always valid.
-    function _requireSimpleConstituent(uint64 policyId) internal view {
+    // Validates that policyId is a legal compound child: must exist and must not
+    // itself be COMPOUND. Built-in IDs 0 and 1 are always valid.
+    function _requireConstituent(uint64 policyId) internal view {
         if (policyId < FIRST_CUSTOM_ID) return;
         uint256 packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
-        if (packed.policyType() == PolicyType.COMPOUND) revert PolicyNotSimple();
+        if (packed.policyType() == PolicyType.COMPOUND) revert ConstituentIsCompound();
     }
 
     // Resolves an authorization check for a single role slot. The shift selects
