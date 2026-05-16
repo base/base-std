@@ -62,14 +62,20 @@ interface IPolicyRegistry {
         address admin;
     }
 
-    /// @notice Constituent policy IDs for a compound policy.
+    /// @notice Constituent policy IDs for a compound policy. Each slot maps to one
+    ///         transfer role; the referenced policy is evaluated against the address
+    ///         fulfilling that role. Slots may reference any simple policy (WHITELIST,
+    ///         BLACKLIST) or a built-in ID. Use ID `1` (always-allow) for any slot
+    ///         with no constraint, or `0` (always-reject) to hard-block a role.
     /// @param senderPolicyId        Policy checked for transfer senders.
     /// @param recipientPolicyId     Policy checked for transfer recipients.
     /// @param mintRecipientPolicyId Policy checked for mint recipients.
+    /// @param redeemerPolicyId      Policy checked for redeem callers.
     struct CompoundPolicyData {
         uint64 senderPolicyId;
         uint64 recipientPolicyId;
         uint64 mintRecipientPolicyId;
+        uint64 redeemerPolicyId;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -114,7 +120,8 @@ interface IPolicyRegistry {
         address indexed creator,
         uint64 senderPolicyId,
         uint64 recipientPolicyId,
-        uint64 mintRecipientPolicyId
+        uint64 mintRecipientPolicyId,
+        uint64 redeemerPolicyId
     );
 
     /// @notice Emitted when a policy's admin is updated (including initial
@@ -149,19 +156,22 @@ interface IPolicyRegistry {
         external
         returns (uint64 newPolicyId);
 
-    /// @notice Creates a new compound policy referencing three constituent
-    ///         simple policies. Compound policies are structurally
-    ///         immutable: the constituent IDs cannot be changed after
+    /// @notice Creates a new compound policy referencing four constituent
+    ///         simple policies, one per transfer role. Compound policies are
+    ///         structurally immutable: constituent IDs cannot be changed after
     ///         creation, and there is no admin. To rotate the configuration,
     ///         create a new compound policy and re-point the consuming
     ///         token's `transferPolicyId`.
-    /// @dev    Permissionless. Each constituent MUST exist and MUST be a
-    ///         simple policy (WHITELIST, BLACKLIST) OR a built-in (IDs 0
-    ///         or 1). Reverts with `PolicyNotFound` for unknown IDs and
-    ///         `PolicyNotSimple` if any constituent is itself COMPOUND.
-    function createCompoundPolicy(uint64 senderPolicyId, uint64 recipientPolicyId, uint64 mintRecipientPolicyId)
-        external
-        returns (uint64 newPolicyId);
+    /// @dev    Permissionless. Each constituent MUST exist and MUST NOT be a
+    ///         COMPOUND policy. Built-in IDs (0 and 1) are always valid
+    ///         constituents. Reverts with `PolicyNotFound` for unknown IDs
+    ///         and `PolicyNotSimple` if any constituent is itself COMPOUND.
+    function createCompoundPolicy(
+        uint64 senderPolicyId,
+        uint64 recipientPolicyId,
+        uint64 mintRecipientPolicyId,
+        uint64 redeemerPolicyId
+    ) external returns (uint64 newPolicyId);
 
     /*//////////////////////////////////////////////////////////////
                           POLICY ADMINISTRATION
@@ -212,6 +222,11 @@ interface IPolicyRegistry {
     ///         the same result as `isAuthorizedRecipient`.
     function isAuthorizedMintRecipient(uint64 policyId, address user) external view returns (bool);
 
+    /// @notice Whether `user` is authorized as a redeemer under `policyId`.
+    ///         For compound policies, delegates to the policy's `redeemerPolicyId`.
+    ///         For simple policies, equivalent to `isAuthorizedRecipient`.
+    function isAuthorizedRedeemer(uint64 policyId, address user) external view returns (bool);
+
     /*//////////////////////////////////////////////////////////////
                             POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
@@ -240,5 +255,10 @@ interface IPolicyRegistry {
     function compoundPolicyData(uint64 policyId)
         external
         view
-        returns (uint64 senderPolicyId, uint64 recipientPolicyId, uint64 mintRecipientPolicyId);
+        returns (
+            uint64 senderPolicyId,
+            uint64 recipientPolicyId,
+            uint64 mintRecipientPolicyId,
+            uint64 redeemerPolicyId
+        );
 }
