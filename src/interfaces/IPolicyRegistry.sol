@@ -145,6 +145,10 @@ interface IPolicyRegistry {
     /// @notice Same as `createPolicy`, but additionally seeds the policy's
     ///         member set with `accounts`. Convenience for one-shot
     ///         creation flows that don't need an empty initial state.
+    /// @param  admin       The address granted admin role on the new policy.
+    /// @param  policyType  The policy type to create.
+    /// @param  accounts    Initial members to add to the policy's set.
+    /// @return newPolicyId The ID of the newly created policy.
     function createPolicyWithAccounts(address admin, PolicyType policyType, address[] calldata accounts)
         external
         returns (uint64 newPolicyId);

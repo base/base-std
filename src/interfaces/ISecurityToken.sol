@@ -296,11 +296,9 @@ interface ISecurityToken is IDefaultToken {
 
     /// @notice Updates the token's name (e.g. corporate rebrand).
     ///         Reads via the inherited `name()` accessor reflect the
-    ///         new value immediately. Affects EIP-712 domain separator
-    ///         computation (used by `permit`); callers signing permits
-    ///         should re-read the relevant domain fields immediately
-    ///         before signing. Emits the inherited `NameUpdated` event
-    ///         from `IDefaultToken`.
+    ///         new value immediately. Does not affect the EIP-712 domain
+    ///         separator, which only includes (chainId, verifyingContract).
+    ///         Emits the inherited `NameUpdated` event from `IDefaultToken`.
     /// @dev    Requires `DEFAULT_ADMIN_ROLE` and an
     ///         `Announcement(id, ...)` emitted earlier in the same
     ///         transaction with the same id.

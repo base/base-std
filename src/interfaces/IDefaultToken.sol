@@ -220,9 +220,9 @@ interface IDefaultToken {
     ///         here; this is intentional alignment.
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
 
-    /// @notice Emitted by `pause`. `vectors` is the bitmask added to the
-    ///         current paused state (the result of `current | vectors`,
-    ///         not the argument). `updater` is the caller.
+    /// @notice Emitted by `pause`. `vectors` is the bitmask argument passed to
+    ///         `pause` (not the resulting accumulated state). Emitted even when
+    ///         a vector was already set. `updater` is the caller.
     event Paused(address indexed updater, uint256 vectors);
 
     /// @notice Emitted by `unpause`. All paused vectors are cleared.

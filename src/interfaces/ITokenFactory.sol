@@ -244,6 +244,7 @@ interface ITokenFactory {
     ///         `params.initialSupplyRecipient` atomically (same bootstrap
     ///         policy bypass as `createDefault`). Sets the immutable
     ///         `currency` field.
+    /// @return token The address of the newly created token.
     function createStablecoin(CreateStablecoinParams calldata params) external returns (address token);
 
     /// @notice Creates a Security-variant token at a deterministic
@@ -252,6 +253,7 @@ interface ITokenFactory {
     ///         (rate-limited compliant issuance) or `adminMint`
     ///         (cold-path batch with announcement coupling) for issuance
     ///         after deployment.
+    /// @return token The address of the newly created token.
     function createSecurity(CreateSecurityTokenParams calldata params) external returns (address token);
 
     /*//////////////////////////////////////////////////////////////
