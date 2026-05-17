@@ -70,10 +70,6 @@ default token that opts in), single auditable source for compliance
 state, and no duplication of mechanism. CCS uses an internal blocklist;
 we deliberately diverge to centralize this.
 
-The token-level `BURN_BLOCKED` capability bit is still per-token. It
-controls whether the issuer can force-burn balance from policy-blocked
-addresses (sanctions seizure flow). See "Freeze vs. seize" below.
-
 #### Memos as sibling functions, not optional parameters
 
 `transfer` / `transferWithMemo`, `mint` / `mintWithMemo`, `burn` /
@@ -122,10 +118,9 @@ interface surface and gives genuine ops authority granularity. Tokens
 that want unified mint+burn authority just grant both roles to the
 same address.
 
-`burnBlocked` remains under `BURN_BLOCKED_ROLE` (separate from
-`BURN_ROLE`). The two operations have very different blast radii: `burn`
-destroys the caller's own balance; `burnBlocked` destroys someone else's
-balance.
+`burnBlocked` (force-burn from policy-blocked addresses) is not part of
+the Default surface — it is a periphery/variant concern. See
+`Capabilities.sol` for the rationale.
 
 #### PAUSE_ROLE and UNPAUSE_ROLE are separate
 
@@ -133,33 +128,45 @@ Same pattern as TIP-20. Pause authority can be delegated to a 24/7 ops
 team for emergency response without granting unpause authority. Unpause
 is typically a more deliberate action requiring senior sign-off.
 
-#### Two-step admin transfer with delay
+#### ~~Two-step admin transfer with delay~~ [ROLLED BACK]
+
+> **This design was considered but dropped.** The active model is
+> simpler: `grantRole(DEFAULT_ADMIN_ROLE, ...)` and
+> `revokeRole(DEFAULT_ADMIN_ROLE, ...)` work uniformly with no delay or
+> two-step handshake. See `IDefaultToken.sol` lines 273–278 for the
+> authoritative `@dev` note. No `defaultAdminDelay` parameter exists in
+> the factory creation structs.
+
+The original rationale for the two-step design is preserved below for
+historical context.
 
 `DEFAULT_ADMIN_ROLE` is the single most powerful role on a token. It
 controls all other role assignments. An accidental transfer to a wrong
 address (typo, key error, contract that can't accept) permanently
-bricks all admin operations. To prevent this, we adopt the OZ
-`AccessControlDefaultAdminRulesUpgradeable` pattern, also used by CCS.
+bricks all admin operations. To prevent this, we considered adopting
+the OZ `AccessControlDefaultAdminRulesUpgradeable` pattern, also used
+by CCS.
 
-The mechanism:
-- Admin transfer is a TWO-step process. The current admin calls
+The proposed mechanism:
+- Admin transfer would be a TWO-step process. The current admin calls
   `beginDefaultAdminTransfer(newAdmin)`, scheduling the transfer.
 - The new admin must call `acceptDefaultAdminTransfer()` after a
   configurable `defaultAdminDelay` elapses.
 - The current admin can `cancelDefaultAdminTransfer` at any time before
   acceptance.
 - `grantRole(DEFAULT_ADMIN_ROLE, ...)` and `revokeRole(DEFAULT_ADMIN_ROLE, ...)`
-  REVERT — the only valid transfer path is the two-step flow.
+  would REVERT — the only valid transfer path is the two-step flow.
 
-The delay protects against key compromise. If an attacker steals the
-admin key and immediately schedules a transfer to themselves, the
+The delay was intended to protect against key compromise: if an attacker
+steals the admin key and schedules a transfer to themselves, the
 legitimate admin has `defaultAdminDelay` seconds to detect it and call
-`cancelDefaultAdminTransfer`. There is also a `defaultAdminDelayIncreaseWait`
-floor that prevents an admin from "instantly" extending the delay to
-trap a rightful owner.
+`cancelDefaultAdminTransfer`. A `defaultAdminDelayIncreaseWait` floor
+would prevent an admin from "instantly" extending the delay to trap a
+rightful owner.
 
-`renounceRole(DEFAULT_ADMIN_ROLE)` is allowed but is itself scheduled
-through the same mechanism (with `newAdmin == address(0)`).
+This design was rolled back in favor of uniform `grantRole`/`revokeRole`
+semantics. The complexity of the two-step mechanism outweighed its
+safety benefit for this surface.
 
 #### User-defined roles supported
 
@@ -242,11 +249,13 @@ Tangor / Coinbase Tokenized Securities DOES have force-burn (called
 `burnBlocked` in our interface). Sanctions enforcement requires the
 ability to actually destroy the balance, not just freeze it.
 
-We support both via the `BURN_BLOCKED` capability bit. The
-`STANDARD_STABLECOIN` preset OMITS `BURN_BLOCKED` to default to the CCS
-philosophy. Issuers who want force-burn capability OR `BURN_BLOCKED` in
-at creation. The `STANDARD_EQUITY` preset INCLUDES `BURN_BLOCKED` to
-default to the Tangor philosophy.
+`BURN_BLOCKED` was removed from the Default capability surface — force-burn
+is a periphery/variant concern (see `Capabilities.sol`). The distinction
+between freeze and seize philosophies still matters at the preset level:
+`STANDARD_STABLECOIN` defaults to freeze-only (CCS style), while
+`STANDARD_EQUITY` supports seizure via variant-specific mechanisms
+(Tangor style). Issuers who want force-burn capability must opt in at
+creation through a variant that exposes it.
 
 ### Security-specific design
 
@@ -421,9 +430,9 @@ intended one.
 
 Preset values:
 - `STANDARD_STABLECOIN` includes per-minter rate limiting and ERC-3009;
-  OMITS `BURN_BLOCKED` (CCS-style freeze philosophy).
-- `STANDARD_EQUITY` includes `BURN_BLOCKED` (Tangor-style sanctions
-  enforcement) and the security-specific bits.
+  defaults to freeze-only (CCS-style, no force-burn).
+- `STANDARD_EQUITY` includes sanctions enforcement via variant-specific
+  mechanisms (Tangor-style) and the security-specific bits.
 - `FIXED_SUPPLY` is for default tokens with one-shot issuance.
 
 Worth verifying these match what real issuers (CCS, Tangor, Coinbase
@@ -484,7 +493,7 @@ against caller-side off-by-one bugs at the cost of one extra parameter.
 
 #### 🟡 OPEN: `adminBurn` can affect any account (not just policy-blocked) given announcement coupling
 
-Powerful primitive: anyone with `BURN_BLOCKED_ROLE` + a posted
+Powerful primitive: anyone with the appropriate burn role + a posted
 announcement can destroy any holder's balance. Use cases for
 non-blocked accounts: liquidations, reverse tender settlements,
 accounting corrections. Worth explicit confirmation.
@@ -562,14 +571,19 @@ Or the admin can use `adminMint` for a one-shot batch mint with an
 announcement. Either path works; both produce more audit-trail than a
 silent bootstrap mint.
 
-### `defaultAdminDelay` configurable at creation
+### ~~`defaultAdminDelay` configurable at creation~~ [ROLLED BACK]
 
-Each token's two-step admin transfer delay is set per-token at
+> **This factory parameter was part of the two-step admin transfer
+> design, which was dropped.** No `defaultAdminDelay` field appears in
+> any creation parameter struct. See the rolled-back section above and
+> `IDefaultToken.sol` lines 273–278.
+
+~~Each token's two-step admin transfer delay is set per-token at
 creation via `defaultAdminDelay`. Different tokens can have different
 delays based on their security posture (a stablecoin might want hours;
 a memecoin might want zero). Admin can change later via
 `changeDefaultAdminDelay` if the token's `ADMIN_MUTABLE` capability
-is on.
+is on.~~
 
 ### `predict*Address` does not depend on params other than `(creator, salt)`
 
@@ -601,8 +615,8 @@ items needing your input:
    filterability?
 5. `adminMint` / `adminBurn` `totalAmount` parameter for sum
    validation — add?
-6. `adminBurn` semantics — confirm it can affect any account, gated by
-   `BURN_BLOCKED_ROLE` + announcement coupling, NOT restricted to
+6. `adminBurn` semantics — confirm it can affect any account (gated by
+   the burn role + announcement coupling), NOT restricted to
    policy-blocked addresses?
 7. `share ratio` default at creation — 1:1 or 1e9:1e9?
 8. `pausedBurn` as a separate function vs. `adminBurn` always
