@@ -129,6 +129,11 @@ library Capabilities {
     ///         governance.
     uint256 internal constant FIXED_SUPPLY = PAUSABLE;
 
+    // NOTE: STANDARD_EQUITY currently resolves to the same bitmask as ALL
+    // because no stablecoin-specific bits (24..31) are assigned yet. The
+    // moment any such bit is added, ALL must include it but STANDARD_EQUITY
+    // must not — security tokens must never silently inherit stablecoin
+    // capabilities.
     /// @notice Standard equity-style security token: supports compliant
     ///         issuance via `create`, user redemption via `redeem`,
     ///         share-ratio updates (for splits), all metadata updates, and
