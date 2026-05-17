@@ -30,6 +30,12 @@ contract PolicyRegistry is IPolicyRegistry {
     // BLACKLIST: member == true means the address is restricted.
     mapping(uint64 policyId => mapping(address account => bool)) private _members;
 
+    // Pending admin per policy. Set by beginPolicyAdminTransfer, cleared on
+    // accept/cancel/freeze. Kept in its own mapping (rather than packed into the
+    // policy slot) so the hot-path read on _policyData stays minimal; admin
+    // rotation is a cold path and the extra SLOAD on accept is acceptable.
+    mapping(uint64 policyId => address pendingAdmin) private _pendingAdmins;
+
     uint64 private _counter = FIRST_USER_POLICY_ID;
 
     /*//////////////////////////////////////////////////////////////
@@ -98,20 +104,67 @@ contract PolicyRegistry is IPolicyRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IPolicyRegistry
-    function setPolicyAdmin(uint64 policyId, address newAdmin) external {
-        if (newAdmin == address(0)) revert ZeroAddress();
+    function beginPolicyAdminTransfer(uint64 policyId, address newAdmin) external {
+        // Permitting newAdmin == address(0) here is intentional: it lets the current
+        // admin cancel a prior nomination via the same entry point. The pending slot
+        // is just a nomination; the active admin doesn't change until accept.
+        uint256 packed = _requireExists(policyId);
+        PolicyType policyType = packed.decodeType();
+        if (policyType == PolicyType.COMPOUND) revert IncompatiblePolicyType();
+        if (packed.decodeFrozen()) revert PolicyFrozen();
+        if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
+        _pendingAdmins[policyId] = newAdmin;
+        emit PolicyAdminTransferBegun(policyId, msg.sender, newAdmin);
+    }
+
+    /// @inheritdoc IPolicyRegistry
+    function acceptPolicyAdminTransfer(uint64 policyId) external {
+        uint256 packed = _requireExists(policyId);
+        PolicyType policyType = packed.decodeType();
+        if (policyType == PolicyType.COMPOUND) revert IncompatiblePolicyType();
+        if (packed.decodeFrozen()) revert PolicyFrozen();
+        address pending = _pendingAdmins[policyId];
+        if (pending != msg.sender) revert NotPendingAdmin();
+        // Preserve the frozen bit on rotation. Currently unreachable because the
+        // freeze check above short-circuits, but coded defensively in case the
+        // freeze semantics evolve (e.g. allowing rotation while frozen).
+        _policyData[policyId] = PolicySlot.encodeSimple(policyType, msg.sender)
+            | (packed.decodeFrozen() ? PolicySlot.FROZEN_BIT : 0);
+        delete _pendingAdmins[policyId];
+        emit PolicyAdminUpdated(policyId, msg.sender, msg.sender);
+    }
+
+    /// @inheritdoc IPolicyRegistry
+    function cancelPolicyAdminTransfer(uint64 policyId) external {
         uint256 packed = _requireExists(policyId);
         PolicyType policyType = packed.decodeType();
         if (policyType == PolicyType.COMPOUND) revert IncompatiblePolicyType();
         if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
-        _policyData[policyId] = PolicySlot.encodeSimple(policyType, newAdmin);
-        emit PolicyAdminUpdated(policyId, msg.sender, newAdmin);
+        address pending = _pendingAdmins[policyId];
+        if (pending == address(0)) revert NoTransferPending();
+        delete _pendingAdmins[policyId];
+        emit PolicyAdminTransferCancelled(policyId, msg.sender, pending);
+    }
+
+    /// @inheritdoc IPolicyRegistry
+    function freezePolicy(uint64 policyId) external {
+        uint256 packed = _requireExists(policyId);
+        PolicyType policyType = packed.decodeType();
+        if (policyType == PolicyType.COMPOUND) revert IncompatiblePolicyType();
+        if (packed.decodeFrozen()) revert PolicyFrozen();
+        if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
+        _policyData[policyId] = packed | PolicySlot.FROZEN_BIT;
+        // Any in-flight nomination is moot once frozen; clear it so the post-freeze
+        // state is unambiguous (no zombie pending admin lingering in storage).
+        if (_pendingAdmins[policyId] != address(0)) delete _pendingAdmins[policyId];
+        emit PolicyFrozenEvent(policyId, msg.sender);
     }
 
     /// @inheritdoc IPolicyRegistry
     function modifyPolicyWhitelist(uint64 policyId, address account, bool allowed) external {
         uint256 packed = _requireExists(policyId);
         if (packed.decodeType() != PolicyType.WHITELIST) revert IncompatiblePolicyType();
+        if (packed.decodeFrozen()) revert PolicyFrozen();
         if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
         _members[policyId][account] = allowed;
         emit WhitelistUpdated(policyId, msg.sender, account, allowed);
@@ -121,6 +174,7 @@ contract PolicyRegistry is IPolicyRegistry {
     function modifyPolicyBlacklist(uint64 policyId, address account, bool restricted) external {
         uint256 packed = _requireExists(policyId);
         if (packed.decodeType() != PolicyType.BLACKLIST) revert IncompatiblePolicyType();
+        if (packed.decodeFrozen()) revert PolicyFrozen();
         if (packed.decodeAdmin() != msg.sender) revert Unauthorized();
         _members[policyId][account] = restricted;
         emit BlacklistUpdated(policyId, msg.sender, account, restricted);
@@ -178,6 +232,20 @@ contract PolicyRegistry is IPolicyRegistry {
         uint256 packed = _policyData[policyId];
         policyType = packed.decodeType();
         admin = policyType == PolicyType.COMPOUND ? address(0) : packed.decodeAdmin();
+    }
+
+    /// @inheritdoc IPolicyRegistry
+    function pendingPolicyAdmin(uint64 policyId) external view returns (address) {
+        return _pendingAdmins[policyId];
+    }
+
+    /// @inheritdoc IPolicyRegistry
+    function isPolicyFrozen(uint64 policyId) external view returns (bool) {
+        if (policyId < FIRST_USER_POLICY_ID) return false;
+        uint256 packed = _policyData[policyId];
+        if (packed == 0) return false;
+        if (packed.decodeType() == PolicyType.COMPOUND) return false;
+        return packed.decodeFrozen();
     }
 
     /// @inheritdoc IPolicyRegistry
