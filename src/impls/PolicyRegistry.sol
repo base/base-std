@@ -11,9 +11,11 @@ import {PolicySlot} from "./PolicySlot.sol";
 ///      This is safe because WHITELIST/BLACKLIST require a non-zero admin (so packed
 ///      is never zero), and COMPOUND always has type byte = 2 (so packed is never zero).
 ///
-///      Authorization cost: at most 2 SLOADs for any policy. For a compound policy,
-///      one SLOAD reads the packed slot (yielding all four constituent IDs), and one SLOAD
-///      reads the relevant constituent's member set. Compound constituents cannot themselves be
+///      Authorization cost: exactly 2 SLOADs for any custom policy (zero for built-ins).
+///      Compound policies pack each constituent's type bit alongside its ID in the
+///      compound slot, so a hot-path check reads only (a) the compound slot and
+///      (b) the relevant constituent's member set — the constituent's own policy
+///      slot does NOT need to be loaded. Compound constituents cannot themselves be
 ///      COMPOUND (enforced at creation), so evaluation never goes deeper.
 contract PolicyRegistry is IPolicyRegistry {
     using PolicySlot for uint256;
@@ -73,13 +75,19 @@ contract PolicyRegistry is IPolicyRegistry {
         uint64 mintRecipientPolicyId,
         uint64 redeemerPolicyId
     ) external returns (uint64 newPolicyId) {
-        _requireConstituent(senderPolicyId);
-        _requireConstituent(recipientPolicyId);
-        _requireConstituent(mintRecipientPolicyId);
-        _requireConstituent(redeemerPolicyId);
+        // Resolve each constituent's type once, at creation, so the hot path can read
+        // the constituent's type bit directly from the compound slot.
+        PolicyType senderType = _requireConstituent(senderPolicyId);
+        PolicyType recipientType = _requireConstituent(recipientPolicyId);
+        PolicyType mintRecipientType = _requireConstituent(mintRecipientPolicyId);
+        PolicyType redeemerType = _requireConstituent(redeemerPolicyId);
         newPolicyId = _nextPolicyId();
-        _policyData[newPolicyId] =
-            PolicySlot.encodeCompound(senderPolicyId, recipientPolicyId, mintRecipientPolicyId, redeemerPolicyId);
+        _policyData[newPolicyId] = PolicySlot.encodeCompound(
+            PolicySlot.encodeField(senderPolicyId, senderType),
+            PolicySlot.encodeField(recipientPolicyId, recipientType),
+            PolicySlot.encodeField(mintRecipientPolicyId, mintRecipientType),
+            PolicySlot.encodeField(redeemerPolicyId, redeemerType)
+        );
         emit CompoundPolicyCreated(
             newPolicyId, msg.sender, senderPolicyId, recipientPolicyId, mintRecipientPolicyId, redeemerPolicyId
         );
@@ -180,10 +188,10 @@ contract PolicyRegistry is IPolicyRegistry {
     {
         uint256 packed = _requireExists(policyId);
         if (packed.decodeType() != PolicyType.COMPOUND) revert IncompatiblePolicyType();
-        senderPolicyId = packed.decodeIdAt(PolicySlot.SENDER_SHIFT);
-        recipientPolicyId = packed.decodeIdAt(PolicySlot.RECIPIENT_SHIFT);
-        mintRecipientPolicyId = packed.decodeIdAt(PolicySlot.MINT_SHIFT);
-        redeemerPolicyId = packed.decodeIdAt(PolicySlot.REDEEM_SHIFT);
+        senderPolicyId = packed.decodeId(PolicySlot.SENDER_SHIFT);
+        recipientPolicyId = packed.decodeId(PolicySlot.RECIPIENT_SHIFT);
+        mintRecipientPolicyId = packed.decodeId(PolicySlot.MINT_SHIFT);
+        redeemerPolicyId = packed.decodeId(PolicySlot.REDEEM_SHIFT);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -215,21 +223,24 @@ contract PolicyRegistry is IPolicyRegistry {
         if (packed == 0) revert PolicyNotFound();
     }
 
-    // Validates that policyId is a legal compound constituent: must exist and must be
-    // WHITELIST or BLACKLIST. Built-in IDs 0 and 1 are always valid.
-    function _requireConstituent(uint64 policyId) internal view {
-        if (policyId < FIRST_USER_POLICY_ID) return;
+    // Validates that policyId is a legal compound constituent and returns its type.
+    // Must exist and must be WHITELIST or BLACKLIST. Built-in IDs (0, 1) are always
+    // valid; their returned type is WHITELIST as a placeholder (the type bit is
+    // ignored on the hot path for built-ins because evaluation short-circuits on ID).
+    function _requireConstituent(uint64 policyId) internal view returns (PolicyType) {
+        if (policyId < FIRST_USER_POLICY_ID) return PolicyType.WHITELIST;
         uint256 packed = _policyData[policyId];
         if (packed == 0) revert PolicyNotFound();
         PolicyType policyType = packed.decodeType();
         if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert ConstituentIsCompound();
+        return policyType;
     }
 
     // Resolves an authorization check for a single role slot. The shift selects
-    // which 62-bit field to read from a compound policy's packed slot.
+    // which 62-bit constituent field to read from a compound policy's packed slot.
     //
     // For a compound policyId:    1 SLOAD (compound slot) + 1 SLOAD (member set) = 2 SLOADs
-    // For a simple policyId:      1 SLOAD (member set)                           = 1 SLOAD
+    // For a simple policyId:      1 SLOAD (policy slot)   + 1 SLOAD (member set) = 2 SLOADs
     // For a built-in policyId:    0 SLOADs
     function _checkRole(uint64 policyId, address user, uint256 shift) internal view returns (bool) {
         if (policyId == ALWAYS_REJECT_ID) return false;
@@ -239,14 +250,14 @@ contract PolicyRegistry is IPolicyRegistry {
         PolicyType policyType = packed.decodeType();
 
         if (policyType == PolicyType.COMPOUND) {
-            uint64 constituentId = packed.decodeIdAt(shift);
+            (uint64 constituentId, bool isBlacklist) = packed.decodeField(shift);
             if (constituentId == ALWAYS_REJECT_ID) return false;
             if (constituentId == ALWAYS_ALLOW_ID) return true;
-            packed = _policyData[constituentId];
-            policyType = packed.decodeType();
-            return policyType == PolicyType.WHITELIST ? _members[constituentId][user] : !_members[constituentId][user];
+            bool member = _members[constituentId][user];
+            return isBlacklist ? !member : member;
         }
 
-        return policyType == PolicyType.WHITELIST ? _members[policyId][user] : !_members[policyId][user];
+        bool simpleMember = _members[policyId][user];
+        return policyType == PolicyType.WHITELIST ? simpleMember : !simpleMember;
     }
 }
