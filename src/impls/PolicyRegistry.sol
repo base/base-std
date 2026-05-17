@@ -200,6 +200,12 @@ contract PolicyRegistry is IPolicyRegistry {
 
     function _nextPolicyId() internal returns (uint64 id) {
         id = _counter++;
+        // The on-chain compound-policy packing reserves 61 bits per constituent ID.
+        // Bounding the counter here guarantees that every policy ID ever created can
+        // be round-tripped through the compound slot without silent truncation; the
+        // packed-field decoders elsewhere in this contract can therefore rely on
+        // ID <= PolicySlot.ID_MASK without re-checking.
+        if (id > PolicySlot.ID_MASK) revert PolicyIdOverflow();
     }
 
     function _createPolicy(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
