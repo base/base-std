@@ -98,6 +98,11 @@ interface IPolicyRegistry {
     /// @notice A required address argument was the zero address.
     error ZeroAddress();
 
+    /// @notice The policy ID counter has been exhausted. Custom policy IDs are
+    ///         bounded by the on-chain packing format (61 bits, or ~2.3e18 IDs);
+    ///         creating one more policy would overflow that bound.
+    error PolicyIdOverflow();
+
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
