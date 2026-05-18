@@ -225,14 +225,12 @@ contract B20 is IDefaultToken {
                             METADATA UPDATES
     //////////////////////////////////////////////////////////////*/
 
-    function setName(string calldata newName) external {
-        _requireRole(DEFAULT_ADMIN_ROLE);
+    function setName(string calldata newName) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _name = newName;
         emit NameUpdated({updater: msg.sender, newName: newName});
     }
 
-    function setSymbol(string calldata newSymbol) external {
-        _requireRole(DEFAULT_ADMIN_ROLE);
+    function setSymbol(string calldata newSymbol) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _symbol = newSymbol;
         emit SymbolUpdated({updater: msg.sender, newSymbol: newSymbol});
     }
@@ -259,20 +257,20 @@ contract B20 is IDefaultToken {
                               MINT / BURN
     //////////////////////////////////////////////////////////////*/
 
-    function mint(address to, uint256 amount) external {
+    function mint(address to, uint256 amount) external onlyRole(MINT_ROLE) {
         _mint({to: to, amount: amount});
     }
 
-    function mintWithMemo(address to, uint256 amount, bytes32 memo) external {
+    function mintWithMemo(address to, uint256 amount, bytes32 memo) external onlyRole(MINT_ROLE) {
         _mint({to: to, amount: amount});
         emit Memo(memo);
     }
 
-    function burn(uint256 amount) external {
+    function burn(uint256 amount) external onlyRole(BURN_ROLE) {
         _burn({from: msg.sender, amount: amount});
     }
 
-    function burnWithMemo(uint256 amount, bytes32 memo) external {
+    function burnWithMemo(uint256 amount, bytes32 memo) external onlyRole(BURN_ROLE) {
         _burn({from: msg.sender, amount: amount});
         emit Memo(memo);
     }
@@ -294,8 +292,7 @@ contract B20 is IDefaultToken {
         return _minimumRedeemable;
     }
 
-    function setMinimumRedeemable(uint256 newMinimum) external {
-        _requireRole(DEFAULT_ADMIN_ROLE);
+    function setMinimumRedeemable(uint256 newMinimum) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 old = _minimumRedeemable;
         _minimumRedeemable = newMinimum;
         emit MinimumRedeemableUpdated({updater: msg.sender, oldMinimum: old, newMinimum: newMinimum});
@@ -313,13 +310,11 @@ contract B20 is IDefaultToken {
         return _roles[role].adminRole;
     }
 
-    function grantRole(bytes32 role, address account) external {
-        _requireRole(getRoleAdmin(role));
+    function grantRole(bytes32 role, address account) external onlyRole(getRoleAdmin(role)) {
         _grantRoleInternal({role: role, account: account});
     }
 
-    function revokeRole(bytes32 role, address account) external {
-        _requireRole(getRoleAdmin(role));
+    function revokeRole(bytes32 role, address account) external onlyRole(getRoleAdmin(role)) {
         _revokeRoleInternal({role: role, account: account});
     }
 
@@ -330,9 +325,8 @@ contract B20 is IDefaultToken {
         _revokeRoleInternal({role: role, account: msg.sender});
     }
 
-    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external {
+    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRole(getRoleAdmin(role)) {
         bytes32 previousAdminRole = getRoleAdmin(role);
-        _requireRole(previousAdminRole);
         _roles[role].adminRole = newAdminRole;
         emit RoleAdminChanged({role: role, previousAdminRole: previousAdminRole, newAdminRole: newAdminRole});
     }
@@ -350,17 +344,15 @@ contract B20 is IDefaultToken {
         return (paused() & vector) != 0;
     }
 
-    function pause(uint256 vectors) external {
+    function pause(uint256 vectors) external onlyRole(PAUSE_ROLE) {
         _requireCapability(Capabilities.PAUSABLE);
-        _requireRole(PAUSE_ROLE);
         if (vectors == 0) revert InvalidAmount();
         _pausedVectors |= vectors;
         emit Paused({updater: msg.sender, vectors: vectors});
     }
 
-    function unpause() external {
+    function unpause() external onlyRole(UNPAUSE_ROLE) {
         _requireCapability(Capabilities.PAUSABLE);
-        _requireRole(UNPAUSE_ROLE);
         _pausedVectors = 0;
         emit Unpaused(msg.sender);
     }
@@ -373,8 +365,7 @@ contract B20 is IDefaultToken {
         return _transferPolicyId;
     }
 
-    function changeTransferPolicyId(uint64 newPolicyId) external {
-        _requireRole(DEFAULT_ADMIN_ROLE);
+    function changeTransferPolicyId(uint64 newPolicyId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         if (newPolicyId != _POLICY_REJECT && newPolicyId != _POLICY_ALLOW) {
             if (!_policyExists(newPolicyId)) revert PolicyNotFound(newPolicyId);
         }
@@ -391,9 +382,8 @@ contract B20 is IDefaultToken {
         return _supplyCap;
     }
 
-    function setSupplyCap(uint256 newSupplyCap) external {
+    function setSupplyCap(uint256 newSupplyCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _requireCapability(Capabilities.CAP_MUTABLE);
-        _requireRole(DEFAULT_ADMIN_ROLE);
         if (newSupplyCap < _totalSupply) {
             revert InvalidSupplyCap({currentSupply: _totalSupply, proposedCap: newSupplyCap});
         }
@@ -457,8 +447,7 @@ contract B20 is IDefaultToken {
         return _contractURI;
     }
 
-    function setContractURI(string calldata newURI) external {
-        _requireRole(DEFAULT_ADMIN_ROLE);
+    function setContractURI(string calldata newURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
         _contractURI = newURI;
         emit ContractURIUpdated();
     }
@@ -485,7 +474,6 @@ contract B20 is IDefaultToken {
     }
 
     function _mint(address to, uint256 amount) private {
-        _requireRole(MINT_ROLE);
         if (to == address(0)) revert InvalidReceiver(to);
         if (_pausedVectors & PauseVectors.MINT != 0) revert ContractPaused(PauseVectors.MINT);
 
@@ -502,7 +490,6 @@ contract B20 is IDefaultToken {
     }
 
     function _burn(address from, uint256 amount) private {
-        _requireRole(BURN_ROLE);
         if (_pausedVectors & PauseVectors.BURN != 0) revert ContractPaused(PauseVectors.BURN);
 
         uint256 fromBalance = _balances[from];
@@ -585,10 +572,11 @@ contract B20 is IDefaultToken {
         emit RoleRevoked({role: role, account: account, sender: msg.sender});
     }
 
-    function _requireRole(bytes32 role) private view {
+    modifier onlyRole(bytes32 role) {
         if (!_roles[role].members[msg.sender]) {
             revert AccessControlUnauthorizedAccount({account: msg.sender, neededRole: role});
         }
+        _;
     }
 
     function _requireCapability(uint256 capability) private view {
