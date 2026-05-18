@@ -98,6 +98,22 @@ interface IPolicyRegistry {
     /// @notice A required address argument was the zero address.
     error ZeroAddress();
 
+    /// @notice The policy ID counter has been exhausted. Custom policy IDs are
+    ///         bounded by the on-chain packing format (61 bits, or ~2.3e18 IDs);
+    ///         creating one more policy would overflow that bound.
+    error PolicyIdOverflow();
+
+    /// @notice The caller is not the pending admin for this policy.
+    error NotPendingAdmin();
+
+    /// @notice There is no admin transfer in progress for this policy.
+    error NoTransferPending();
+
+    /// @notice The policy has been permanently frozen and can no longer be
+    ///         modified (no membership changes, no admin transfers, no further
+    ///         freezing). This is a one-way state set by `freezePolicy`.
+    error PolicyFrozen();
+
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -117,8 +133,25 @@ interface IPolicyRegistry {
     );
 
     /// @notice Emitted when a policy's admin is updated (including initial
-    ///         assignment at creation).
+    ///         assignment at creation and on `acceptPolicyAdminTransfer`).
     event PolicyAdminUpdated(uint64 indexed policyId, address indexed updater, address indexed admin);
+
+    /// @notice Emitted when the current admin nominates a new admin via
+    ///         `beginPolicyAdminTransfer`. The transfer does not take effect until
+    ///         `pendingAdmin` calls `acceptPolicyAdminTransfer`.
+    event PolicyAdminTransferBegun(
+        uint64 indexed policyId, address indexed currentAdmin, address indexed pendingAdmin
+    );
+
+    /// @notice Emitted when an in-flight admin transfer is cancelled by the current
+    ///         admin (clearing the pending admin without changing the active admin).
+    event PolicyAdminTransferCancelled(
+        uint64 indexed policyId, address indexed currentAdmin, address indexed cancelledPendingAdmin
+    );
+
+    /// @notice Emitted when a policy is permanently frozen. After this event, the
+    ///         policy's membership and admin can no longer be modified.
+    event PolicyFrozenEvent(uint64 indexed policyId, address indexed frozenBy);
 
     /// @notice Emitted when an account's whitelist status is updated for a
     ///         WHITELIST policy.
@@ -168,21 +201,46 @@ interface IPolicyRegistry {
                           POLICY ADMINISTRATION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Transfers admin rights for a simple policy. Caller must be
-    ///         the current admin. Reverts on COMPOUND policies (they have
-    ///         no admin).
-    function setPolicyAdmin(uint64 policyId, address newAdmin) external;
+    /// @notice Nominates a new admin for a simple policy. The transfer is two-step:
+    ///         this call records `newAdmin` as the pending admin without changing the
+    ///         active admin. The nominee must then call `acceptPolicyAdminTransfer`.
+    /// @dev    Caller must be the current admin. Reverts on COMPOUND policies (they
+    ///         have no admin) and on frozen policies. Calling this again overwrites
+    ///         any previously pending admin for this policy. Pass `address(0)` to
+    ///         clear a previously nominated pending admin (equivalent to
+    ///         `cancelPolicyAdminTransfer`).
+    function beginPolicyAdminTransfer(uint64 policyId, address newAdmin) external;
+
+    /// @notice Completes a two-step admin transfer. Caller must be the address
+    ///         previously nominated via `beginPolicyAdminTransfer`. On success,
+    ///         the caller becomes the new admin and the pending admin slot is
+    ///         cleared.
+    function acceptPolicyAdminTransfer(uint64 policyId) external;
+
+    /// @notice Cancels a pending admin transfer without changing the active admin.
+    ///         Caller must be the current admin.
+    function cancelPolicyAdminTransfer(uint64 policyId) external;
+
+    /// @notice Permanently freezes a policy: after this call, the policy's
+    ///         membership cannot be modified, its admin cannot be transferred,
+    ///         and it cannot be unfrozen. Compound policies that reference this
+    ///         policy as a constituent continue to work; only this policy's own
+    ///         membership state is locked.
+    /// @dev    Caller must be the current admin. Reverts on COMPOUND policies and
+    ///         on already-frozen policies. Any in-flight admin transfer is
+    ///         cleared as a side effect.
+    function freezePolicy(uint64 policyId) external;
 
     /// @notice Adds or removes an account from a WHITELIST policy. Caller
     ///         must be the policy admin.
     /// @dev    Reverts with `IncompatiblePolicyType` if the policy is not
-    ///         WHITELIST.
+    ///         WHITELIST, and with `PolicyFrozen` if the policy has been frozen.
     function modifyPolicyWhitelist(uint64 policyId, address account, bool allowed) external;
 
     /// @notice Adds or removes an account from a BLACKLIST policy. Caller
     ///         must be the policy admin.
     /// @dev    Reverts with `IncompatiblePolicyType` if the policy is not
-    ///         BLACKLIST.
+    ///         BLACKLIST, and with `PolicyFrozen` if the policy has been frozen.
     function modifyPolicyBlacklist(uint64 policyId, address account, bool restricted) external;
 
     /*//////////////////////////////////////////////////////////////
@@ -236,6 +294,15 @@ interface IPolicyRegistry {
     ///         and `policyType` is `ALWAYS_REJECT` (ID 0) or `ALWAYS_ALLOW` (ID 1).
     ///         Reverts with `PolicyNotFound` for unknown policy IDs.
     function policyData(uint64 policyId) external view returns (PolicyType policyType, address admin);
+
+    /// @notice The pending admin nominated via `beginPolicyAdminTransfer`, or
+    ///         `address(0)` if no transfer is in flight. Always `address(0)`
+    ///         for compound and built-in policies.
+    function pendingPolicyAdmin(uint64 policyId) external view returns (address);
+
+    /// @notice Whether `policyId` has been permanently frozen via `freezePolicy`.
+    ///         Always false for compound and built-in policies.
+    function isPolicyFrozen(uint64 policyId) external view returns (bool);
 
     /// @notice Returns the constituent policy IDs of a compound policy.
     /// @dev    Reverts with `IncompatiblePolicyType` if the policy is not
