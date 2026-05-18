@@ -14,11 +14,17 @@ import {IB20} from "./IB20.sol";
 /// @dev    **Inherited surface.** `IB20` already provides the
 ///         pieces that are shared with stablecoins and other variants:
 ///         ERC-20 surface, mint / burn (gated by `MINT_ROLE` / `BURN_ROLE`),
-///         redeem / redeemWithMemo / minimumRedeemable / setMinimumRedeemable
-///         (gated by the redeemer slot of the compound transfer policy),
 ///         pause vectors (including REDEEM at bit 3), permit, contract URI,
 ///         supply cap, and OZ-style role management. Security tokens use
 ///         all of these as-is and do not redeclare them here.
+///
+///         **Redeem surface.** Unlike IB20Stablecoin, security tokens carry
+///         a full redemption surface: `redeem` / `redeemWithMemo` /
+///         `minimumRedeemable` / `setMinimumRedeemable`. Redemption is
+///         gated by a separate `redeemPolicyId` (distinct from
+///         `transferPolicyId`) so brokerage-verified holders can redeem
+///         without the transfer policy needing to authorize them for general
+///         transfers.
 ///
 ///         **Security-specific additions.** This interface adds:
 ///         1. `announcement(...)` plus an `ANNOUNCE_ROLE` for posting
@@ -85,9 +91,27 @@ interface IB20Security is IB20 {
     ///         `identifierType` string.
     error InvalidIdentifierType();
 
+    /// @notice The redemption amount is below the configured
+    ///         `minimumRedeemable` threshold.
+    error MinimumRedeemableNotMet(uint256 amount, uint256 minimum);
+
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Emitted by `updateRedeemPolicy`. Includes the prior ID
+    ///         for indexer convenience.
+    event RedeemPolicyUpdated(address indexed updater, uint64 oldPolicyId, uint64 newPolicyId);
+
+    /// @notice Emitted by `redeem` and `redeemWithMemo` (in addition to
+    ///         the standard `Transfer(holder, address(0), amount)`).
+    ///         Distinguishes user-initiated redemption (which implies an
+    ///         off-chain settlement obligation) from plain `burn`.
+    event Redeemed(address indexed holder, uint256 amount);
+
+    /// @notice Emitted by `setMinimumRedeemable`. Includes the prior
+    ///         minimum for indexer convenience.
+    event MinimumRedeemableUpdated(address indexed updater, uint256 oldMinimum, uint256 newMinimum);
 
     /// @notice A holder-impacting announcement. Posted before any
     ///         metadata-changing operation that references the same
@@ -109,9 +133,7 @@ interface IB20Security is IB20 {
     /// @notice A security identifier (ISIN, CUSIP, FIGI, etc.) was set,
     ///         changed, or removed. `value` is the empty string on
     ///         removal.
-    event SecurityIdentifierUpdated(
-        address indexed caller, string announcementId, string identifierType, string value
-    );
+    event SecurityIdentifierUpdated(address indexed caller, string announcementId, string identifierType, string value);
 
     /// @notice Supply created via the compliant issuance path.
     event Created(address indexed to, uint256 amount);
@@ -125,14 +147,11 @@ interface IB20Security is IB20 {
     /// @notice Per-caller create rate-limit configuration changed.
     event CreateRateLimitConfigured(address indexed caller, uint256 maxAmount, uint256 interval);
 
-    // NOTE on `NameUpdated` / `SymbolUpdated` / `Redeemed` /
-    // `MinimumRedeemableUpdated`: all four are inherited from
-    // `IB20` and are not redeclared here. Security
-    // implementations of `updateName` / `updateSymbol` emit the
-    // inherited `NameUpdated` / `SymbolUpdated` event after the matching
-    // `Announcement(id, ...)` has been emitted earlier in the
-    // transaction; indexers correlate the two via the shared
-    // transaction hash.
+    // NOTE on `NameUpdated` / `SymbolUpdated`: both are inherited from
+    // `IB20` and are not redeclared here. Security implementations of
+    // `updateName` / `updateSymbol` emit the inherited event after the
+    // matching `Announcement(id, ...)` has been emitted earlier in the
+    // transaction; indexers correlate the two via the shared transaction hash.
 
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
@@ -151,6 +170,67 @@ interface IB20Security is IB20 {
     ///         (which is typically not granted at all on security
     ///         tokens).
     function ISSUER_ROLE() external view returns (bytes32);
+
+    /*//////////////////////////////////////////////////////////////
+                              POLICY
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The policy ID currently gating this token's redemptions.
+    ///         Checked via `isAuthorized(redeemPolicyId, msg.sender)` on
+    ///         every call to `redeem` / `redeemWithMemo`. ID `0` always
+    ///         rejects (disables redemption entirely); ID `1` always allows.
+    ///         Distinct from the inherited `transferPolicyId` so brokerage-
+    ///         verified holders can redeem without the transfer policy
+    ///         needing to authorize them for general transfers.
+    function redeemPolicyId() external view returns (uint64 policyId);
+
+    /// @notice Sets a new redeem policy. Requires `DEFAULT_ADMIN_ROLE`.
+    ///         The policy MUST exist in the registry (or be one of the
+    ///         built-in IDs `0` or `1`); otherwise reverts with
+    ///         `PolicyNotFound`. Takes effect immediately for the next
+    ///         redemption. Emits `RedeemPolicyUpdated`.
+    function updateRedeemPolicy(uint64 newPolicyId) external;
+
+    /*//////////////////////////////////////////////////////////////
+                                 REDEEM
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Destroys `amount` of the caller's balance, signaling an
+    ///         off-chain redemption claim against the issuer. Subject to:
+    ///         1. `amount >= minimumRedeemable()` (else
+    ///            `MinimumRedeemableNotMet(amount, minimum)`).
+    ///         2. `amount <= balanceOf(msg.sender)` (else
+    ///            `InsufficientBalance(msg.sender, balance, amount)`).
+    ///         3. The `REDEEM` pause vector is unset (else
+    ///            `ContractPaused(REDEEM)`).
+    ///         4. `isAuthorized(redeemPolicyId, msg.sender)` returns true
+    ///            (else `PolicyForbids(redeemPolicyId)`).
+    /// @dev    No role is required: redemption is a user-initiated
+    ///         operation on the caller's own balance. Set `redeemPolicyId`
+    ///         to the built-in ID `0` to disable redemption entirely.
+    ///
+    ///         Distinct from `burn` (which requires `BURN_ROLE` and
+    ///         carries no off-chain settlement implication). Both emit
+    ///         `Transfer(holder, address(0), amount)`; `redeem`
+    ///         additionally emits `Redeemed(holder, amount)` so indexers
+    ///         can distinguish.
+    function redeem(uint256 amount) external;
+
+    /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
+    ///         immediately after the standard `Transfer` event (and
+    ///         after `Redeemed`).
+    function redeemWithMemo(uint256 amount, bytes32 memo) external;
+
+    /// @notice The minimum amount that may be redeemed in a single call
+    ///         to `redeem` / `redeemWithMemo`. Defaults to 0 (no
+    ///         minimum) at creation.
+    function minimumRedeemable() external view returns (uint256);
+
+    /// @notice Sets a new minimum redeemable amount. Requires
+    ///         `DEFAULT_ADMIN_ROLE`. May be set to 0 to disable the
+    ///         minimum entirely. Takes effect immediately for the next
+    ///         redemption.
+    function setMinimumRedeemable(uint256 newMinimum) external;
 
     /*//////////////////////////////////////////////////////////////
                               ANNOUNCEMENTS
@@ -233,18 +313,15 @@ interface IB20Security is IB20 {
     /// @notice Cold-path batch mint. Used for unusual or emergency
     ///         issuance (e.g. distribution of a stock dividend to many
     ///         holders). All recipients must satisfy
-    ///         `isAuthorizedMintRecipient` on the active transfer
+    ///         `isAuthorized` on the active transfer
     ///         policy.
     /// @dev    Requires `ISSUER_ROLE` and an `Announcement(id, ...)`
     ///         emitted earlier in the same transaction with the same
     ///         `announcementId`. Subject to the inherited `supplyCap`.
     ///         Reverts atomically if any single recipient fails;
     ///         partial mints are not possible.
-    function adminMint(
-        string calldata announcementId,
-        address[] calldata recipients,
-        uint256[] calldata amounts
-    ) external;
+    function adminMint(string calldata announcementId, address[] calldata recipients, uint256[] calldata amounts)
+        external;
 
     /// @notice Cold-path batch burn. Used for cold-path corporate
     ///         actions (reverse-tender settlement, mass-corrections
@@ -256,11 +333,7 @@ interface IB20Security is IB20 {
     ///         `announcementId`. Reverts atomically if any single
     ///         account lacks sufficient balance; partial burns are not
     ///         possible.
-    function adminBurn(
-        string calldata announcementId,
-        address[] calldata accounts,
-        uint256[] calldata amounts
-    ) external;
+    function adminBurn(string calldata announcementId, address[] calldata accounts, uint256[] calldata amounts) external;
 
     /*//////////////////////////////////////////////////////////////
                        SECURITY IDENTIFIERS

@@ -33,19 +33,15 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         Functions whose capability bit is unset revert with
 ///         `FeatureDisabled`, regardless of role state. See `Capabilities`.
 ///
-///         **Policy model.** Every transfer, mint, and redeem passes
-///         through the token's currently-set policy ID, resolved against
-///         the singleton policy registry. Transfer checks consult the
-///         policy for `from`, `to`, AND `msg.sender` (the spender, when
-///         distinct from `from`). Mint checks consult the policy for the
-///         recipient via the mint-recipient slot of a compound policy.
-///         Redeem checks consult the policy for `msg.sender` via the
-///         redeemer slot of a compound policy: tokens without redemption
-///         configure that slot as always-reject, making `redeem` revert
-///         for every caller. Burn checks consult only the role of the
-///         caller; `BURN_ROLE` plus the caller's own balance are
-///         sufficient. `approve` is NOT gated by the policy (only the
-///         act of MOVING balance is gated).
+///         **Policy model.** Every transfer and mint passes through the
+///         token's currently-set policy ID, resolved against the singleton
+///         policy registry via `isAuthorized(transferPolicyId, address)`.
+///         Transfer checks run for `from`, `to`, AND `msg.sender` (the
+///         spender, when distinct from `from`). Mint checks run for `to`
+///         (the recipient). Burn checks consult only the role of the caller;
+///         `BURN_ROLE` plus the caller's own balance are sufficient.
+///         `approve` is NOT gated by the policy (only the act of MOVING
+///         balance is gated).
 ///
 ///         **Permit.** EIP-2612 permit, EOA signatures only. ERC-1271
 ///         contract signatures are NOT supported on the default surface
@@ -157,10 +153,6 @@ interface IB20 {
     ///         permanent.
     error FeatureDisabled(uint256 capability);
 
-    /// @notice The redemption amount is below the configured
-    ///         `minimumRedeemable` threshold.
-    error MinimumRedeemableNotMet(uint256 amount, uint256 minimum);
-
     /// @notice `renounceRole(DEFAULT_ADMIN_ROLE, ...)` was called when the
     ///         caller is the last admin. Tokens MUST always have at least
     ///         one admin; rotate to a new admin first via `grantRole`.
@@ -228,9 +220,13 @@ interface IB20 {
     /// @notice Emitted by `unpause`. All paused vectors are cleared.
     event Unpaused(address indexed updater);
 
-    /// @notice Emitted by `changeTransferPolicyId`. Includes the prior ID
+    /// @notice Emitted by `updateTransferPolicy`. Includes the prior ID
     ///         for indexer convenience.
     event TransferPolicyUpdated(address indexed updater, uint64 oldPolicyId, uint64 newPolicyId);
+
+    /// @notice Emitted by `updateMintPolicy`. Includes the prior ID
+    ///         for indexer convenience.
+    event MintPolicyUpdated(address indexed updater, uint64 oldPolicyId, uint64 newPolicyId);
 
     /// @notice Emitted by `setSupplyCap`. Includes the prior cap for
     ///         indexer convenience.
@@ -248,18 +244,6 @@ interface IB20 {
     /// @notice Emitted by `setSymbol`. Carries the new symbol string for
     ///         indexer consumption.
     event SymbolUpdated(address indexed updater, string newSymbol);
-
-    /// @notice Emitted by `redeem` and `redeemWithMemo` (in addition to
-    ///         the standard `Transfer(holder, address(0), amount)`).
-    ///         Distinguishes user-initiated redemption (which implies an
-    ///         off-chain settlement obligation) from plain `burn`, which
-    ///         emits the same `Transfer` event but carries no
-    ///         off-chain meaning.
-    event Redeemed(address indexed holder, uint256 amount);
-
-    /// @notice Emitted by `setMinimumRedeemable`. Includes the prior
-    ///         minimum for indexer convenience.
-    event MinimumRedeemableUpdated(address indexed updater, uint256 oldMinimum, uint256 newMinimum);
 
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
@@ -463,54 +447,6 @@ interface IB20 {
     function burnWithMemo(uint256 amount, bytes32 memo) external;
 
     /*//////////////////////////////////////////////////////////////
-                                 REDEEM
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Destroys `amount` of the caller's balance, signaling an
-    ///         off-chain redemption claim against the issuer. Subject to:
-    ///         1. `amount >= minimumRedeemable()` (else
-    ///            `MinimumRedeemableNotMet(amount, minimum)`).
-    ///         2. `amount <= balanceOf(msg.sender)` (else
-    ///            `InsufficientBalance(msg.sender, balance, amount)`).
-    ///         3. The `REDEEM` pause vector is unset (else
-    ///            `ContractPaused(REDEEM)`).
-    ///         4. The active transfer policy authorizes `msg.sender` as
-    ///            a redeemer (else `PolicyForbids(transferPolicyId)`).
-    /// @dev    No role is required: redemption is a user-initiated
-    ///         operation on the caller's own balance, gated entirely by
-    ///         the policy's redeemer slot.
-    ///
-    ///         Tokens that do not offer redemption configure their
-    ///         transfer policy with the redeemer slot pointed at policy
-    ///         ID `0` (always-reject); calls to `redeem` then revert
-    ///         with `PolicyForbids` for every caller. The function is
-    ///         present on every Default token but its availability is
-    ///         policy-driven.
-    ///
-    ///         Distinct from `burn` (which requires `BURN_ROLE` and
-    ///         carries no off-chain settlement implication). Both emit
-    ///         `Transfer(holder, address(0), amount)`; `redeem`
-    ///         additionally emits `Redeemed(holder, amount)` so indexers
-    ///         can distinguish.
-    function redeem(uint256 amount) external;
-
-    /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
-    ///         immediately after the standard `Transfer` event (and
-    ///         after `Redeemed`).
-    function redeemWithMemo(uint256 amount, bytes32 memo) external;
-
-    /// @notice The minimum amount that may be redeemed in a single call
-    ///         to `redeem` / `redeemWithMemo`. Defaults to 0 (no
-    ///         minimum) at creation.
-    function minimumRedeemable() external view returns (uint256);
-
-    /// @notice Sets a new minimum redeemable amount. Requires
-    ///         `DEFAULT_ADMIN_ROLE`. May be set to 0 to disable the
-    ///         minimum entirely. Takes effect immediately for the next
-    ///         redemption.
-    function setMinimumRedeemable(uint256 newMinimum) external;
-
-    /*//////////////////////////////////////////////////////////////
                                   ROLES
     //////////////////////////////////////////////////////////////*/
 
@@ -596,14 +532,27 @@ interface IB20 {
     ///         mints. Resolved against the singleton policy registry
     ///         precompile. ID `0` always rejects (functional soft-pause
     ///         via policy); ID `1` always allows.
-    function transferPolicyId() external view returns (uint64);
+    function transferPolicyId() external view returns (uint64 policyId);
 
     /// @notice Sets a new transfer policy. Requires `DEFAULT_ADMIN_ROLE`.
     ///         The policy MUST exist in the registry (or be one of the
     ///         built-in IDs `0` or `1`); otherwise reverts with
     ///         `PolicyNotFound`. Takes effect immediately for the next
     ///         transfer or mint.
-    function changeTransferPolicyId(uint64 newPolicyId) external;
+    function updateTransferPolicy(uint64 newPolicyId) external;
+
+    /// @notice The policy ID currently gating this token's transfers and
+    ///         mints. Resolved against the singleton policy registry
+    ///         precompile. ID `0` always rejects (functional soft-pause
+    ///         via policy); ID `1` always allows.
+    function mintPolicyId() external view returns (uint64 policyId);
+
+    /// @notice Sets a new transfer policy. Requires `DEFAULT_ADMIN_ROLE`.
+    ///         The policy MUST exist in the registry (or be one of the
+    ///         built-in IDs `0` or `1`); otherwise reverts with
+    ///         `PolicyNotFound`. Takes effect immediately for the next
+    ///         transfer or mint.
+    function updateMintPolicy(uint64 newPolicyId) external;
 
     /*//////////////////////////////////////////////////////////////
                               SUPPLY CAP

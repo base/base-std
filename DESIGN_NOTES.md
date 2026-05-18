@@ -62,10 +62,10 @@ All B-20 tokens delegate transfer authorization to the policy engine
 via `transferPolicyId`. There is no internal blocklist on the token
 itself. Sanctions lists, KYC allowlists, jurisdiction restrictions, and
 similar compliance rules all live in the policy registry as
-whitelist/blacklist/compound policies.
+allowlist/blocklist policies.
 
 **Why.** Composability across tokens (one Coinbase-managed sanctions
-blacklist policy serves every stablecoin AND every security AND every
+blocklist policy serves every stablecoin AND every security AND every
 default token that opts in), single auditable source for compliance
 state, and no duplication of mechanism. CCS uses an internal blocklist;
 we deliberately diverge to centralize this.
@@ -280,11 +280,11 @@ commitment from the issuer.
 
 Gated on a separate `redeemPolicyId` (see below).
 
-#### Policy engine scope: TIP-403 + TIP-1015 parity, no callback or richer guards in v1
+#### Policy engine scope: TIP-403 only, no compound or richer guards in v1
 
 We considered four levels of policy sophistication for v1:
 
-1. **Pure set membership** (TIP-403): WHITELIST, BLACKLIST.
+1. **Pure set membership** (TIP-403): ALLOWLIST, BLOCKLIST.
 2. **+ Compound policies** (TIP-1015): asymmetric sender / recipient /
    mint-recipient slots referencing simple policies.
 3. **+ Callback policies**: a fourth policy type that defers the
@@ -294,20 +294,20 @@ We considered four levels of policy sophistication for v1:
 4. **+ Modular guards / hooks**: the Modular ERC20 vision. Per-operation
    guard arrays, custom storage per guard, etc.
 
-We ship **Levels 1 + 2 only** in v1.
+We ship **Level 1 only** in v1.
+
+Compound policies (Level 2) were removed: the asymmetric sender /
+recipient / mint-recipient slots added complexity for a use case that
+can be approximated by pointing the token at a blocklist that covers
+all roles uniformly, or by wrapping the precompile in a periphery
+contract. The forward-compat story is the same as callback — enum
+extensions are backward-compatible, so compound can be added in a
+future hardfork without breaking existing consumers.
 
 The case for adding callback (Level 3) was real (richer rules without
-chain bloat, small interface delta). But the forward-compat argument is
-weak: even if we reserved the `CALLBACK` enum value now, the actual
-implementation requires a hardfork — same as just adding it later.
-Enum extensions are backward-compatible (existing values keep their
-meanings), so consumers don't break when callback is added in a future
-hardfork. Conclusion: defer to a future hardfork if real demand
-emerges.
-
-The user-stories doc explicitly lists three types (allowlist, blocklist,
-compound). Conner has consistently steered toward "fork Tempo cleanly."
-Our v1 matches that exactly.
+chain bloat, small interface delta). But it similarly requires a
+hardfork and has no confirmed demand. Defer to a future hardfork if
+real demand emerges.
 
 **Rules that v1 DOES NOT support and would need future work:**
 - Per-tx amount limits (callback signature lacks the amount)
@@ -321,18 +321,21 @@ pattern; no chain change needed.
 #### Brokerage allowlist via separate `redeemPolicyId`
 
 Each security token holds two policy IDs:
-- `transferPolicyId`: gates transfers and mints. Typically a compound
-  policy (e.g. KYC'd recipients, sanctions-blacklisted senders).
-- `redeemPolicyId`: gates `redeem` callers. Typically a simple
-  whitelist of brokerage-verified accounts. Coinbase manages this list
-  by being the policy admin in the registry.
+- `transferPolicyId` (inherited from `IB20`): gates transfers and mints.
+  Typically a blocklist of sanctioned addresses or an allowlist of KYC'd
+  accounts, depending on the issuer's compliance regime.
+- `redeemPolicyId` (security-specific): gates `redeem` / `redeemWithMemo`
+  callers. Typically an allowlist of brokerage-verified accounts. Set to
+  built-in ID `0` to disable redemption entirely.
+
+Coinbase manages the relevant policies as the policy admin in the registry.
 
 **Why separate IDs?** Transfer-eligibility and redeem-eligibility are
 different sets in practice. Retail can hold and trade a tokenized
 security without being able to redeem to brokerage; redemption requires
-KYC + brokerage account connection that not all holders have. Putting
-both behind the same policy would force every holder to be brokerage-
-verified.
+KYC + brokerage account connection that not all holders have. A single
+shared policy would force every holder to be brokerage-verified before
+they could receive a transfer.
 
 #### Announcement coupling for metadata changes
 
@@ -534,7 +537,7 @@ just promises determinism + variant-recoverability.
 For Default and Stablecoin, `initialSupply` is minted to
 `initialSupplyRecipient` atomically at creation. This bypasses BOTH
 the policy check (the recipient does not need to satisfy
-`isAuthorizedMintRecipient` on `transferPolicyId`) AND the `MINTABLE`
+`isAuthorized` on `transferPolicyId`) AND the `MINTABLE`
 capability check (the bootstrap mint works even on a token where
 `MINTABLE = false`).
 
