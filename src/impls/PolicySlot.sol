@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20 <0.9.0;
+pragma solidity ^0.8.20;
 
 import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 
 /// @title PolicySlot
 /// @notice Internal library for encoding and decoding packed policy storage slots.
+/// @author Coinbase
 ///
 /// @dev Each policy is stored as a single uint256. The low 8 bits are always the
 ///      PolicyType discriminator; the remaining bits depend on the type:

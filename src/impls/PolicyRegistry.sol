@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20 <0.9.0;
+pragma solidity 0.8.30;
 
 import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 import {PolicySlot} from "./PolicySlot.sol";
 
 /// @title PolicyRegistry
 /// @notice Implementation of the IPolicyRegistry precompile interface.
+/// @author Coinbase
 ///
 /// @dev Existence sentinel: `_policyData[id] == 0` means the policy was never created.
 ///      This is safe because WHITELIST/BLACKLIST require a non-zero admin (so packed
@@ -88,12 +89,12 @@ contract PolicyRegistry is IPolicyRegistry {
         PolicyType mintRecipientType = _requireConstituent(mintRecipientPolicyId);
         PolicyType redeemerType = _requireConstituent(redeemerPolicyId);
         newPolicyId = _nextPolicyId();
-        _policyData[newPolicyId] = PolicySlot.encodeCompound(
-            PolicySlot.encodeField(senderPolicyId, senderType),
-            PolicySlot.encodeField(recipientPolicyId, recipientType),
-            PolicySlot.encodeField(mintRecipientPolicyId, mintRecipientType),
-            PolicySlot.encodeField(redeemerPolicyId, redeemerType)
-        );
+        _policyData[newPolicyId] = PolicySlot.encodeCompound({
+            senderField: PolicySlot.encodeField({id: senderPolicyId, constituentType: senderType}),
+            recipientField: PolicySlot.encodeField({id: recipientPolicyId, constituentType: recipientType}),
+            mintField: PolicySlot.encodeField({id: mintRecipientPolicyId, constituentType: mintRecipientType}),
+            redeemerField: PolicySlot.encodeField({id: redeemerPolicyId, constituentType: redeemerType})
+        });
         emit CompoundPolicyCreated(
             newPolicyId, msg.sender, senderPolicyId, recipientPolicyId, mintRecipientPolicyId, redeemerPolicyId
         );
@@ -128,7 +129,7 @@ contract PolicyRegistry is IPolicyRegistry {
         // Preserve the frozen bit on rotation. Currently unreachable because the
         // freeze check above short-circuits, but coded defensively in case the
         // freeze semantics evolve (e.g. allowing rotation while frozen).
-        _policyData[policyId] = PolicySlot.encodeSimple(policyType, msg.sender)
+        _policyData[policyId] = PolicySlot.encodeSimple({policyType: policyType, policyAdmin: msg.sender})
             | (packed.decodeFrozen() ? PolicySlot.FROZEN_BIT : 0);
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, msg.sender);
@@ -186,8 +187,9 @@ contract PolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address user) external view returns (bool) {
-        return _checkRole(policyId, user, PolicySlot.SENDER_SHIFT)
-            && _checkRole(policyId, user, PolicySlot.RECIPIENT_SHIFT);
+        return
+            _checkRole(policyId, user, PolicySlot.SENDER_SHIFT)
+                && _checkRole(policyId, user, PolicySlot.RECIPIENT_SHIFT);
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -280,7 +282,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyType != PolicyType.WHITELIST && policyType != PolicyType.BLACKLIST) revert InvalidPolicyType();
         if (admin == address(0)) revert ZeroAddress();
         newPolicyId = _nextPolicyId();
-        _policyData[newPolicyId] = PolicySlot.encodeSimple(policyType, admin);
+        _policyData[newPolicyId] = PolicySlot.encodeSimple({policyType: policyType, policyAdmin: admin});
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, msg.sender, admin);
     }
