@@ -100,7 +100,7 @@ library Capabilities {
     // Earlier drafts defined STABLECOIN_MINT_RATE_LIMITED (per-minter
     // rate limiting) and STABLECOIN_AUTHORIZATIONS (ERC-3009). Both
     // were removed when the corresponding surface moved out of
-    // `IStablecoin` to EVM periphery contracts. See `IStablecoin` for
+    // `IB20Stablecoin` to EVM periphery contracts. See `IB20Stablecoin` for
     // the rationale.
 
     /*//////////////////////////////////////////////////////////////

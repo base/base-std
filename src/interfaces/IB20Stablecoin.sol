@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20 <0.9.0;
 
-import {IDefaultToken} from "./IDefaultToken.sol";
+import {IB20} from "./IB20.sol";
 
-/// @title IStablecoin
+/// @title IB20Stablecoin
 /// @notice A B-20 token variant for value-pegged tokens (USD, EUR, XAU, etc.).
-///         Inherits the full `IDefaultToken` surface and adds a single
+///         Inherits the full `IB20` surface and adds a single
 ///         immutable `currency()` identifier for routing, categorization,
 ///         and wallet display.
 ///
@@ -32,11 +32,11 @@ import {IDefaultToken} from "./IDefaultToken.sol";
 ///           operations.
 ///
 ///         Compliance (sanctions, jurisdiction restrictions, KYC) is
-///         delegated to the policy engine via `IDefaultToken.transferPolicyId`.
+///         delegated to the policy engine via `IB20.transferPolicyId`.
 ///         Issuers point their stablecoin at a compound policy with the
 ///         appropriate sender, recipient, mint-recipient, and redeemer
 ///         slots configured per their compliance regime.
-interface IStablecoin is IDefaultToken {
+interface IB20Stablecoin is IB20 {
     /*//////////////////////////////////////////////////////////////
                           CURRENCY IDENTIFIER
     //////////////////////////////////////////////////////////////*/

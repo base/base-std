@@ -3,7 +3,7 @@ pragma solidity >=0.8.20 <0.9.0;
 
 /// @title PauseVectors
 /// @notice Bit positions for the granular pause bitfield used by `pause`
-///         and `paused` on `IDefaultToken` and its variants.
+///         and `paused` on `IB20` and its variants.
 ///
 ///         A token's `pause(uint256 vectors)` function accepts a bitmask
 ///         of vectors to pause; multiple calls are additive (each call

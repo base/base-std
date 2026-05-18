@@ -17,7 +17,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 ///         The factory is a precompile and has no admin or governance.
 ///         Each created token has its own independent admin and operates
-///         per the inherited `IDefaultToken` (and variant) surface.
+///         per the inherited `IB20` (and variant) surface.
 interface ITokenFactory {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
@@ -87,7 +87,7 @@ interface ITokenFactory {
     /// @notice Creation parameters for a Stablecoin-variant token.
     /// @param currency               Immutable currency identifier (e.g.
     ///                               "USD", "EUR", "XAU"). See
-    ///                               `IStablecoin.currency` for the
+    ///                               `IB20Stablecoin.currency` for the
     ///                               convention.
     /// @dev    All other fields have the same semantics as the Default
     ///         params struct.

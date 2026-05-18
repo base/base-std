@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20 <0.9.0;
 
-import {IDefaultToken} from "./IDefaultToken.sol";
+import {IB20} from "./IB20.sol";
 
-/// @title ISecurityToken
+/// @title IB20Security
 /// @notice A B-20 token variant for tokenized securities (equities, ETFs,
-///         commodities, etc.). Extends `IDefaultToken` with primitives
+///         commodities, etc.). Extends `IB20` with primitives
 ///         specific to securities: holder-impacting announcements,
 ///         split-safe share-ratio accounting, security-identifier
 ///         metadata, compliant issuance via `create`, and cold-path
 ///         admin batch mint / burn for unusual corporate actions.
 ///
-/// @dev    **Inherited surface.** `IDefaultToken` already provides the
+/// @dev    **Inherited surface.** `IB20` already provides the
 ///         pieces that are shared with stablecoins and other variants:
 ///         ERC-20 surface, mint / burn (gated by `MINT_ROLE` / `BURN_ROLE`),
 ///         redeem / redeemWithMemo / minimumRedeemable / setMinimumRedeemable
@@ -44,7 +44,7 @@ import {IDefaultToken} from "./IDefaultToken.sol";
 ///            paths that take an announcement ID. These are the
 ///            canonical name/symbol update functions for security
 ///            tokens; the inherited `setName` / `setSymbol` from
-///            `IDefaultToken` are present in the interface but
+///            `IB20` are present in the interface but
 ///            implementations typically revert them on security tokens
 ///            so that name/symbol changes always carry an announcement.
 ///         7. `securityIdentifier` / `updateSecurityIdentifier` for
@@ -58,7 +58,7 @@ import {IDefaultToken} from "./IDefaultToken.sol";
 ///         Capability bits relevant to securities live in the
 ///         `Capabilities` library bits 16..23 (e.g. `SECURITY_CREATABLE`,
 ///         `SHARE_RATIO_MUTABLE`).
-interface ISecurityToken is IDefaultToken {
+interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -127,7 +127,7 @@ interface ISecurityToken is IDefaultToken {
 
     // NOTE on `NameUpdated` / `SymbolUpdated` / `Redeemed` /
     // `MinimumRedeemableUpdated`: all four are inherited from
-    // `IDefaultToken` and are not redeclared here. Security
+    // `IB20` and are not redeclared here. Security
     // implementations of `updateName` / `updateSymbol` emit the
     // inherited `NameUpdated` / `SymbolUpdated` event after the matching
     // `Announcement(id, ...)` has been emitted earlier in the
@@ -300,12 +300,12 @@ interface ISecurityToken is IDefaultToken {
     ///         computation (used by `permit`); callers signing permits
     ///         should re-read the relevant domain fields immediately
     ///         before signing. Emits the inherited `NameUpdated` event
-    ///         from `IDefaultToken`.
+    ///         from `IB20`.
     /// @dev    Requires `DEFAULT_ADMIN_ROLE` and an
     ///         `Announcement(id, ...)` emitted earlier in the same
     ///         transaction with the same id.
     ///
-    ///         Note: `IDefaultToken.setName(newName)` is also in this
+    ///         Note: `IB20.setName(newName)` is also in this
     ///         interface (inherited) but security-token implementations
     ///         typically revert it so that all name changes carry an
     ///         announcement. Use `updateName` here for the canonical
@@ -315,7 +315,7 @@ interface ISecurityToken is IDefaultToken {
     /// @notice Updates the token's symbol (e.g. ticker change). Reads
     ///         via the inherited `symbol()` accessor reflect the new
     ///         value immediately. Emits the inherited `SymbolUpdated`
-    ///         event from `IDefaultToken`.
+    ///         event from `IB20`.
     /// @dev    Requires `DEFAULT_ADMIN_ROLE` and an
     ///         `Announcement(id, ...)` emitted earlier in the same
     ///         transaction with the same id.
