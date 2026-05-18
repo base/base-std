@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20 <0.9.0;
 
-/// @title IDefaultToken
+/// @title IB20
 /// @notice The base Solidity surface every Base-native token (B-20) implements.
 ///         Variants (Stablecoin, Security, ...) extend this interface; nothing
 ///         on this surface is variant-specific. A token created at the Default
@@ -54,7 +54,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         `(chainId, verifyingContract)` only, with `name` and `version`
 ///         empty. ERC-5267 `eip712Domain()` is exposed for domain
 ///         introspection by integrators.
-interface IDefaultToken {
+interface IB20 {
     /*//////////////////////////////////////////////////////////////
                                 ERRORS
     //////////////////////////////////////////////////////////////*/
