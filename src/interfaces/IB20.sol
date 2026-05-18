@@ -36,16 +36,20 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 ///         **Policy model.** The token holds a generic `policyId` mapping
 ///         keyed by `bytes32 policyType`, where each standard policy type
-///         is the `keccak256` hash of its name. Five standard types are
-///         exposed as constants:
+///         is the `keccak256` hash of its name. Four standard types are
+///         exposed as constants on this base surface:
 ///         - `TRANSFER_SENDER`   — checked against `from` on every transfer
 ///         - `TRANSFER_RECEIVER` — checked against `to`   on every transfer
 ///         - `TRANSFER_EXECUTOR` — checked against `msg.sender` on `transferFrom`
 ///                                  (when distinct from `from`)
 ///         - `MINT_RECEIVER`     — checked against `to`   on every mint
-///         - `REDEEMER_SENDER`   — checked against `msg.sender` on `redeem`
-///                                  (used by variants that ship redeem,
-///                                  e.g. IB20Security)
+///         Variants may introduce additional policy-type constants for
+///         variant-specific operations (e.g. `IB20Security` adds
+///         `REDEEMER_SENDER` for its `redeem` path). The underlying
+///         `policyId` mapping accepts any `bytes32` key, so the
+///         variant-side additions are pure interface additions with no
+///         change to the storage shape.
+///
 ///         Each policy slot defaults to built-in ID `0` (always-reject) so
 ///         newly minted tokens cannot move balance until the admin
 ///         configures their compliance regime. ID `1` (always-allow) is
@@ -335,14 +339,6 @@ interface IB20 {
     ///         Identifier is `keccak256("MINT_RECEIVER")`.
     function MINT_RECEIVER() external view returns (bytes32);
 
-    /// @notice The policy slot consulted against `msg.sender` on
-    ///         `redeem` (used by variants that ship redeem, e.g.
-    ///         IB20Security). Identifier is `keccak256("REDEEMER_SENDER")`.
-    ///         Exposed on the base interface so all B-20 tokens share a
-    ///         common policy-type vocabulary even when not all slots are
-    ///         actively consulted on a given variant.
-    function REDEEMER_SENDER() external view returns (bytes32);
-
     /*//////////////////////////////////////////////////////////////
                               CAPABILITIES
     //////////////////////////////////////////////////////////////*/
@@ -603,10 +599,12 @@ interface IB20 {
     ///         `0` (always-reject built-in) for any policy slot that has
     ///         never been assigned. Standard policy types are exposed as
     ///         the role-identifier constants `TRANSFER_SENDER()`,
-    ///         `TRANSFER_RECEIVER()`, `TRANSFER_EXECUTOR()`,
-    ///         `MINT_RECEIVER()`, and `REDEEMER_SENDER()`; user-defined
-    ///         policy types are also supported and may be used by
-    ///         variant-specific functions.
+    ///         `TRANSFER_RECEIVER()`, `TRANSFER_EXECUTOR()`, and
+    ///         `MINT_RECEIVER()`. Variants add their own constants for
+    ///         variant-specific operations (e.g. `REDEEMER_SENDER()` on
+    ///         `IB20Security`). User-defined policy types are also
+    ///         supported and may be used by periphery contracts that
+    ///         layer additional gating on top.
     /// @dev    All slots default to `0` (always-reject) at token creation:
     ///         newly minted tokens cannot move balance until the admin
     ///         configures their policy slots. To explicitly opt out of a

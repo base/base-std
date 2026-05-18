@@ -178,6 +178,19 @@ interface IB20Security is IB20 {
     function ISSUER_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
+                          POLICY TYPE IDENTIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The policy slot consulted against `msg.sender` on
+    ///         `redeem` / `redeemWithMemo`. Identifier is
+    ///         `keccak256("REDEEMER_SENDER")`. Security-specific because
+    ///         the redeem surface is itself security-specific; the
+    ///         underlying `policyId(bytes32)` mapping on `IB20` accepts
+    ///         any key, so this is a pure interface addition with no
+    ///         change to base storage shape.
+    function REDEEMER_SENDER() external view returns (bytes32);
+
+    /*//////////////////////////////////////////////////////////////
                                  REDEEM
     //////////////////////////////////////////////////////////////*/
 
