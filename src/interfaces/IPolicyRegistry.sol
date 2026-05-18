@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.20 <0.9.0;
+pragma solidity ^0.8.20;
 
 /// @title IPolicyRegistry
+/// @author Coinbase
 /// @notice Singleton registry of transfer-authorization policies for B-20
 ///         tokens. Each B-20 token holds a single `transferPolicyId`
 ///         pointing into this registry; on every transfer, mint, or redeem,
@@ -47,11 +48,11 @@ interface IPolicyRegistry {
     ///         reserved for the built-in IDs (0 and 1) and cannot be assigned
     ///         to created policies.
     enum PolicyType {
-        WHITELIST,     // 0: address-set membership; authorized if in set
-        BLACKLIST,     // 1: address-set membership; authorized if NOT in set
-        COMPOUND,      // 2: per-role slots delegating to constituent policies
+        WHITELIST, // 0: address-set membership; authorized if in set
+        BLACKLIST, // 1: address-set membership; authorized if NOT in set
+        COMPOUND, // 2: per-role slots delegating to constituent policies
         ALWAYS_REJECT, // 3: built-in; all authorization queries return false
-        ALWAYS_ALLOW   // 4: built-in; all authorization queries return true
+        ALWAYS_ALLOW // 4: built-in; all authorization queries return true
     }
 
     /// @notice Constituent policy IDs for a compound policy. Each slot maps to one
@@ -59,14 +60,14 @@ interface IPolicyRegistry {
     ///         fulfilling that role. Slots may reference any simple policy (WHITELIST,
     ///         BLACKLIST) or a built-in ID. Use ID `1` (always-allow) for any slot
     ///         with no constraint, or `0` (always-reject) to hard-block a role.
-    /// @param senderPolicyId        Policy checked for transfer senders.
-    /// @param recipientPolicyId     Policy checked for transfer recipients.
-    /// @param mintRecipientPolicyId Policy checked for mint recipients.
-    /// @param redeemerPolicyId      Policy checked for redeem callers.
     struct CompoundPolicyData {
+        /// @dev Policy checked for transfer senders.
         uint64 senderPolicyId;
+        /// @dev Policy checked for transfer recipients.
         uint64 recipientPolicyId;
+        /// @dev Policy checked for mint recipients.
         uint64 mintRecipientPolicyId;
+        /// @dev Policy checked for redeem callers.
         uint64 redeemerPolicyId;
     }
 
@@ -139,9 +140,7 @@ interface IPolicyRegistry {
     /// @notice Emitted when the current admin nominates a new admin via
     ///         `beginPolicyAdminTransfer`. The transfer does not take effect until
     ///         `pendingAdmin` calls `acceptPolicyAdminTransfer`.
-    event PolicyAdminTransferBegun(
-        uint64 indexed policyId, address indexed currentAdmin, address indexed pendingAdmin
-    );
+    event PolicyAdminTransferBegun(uint64 indexed policyId, address indexed currentAdmin, address indexed pendingAdmin);
 
     /// @notice Emitted when an in-flight admin transfer is cancelled by the current
     ///         admin (clearing the pending admin without changing the active admin).
@@ -166,11 +165,14 @@ interface IPolicyRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Creates a new simple (WHITELIST or BLACKLIST) policy.
+    ///
     /// @dev    Permissionless. Reverts with `InvalidPolicyType` if `policyType`
     ///         is `COMPOUND` (use `createCompoundPolicy`), and with `ZeroAddress`
     ///         if `admin` is `address(0)`.
+    ///
     /// @param admin       The address authorized to modify this policy.
     /// @param policyType  WHITELIST or BLACKLIST.
+    ///
     /// @return newPolicyId The newly assigned policy ID.
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId);
 
@@ -186,6 +188,7 @@ interface IPolicyRegistry {
     ///         cannot be changed after creation, and there is no admin. To rotate
     ///         the configuration, create a new compound policy and re-point the
     ///         token's `transferPolicyId`.
+    ///
     /// @dev    Permissionless. Each constituent MUST exist and MUST NOT be COMPOUND.
     ///         Built-in IDs (0 and 1) are always valid. Reverts with
     ///         `PolicyNotFound` for unknown IDs and `ConstituentIsCompound` if
@@ -204,6 +207,7 @@ interface IPolicyRegistry {
     /// @notice Nominates a new admin for a simple policy. The transfer is two-step:
     ///         this call records `newAdmin` as the pending admin without changing the
     ///         active admin. The nominee must then call `acceptPolicyAdminTransfer`.
+    ///
     /// @dev    Caller must be the current admin. Reverts on COMPOUND policies (they
     ///         have no admin) and on frozen policies. Calling this again overwrites
     ///         any previously pending admin for this policy. Pass `address(0)` to
@@ -226,6 +230,7 @@ interface IPolicyRegistry {
     ///         and it cannot be unfrozen. Compound policies that reference this
     ///         policy as a constituent continue to work; only this policy's own
     ///         membership state is locked.
+    ///
     /// @dev    Caller must be the current admin. Reverts on COMPOUND policies and
     ///         on already-frozen policies. Any in-flight admin transfer is
     ///         cleared as a side effect.
@@ -233,12 +238,14 @@ interface IPolicyRegistry {
 
     /// @notice Adds or removes an account from a WHITELIST policy. Caller
     ///         must be the policy admin.
+    ///
     /// @dev    Reverts with `IncompatiblePolicyType` if the policy is not
     ///         WHITELIST, and with `PolicyFrozen` if the policy has been frozen.
     function modifyPolicyWhitelist(uint64 policyId, address account, bool allowed) external;
 
     /// @notice Adds or removes an account from a BLACKLIST policy. Caller
     ///         must be the policy admin.
+    ///
     /// @dev    Reverts with `IncompatiblePolicyType` if the policy is not
     ///         BLACKLIST, and with `PolicyFrozen` if the policy has been frozen.
     function modifyPolicyBlacklist(uint64 policyId, address account, bool restricted) external;
@@ -305,16 +312,12 @@ interface IPolicyRegistry {
     function isPolicyFrozen(uint64 policyId) external view returns (bool);
 
     /// @notice Returns the constituent policy IDs of a compound policy.
+    ///
     /// @dev    Reverts with `IncompatiblePolicyType` if the policy is not
     ///         COMPOUND, and with `PolicyNotFound` if the policy does not
     ///         exist.
     function compoundPolicyData(uint64 policyId)
         external
         view
-        returns (
-            uint64 senderPolicyId,
-            uint64 recipientPolicyId,
-            uint64 mintRecipientPolicyId,
-            uint64 redeemerPolicyId
-        );
+        returns (uint64 senderPolicyId, uint64 recipientPolicyId, uint64 mintRecipientPolicyId, uint64 redeemerPolicyId);
 }
