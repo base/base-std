@@ -14,9 +14,9 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         wallet or contract already expects.
 ///
 ///         **Role model.** Standard OpenZeppelin AccessControl semantics:
-///         six named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
-///         `BURN_BLOCKED_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`) plus arbitrary
-///         user-defined roles. `grantRole`, `revokeRole`, `renounceRole`, and
+///         seven named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
+///         `BURN_BLOCKED_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`, `METADATA_ROLE`)
+///         plus arbitrary user-defined roles. `grantRole`, `revokeRole`, `renounceRole`, and
 ///         `setRoleAdmin` work uniformly across all roles, with one
 ///         protocol-level constraint: the LAST holder of
 ///         `DEFAULT_ADMIN_ROLE` cannot renounce via `renounceRole` (this
@@ -273,8 +273,10 @@ interface IB20 {
     ///         previousAdmin)` event. Signals the irreversible
     ///         transition of the token to a permanently adminless
     ///         state: no `grantRole`, `revokeRole`, `setRoleAdmin`,
-    ///         `updatePolicy`, `setSupplyCap`, `setContractURI`,
-    ///         `setName`, or `setSymbol` call can ever succeed again.
+    ///         `updatePolicy`, `setSupplyCap`, or `setContractURI` call
+    ///         can ever succeed again. Existing role holders
+    ///         (`MINT_ROLE`, `BURN_ROLE`, `METADATA_ROLE`, etc.) retain
+    ///         their abilities, but no new grants are possible.
     ///         Indexers should treat this event as a one-way state
     ///         transition.
     event LastAdminRenounced(address indexed previousAdmin);
@@ -322,7 +324,8 @@ interface IB20 {
     ///         the OpenZeppelin AccessControl convention. The admin
     ///         manages all other roles via `grantRole`, `revokeRole`, and
     ///         `setRoleAdmin`. The admin can also `updatePolicy`,
-    ///         `setSupplyCap`, `setContractURI`, `setName`, and `setSymbol`.
+    ///         `setSupplyCap`, and `setContractURI`. Name and symbol
+    ///         updates are gated by `METADATA_ROLE`, not by this role.
     /// @dev    There is NO two-step delay-protected transfer for this
     ///         role. `grantRole(DEFAULT_ADMIN_ROLE, ...)` and
     ///         `revokeRole(DEFAULT_ADMIN_ROLE, ...)` work uniformly.
@@ -357,6 +360,15 @@ interface IB20 {
     ///         resumption requires a deliberate, typically more senior
     ///         action than the pause itself.
     function UNPAUSE_ROLE() external view returns (bytes32);
+
+    /// @notice Required to call `setName` and `setSymbol`. Held
+    ///         separately from `DEFAULT_ADMIN_ROLE` so the authority to
+    ///         re-brand or legally-restructure the token can be
+    ///         delegated to a metadata operator (e.g. corporate-actions
+    ///         desk for security tokens) without granting the broader
+    ///         admin powers (role grants, policy changes, supply-cap
+    ///         changes, etc.).
+    function METADATA_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                           POLICY TYPE IDENTIFIERS
@@ -450,16 +462,16 @@ interface IB20 {
                             METADATA UPDATES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Updates the token's `name`. Requires `DEFAULT_ADMIN_ROLE`.
+    /// @notice Updates the token's `name`. Requires `METADATA_ROLE`.
     ///         No length restrictions. Emits `NameUpdated`.
     /// @dev    Several customers (Coinbase Tokenized Equities, Coinbase
     ///         Wrapped Assets) need the ability to update name and symbol
     ///         post-deployment for re-branding or legal-restructuring
     ///         events. Tokens that do not want to update their name
-    ///         simply never call this function.
+    ///         simply never grant `METADATA_ROLE`.
     function setName(string calldata newName) external;
 
-    /// @notice Updates the token's `symbol`. Requires `DEFAULT_ADMIN_ROLE`.
+    /// @notice Updates the token's `symbol`. Requires `METADATA_ROLE`.
     ///         No length restrictions. Emits `SymbolUpdated`.
     function setSymbol(string calldata newSymbol) external;
 
@@ -588,9 +600,13 @@ interface IB20 {
     ///         reinstated: `grantRole(DEFAULT_ADMIN_ROLE, ...)` would
     ///         require an admin caller and there is none. All
     ///         admin-gated operations (`updatePolicy`, `setSupplyCap`,
-    ///         `setContractURI`, `setName`, `setSymbol`, and any
-    ///         `grantRole` / `revokeRole` / `setRoleAdmin` for other
-    ///         roles) become permanently uncallable.
+    ///         `setContractURI`, and any `grantRole` / `revokeRole` /
+    ///         `setRoleAdmin` for other roles) become permanently
+    ///         uncallable. Operations gated by other roles
+    ///         (`setName` / `setSymbol` via `METADATA_ROLE`, `mint` via
+    ///         `MINT_ROLE`, etc.) remain callable by their existing
+    ///         role holders, but no new grants for those roles are
+    ///         possible.
     /// @dev    Caller MUST be the sole remaining holder of
     ///         `DEFAULT_ADMIN_ROLE`; otherwise reverts with
     ///         `NotSoleAdmin` (when there are additional admins) or
