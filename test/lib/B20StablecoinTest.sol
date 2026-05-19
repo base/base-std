@@ -1,44 +1,44 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
+import {B20Test} from "test/lib/B20Test.sol";
 
+import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 
 /// @notice Base test contract for `IB20Stablecoin` unit tests.
 ///
-/// Extends `TokenFactoryTest` because a stablecoin token cannot exist
-/// without the factory: `setUp` calls `super.setUp()` to etch every
-/// precompile mock (via `BaseTest`) and pick up the factory create
-/// helpers, then deploys a stablecoin-variant token here.
+/// Extends `B20Test` because `IB20Stablecoin is IB20`: the inherited
+/// surface (`_transfer`, `_mint`, `_burn`, role helpers, pause helpers,
+/// ...) is exactly the same against a stablecoin-variant token, and
+/// every B20 actor / label / setUp step applies unchanged. The only
+/// stablecoin-specific concern at the base level is the variant of the
+/// deployed token, which `_deployToken` controls.
 ///
-/// Only the variant-specific additions on `IB20Stablecoin` are covered
-/// here; the inherited `IB20` surface is exercised against a
-/// default-variant token in `B20Test`. The `IB20Stablecoin` test
-/// surface today is a single function (`currency()`), so the helper
-/// area is intentionally empty.
+/// The inherited `token` member is typed `IB20`. Tests that need the
+/// variant-only methods (just `currency()` today) use `_stablecoinToken()`
+/// or cast inline. The stablecoin test surface is small enough that
+/// this is rarely needed.
 ///
-/// The mock contracts are added in a follow-up PR; until then, `token`
-/// is the zero address and the unit stubs in this spec PR are not yet
-/// implemented, so this is intentional.
-contract B20StablecoinTest is TokenFactoryTest {
-    // -- Token under test --
-    /// @notice Stablecoin-variant `IB20Stablecoin` token deployed in `setUp`.
-    IB20Stablecoin internal token;
-
+/// The mock contracts are added in a follow-up PR; until then,
+/// `_deployToken` returns the zero address. The unit stubs in this
+/// spec PR are not yet implemented, so this is intentional.
+contract B20StablecoinTest is B20Test {
     /// @notice The currency identifier passed at creation (e.g. "USD").
-    /// Set in `setUp` so tests can compare against `token.currency()`.
-    string internal currencyAtCreation;
+    /// Tests compare against `_stablecoinToken().currency()`.
+    string internal currencyAtCreation = "USD";
 
-    // -- Setup --
-    function setUp() public virtual override {
-        super.setUp();
+    /// @notice Typed accessor for the inherited `token`, cast as `IB20Stablecoin`.
+    function _stablecoinToken() internal view returns (IB20Stablecoin) {
+        return IB20Stablecoin(address(token));
+    }
 
-        currencyAtCreation = "USD";
-
-        // TODO(mock PR): once MockTokenFactory is etched (in BaseTest.setUp),
-        // call `_createStablecoin(...)` with `currencyAtCreation` as the currency
-        // string. Cast the returned address to IB20Stablecoin and assign to `token`;
-        // then `vm.label` it.
+    /// @inheritdoc B20Test
+    /// @dev Override deploys a stablecoin-variant token instead of the
+    ///      default variant. TODO(mock PR): swap the placeholder for a
+    ///      real `_createStablecoin(...)` call once MockTokenFactory is
+    ///      etched.
+    function _deployToken() internal virtual override returns (IB20) {
+        return IB20(address(0));
     }
 }

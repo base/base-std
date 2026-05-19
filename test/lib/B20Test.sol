@@ -45,11 +45,20 @@ contract B20Test is TokenFactoryTest {
         vm.label(unpauser, "unpauser");
         vm.label(burnBlocker, "burnBlocker");
 
-        // TODO(mock PR): once MockTokenFactory is etched (in BaseTest.setUp),
-        // call `_createDefault(...)` with initCalls that grant MINT_ROLE /
-        // BURN_ROLE / PAUSE_ROLE / UNPAUSE_ROLE / BURN_BLOCKED_ROLE to the
-        // corresponding actors above. Cast the returned address to IB20 and
-        // assign to `token`; then `vm.label` it.
+        token = _deployToken();
+        vm.label(address(token), "token");
+    }
+
+    /// @notice Token-deployment hook. Default impl deploys a default-variant
+    ///         token via the factory with initCalls that grant the standard
+    ///         role-holder actors their roles. Variant-specific bases
+    ///         (e.g. `B20StablecoinTest`) override this to deploy their
+    ///         variant while reusing every other piece of `B20Test`.
+    /// @dev    TODO(mock PR): swap the placeholder `address(0)` for a real
+    ///         `_createDefault(...)` call with role-granting initCalls once
+    ///         MockTokenFactory is etched (in BaseTest.setUp).
+    function _deployToken() internal virtual returns (IB20) {
+        return IB20(address(0));
     }
 
     // -- ERC-20 action wrappers --
