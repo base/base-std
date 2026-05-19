@@ -40,11 +40,12 @@ pragma solidity >=0.8.20 <0.9.0;
 ///                  at this ID), or as a kill switch independent of
 ///                  token-level pause.
 ///
-///         **Policy ID assignment.** Custom policy IDs are assigned from
-///         a single monotonic global counter starting at `2` (reserving
-///         `0` and `1` for the built-ins). The counter increments by one
-///         per policy created, regardless of type. Policy type is stored
-///         separately and is not encoded in the ID itself.
+///         **Policy ID encoding.** A custom policy ID packs the policy
+///         type into the top byte and a global counter into the low 56
+///         bits: `(uint8(policyType) << 56) | counter`. The counter is
+///         shared across all types and starts at `2` (reserving `0` and
+///         `1` for the built-ins). This lets `policyType(id)` resolve
+///         via a single bit-mask with no SLOAD for custom IDs.
 ///
 ///         **Future extensions** (not in v1 scope, intended path):
 ///         - Union / intersect policies: compose two same-typed policies
@@ -224,18 +225,22 @@ interface IPolicyRegistry {
                             POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The policy ID that will be assigned by the next
-    ///         `createPolicy` or `createPolicyWithAccounts` call. IDs are
-    ///         drawn from a single global counter starting at `2`;
-    ///         built-in IDs `0` and `1` are pre-reserved.
-    function nextPolicyId() external view returns (uint64);
+    /// @notice The full policy ID that would be assigned by the next
+    ///         `createPolicy(admin, policyType)` call. Encodes `policyType`
+    ///         into the top byte combined with the current global counter
+    ///         in the low 56 bits. The counter starts at `2` and increments
+    ///         by one per policy created, regardless of type.
+    function nextPolicyId(PolicyType policyType) external view returns (uint64);
 
-    /// @notice Returns true iff `policyId < nextPolicyId()`.
+    /// @notice Whether `policyId` exists. Returns true for built-in IDs
+    ///         `0` and `1`, and for any custom policy ID previously
+    ///         assigned by `createPolicy` or `createPolicyWithAccounts`.
     function policyExists(uint64 policyId) external view returns (bool);
 
     /// @notice The type of `policyId`. Returns `PolicyType.ALWAYS_ALLOW`
-    ///         for built-in ID `0`, `PolicyType.ALWAYS_BLOCK` for built-in
-    ///         ID `1`, or the stored type for custom IDs. Reverts with
+    ///         for built-in ID `0` and `PolicyType.ALWAYS_BLOCK` for
+    ///         built-in ID `1`. For custom IDs, extracts the type from
+    ///         the top byte of the ID with no storage read. Reverts with
     ///         `PolicyNotFound` for unknown IDs.
     function policyType(uint64 policyId) external view returns (PolicyType);
 
