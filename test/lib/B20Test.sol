@@ -50,15 +50,17 @@ contract B20Test is TokenFactoryTest {
     }
 
     /// @notice Token-deployment hook. Default impl deploys a default-variant
-    ///         token via the factory with initCalls that grant the standard
-    ///         role-holder actors their roles. Variant-specific bases
-    ///         (e.g. `B20StablecoinTest`) override this to deploy their
-    ///         variant while reusing every other piece of `B20Test`.
-    /// @dev    TODO(mock PR): swap the placeholder `address(0)` for a real
-    ///         `_createDefault(...)` call with role-granting initCalls once
-    ///         MockTokenFactory is etched (in BaseTest.setUp).
+    ///         token via the factory mock; variant-specific bases (e.g.
+    ///         `B20StablecoinTest`) override to deploy their variant while
+    ///         reusing every other piece of `B20Test`.
+    /// @dev    The current `MockTokenFactory` only computes and returns the
+    ///         deterministic token address — no token code is deployed
+    ///         there yet, so any call against `token` (transfer, mint, ...)
+    ///         will revert. The unit stubs in this spec PR have no-op
+    ///         bodies, so this is intentional. The next PR plants real
+    ///         token bytecode at the returned address.
     function _deployToken() internal virtual returns (IB20) {
-        return IB20(address(0));
+        return IB20(_createDefault());
     }
 
     // -- ERC-20 action wrappers --

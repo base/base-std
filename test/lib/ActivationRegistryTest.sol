@@ -24,8 +24,8 @@ contract ActivationRegistryTest is BaseTest {
     function setUp() public virtual override {
         super.setUp();
 
-        // TODO(mock PR): activationAdmin = activationRegistry.admin();
-        // vm.label(activationAdmin, "activationAdmin");
+        activationAdmin = activationRegistry.admin();
+        vm.label(activationAdmin, "activationAdmin");
     }
 
     // -- Action wrappers --

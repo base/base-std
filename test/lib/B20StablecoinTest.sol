@@ -34,11 +34,11 @@ contract B20StablecoinTest is B20Test {
     }
 
     /// @inheritdoc B20Test
-    /// @dev Override deploys a stablecoin-variant token instead of the
-    ///      default variant. TODO(mock PR): swap the placeholder for a
-    ///      real `_createStablecoin(...)` call once MockTokenFactory is
-    ///      etched.
+    /// @dev Override deploys a stablecoin-variant token via the factory
+    ///      mock. The mock returns the deterministic address per the B-20
+    ///      schema but does not yet deploy code there; the next PR plants
+    ///      real token bytecode at that address.
     function _deployToken() internal virtual override returns (IB20) {
-        return IB20(address(0));
+        return IB20(_createStablecoin());
     }
 }

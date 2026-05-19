@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
+import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol";
+import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
+import {MockTokenFactory} from "test/lib/mocks/MockTokenFactory.sol";
+
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 /// @notice Common base for every test contract in this suite.
@@ -30,8 +34,16 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// reason about which precompiles they "depend on" — they're all just
 /// available, the way the EVM has `SLOAD`.
 ///
-/// **Mock contracts** land in a follow-up PR; the etch TODOs below
-/// activate at that point.
+/// **Mock status.** The placeholder mocks etched here implement the
+/// minimum needed for `setUp` to succeed across every base:
+///   - `MockTokenFactory` implements the address-derivation schema so
+///     `_deployToken` calls return real-shaped addresses.
+///   - `MockPolicyRegistry` implements the two built-in sentinel IDs
+///     (`0` → always-allow, `type(uint64).max` → always-reject).
+///   - `MockActivationRegistry` implements `admin()` to return the
+///     hardcoded test admin.
+/// Every other method reverts with `"MockX: not implemented"`. Real
+/// behavior fills in alongside test implementations in the next PR.
 abstract contract BaseTest is Test {
     // -- Actors --
     address internal admin = makeAddr("admin");
@@ -50,23 +62,14 @@ abstract contract BaseTest is Test {
         vm.label(StdPrecompiles.POLICY_REGISTRY_ADDRESS, "PolicyRegistry");
         vm.label(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, "ActivationRegistry");
 
-        // TODO(mock PR): unconditionally etch each mock when the canonical
-        // address has empty code. Pattern:
-        //
-        //     if (StdPrecompiles.TOKEN_FACTORY_ADDRESS.code.length == 0) {
-        //         vm.etch(StdPrecompiles.TOKEN_FACTORY_ADDRESS,
-        //                 type(MockTokenFactory).runtimeCode);
-        //     }
-        //     if (StdPrecompiles.POLICY_REGISTRY_ADDRESS.code.length == 0) {
-        //         vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS,
-        //                 type(MockPolicyRegistry).runtimeCode);
-        //     }
-        //     if (StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS.code.length == 0) {
-        //         vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS,
-        //                 type(MockActivationRegistry).runtimeCode);
-        //     }
-        //
-        // Live mode under --fork-url skips every branch because the
-        // precompiles already have code at those addresses.
+        if (StdPrecompiles.TOKEN_FACTORY_ADDRESS.code.length == 0) {
+            vm.etch(StdPrecompiles.TOKEN_FACTORY_ADDRESS, type(MockTokenFactory).runtimeCode);
+        }
+        if (StdPrecompiles.POLICY_REGISTRY_ADDRESS.code.length == 0) {
+            vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
+        }
+        if (StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS.code.length == 0) {
+            vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
+        }
     }
 }
