@@ -9,8 +9,9 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         downstream contracts) consult `isActivated` to gate behavior.
 ///
 ///         The activation admin is the only address authorized to call
-///         `activate` and `deactivate`; all other callers revert with
-///         `Unauthorized`.
+///         `activate`; all other callers revert with `Unauthorized`.
+///         Activation is one-way: once a feature is activated it cannot
+///         be deactivated.
 ///
 /// @dev    The precompile enforces two call-context invariants that are
 ///         surfaced as reverts but cannot originate from normal Solidity
@@ -19,8 +20,8 @@ pragma solidity >=0.8.20 <0.9.0;
 ///           via `CALL` (not `DELEGATECALL` or `CALLCODE`), so the admin
 ///           identity is bound to `msg.sender` rather than the calling
 ///           contract's storage context.
-///         - `StaticCallNotAllowed`: `activate` and `deactivate` mutate
-///           state and cannot be invoked from a `STATICCALL` frame.
+///         - `StaticCallNotAllowed`: `activate` mutates state and cannot
+///           be invoked from a `STATICCALL` frame.
 ///
 ///         Feature ids are opaque to the registry: it does not interpret
 ///         them, and any `bytes32` is a valid id. By convention the
@@ -33,16 +34,12 @@ interface IActivationRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice `caller` is not the activation admin and is therefore
-    ///         not authorized to call `activate` or `deactivate`.
+    ///         not authorized to call `activate`.
     error Unauthorized(address caller);
 
     /// @notice `activate` was called on a feature that is already
     ///         activated.
     error AlreadyActivated(bytes32 feature);
-
-    /// @notice `deactivate` was called on a feature that is not
-    ///         currently activated.
-    error AlreadyDeactivated(bytes32 feature);
 
     /// @notice `feature` is not activated. Returned by precompiles that
     ///         consult the registry as a hard gate (the chain node
@@ -54,8 +51,8 @@ interface IActivationRegistry {
     ///         `CALLCODE`. All entry points require a direct `CALL`.
     error DelegateCallNotAllowed();
 
-    /// @notice A state-mutating entry point (`activate` / `deactivate`)
-    ///         was invoked from a `STATICCALL` frame.
+    /// @notice A state-mutating entry point (`activate`) was invoked
+    ///         from a `STATICCALL` frame.
     error StaticCallNotAllowed();
 
     /*//////////////////////////////////////////////////////////////
@@ -66,21 +63,16 @@ interface IActivationRegistry {
     ///         activated. `caller` is the activation admin.
     event FeatureActivated(bytes32 indexed feature, address indexed caller);
 
-    /// @notice Emitted when `feature` transitions from activated to
-    ///         inactive. `caller` is the activation admin.
-    event FeatureDeactivated(bytes32 indexed feature, address indexed caller);
-
     /*//////////////////////////////////////////////////////////////
                             ACTIVATION QUERIES
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Whether `feature` is currently activated. Returns
-    ///         `false` for any feature id that has never been activated
-    ///         (the default state) or that has been deactivated.
+    ///         `false` for any feature id that has never been
+    ///         activated (the default state).
     function isActivated(bytes32 feature) external view returns (bool);
 
-    /// @notice The address authorized to call `activate` and
-    ///         `deactivate`.
+    /// @notice The address authorized to call `activate`.
     function admin() external view returns (address);
 
     /*//////////////////////////////////////////////////////////////
@@ -91,13 +83,7 @@ interface IActivationRegistry {
     ///         `Unauthorized`). Reverts with `AlreadyActivated` if the
     ///         feature is already activated; reverts with
     ///         `StaticCallNotAllowed` if invoked under `STATICCALL`.
-    ///         Emits `FeatureActivated` on success.
+    ///         Emits `FeatureActivated` on success. Activation is
+    ///         one-way: there is no `deactivate` counterpart.
     function activate(bytes32 feature) external;
-
-    /// @notice Deactivates `feature`. Caller MUST equal `admin()` (else
-    ///         `Unauthorized`). Reverts with `AlreadyDeactivated` if
-    ///         the feature is not currently activated; reverts with
-    ///         `StaticCallNotAllowed` if invoked under `STATICCALL`.
-    ///         Emits `FeatureDeactivated` on success.
-    function deactivate(bytes32 feature) external;
 }
