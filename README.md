@@ -10,7 +10,7 @@
 
 # Base Standard Library
 
-Base Standard Library is a collection of Solidity interfaces, libraries, and mock implementations for Base precompiles.
+A collection of Solidity interfaces, libraries, and mock implementations for Base precompiles.
 
 ## Installation
 
