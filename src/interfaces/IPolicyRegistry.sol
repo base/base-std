@@ -40,12 +40,41 @@ pragma solidity >=0.8.20 <0.9.0;
 ///                  at this ID), or as a kill switch independent of
 ///                  token-level pause.
 ///
-///         **Policy ID encoding.** A custom policy ID packs the policy
-///         type into the top byte and a global counter into the low 56
-///         bits: `(uint8(policyType) << 56) | counter`. The counter is
-///         shared across all types and starts at `2` (reserving `0` and
-///         `1` for the built-ins). This lets `policyType(id)` resolve
-///         via a single bit-mask with no SLOAD for custom IDs.
+///         **Policy ID encoding.** Custom policy IDs encode the policy's
+///         type directly into the top byte of the ID, so `policyType(id)`
+///         resolves via pure bit extraction with no SLOAD. Since every
+///         B-20 transfer / mint / redeem consults the registry, removing
+///         a per-call storage read from the type lookup is a material
+///         protocol-wide saving.
+///
+///         Encoding layout for custom IDs:
+///         ```
+///         [63:56]  uint8 type discriminator = uint8(PolicyType)
+///         [55:0]   uint56 global counter (max ~7.2e16)
+///         ```
+///         Discriminators currently in use:
+///         - `0x00` — ALWAYS_ALLOW (reserved; no custom policies carry this discriminator)
+///         - `0x01` — ALWAYS_BLOCK (reserved; no custom policies carry this discriminator)
+///         - `0x02` — ALLOWLIST
+///         - `0x03` — BLOCKLIST
+///         - `0x04` .. `0xFF` — reserved for future PolicyType enum values
+///
+///         The two built-in IDs (`0` and `1`) are special-cased BEFORE
+///         the encoding is consulted: implementations short-circuit on
+///         those exact ID values. The ALWAYS_ALLOW and ALWAYS_BLOCK
+///         discriminators (`0x00`, `0x01`) are reserved solely for the
+///         built-ins; no custom policies are ever assigned IDs with those
+///         top bytes, so there is no ambiguity at evaluation time.
+///
+///         This encoding gives `isAuthorized(policyId, account)` a
+///         best-case hot path of 1 SLOAD (the member set), compared to 2
+///         SLOADs if the type required a separate storage lookup. The
+///         built-in IDs cost 0 SLOADs (short-circuited).
+///
+///         Custom policy IDs are assigned from a single global monotonic
+///         counter starting at `2` (reserving `0` and `1` for the
+///         built-ins); see `nextPolicyId(PolicyType)` to predict the
+///         next ID for a given type.
 ///
 ///         **Future extensions** (not in v1 scope, intended path):
 ///         - Union / intersect policies: compose two same-typed policies
