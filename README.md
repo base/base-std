@@ -18,36 +18,18 @@ Base Standard Library is a collection of Solidity interfaces, libraries, and moc
 forge install base/base-std
 ```
 
-## Scope
+## Standard Precompiles
 
-This repo holds:
-
-- Solidity **interfaces** for Base precompiles, suitable for integrators to
-  import when calling them from their own contracts.
-- Solidity **mock implementations** of those precompiles, useful as
-  guidance for Rust precompile work, for local testing and CI, and as a
-  forcing function for thinking about behavior, gas, and storage shape
-  before committing to a chain-level surface.
-
-## Constraints
-
-- **No third-party dependencies.** Mock implementations are written
-  from scratch. We can read other prior art for inspiration, but we do
-  not import them. The point is for the interfaces and behavior to
-  reflect our own opinions, not someone else's defaults.
-- **EVM backward compatibility.** Base is an existing chain with an
-  existing ecosystem. New token primitives must coexist with deployed
-  ERC-20 tokens and the addresses that hold them. We do not reserve or
-  reformat any address space that conflicts with existing usage.
-
-## Layout
-
-```
-src/
-├── interfaces/     # Solidity interfaces for precompiles
-test/               # Foundry tests for the reference implementations
-└── mocks/          # Mock Solidity implementations
-```
+<pre>
+src
+├── <a href="./src/StdPrecompiles.sol">StdPrecompiles.sol</a>: Collection of precompiles and their interfaces
+└── interfaces
+    ├── <a href="./src/interfaces/IB20.sol">IB20.sol</a>: Core Token Standard
+    ├── <a href="./src/interfaces/IB20Stablecoin.sol">IB20Stablecoin.sol</a>: Stablecoin variant of B20
+    ├── <a href="./src/interfaces/IB20Security.sol">IB20Security.sol</a>: Security variant of B20
+    ├── <a href="./src/interfaces/IPolicyRegistry.sol">IPolicyRegistry.sol</a>: Policy registry shared across B20s
+    └── <a href="./src/interfaces/ITokenFactory.sol">ITokenFactory.sol</a>: B20 factory contract
+</pre>
 
 ## Development
 
