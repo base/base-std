@@ -23,16 +23,15 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         `DEFAULT_ADMIN_ROLE` cannot renounce: the token must always have
 ///         at least one admin.
 ///
-///         **Pause model.** Pause is granular: `pause(uint256 vectors)`
-///         accepts a bitmask indicating which classes of operation to halt
-///         (transfer, mint, burn, ...). Multiple `pause` calls are
-///         additive. `unpause()` clears all paused vectors at once. See
-///         `PauseVectors` for the bit definitions.
-///
-///         **Capability bits.** Every token's optional features are gated
-///         by an immutable `capabilities()` bitfield set at creation.
-///         Functions whose capability bit is unset revert with
-///         `FeatureDisabled`, regardless of role state. See `Capabilities`.
+///         **Pause model.** Pause is granular: `pause(PausableFeature[])`
+///         halts a set of operation classes (transfer, mint, burn, ...)
+///         and `unpause(PausableFeature[])` resumes a (possibly
+///         different) subset. Both are additive against the
+///         currently-paused set, so callers can pause incrementally and
+///         resume a single class without disturbing the others. The
+///         on-chain storage layout (a bitmask) is an implementation
+///         detail; the public surface speaks only in `PausableFeature`
+///         values.
 ///
 ///         **Policy model.** The token holds a generic `policyId` mapping
 ///         keyed by `bytes32 policyType`, where each standard policy type
@@ -74,6 +73,21 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         introspection by integrators.
 interface IB20 {
     /*//////////////////////////////////////////////////////////////
+                                  TYPES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Pausable operation classes. Passed in arrays to `pause`
+    ///         and `unpause`, returned by `pausedFeatures`, and used by
+    ///         `isPaused` and the `ContractPaused` revert. Append-only
+    ///         across protocol versions; existing values are stable.
+    enum PausableFeature {
+        TRANSFER,
+        MINT,
+        BURN,
+        REDEEM
+    }
+
+    /*//////////////////////////////////////////////////////////////
                                 ERRORS
     //////////////////////////////////////////////////////////////*/
 
@@ -95,10 +109,9 @@ interface IB20 {
     ///         `AccessControlUnauthorizedAccount`.
     error Unauthorized();
 
-    /// @notice One or more pause vectors covering this operation are
-    ///         currently set. `pausedVector` is the specific vector that
-    ///         blocked the call.
-    error ContractPaused(uint256 pausedVector);
+    /// @notice The `PausableFeature` covering this operation is
+    ///         currently paused.
+    error ContractPaused(PausableFeature feature);
 
     /// @notice `spender`'s allowance from the relevant token owner is
     ///         less than `needed` for the requested `transferFrom`.
@@ -132,10 +145,13 @@ interface IB20 {
     error InvalidSpender(address spender);
 
     /// @notice An amount argument was zero where a non-zero value is
-    ///         required (e.g. `pause(0)`). NOT used for ERC-20 amount
-    ///         arguments: per OZ / ERC-6093, ERC-20 functions do not
-    ///         validate `amount > 0`.
+    ///         required. NOT used for ERC-20 amount arguments: per OZ /
+    ///         ERC-6093, ERC-20 functions do not validate `amount > 0`.
     error InvalidAmount();
+
+    /// @notice An empty array was passed to a function that requires at
+    ///         least one element (e.g. `pause([])`, `unpause([])`).
+    error EmptyFeatureSet();
 
     /// @notice The proposed supply cap is below the current `totalSupply`,
     ///         which would invalidate already-issued supply.
@@ -171,11 +187,6 @@ interface IB20 {
     /// @dev    Matches OZ ERC20Permit's `InvalidSigner` error
     ///         exactly.
     error InvalidSigner(address signer, address owner);
-
-    /// @notice The capability bit for this operation is not set on the
-    ///         token. Capability state is immutable; this revert is
-    ///         permanent.
-    error FeatureDisabled(uint256 capability);
 
     /// @notice `renounceRole(DEFAULT_ADMIN_ROLE, ...)` was called when the
     ///         caller is the last admin. Tokens MUST always have at least
@@ -240,13 +251,15 @@ interface IB20 {
     /// @dev    Matches OZ AccessControl's `RoleAdminChanged` event exactly.
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
 
-    /// @notice Emitted by `pause`. `vectors` is the bitmask argument to
-    ///         the call (not the resulting paused state). `updater` is
-    ///         the caller.
-    event Paused(address indexed updater, uint256 vectors);
+    /// @notice Emitted by `pause`. `features` is the argument to the
+    ///         call (not the resulting paused state). `updater` is the
+    ///         caller.
+    event Paused(address indexed updater, PausableFeature[] features);
 
-    /// @notice Emitted by `unpause`. All paused vectors are cleared.
-    event Unpaused(address indexed updater);
+    /// @notice Emitted by `unpause`. `features` is the argument to the
+    ///         call (not the resulting paused state). `updater` is the
+    ///         caller.
+    event Unpaused(address indexed updater, PausableFeature[] features);
 
     /// @notice Emitted by `updatePolicy` when a token's policy slot is
     ///         changed. `policyType` is one of the standard policy-type
@@ -341,23 +354,6 @@ interface IB20 {
     function MINT_RECEIVER() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
-                              CAPABILITIES
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice The immutable feature bitfield assigned at creation. Each
-    ///         bit indicates that the corresponding optional function CAN
-    ///         be called on this token. Bits not set here mean the
-    ///         corresponding function reverts with `FeatureDisabled`,
-    ///         permanently. See `Capabilities` for the bit definitions.
-    function capabilities() external view returns (uint256);
-
-    /// @notice Convenience view: `(capabilities() & Capabilities.PAUSABLE) != 0`.
-    function isPausable() external view returns (bool);
-
-    /// @notice Convenience view: `(capabilities() & Capabilities.CAP_MUTABLE) != 0`.
-    function isCapMutable() external view returns (bool);
-
-    /*//////////////////////////////////////////////////////////////
                                   ERC-20
     //////////////////////////////////////////////////////////////*/
 
@@ -383,8 +379,7 @@ interface IB20 {
     function allowance(address owner, address spender) external view returns (uint256);
 
     /// @notice Transfers `amount` from `msg.sender` to `to`. Reverts with:
-    ///         - `ContractPaused(TRANSFER)` if the `TRANSFER` pause vector
-    ///           is set.
+    ///         - `ContractPaused(TRANSFER)` if `TRANSFER` is paused.
     ///         - `PolicyForbids(TRANSFER_SENDER,   policyId)` if `msg.sender`
     ///           is not authorized under the active `TRANSFER_SENDER` policy.
     ///         - `PolicyForbids(TRANSFER_RECEIVER, policyId)` if `to` is not
@@ -432,9 +427,8 @@ interface IB20 {
     /// @dev    Several customers (Coinbase Tokenized Equities, Coinbase
     ///         Wrapped Assets) need the ability to update name and symbol
     ///         post-deployment for re-branding or legal-restructuring
-    ///         events. There is no capability bit for this; tokens that
-    ///         do not want to update their name simply never call this
-    ///         function.
+    ///         events. Tokens that do not want to update their name
+    ///         simply never call this function.
     function setName(string calldata newName) external;
 
     /// @notice Updates the token's `symbol`. Requires `DEFAULT_ADMIN_ROLE`.
@@ -467,8 +461,7 @@ interface IB20 {
     /// @notice Mints `amount` to `to`. Requires `MINT_ROLE`. Subject to:
     ///         1. `totalSupply + amount <= supplyCap` (else
     ///            `SupplyCapExceeded`).
-    ///         2. The `MINT` pause vector is unset (else
-    ///            `ContractPaused(MINT)`).
+    ///         2. `MINT` is not paused (else `ContractPaused(MINT)`).
     ///         3. `to` is authorized under the active `MINT_RECEIVER`
     ///            policy (else `PolicyForbids(MINT_RECEIVER, policyId)`).
     /// @dev    Per-minter rate limiting is NOT enshrined at any level
@@ -486,8 +479,8 @@ interface IB20 {
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external;
 
     /// @notice Burns `amount` from the caller's own balance. Requires
-    ///         `BURN_ROLE`. Subject to the `BURN` pause vector being unset
-    ///         (else `ContractPaused(BURN)`). NOT subject to any policy:
+    ///         `BURN_ROLE`. Subject to `BURN` not being paused (else
+    ///         `ContractPaused(BURN)`). NOT subject to any policy:
     ///         burn destroys the caller's own supply with no recipient.
     ///         Reverts with `InsufficientBalance(caller, balance, amount)`
     ///         if the caller does not have enough balance.
@@ -502,8 +495,7 @@ interface IB20 {
 
     /// @notice Destroys `amount` of `from`'s balance. Requires
     ///         `BURN_BLOCKED_ROLE`. Subject to:
-    ///         1. The `BURN` pause vector is unset (else
-    ///            `ContractPaused(BURN)`).
+    ///         1. `BURN` is not paused (else `ContractPaused(BURN)`).
     ///         2. `from` is NOT authorized under the active
     ///            `TRANSFER_SENDER` policy (else `AccountNotBlocked(from)`).
     ///            `burnBlocked` exists for seizure of policy-blocked
@@ -566,31 +558,30 @@ interface IB20 {
                                   PAUSE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The current paused-vector bitmask. A bit set in the result
-    ///         means the corresponding class of operation (per
-    ///         `PauseVectors`) is currently halted. Returns 0 when no
-    ///         vectors are paused. Always returns 0 if the token's
-    ///         `PAUSABLE` capability is unset.
-    function paused() external view returns (uint256);
+    /// @notice The set of `PausableFeature`s currently paused on this
+    ///         token. Returns an empty array when nothing is paused.
+    ///         Order is implementation-defined; callers should treat the
+    ///         result as a set, not a sequence.
+    function pausedFeatures() external view returns (PausableFeature[] memory);
 
-    /// @notice Convenience view: returns whether `vector` is set in the
-    ///         current paused bitmask. Equivalent to
-    ///         `(paused() & vector) != 0`.
-    function isPaused(uint256 vector) external view returns (bool);
+    /// @notice Whether `feature` is currently paused. O(1) regardless of
+    ///         how many features are paused.
+    function isPaused(PausableFeature feature) external view returns (bool);
 
-    /// @notice Pauses the operations indicated by `vectors`. Multiple
-    ///         calls are additive: the new paused state is
-    ///         `currentPaused | vectors`. Requires `PAUSABLE` capability
-    ///         and `PAUSE_ROLE`. Reverts with `InvalidAmount` if
-    ///         `vectors == 0`.
-    function pause(uint256 vectors) external;
+    /// @notice Pauses the `features` operations. Additive: features
+    ///         already paused remain paused, and the listed features
+    ///         become paused (duplicates within the call are idempotent).
+    ///         Requires `PAUSE_ROLE`. Reverts with `EmptyFeatureSet` if
+    ///         `features.length == 0`.
+    function pause(PausableFeature[] calldata features) external;
 
-    /// @notice Unpauses ALL currently-paused vectors. Requires `PAUSABLE`
-    ///         capability and `UNPAUSE_ROLE`. The Default surface does
-    ///         not support unpausing a subset of vectors; admin must
-    ///         unpause everything and re-pause the still-blocked vectors
-    ///         in a follow-up call if granular resumption is desired.
-    function unpause() external;
+    /// @notice Unpauses the `features` operations. Listed features
+    ///         become unpaused; features not listed are unaffected
+    ///         (duplicates are idempotent; unpausing a feature that is
+    ///         not currently paused is a no-op for that feature).
+    ///         Requires `UNPAUSE_ROLE`. Reverts with `EmptyFeatureSet`
+    ///         if `features.length == 0`.
+    function unpause(PausableFeature[] calldata features) external;
 
     /*//////////////////////////////////////////////////////////////
                                  POLICY
@@ -631,12 +622,11 @@ interface IB20 {
     ///         tokens that do not specify a cap at creation).
     function supplyCap() external view returns (uint256);
 
-    /// @notice Sets a new supply cap. Requires `CAP_MUTABLE` capability
-    ///         and `DEFAULT_ADMIN_ROLE`. Reverts with `InvalidSupplyCap`
-    ///         if the new cap is below the current `totalSupply` (we
-    ///         never invalidate already-issued supply). The cap may be
-    ///         raised or lowered freely otherwise. Emits
-    ///         `SupplyCapUpdated`.
+    /// @notice Sets a new supply cap. Requires `DEFAULT_ADMIN_ROLE`.
+    ///         Reverts with `InvalidSupplyCap` if the new cap is below
+    ///         the current `totalSupply` (we never invalidate
+    ///         already-issued supply). The cap may be raised or lowered
+    ///         freely otherwise. Emits `SupplyCapUpdated`.
     function setSupplyCap(uint256 newSupplyCap) external;
 
     /*//////////////////////////////////////////////////////////////

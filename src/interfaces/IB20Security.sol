@@ -16,7 +16,7 @@ import {IB20} from "./IB20.sol";
 ///         shared with stablecoins and other variants: ERC-20 surface,
 ///         `mint` / `burn` (gated by `MINT_ROLE` / `BURN_ROLE`),
 ///         `burnBlocked` for sanctions seizure (gated by
-///         `BURN_BLOCKED_ROLE`), pause vectors, permit, contract URI,
+///         `BURN_BLOCKED_ROLE`), the pause surface, permit, contract URI,
 ///         supply cap, OZ-style role management, and the generic policy
 ///         system (`policyId(bytes32)` / `updatePolicy(bytes32, uint64)`
 ///         with the standard five policy-type constants).
@@ -66,9 +66,7 @@ import {IB20} from "./IB20.sol";
 ///         The `REDEEMER_SENDER` policy slot is typically pointed at an
 ///         ALLOWLIST of brokerage-verified holders (Coinbase adds
 ///         addresses to this allowlist as users complete KYC and connect
-///         a valid brokerage account). Capability bits relevant to
-///         securities live in the `Capabilities` library bits 16..23
-///         (e.g. `SECURITY_CREATABLE`, `SHARE_RATIO_MUTABLE`).
+///         a valid brokerage account).
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -200,8 +198,7 @@ interface IB20Security is IB20 {
     ///            `MinimumRedeemableNotMet(amount, minimum)`).
     ///         2. `amount <= balanceOf(msg.sender)` (else
     ///            `InsufficientBalance(msg.sender, balance, amount)`).
-    ///         3. The `REDEEM` pause vector is unset (else
-    ///            `ContractPaused(REDEEM)`).
+    ///         3. `REDEEM` is not paused (else `ContractPaused(REDEEM)`).
     ///         4. `msg.sender` is authorized under the active
     ///            `REDEEMER_SENDER` policy (else
     ///            `PolicyForbids(REDEEMER_SENDER, policyId)`).
@@ -332,8 +329,8 @@ interface IB20Security is IB20 {
     /// @notice Cold-path batch burn. Used for cold-path corporate
     ///         actions (reverse-tender settlement, mass-corrections
     ///         under regulatory direction, etc.). NOT subject to the
-    ///         inherited pause vectors: admins can `adminBurn` even
-    ///         while transfers and burns are paused.
+    ///         inherited pause surface: admins can `adminBurn` even
+    ///         while `TRANSFER` and `BURN` are paused.
     /// @dev    Requires `ISSUER_ROLE` and an `Announcement(id, ...)`
     ///         emitted earlier in the same transaction with the same
     ///         `announcementId`. Reverts atomically if any single
