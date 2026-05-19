@@ -1,7 +1,6 @@
 # Base Standard Library
 
-Base Standard Library defines the Solidity interfaces and mock implementations 
-for protocol primitives that are (or are proposed to be) enshrined as precompiles on Base.
+Base Standard Library is a collection of Solidity interfaces, libraries, and mock implementations for Base precompiles.
 
 ## Scope
 
