@@ -27,12 +27,8 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         accepts a bitmask indicating which classes of operation to halt
 ///         (transfer, mint, burn, ...). Multiple `pause` calls are
 ///         additive. `unpause()` clears all paused vectors at once. See
-///         `PauseVectors` for the bit definitions.
-///
-///         **Capability bits.** Every token's optional features are gated
-///         by an immutable `capabilities()` bitfield set at creation.
-///         Functions whose capability bit is unset revert with
-///         `FeatureDisabled`, regardless of role state. See `Capabilities`.
+///         `utils/PauseVectors` for the `PausableFeature` enum and the
+///         `toPauseVector` helper that builds the bitmask.
 ///
 ///         **Policy model.** The token holds a generic `policyId` mapping
 ///         keyed by `bytes32 policyType`, where each standard policy type
@@ -171,11 +167,6 @@ interface IB20 {
     /// @dev    Matches OZ ERC20Permit's `InvalidSigner` error
     ///         exactly.
     error InvalidSigner(address signer, address owner);
-
-    /// @notice The capability bit for this operation is not set on the
-    ///         token. Capability state is immutable; this revert is
-    ///         permanent.
-    error FeatureDisabled(uint256 capability);
 
     /// @notice `renounceRole(DEFAULT_ADMIN_ROLE, ...)` was called when the
     ///         caller is the last admin. Tokens MUST always have at least
@@ -341,23 +332,6 @@ interface IB20 {
     function MINT_RECEIVER() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
-                              CAPABILITIES
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice The immutable feature bitfield assigned at creation. Each
-    ///         bit indicates that the corresponding optional function CAN
-    ///         be called on this token. Bits not set here mean the
-    ///         corresponding function reverts with `FeatureDisabled`,
-    ///         permanently. See `Capabilities` for the bit definitions.
-    function capabilities() external view returns (uint256);
-
-    /// @notice Convenience view: `(capabilities() & Capabilities.PAUSABLE) != 0`.
-    function isPausable() external view returns (bool);
-
-    /// @notice Convenience view: `(capabilities() & Capabilities.CAP_MUTABLE) != 0`.
-    function isCapMutable() external view returns (bool);
-
-    /*//////////////////////////////////////////////////////////////
                                   ERC-20
     //////////////////////////////////////////////////////////////*/
 
@@ -432,9 +406,8 @@ interface IB20 {
     /// @dev    Several customers (Coinbase Tokenized Equities, Coinbase
     ///         Wrapped Assets) need the ability to update name and symbol
     ///         post-deployment for re-branding or legal-restructuring
-    ///         events. There is no capability bit for this; tokens that
-    ///         do not want to update their name simply never call this
-    ///         function.
+    ///         events. Tokens that do not want to update their name
+    ///         simply never call this function.
     function setName(string calldata newName) external;
 
     /// @notice Updates the token's `symbol`. Requires `DEFAULT_ADMIN_ROLE`.
@@ -567,10 +540,9 @@ interface IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The current paused-vector bitmask. A bit set in the result
-    ///         means the corresponding class of operation (per
-    ///         `PauseVectors`) is currently halted. Returns 0 when no
-    ///         vectors are paused. Always returns 0 if the token's
-    ///         `PAUSABLE` capability is unset.
+    ///         means the corresponding `PausableFeature` (see
+    ///         `utils/PauseVectors`) is currently halted. Returns 0 when
+    ///         no vectors are paused.
     function paused() external view returns (uint256);
 
     /// @notice Convenience view: returns whether `vector` is set in the
@@ -580,16 +552,15 @@ interface IB20 {
 
     /// @notice Pauses the operations indicated by `vectors`. Multiple
     ///         calls are additive: the new paused state is
-    ///         `currentPaused | vectors`. Requires `PAUSABLE` capability
-    ///         and `PAUSE_ROLE`. Reverts with `InvalidAmount` if
-    ///         `vectors == 0`.
+    ///         `currentPaused | vectors`. Requires `PAUSE_ROLE`. Reverts
+    ///         with `InvalidAmount` if `vectors == 0`.
     function pause(uint256 vectors) external;
 
-    /// @notice Unpauses ALL currently-paused vectors. Requires `PAUSABLE`
-    ///         capability and `UNPAUSE_ROLE`. The Default surface does
-    ///         not support unpausing a subset of vectors; admin must
-    ///         unpause everything and re-pause the still-blocked vectors
-    ///         in a follow-up call if granular resumption is desired.
+    /// @notice Unpauses ALL currently-paused vectors. Requires
+    ///         `UNPAUSE_ROLE`. The Default surface does not support
+    ///         unpausing a subset of vectors; admin must unpause
+    ///         everything and re-pause the still-blocked vectors in a
+    ///         follow-up call if granular resumption is desired.
     function unpause() external;
 
     /*//////////////////////////////////////////////////////////////
@@ -631,12 +602,11 @@ interface IB20 {
     ///         tokens that do not specify a cap at creation).
     function supplyCap() external view returns (uint256);
 
-    /// @notice Sets a new supply cap. Requires `CAP_MUTABLE` capability
-    ///         and `DEFAULT_ADMIN_ROLE`. Reverts with `InvalidSupplyCap`
-    ///         if the new cap is below the current `totalSupply` (we
-    ///         never invalidate already-issued supply). The cap may be
-    ///         raised or lowered freely otherwise. Emits
-    ///         `SupplyCapUpdated`.
+    /// @notice Sets a new supply cap. Requires `DEFAULT_ADMIN_ROLE`.
+    ///         Reverts with `InvalidSupplyCap` if the new cap is below
+    ///         the current `totalSupply` (we never invalidate
+    ///         already-issued supply). The cap may be raised or lowered
+    ///         freely otherwise. Emits `SupplyCapUpdated`.
     function setSupplyCap(uint256 newSupplyCap) external;
 
     /*//////////////////////////////////////////////////////////////
