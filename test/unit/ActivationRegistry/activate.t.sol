@@ -11,7 +11,7 @@ contract ActivationRegistryActivateTest is ActivationRegistryTest {
     }
 
     /// @notice Verifies activate reverts when invoked on a feature that is already activated
-    /// @dev Activation is one-way and not idempotent; checks AlreadyActivated(feature) error
+    /// @dev Activation is not idempotent; checks AlreadyActivated(feature) error
     function test_activate_revert_alreadyActivated(bytes32 feature) public {
         // unimplemented
     }
