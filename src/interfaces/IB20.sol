@@ -15,12 +15,13 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         wallet or contract already expects.
 ///
 ///         **Role model.** Standard OpenZeppelin AccessControl semantics:
-///         five named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
-///         `PAUSE_ROLE`, `UNPAUSE_ROLE`) plus arbitrary user-defined roles.
-///         `grantRole`, `revokeRole`, `renounceRole`, and `setRoleAdmin`
-///         work uniformly across all roles. The only protocol-level
-///         constraint is that the LAST holder of `DEFAULT_ADMIN_ROLE`
-///         cannot renounce: the token must always have at least one admin.
+///         six named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
+///         `BURN_BLOCKED_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`) plus arbitrary
+///         user-defined roles. `grantRole`, `revokeRole`, `renounceRole`, and
+///         `setRoleAdmin` work uniformly across all roles. The only
+///         protocol-level constraint is that the LAST holder of
+///         `DEFAULT_ADMIN_ROLE` cannot renounce: the token must always have
+///         at least one admin.
 ///
 ///         **Pause model.** Pause is granular: `pause(uint256 vectors)`
 ///         accepts a bitmask indicating which classes of operation to halt
@@ -33,19 +34,35 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         Functions whose capability bit is unset revert with
 ///         `FeatureDisabled`, regardless of role state. See `Capabilities`.
 ///
-///         **Policy model.** Every transfer, mint, and redeem passes
-///         through the token's currently-set policy ID, resolved against
-///         the singleton policy registry. Transfer checks consult the
-///         policy for `from`, `to`, AND `msg.sender` (the spender, when
-///         distinct from `from`). Mint checks consult the policy for the
-///         recipient via the mint-recipient slot of a compound policy.
-///         Redeem checks consult the policy for `msg.sender` via the
-///         redeemer slot of a compound policy: tokens without redemption
-///         configure that slot as always-reject, making `redeem` revert
-///         for every caller. Burn checks consult only the role of the
-///         caller; `BURN_ROLE` plus the caller's own balance are
-///         sufficient. `approve` is NOT gated by the policy (only the
-///         act of MOVING balance is gated).
+///         **Policy model.** The token holds a generic `policyId` mapping
+///         keyed by `bytes32 policyType`, where each standard policy type
+///         is the `keccak256` hash of its name. Four standard types are
+///         exposed as constants on this base surface:
+///         - `TRANSFER_SENDER`   — checked against `from` on every transfer
+///         - `TRANSFER_RECEIVER` — checked against `to`   on every transfer
+///         - `TRANSFER_EXECUTOR` — checked against `msg.sender` on `transferFrom`
+///                                  (when distinct from `from`)
+///         - `MINT_RECEIVER`     — checked against `to`   on every mint
+///         Variants may introduce additional policy-type constants for
+///         variant-specific operations (e.g. `IB20Security` adds
+///         `REDEEMER_SENDER` for its `redeem` path). The underlying
+///         `policyId` mapping accepts any `bytes32` key, so the
+///         variant-side additions are pure interface additions with no
+///         change to the storage shape.
+///
+///         Each policy slot defaults to built-in ID `0` (always-reject) so
+///         newly minted tokens cannot move balance until the admin
+///         configures their compliance regime. ID `1` (always-allow) is
+///         the explicit opt-out for a given role.
+///
+///         Asymmetric per-role configuration is expressed by pointing
+///         different slots at different policies — for example, a
+///         sanctions BLOCKLIST on `TRANSFER_SENDER` and an unrestricted
+///         always-allow on `MINT_RECEIVER`. The registry stays flat;
+///         all composition happens at the token layer.
+///
+///         `approve` is NOT gated by any policy (only the act of MOVING
+///         balance is gated).
 ///
 ///         **Permit.** EIP-2612 permit, EOA signatures only. ERC-1271
 ///         contract signatures are NOT supported on the default surface
@@ -66,13 +83,7 @@ interface IB20 {
     ///         for the target role, and `setRoleAdmin` when the caller
     ///         does not hold the current admin role for the target role.
     /// @dev    Matches OZ AccessControl's `AccessControlUnauthorizedAccount`
-    ///         error exactly. Since `getRoleAdmin(role)` defaults to
-    ///         `DEFAULT_ADMIN_ROLE` for any role that has not had a
-    ///         custom admin set, calls like
-    ///         `grantRole(SOME_UNREGISTERED_ROLE, alice)` revert with
-    ///         `neededRole == DEFAULT_ADMIN_ROLE` rather than a
-    ///         "role does not exist" error: every `bytes32` is a valid
-    ///         role identifier in this model.
+    ///         error exactly.
     error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
 
     /// @notice Caller failed a positional authorization check that is NOT
@@ -94,7 +105,7 @@ interface IB20 {
     error InsufficientAllowance(address spender, uint256 allowance, uint256 needed);
 
     /// @notice `sender`'s balance is less than `needed` for the requested
-    ///         transfer, burn, or redeem.
+    ///         transfer or burn.
     /// @dev    Matches OZ ERC20 / ERC-6093 exactly.
     error InsufficientBalance(address sender, uint256 balance, uint256 needed);
 
@@ -132,13 +143,21 @@ interface IB20 {
     /// @notice The mint would push `totalSupply` past the configured cap.
     error SupplyCapExceeded(uint256 cap, uint256 attempted);
 
-    /// @notice The active transfer policy denied the operation. `policyId`
-    ///         is the ID currently set as `transferPolicyId`.
-    error PolicyForbids(uint64 policyId);
+    /// @notice A policy slot denied the operation. `policyType` identifies
+    ///         which slot (e.g. `TRANSFER_SENDER`, `MINT_RECEIVER`) and
+    ///         `policyId` is the ID currently set in that slot.
+    error PolicyForbids(bytes32 policyType, uint64 policyId);
 
     /// @notice The provided policy ID does not exist in the policy
     ///         registry.
     error PolicyNotFound(uint64 policyId);
+
+    /// @notice `burnBlocked` was called against a `from` address that is
+    ///         currently authorized under the active `TRANSFER_SENDER`
+    ///         policy. `burnBlocked` exists specifically to seize supply
+    ///         from policy-blocked addresses; calling it against a
+    ///         non-blocked address is rejected by design.
+    error AccountNotBlocked(address account);
 
     /// @notice An EIP-2612 `permit` was submitted with a `deadline`
     ///         strictly less than the current block timestamp.
@@ -156,10 +175,6 @@ interface IB20 {
     ///         token. Capability state is immutable; this revert is
     ///         permanent.
     error FeatureDisabled(uint256 capability);
-
-    /// @notice The redemption amount is below the configured
-    ///         `minimumRedeemable` threshold.
-    error MinimumRedeemableNotMet(uint256 amount, uint256 minimum);
 
     /// @notice `renounceRole(DEFAULT_ADMIN_ROLE, ...)` was called when the
     ///         caller is the last admin. Tokens MUST always have at least
@@ -180,7 +195,8 @@ interface IB20 {
 
     /// @notice ERC-20 standard transfer event. Emitted on every successful
     ///         transfer (including memo'd variants), mint
-    ///         (`from = address(0)`), and burn (`to = address(0)`).
+    ///         (`from = address(0)`), and burn (`to = address(0)`,
+    ///         including `burnBlocked` and `redeem`).
     event Transfer(address indexed from, address indexed to, uint256 amount);
 
     /// @notice ERC-20 standard approval event.
@@ -195,6 +211,13 @@ interface IB20 {
     ///         (e.g. `redeem` on a Security token); the event signature
     ///         is shared.
     event Memo(bytes32 indexed memo);
+
+    /// @notice Emitted by `burnBlocked` in addition to the standard
+    ///         `Transfer(from, address(0), amount)`. Distinguishes
+    ///         compliance-driven seizure (which destroys balance belonging
+    ///         to a third party) from `burn` (which destroys the caller's
+    ///         own balance).
+    event BurnedBlocked(address indexed caller, address indexed from, uint256 amount);
 
     /// @notice Emitted when `account` is granted `role`. `sender` is the
     ///         account that originated the call (the admin for `role`,
@@ -212,25 +235,25 @@ interface IB20 {
     event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
 
     /// @notice Emitted when the admin role for `role` is changed via
-    ///         `setRoleAdmin`. `DEFAULT_ADMIN_ROLE` is the implicit
-    ///         starting admin for all roles, despite this event NOT
-    ///         being emitted to signal that initial state.
-    /// @dev    Matches OZ AccessControl's `RoleAdminChanged` event
-    ///         exactly. Note OZ does NOT include a `sender` parameter
-    ///         here; this is intentional alignment.
+    ///         `setRoleAdmin`.
+    /// @dev    Matches OZ AccessControl's `RoleAdminChanged` event exactly.
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
 
-    /// @notice Emitted by `pause`. `vectors` is the bitmask added to the
-    ///         current paused state (the result of `current | vectors`,
-    ///         not the argument). `updater` is the caller.
+    /// @notice Emitted by `pause`. `vectors` is the bitmask argument to
+    ///         the call (not the resulting paused state). `updater` is
+    ///         the caller.
     event Paused(address indexed updater, uint256 vectors);
 
     /// @notice Emitted by `unpause`. All paused vectors are cleared.
     event Unpaused(address indexed updater);
 
-    /// @notice Emitted by `changeTransferPolicyId`. Includes the prior ID
-    ///         for indexer convenience.
-    event TransferPolicyUpdated(address indexed updater, uint64 oldPolicyId, uint64 newPolicyId);
+    /// @notice Emitted by `updatePolicy` when a token's policy slot is
+    ///         changed. `policyType` is one of the standard policy-type
+    ///         identifiers (e.g. `TRANSFER_SENDER()`); `oldPolicyId` and
+    ///         `newPolicyId` are the prior and current registry IDs for
+    ///         that slot. Initial slot assignment at creation is also
+    ///         emitted via `PolicyUpdated` with `oldPolicyId == 0`.
+    event PolicyUpdated(bytes32 indexed policyType, uint64 oldPolicyId, uint64 newPolicyId);
 
     /// @notice Emitted by `setSupplyCap`. Includes the prior cap for
     ///         indexer convenience.
@@ -249,18 +272,6 @@ interface IB20 {
     ///         indexer consumption.
     event SymbolUpdated(address indexed updater, string newSymbol);
 
-    /// @notice Emitted by `redeem` and `redeemWithMemo` (in addition to
-    ///         the standard `Transfer(holder, address(0), amount)`).
-    ///         Distinguishes user-initiated redemption (which implies an
-    ///         off-chain settlement obligation) from plain `burn`, which
-    ///         emits the same `Transfer` event but carries no
-    ///         off-chain meaning.
-    event Redeemed(address indexed holder, uint256 amount);
-
-    /// @notice Emitted by `setMinimumRedeemable`. Includes the prior
-    ///         minimum for indexer convenience.
-    event MinimumRedeemableUpdated(address indexed updater, uint256 oldMinimum, uint256 newMinimum);
-
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
     //////////////////////////////////////////////////////////////*/
@@ -268,25 +279,32 @@ interface IB20 {
     /// @notice The default top-level admin role, equal to `bytes32(0)` per
     ///         the OpenZeppelin AccessControl convention. The admin
     ///         manages all other roles via `grantRole`, `revokeRole`, and
-    ///         `setRoleAdmin`. The admin can also `changeTransferPolicyId`,
+    ///         `setRoleAdmin`. The admin can also `updatePolicy`,
     ///         `setSupplyCap`, `setContractURI`, `setName`, and `setSymbol`.
-    /// @dev    Unlike earlier drafts, there is NO two-step delay-protected
-    ///         transfer for this role. `grantRole(DEFAULT_ADMIN_ROLE, ...)`
-    ///         and `revokeRole(DEFAULT_ADMIN_ROLE, ...)` work uniformly.
+    /// @dev    There is NO two-step delay-protected transfer for this
+    ///         role. `grantRole(DEFAULT_ADMIN_ROLE, ...)` and
+    ///         `revokeRole(DEFAULT_ADMIN_ROLE, ...)` work uniformly.
     ///         The only constraint is that the last admin cannot renounce
     ///         (see `LastAdminCannotRenounce`).
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `mint` and `mintWithMemo`. Held separately
-    ///         from `BURN_ROLE` so issuance and destruction authority can
-    ///         be split across teams (e.g. treasury team mints, redemption
-    ///         team burns).
+    ///         from `BURN_ROLE` and `BURN_BLOCKED_ROLE` so issuance and
+    ///         destruction authority can be split across teams.
     function MINT_ROLE() external view returns (bytes32);
 
-    /// @notice Required to call `burn` and `burnWithMemo`. Note that burn
-    ///         operates on the caller's own balance only; there is no
-    ///         force-burn function on the Default surface.
+    /// @notice Required to call `burn` and `burnWithMemo`. Note that
+    ///         `burn` operates on the caller's own balance only; to
+    ///         destroy supply held by a third party (e.g. for sanctions
+    ///         seizure), see `BURN_BLOCKED_ROLE` and `burnBlocked`.
     function BURN_ROLE() external view returns (bytes32);
+
+    /// @notice Required to call `burnBlocked`. Held separately from
+    ///         `BURN_ROLE` so the authority to destroy a third party's
+    ///         balance (gated on that party being unauthorized under the
+    ///         active `TRANSFER_SENDER` policy) can be granted only to a
+    ///         compliance role, not to general burn operators.
+    function BURN_BLOCKED_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `pause`. Held separately from
     ///         `UNPAUSE_ROLE` so emergency-stop authority can be delegated
@@ -297,6 +315,29 @@ interface IB20 {
     ///         resumption requires a deliberate, typically more senior
     ///         action than the pause itself.
     function UNPAUSE_ROLE() external view returns (bytes32);
+
+    /*//////////////////////////////////////////////////////////////
+                          POLICY TYPE IDENTIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The policy slot consulted against `from` on every transfer
+    ///         (including the `from` side of `transferFrom`). Identifier
+    ///         is `keccak256("TRANSFER_SENDER")`.
+    function TRANSFER_SENDER() external view returns (bytes32);
+
+    /// @notice The policy slot consulted against `to` on every transfer.
+    ///         Identifier is `keccak256("TRANSFER_RECEIVER")`.
+    function TRANSFER_RECEIVER() external view returns (bytes32);
+
+    /// @notice The policy slot consulted against `msg.sender` on
+    ///         `transferFrom` (the spender, when distinct from `from`).
+    ///         Not consulted on `transfer` (where `msg.sender == from`).
+    ///         Identifier is `keccak256("TRANSFER_EXECUTOR")`.
+    function TRANSFER_EXECUTOR() external view returns (bytes32);
+
+    /// @notice The policy slot consulted against `to` on every mint.
+    ///         Identifier is `keccak256("MINT_RECEIVER")`.
+    function MINT_RECEIVER() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                               CAPABILITIES
@@ -343,14 +384,18 @@ interface IB20 {
     /// @notice Transfers `amount` from `msg.sender` to `to`. Reverts with:
     ///         - `ContractPaused(TRANSFER)` if the `TRANSFER` pause vector
     ///           is set.
-    ///         - `PolicyForbids(transferPolicyId)` if the active transfer
-    ///           policy denies the transfer.
-    ///         - `InsufficientBalance(msg.sender, balance, amount)`
-    ///           if the caller does not have enough balance.
+    ///         - `PolicyForbids(TRANSFER_SENDER,   policyId)` if `msg.sender`
+    ///           is not authorized under the active `TRANSFER_SENDER` policy.
+    ///         - `PolicyForbids(TRANSFER_RECEIVER, policyId)` if `to` is not
+    ///           authorized under the active `TRANSFER_RECEIVER` policy.
+    ///         - `InsufficientBalance(msg.sender, balance, amount)` if the
+    ///           caller does not have enough balance.
     ///         - `InvalidReceiver(to)` if `to == address(0)`.
-    /// @dev    Policy check evaluates `msg.sender` (the sender of value)
-    ///         and `to` (the recipient). When the token is configured as
-    ///         a gas asset, fee debits go through this same path.
+    /// @dev    Does NOT consult the `TRANSFER_EXECUTOR` policy: on direct
+    ///         `transfer` the executor IS the sender, and the sender
+    ///         check already covers that address. When the token is
+    ///         configured as a gas asset, fee debits go through this
+    ///         same path.
     function transfer(address to, uint256 amount) external returns (bool);
 
     /// @notice Transfers `amount` from `from` to `to` using `msg.sender`'s
@@ -358,17 +403,18 @@ interface IB20 {
     ///         - `InsufficientAllowance(msg.sender, allowance, amount)`
     ///           if the caller does not have enough allowance from `from`.
     ///         - `InvalidSender(from)` if `from == address(0)`.
-    /// @dev    Policy check evaluates `from` (the sender of value), `to`
-    ///         (the recipient), AND `msg.sender` (the spender, when
-    ///         distinct from `from`). A sanctioned spender cannot move
-    ///         tokens for a non-sanctioned holder.
+    ///         - `PolicyForbids(TRANSFER_EXECUTOR, policyId)` if
+    ///           `msg.sender != from` and `msg.sender` is not authorized
+    ///           under the active `TRANSFER_EXECUTOR` policy.
+    /// @dev    The sender-side check is performed against `from` (the
+    ///         party whose balance moves), the receiver check against
+    ///         `to`, and the executor check against `msg.sender` only
+    ///         when distinct from `from`. A sanctioned spender cannot
+    ///         move tokens for a non-sanctioned holder.
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 
-    /// @notice Sets `spender`'s allowance to `amount`. NOT gated by the
-    ///         transfer policy or by pause; only the act of MOVING balance
-    ///         is gated. A user on the policy blocklist may still
-    ///         `approve` (the approval cannot be acted on by the spender,
-    ///         since `transferFrom` would revert).
+    /// @notice Sets `spender`'s allowance to `amount`. NOT gated by any
+    ///         policy or by pause; only the act of MOVING balance is gated.
     /// @dev    Reverts with `InvalidApprover(msg.sender)` if the
     ///         caller is `address(0)` (theoretically unreachable for
     ///         normal callers but enforced for parity with OZ ERC20),
@@ -422,16 +468,9 @@ interface IB20 {
     ///            `SupplyCapExceeded`).
     ///         2. The `MINT` pause vector is unset (else
     ///            `ContractPaused(MINT)`).
-    ///         3. The active transfer policy authorizes `to` as a mint
-    ///            recipient (else `PolicyForbids`).
-    /// @dev    There is no `MINTABLE` capability bit. To make a token
-    ///         permanently fixed-supply, set `supplyCap == initialSupply`
-    ///         at creation with `CAP_MUTABLE` unset; future mint calls
-    ///         will revert with `SupplyCapExceeded` because the cap can
-    ///         never be raised. To pause minting temporarily, set the
-    ///         `MINT` pause vector or revoke `MINT_ROLE`.
-    ///
-    ///         Per-minter rate limiting is NOT enshrined at any level
+    ///         3. `to` is authorized under the active `MINT_RECEIVER`
+    ///            policy (else `PolicyForbids(MINT_RECEIVER, policyId)`).
+    /// @dev    Per-minter rate limiting is NOT enshrined at any level
     ///         (Default or variant). Minter quotas live in EVM
     ///         periphery contracts: a controller / wrapper that holds
     ///         `MINT_ROLE` and enforces per-caller quotas before
@@ -447,14 +486,12 @@ interface IB20 {
 
     /// @notice Burns `amount` from the caller's own balance. Requires
     ///         `BURN_ROLE`. Subject to the `BURN` pause vector being unset
-    ///         (else `ContractPaused(BURN)`). NOT subject to the transfer
-    ///         policy: burn destroys the caller's own supply with no
-    ///         recipient. Reverts with
-    ///         `InsufficientBalance(caller, balance, amount)` if the
-    ///         caller does not have enough balance.
-    /// @dev    There is no force-burn function on the Default surface.
-    ///         Sanctions seizure flows live in token variants (e.g.
-    ///         Security via `adminBurn`) or in periphery contracts.
+    ///         (else `ContractPaused(BURN)`). NOT subject to any policy:
+    ///         burn destroys the caller's own supply with no recipient.
+    ///         Reverts with `InsufficientBalance(caller, balance, amount)`
+    ///         if the caller does not have enough balance.
+    /// @dev    To destroy balance held by a third party (compliance
+    ///         seizure from a policy-blocked address), use `burnBlocked`.
     ///         Emits `Transfer(caller, address(0), amount)`.
     function burn(uint256 amount) external;
 
@@ -462,53 +499,25 @@ interface IB20 {
     ///         after the standard `Transfer` event.
     function burnWithMemo(uint256 amount, bytes32 memo) external;
 
-    /*//////////////////////////////////////////////////////////////
-                                 REDEEM
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Destroys `amount` of the caller's balance, signaling an
-    ///         off-chain redemption claim against the issuer. Subject to:
-    ///         1. `amount >= minimumRedeemable()` (else
-    ///            `MinimumRedeemableNotMet(amount, minimum)`).
-    ///         2. `amount <= balanceOf(msg.sender)` (else
-    ///            `InsufficientBalance(msg.sender, balance, amount)`).
-    ///         3. The `REDEEM` pause vector is unset (else
-    ///            `ContractPaused(REDEEM)`).
-    ///         4. The active transfer policy authorizes `msg.sender` as
-    ///            a redeemer (else `PolicyForbids(transferPolicyId)`).
-    /// @dev    No role is required: redemption is a user-initiated
-    ///         operation on the caller's own balance, gated entirely by
-    ///         the policy's redeemer slot.
-    ///
-    ///         Tokens that do not offer redemption configure their
-    ///         transfer policy with the redeemer slot pointed at policy
-    ///         ID `0` (always-reject); calls to `redeem` then revert
-    ///         with `PolicyForbids` for every caller. The function is
-    ///         present on every Default token but its availability is
-    ///         policy-driven.
-    ///
-    ///         Distinct from `burn` (which requires `BURN_ROLE` and
-    ///         carries no off-chain settlement implication). Both emit
-    ///         `Transfer(holder, address(0), amount)`; `redeem`
-    ///         additionally emits `Redeemed(holder, amount)` so indexers
-    ///         can distinguish.
-    function redeem(uint256 amount) external;
-
-    /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
-    ///         immediately after the standard `Transfer` event (and
-    ///         after `Redeemed`).
-    function redeemWithMemo(uint256 amount, bytes32 memo) external;
-
-    /// @notice The minimum amount that may be redeemed in a single call
-    ///         to `redeem` / `redeemWithMemo`. Defaults to 0 (no
-    ///         minimum) at creation.
-    function minimumRedeemable() external view returns (uint256);
-
-    /// @notice Sets a new minimum redeemable amount. Requires
-    ///         `DEFAULT_ADMIN_ROLE`. May be set to 0 to disable the
-    ///         minimum entirely. Takes effect immediately for the next
-    ///         redemption.
-    function setMinimumRedeemable(uint256 newMinimum) external;
+    /// @notice Destroys `amount` of `from`'s balance. Requires
+    ///         `BURN_BLOCKED_ROLE`. Subject to:
+    ///         1. The `BURN` pause vector is unset (else
+    ///            `ContractPaused(BURN)`).
+    ///         2. `from` is NOT authorized under the active
+    ///            `TRANSFER_SENDER` policy (else `AccountNotBlocked(from)`).
+    ///            `burnBlocked` exists for seizure of policy-blocked
+    ///            balance; calling it against an authorized address is
+    ///            rejected by design.
+    ///         3. `amount <= balanceOf(from)` (else
+    ///            `InsufficientBalance(from, balance, amount)`).
+    /// @dev    Designed for sanctions-seizure flows where compliance
+    ///         requires destruction of balance held by a blocked
+    ///         address. Tokens that follow a "freeze, never seize"
+    ///         philosophy (e.g. CDP Custom Stablecoin) simply never
+    ///         grant `BURN_BLOCKED_ROLE`.
+    ///         Emits `Transfer(from, address(0), amount)` and
+    ///         `BurnedBlocked(caller, from, amount)`.
+    function burnBlocked(address from, uint256 amount) external;
 
     /*//////////////////////////////////////////////////////////////
                                   ROLES
@@ -573,10 +582,6 @@ interface IB20 {
     ///         `currentPaused | vectors`. Requires `PAUSABLE` capability
     ///         and `PAUSE_ROLE`. Reverts with `InvalidAmount` if
     ///         `vectors == 0`.
-    /// @dev    See `PauseVectors` for the bit definitions. Pausing a
-    ///         vector that is already set is a no-op for the bitmask but
-    ///         still emits `Paused(updater, vectors)` with the argument
-    ///         as supplied (for indexer trace).
     function pause(uint256 vectors) external;
 
     /// @notice Unpauses ALL currently-paused vectors. Requires `PAUSABLE`
@@ -584,26 +589,35 @@ interface IB20 {
     ///         not support unpausing a subset of vectors; admin must
     ///         unpause everything and re-pause the still-blocked vectors
     ///         in a follow-up call if granular resumption is desired.
-    /// @dev    No-op if no vectors are currently paused; still emits
-    ///         `Unpaused(updater)`.
     function unpause() external;
 
     /*//////////////////////////////////////////////////////////////
                                  POLICY
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The policy ID currently gating this token's transfers and
-    ///         mints. Resolved against the singleton policy registry
-    ///         precompile. ID `0` always rejects (functional soft-pause
-    ///         via policy); ID `1` always allows.
-    function transferPolicyId() external view returns (uint64);
+    /// @notice The current policy ID configured for `policyType`. Returns
+    ///         `0` (always-reject built-in) for any policy slot that has
+    ///         never been assigned. Standard policy types are exposed as
+    ///         the role-identifier constants `TRANSFER_SENDER()`,
+    ///         `TRANSFER_RECEIVER()`, `TRANSFER_EXECUTOR()`, and
+    ///         `MINT_RECEIVER()`. Variants add their own constants for
+    ///         variant-specific operations (e.g. `REDEEMER_SENDER()` on
+    ///         `IB20Security`). User-defined policy types are also
+    ///         supported and may be used by periphery contracts that
+    ///         layer additional gating on top.
+    /// @dev    All slots default to `0` (always-reject) at token creation:
+    ///         newly minted tokens cannot move balance until the admin
+    ///         configures their policy slots. To explicitly opt out of a
+    ///         given slot's enforcement, point it at `1` (always-allow).
+    function policyId(bytes32 policyType) external view returns (uint64);
 
-    /// @notice Sets a new transfer policy. Requires `DEFAULT_ADMIN_ROLE`.
-    ///         The policy MUST exist in the registry (or be one of the
-    ///         built-in IDs `0` or `1`); otherwise reverts with
-    ///         `PolicyNotFound`. Takes effect immediately for the next
-    ///         transfer or mint.
-    function changeTransferPolicyId(uint64 newPolicyId) external;
+    /// @notice Updates the policy ID assigned to `policyType`. Requires
+    ///         `DEFAULT_ADMIN_ROLE`. The target policy MUST exist in the
+    ///         registry (or be one of the built-in IDs `0` or `1`);
+    ///         otherwise reverts with `PolicyNotFound`. Takes effect
+    ///         immediately for the next operation that consults this
+    ///         slot. Emits `PolicyUpdated`.
+    function updatePolicy(bytes32 policyType, uint64 newPolicyId) external;
 
     /*//////////////////////////////////////////////////////////////
                               SUPPLY CAP
