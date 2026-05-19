@@ -11,11 +11,14 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         the initial admin.
 ///
 /// @dev    **Factory address.** The factory lives at the fixed address
-///         `0xB20...000F`.
+///         `0xB20F00000000000000000000000000000000000F`. The `0xB20F`
+///         prefix is deliberately distinct from the B-20 token prefix
+///         `0xB200` (byte `[1]` differs), so `isB20(factory)` returns
+///         false unambiguously.
 ///
 ///         **Token address schema (20 bytes).**
-///         - `[0:10]`  — `bytes10(0xB20...000)` shared prefix identifying a
-///                       factory-created B-20.
+///         - `[0:10]`  — `bytes10(0xB200000000000000000000)` shared
+///                       prefix identifying a factory-created B-20.
 ///         - `[10]`    — `bytes1(variant)` (matches `TokenVariant`).
 ///         - `[11]`    — `bytes1(decimals)` — encoded in the address so
 ///                       `decimals()` is recoverable statelessly from the
@@ -95,6 +98,15 @@ interface ITokenFactory {
     ///                      they execute with full privilege regardless
     ///                      of role state, and the privileged window
     ///                      closes the moment `createToken` returns.
+    ///                      May be `address(0)` for the "demonstrate no
+    ///                      owner" case (memecoins, credibly-neutral
+    ///                      tokens). When zero, no role is granted at
+    ///                      creation and the token has no admin: no
+    ///                      role grants, policy changes, or pauses are
+    ///                      ever possible post-creation. The
+    ///                      `renounceLastAdmin` path is the alternative
+    ///                      for tokens that need an admin during setup
+    ///                      and then want to evolve to admin-less.
     /// @param decimals      ERC-20 decimals. MUST be in `[2, 18]`.
     ///                      Encoded into address byte `[11]` for
     ///                      stateless retrieval.
@@ -175,9 +187,6 @@ interface ITokenFactory {
     ///         accept a caller-supplied value.
     error InvalidDecimals(uint8 decimals);
 
-    /// @notice A required address argument was the zero address.
-    error ZeroAddress();
-
     /// @notice A required string argument was the empty string (e.g.
     ///         stablecoin `currency`, security `isin`).
     error MissingRequiredField();
@@ -195,14 +204,21 @@ interface ITokenFactory {
     ///         fields cover the universal token-identity surface; all
     ///         variant-specific state changes (e.g. `currency`, `isin`,
     ///         supply cap, policy slots) are observable via the
-    ///         token's own events as they're applied during the
-    ///         bootstrap and `initCalls`.
+    ///         token's own events as they're applied during `initCalls`.
+    /// @dev    The factory writes the token's initial storage directly
+    ///         (no `bootstrap` call into the token), so the initial
+    ///         admin grant does not produce a separate `RoleGranted`
+    ///         event. This event is the canonical signal for both
+    ///         "token created" AND "initial admin set". A zero `admin`
+    ///         indicates the "demonstrate no owner" path. Post-creation
+    ///         role grants emit `RoleGranted` from the token as usual.
     event TokenCreated(
         address indexed token,
         TokenVariant indexed variant,
         string name,
         string symbol,
-        uint8 decimals
+        uint8 decimals,
+        address admin
     );
 
     /*//////////////////////////////////////////////////////////////

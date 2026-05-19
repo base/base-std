@@ -37,8 +37,9 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// **Mock status.**
 ///   - `MockTokenFactory` is fully implemented: `createToken` decodes
 ///     params, etches the variant-appropriate runtime bytecode at the
-///     computed B-20 address, runs the bootstrap + initCalls flow, and
-///     closes the privileged window before returning.
+///     computed B-20 address, writes initial state directly via vm.store
+///     (no init function on the token), runs initCalls, and closes the
+///     privileged window before returning.
 ///   - `MockB20` / `MockB20Stablecoin` (planted by the factory at token
 ///     addresses) are fully implemented: every `IB20` / `IB20Stablecoin`
 ///     surface function is live, with the bootstrap-window auth bypass
@@ -80,5 +81,27 @@ abstract contract BaseTest is Test {
         if (StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS.code.length == 0) {
             vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
         }
+    }
+
+    /// @notice Filters out addresses that are unsafe to use as a fuzzed
+    ///         `msg.sender` in test bodies.
+    ///
+    /// Pranking these addresses produces meaningless or misleading test
+    /// outcomes:
+    ///   - `address(0)`: many functions revert specifically on zero
+    ///     sender (`InvalidSender`, `InvalidApprover`), masking the
+    ///     behavior under test.
+    ///   - The forge-std VM cheatcode address: pranking it disrupts
+    ///     subsequent cheatcode calls.
+    ///   - Any of the etched precompiles: they have a privileged
+    ///     auth-bypass path (e.g. `MockB20`'s factory bootstrap window),
+    ///     so calls "from" them go through a different code path than
+    ///     a user would.
+    function _assumeValidCaller(address caller) internal pure {
+        vm.assume(caller != address(0));
+        vm.assume(caller != address(vm));
+        vm.assume(caller != StdPrecompiles.TOKEN_FACTORY_ADDRESS);
+        vm.assume(caller != StdPrecompiles.POLICY_REGISTRY_ADDRESS);
+        vm.assume(caller != StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS);
     }
 }

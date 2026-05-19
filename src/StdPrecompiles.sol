@@ -10,7 +10,11 @@ import {ITokenFactory} from "./interfaces/ITokenFactory.sol";
 ///         with interface-typed handles so callers can interact with
 ///         them directly (e.g. `StdPrecompiles.TOKEN_FACTORY.createToken(...)`).
 library StdPrecompiles {
-    address internal constant TOKEN_FACTORY_ADDRESS = 0xB20000000000000000000000000000000000000f;
+    /// @dev The `0xB20F` prefix mirrors the `0xB2` B-20 token prefix while staying
+    ///      disjoint (B-20 tokens have `0x00` at byte [1]; the factory has `0x0F`),
+    ///      so `isB20(TOKEN_FACTORY_ADDRESS)` returns false unambiguously. The
+    ///      trailing `0x0F` byte echoes the prefix for visual symmetry.
+    address internal constant TOKEN_FACTORY_ADDRESS = 0xb20F00000000000000000000000000000000000f;
     address internal constant POLICY_REGISTRY_ADDRESS = 0xb000000000000000000000000000000000000001;
     address internal constant ACTIVATION_REGISTRY_ADDRESS = 0x84530000000000000000000000000000000000ff;
 

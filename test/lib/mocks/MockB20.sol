@@ -18,33 +18,40 @@ import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 ///
 ///         - All mutable state lives in `MockB20Storage.layout()` at a
 ///           single ERC-7201 namespaced root. The struct field order IS
-///           the slot layout the Rust impl mirrors.
+///           the slot layout the Rust impl mirrors; slot offsets are
+///           named constants on `MockB20Storage`.
 ///         - `decimals()` is decoded from address byte `[11]` — no
 ///           storage slot. The Rust impl does the same.
+///         - **No factory-only entrypoints exist on this contract.**
+///           Initial storage state (name, symbol, supply cap, admin
+///           role, `initialized` flag) is written directly by the
+///           factory via `vm.store` at the slots declared in
+///           `MockB20Storage`. The Rust impl writes the same slots
+///           the same way; the public surface this contract exposes
+///           is exactly `IB20`.
 ///         - The factory call-site bypass for the bootstrap window is an
 ///           explicit gate consulted at every authorization check:
-///           `msg.sender == FACTORY && !initialized`. Once
-///           `closeBootstrap()` flips `initialized = true`, the factory
-///           has no remaining special privilege. Token invariants
-///           (supply-cap math, balance accounting) are NOT bypassed
-///           during the window.
+///           `msg.sender == FACTORY && !initialized`. The factory
+///           writes `initialized = true` directly (also via `vm.store`)
+///           once `initCalls` have run, closing the privileged window.
+///           Token invariants (supply-cap math, balance accounting)
+///           are NOT bypassed during the window.
 ///         - Variant tokens (e.g. `MockB20Stablecoin`) extend by adding
-///           a disjoint storage namespace plus an override of
-///           `_bootstrapVariant`; the base never enumerates variants.
+///           a disjoint storage namespace; the factory writes the
+///           variant-specific slots directly, no virtual hook needed.
 ///
 ///         **What this mock is for:** local-tests-with-vm.etch and as a
 ///         readable spec artifact for auditors and Rust developers. It
 ///         lives under `test/` and is never deployed as production code.
 contract MockB20 is IB20 {
-    using MockB20Storage for MockB20Storage.Layout;
-
     // ============================================================
     //                          CONSTANTS
     // ============================================================
 
     /// @notice The factory precompile address. Calls from this address
-    ///         during the bootstrap window (before `closeBootstrap()`)
-    ///         bypass all token-side authorization gates.
+    ///         during the bootstrap window (before the factory writes
+    ///         `initialized = true` via vm.store) bypass all token-side
+    ///         authorization gates.
     address internal constant FACTORY = StdPrecompiles.TOKEN_FACTORY_ADDRESS;
 
     /// @notice The policy registry precompile address. Consulted on
@@ -70,55 +77,6 @@ contract MockB20 is IB20 {
     bytes32 public constant TRANSFER_RECEIVER = keccak256("TRANSFER_RECEIVER");
     bytes32 public constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
     bytes32 public constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
-
-    // ============================================================
-    //                          BOOTSTRAP
-    // ============================================================
-    // Functions called only by the factory during the bootstrap window.
-    // Not part of the IB20 interface.
-
-    /// @notice Factory-only: writes initial identity state into storage.
-    ///         Called once per token, before any initCalls dispatch.
-    /// @dev    Variant-specific state is set via `_bootstrapVariant` so
-    ///         the base contract never enumerates variants.
-    function bootstrap(string calldata name_, string calldata symbol_, address admin, bytes calldata variantData)
-        external
-    {
-        MockB20Storage.Layout storage $ = MockB20Storage.layout();
-        require(msg.sender == FACTORY, "MockB20: only factory");
-        require(!$.initialized, "MockB20: already initialized");
-
-        $.name = name_;
-        $.symbol = symbol_;
-        $.supplyCap = type(uint256).max;
-
-        if (admin != address(0)) {
-            $.roles[DEFAULT_ADMIN_ROLE][admin] = true;
-            $.adminCount = 1;
-            emit RoleGranted(DEFAULT_ADMIN_ROLE, admin, msg.sender);
-        }
-
-        _bootstrapVariant(variantData);
-    }
-
-    /// @notice Factory-only: closes the bootstrap window. After this
-    ///         call `msg.sender == FACTORY` no longer triggers the
-    ///         authorization bypass; every subsequent call (factory or
-    ///         otherwise) goes through the standard checks.
-    function closeBootstrap() external {
-        MockB20Storage.Layout storage $ = MockB20Storage.layout();
-        require(msg.sender == FACTORY, "MockB20: only factory");
-        require(!$.initialized, "MockB20: already initialized");
-        $.initialized = true;
-    }
-
-    /// @notice Variant extension hook. Default-variant tokens ignore
-    ///         `variantData`; variants override to decode and apply
-    ///         their variant-specific initial state (e.g.
-    ///         `MockB20Stablecoin` decodes a currency string).
-    function _bootstrapVariant(bytes calldata variantData) internal virtual {
-        variantData; // unused on the base variant
-    }
 
     // ============================================================
     //                          ERC-20: VIEWS

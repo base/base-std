@@ -67,7 +67,8 @@ library MockB20Storage {
         // ---------- Permit (EIP-2612) ----------
         mapping(address owner => uint256 nonce) nonces;
         // ---------- Bootstrap window flag ----------
-        // False from etch until the factory calls closeBootstrap(). While
+        // False from etch until the factory writes `true` directly (via
+        // vm.store, mirroring the Rust impl's direct slot write). While
         // false, factory-originated calls bypass all token-side authorization
         // gates (role / policy / pause checks). Token invariants (supply-cap
         // math, balance accounting) are NOT bypassed.
@@ -77,6 +78,45 @@ library MockB20Storage {
     // keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff))
     // Verified against the computation in derivedLocation() below.
     bytes32 internal constant STORAGE_LOCATION = 0xc78b71fee795ddd74aff64ea9b2474194c938c3196430e10bb5f01ed48434000;
+
+    // ============================================================
+    //                     SLOT OFFSETS WITHIN LAYOUT
+    // ============================================================
+    // Solidity allocates struct fields sequentially starting at the
+    // struct's base slot. These constants name each field's offset
+    // from `STORAGE_LOCATION` so the factory (and the Rust impl) can
+    // write the token's initial state directly via slot arithmetic
+    // without round-tripping through a Solidity function call on the
+    // token. They MUST stay in sync with the field order of `Layout`
+    // above; the variant-storage test asserts this by reading via the
+    // struct AND via the offset and comparing.
+    //
+    // Mappings consume one declared slot here (their VALUES hash to
+    // unrelated locations), so each mapping below contributes a single
+    // offset that the factory uses as the mapping's base slot when
+    // deriving member slots via `keccak256(abi.encode(key, baseSlot))`.
+
+    uint256 internal constant NAME_OFFSET = 0;
+    uint256 internal constant SYMBOL_OFFSET = 1;
+    uint256 internal constant CONTRACT_URI_OFFSET = 2;
+    uint256 internal constant TOTAL_SUPPLY_OFFSET = 3;
+    uint256 internal constant BALANCES_OFFSET = 4;
+    uint256 internal constant ALLOWANCES_OFFSET = 5;
+    uint256 internal constant ROLES_OFFSET = 6;
+    uint256 internal constant ROLE_ADMINS_OFFSET = 7;
+    uint256 internal constant ADMIN_COUNT_OFFSET = 8;
+    uint256 internal constant POLICY_IDS_OFFSET = 9;
+    uint256 internal constant PAUSED_VECTORS_OFFSET = 10;
+    uint256 internal constant SUPPLY_CAP_OFFSET = 11;
+    uint256 internal constant NONCES_OFFSET = 12;
+    uint256 internal constant INITIALIZED_OFFSET = 13;
+
+    /// @notice Absolute slot for a top-level field of `Layout`.
+    /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the
+    ///      256-slot boundary the ERC-7201 mask reserves.
+    function slotOf(uint256 offset) internal pure returns (bytes32) {
+        return bytes32(uint256(STORAGE_LOCATION) + offset);
+    }
 
     function layout() internal pure returns (Layout storage $) {
         assembly {
@@ -111,6 +151,14 @@ library MockB20StablecoinStorage {
     // keccak256(abi.encode(uint256(keccak256("base.b20.stablecoin")) - 1)) & ~bytes32(uint256(0xff))
     // Verified against the computation in derivedLocation() below.
     bytes32 internal constant STORAGE_LOCATION = 0x35827975a06ca0e9367ea3129b19441d45d0ca58e30b7693f09e73d0943d6200;
+
+    /// @notice Offset of `currency` within `Layout`. Always 0 (single-field struct).
+    uint256 internal constant CURRENCY_OFFSET = 0;
+
+    /// @notice Absolute slot for a top-level field of `Layout`.
+    function slotOf(uint256 offset) internal pure returns (bytes32) {
+        return bytes32(uint256(STORAGE_LOCATION) + offset);
+    }
 
     function layout() internal pure returns (Layout storage $) {
         assembly {

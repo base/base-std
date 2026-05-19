@@ -7,6 +7,7 @@ import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
+import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockTokenFactory
 /// @notice Reference implementation of the `ITokenFactory` precompile
@@ -16,43 +17,51 @@ import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 ///         hit the real factory at the same address with no test-code
 ///         changes.
 ///
-/// @dev    `createToken` does what the production precompile does in
-///         spirit:
-///         1. Decodes variant-specific params (validating the version
+/// @dev    `createToken` mirrors what the production Rust precompile
+///         factory does, step-for-step:
+///         1. Decode variant-specific params (validating the version
 ///            byte and required-field invariants).
-///         2. Computes the deterministic token address per the
+///         2. Compute the deterministic token address per the
 ///            documented schema (`[0:10]` shared prefix, `[10]` variant
 ///            byte, `[11]` decimals byte, `[12:20]` derived from
 ///            `(msg.sender, salt)`).
-///         3. Refuses to overwrite an existing token (revert
+///         3. Refuse to overwrite an existing token (revert
 ///            `TokenAlreadyExists`).
-///         4. Etches the variant-appropriate mock token bytecode at
+///         4. Etch the variant-appropriate mock token bytecode at
 ///            the computed address.
-///         5. Calls `bootstrap(name, symbol, admin, variantData)` on
-///            the new token to write identity state and grant the
-///            initial admin role.
-///         6. Dispatches each `initCalls[i]` via low-level `.call()`
+///         5. **Write the token's initial storage directly** via
+///            `vm.store` at the slot offsets declared in
+///            `MockB20Storage`. Production Rust precompiles have full
+///            chain-state access and write storage the same way; this
+///            mock reaches for the same pattern via cheatcode so the
+///            Solidity reference and the Rust impl agree on the slot
+///            layout slot-for-slot. The token has NO factory-only
+///            entrypoints; its surface is exactly `IB20`.
+///         6. Dispatch each `initCalls[i]` via low-level `.call()`
 ///            so `msg.sender` arrives at the token as `address(this)`
 ///            (the factory). During the bootstrap window
-///            (`!initialized`), the token bypasses all authorization
-///            gates for factory-originated calls — see the
-///            "fully privileged" semantics documented on
+///            (`!initialized`, set via the same `vm.store`), the token
+///            bypasses all authorization gates for factory-originated
+///            calls per the "fully privileged" semantics on
 ///            `ITokenFactory`.
-///         7. Calls `closeBootstrap()` on the token to flip the
-///            initialized flag, closing the privileged window. After
-///            this point the factory has no special access; all
-///            subsequent operations on the token go through standard
-///            role / policy / pause checks.
-///         8. Emits `TokenCreated`.
+///         7. Flip the `initialized` flag (also via `vm.store`),
+///            closing the privileged window. After this point the
+///            factory has no special access; all subsequent operations
+///            on the token go through standard role / policy / pause
+///            checks.
+///         8. Emit `TokenCreated` (which includes `admin`, the
+///            canonical signal for the initial role grant since no
+///            `RoleGranted` event is emitted during direct storage
+///            writes).
 ///
 ///         Token invariants (supply-cap math, balance accounting) are
-///         NOT bypassed during the privileged window — `initCalls` that
-///         would violate an invariant still revert. This matches the
-///         spec documented on `ITokenFactory`.
+///         NOT bypassed during the privileged window: `initCalls` that
+///         would violate an invariant still revert.
 contract MockTokenFactory is ITokenFactory {
     /// @dev Hardcoded forge-std VM address. The factory uses `vm.etch`
-    ///      to plant token bytecode at the deterministic address; this
-    ///      cheatcode dependency is the structural reason the
+    ///      to plant token bytecode at the deterministic address and
+    ///      `vm.store` to write the token's initial state directly.
+    ///      The cheatcode dependencies are the structural reason the
     ///      reference impls live under `test/` rather than `src/`.
     Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
@@ -66,7 +75,7 @@ contract MockTokenFactory is ITokenFactory {
         string memory symbol_;
         address admin;
         uint8 decimals;
-        bytes memory variantData;
+        string memory currency_;
 
         if (variant == TokenVariant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
@@ -76,8 +85,6 @@ contract MockTokenFactory is ITokenFactory {
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = p.decimals;
-            // No variant data on Default.
-            variantData = bytes("");
         } else if (variant == TokenVariant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version);
@@ -86,7 +93,7 @@ contract MockTokenFactory is ITokenFactory {
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 6;
-            variantData = abi.encode(p.currency);
+            currency_ = p.currency;
         } else if (variant == TokenVariant.SECURITY) {
             // IB20Security interface is in flux; the reference impl is
             // deferred until it stabilizes. The factory should not
@@ -109,27 +116,37 @@ contract MockTokenFactory is ITokenFactory {
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
         }
 
-        // -- 5. Bootstrap: writes identity + grants initial admin --
-        MockB20(token).bootstrap(name_, symbol_, admin, variantData);
+        // -- 5. Write initial storage directly via vm.store. No call
+        //       into the token; storage layout is the contract between
+        //       this factory and the Rust impl, which writes the same
+        //       slots the same way.
+        _writeBaseStorage(token, name_, symbol_, admin);
+        if (variant == TokenVariant.STABLECOIN) {
+            _writeStablecoinStorage(token, currency_);
+        }
 
-        // -- 6. Dispatch initCalls. msg.sender at the token is
-        //       address(this) == factory, triggering the bootstrap-
-        //       window auth bypass. Init-call reverts roll up to abort
-        //       the whole creation.
+        // -- 6. Emit creation event BEFORE initCalls dispatch (per
+        //       ITokenFactory natspec) so init-call effects appear
+        //       strictly after the creation event in the log order.
+        //       Includes admin since there's no separate RoleGranted
+        //       at bootstrap.
+        emit TokenCreated(token, variant, name_, symbol_, decimals, admin);
+
+        // -- 7. Dispatch initCalls. msg.sender at the token is
+        //       address(this) == factory, and `initialized` is still
+        //       false (default zero in the freshly-written storage),
+        //       so the token's _isPrivileged() returns true and gates
+        //       are bypassed. Init-call reverts roll up to abort the
+        //       whole creation.
         for (uint256 i = 0; i < initCalls.length; i++) {
             (bool ok,) = token.call(initCalls[i]);
             if (!ok) revert InitCallFailed(i);
         }
 
-        // -- 7. Close the bootstrap window. After this, the factory's
-        //       privilege is gone; only role / policy / pause holders
-        //       can mutate state.
-        MockB20(token).closeBootstrap();
-
-        // -- 8. Emit creation event AFTER identity is sealed and
-        //       initCalls have been applied. (initCalls have already
-        //       emitted their own state-change events.)
-        emit TokenCreated(token, variant, name_, symbol_, decimals);
+        // -- 8. Close the bootstrap window by setting initialized=true.
+        //       After this, the factory's privilege is gone; only
+        //       role / policy / pause holders can mutate state.
+        _writeBool(token, MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET), true);
     }
 
     /// @inheritdoc ITokenFactory
@@ -180,5 +197,93 @@ contract MockTokenFactory is ITokenFactory {
     /// @dev Returns true iff `token`'s first 10 bytes match the B-20 prefix.
     function _isB20Prefix(address token) internal pure returns (bool) {
         return (uint160(token) >> 80) == (uint160(0xB2) << 72);
+    }
+
+    // ============================================================
+    //                     INITIAL-STATE WRITERS
+    // ============================================================
+    // These write the token's initial storage directly via vm.store
+    // at the slot offsets declared in MockB20Storage. The Rust impl
+    // writes the same slots with the same values; the offsets +
+    // ERC-7201 namespace are the storage-layout contract between the
+    // two implementations.
+
+    /// @dev Writes the identity + role + supply-cap state every B-20
+    ///      starts with. Mappings get derived slots via the standard
+    ///      Solidity rule: `keccak256(abi.encode(key, baseSlot))`.
+    function _writeBaseStorage(address token, string memory name_, string memory symbol_, address admin) internal {
+        _writeString(token, MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET), name_);
+        _writeString(token, MockB20Storage.slotOf(MockB20Storage.SYMBOL_OFFSET), symbol_);
+        _writeUint(token, MockB20Storage.slotOf(MockB20Storage.SUPPLY_CAP_OFFSET), type(uint256).max);
+
+        if (admin != address(0)) {
+            // roles[DEFAULT_ADMIN_ROLE][admin] = true
+            // Mapping slot derivation: m[k] is at keccak256(abi.encode(k, baseSlot)),
+            // where baseSlot is the mapping field's ABSOLUTE storage slot.
+            bytes32 rolesBaseSlot = MockB20Storage.slotOf(MockB20Storage.ROLES_OFFSET);
+            bytes32 outerSlot = keccak256(abi.encode(bytes32(0), rolesBaseSlot));
+            bytes32 innerSlot = keccak256(abi.encode(admin, outerSlot));
+            _writeBool(token, innerSlot, true);
+            // adminCount = 1
+            _writeUint(token, MockB20Storage.slotOf(MockB20Storage.ADMIN_COUNT_OFFSET), 1);
+        }
+        // Everything else (totalSupply, allowances, roleAdmins, policyIds,
+        // pausedVectors, nonces, contractURI, initialized) defaults to the
+        // EVM's zero state, which is correct for a fresh token.
+    }
+
+    /// @dev Writes the stablecoin variant's `currency` field at its
+    ///      disjoint ERC-7201 namespace (`base.b20.stablecoin`).
+    function _writeStablecoinStorage(address token, string memory currency_) internal {
+        _writeString(
+            token,
+            MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),
+            currency_
+        );
+    }
+
+    // ============================================================
+    //                     STORAGE WRITE PRIMITIVES
+    // ============================================================
+
+    function _writeUint(address target, bytes32 slot, uint256 value) internal {
+        vm.store(target, slot, bytes32(value));
+    }
+
+    function _writeBool(address target, bytes32 slot, bool value) internal {
+        vm.store(target, slot, bytes32(uint256(value ? 1 : 0)));
+    }
+
+    /// @dev Solidity string storage encoding:
+    ///        - length < 32:  one slot, `(data << 0) | (length * 2)` with
+    ///                         the bytes in the high portion and `length*2`
+    ///                         in the low byte (low bit clear -> short).
+    ///        - length >= 32: slot stores `(length * 2) | 1` (low bit set
+    ///                         -> long), data starts at `keccak256(slot)`
+    ///                         and runs sequentially.
+    function _writeString(address target, bytes32 slot, string memory value) internal {
+        bytes memory data = bytes(value);
+        if (data.length < 32) {
+            bytes32 packed;
+            assembly {
+                // High portion: first 32 bytes of memory at data+32 (the string body,
+                // with implicit zero padding past data.length since memory is fresh).
+                // Low byte: data.length * 2 (low bit clear marks "short string").
+                packed := or(mload(add(data, 32)), mul(mload(data), 2))
+            }
+            vm.store(target, slot, packed);
+        } else {
+            // Long string: marker slot, then data chunks at keccak256(slot)+i.
+            vm.store(target, slot, bytes32(data.length * 2 + 1));
+            bytes32 dataStart = keccak256(abi.encode(slot));
+            uint256 chunks = (data.length + 31) / 32;
+            for (uint256 i = 0; i < chunks; i++) {
+                bytes32 chunk;
+                assembly {
+                    chunk := mload(add(add(data, 32), mul(i, 32)))
+                }
+                vm.store(target, bytes32(uint256(dataStart) + i), chunk);
+            }
+        }
     }
 }
