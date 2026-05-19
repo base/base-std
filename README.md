@@ -24,6 +24,7 @@ forge install base/base-std
 src
 ├── <a href="./src/StdPrecompiles.sol">StdPrecompiles.sol</a>: Collection of precompiles and their interfaces
 └── interfaces
+    ├── <a href="./src/interfaces/IActivationRegistry.sol">IActivationRegistry.sol</a>: Runtime feature activation registry (Beryl+)
     ├── <a href="./src/interfaces/IB20.sol">IB20.sol</a>: Core Token Standard
     ├── <a href="./src/interfaces/IB20Stablecoin.sol">IB20Stablecoin.sol</a>: Stablecoin variant of B20
     ├── <a href="./src/interfaces/IB20Asset.sol">IB20Asset.sol</a>: Security variant of B20
