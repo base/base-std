@@ -24,4 +24,8 @@ contract MockActivationRegistry is IActivationRegistry {
     function activate(bytes32) external pure {
         revert("MockActivationRegistry: not implemented");
     }
+
+    function deactivate(bytes32) external pure {
+        revert("MockActivationRegistry: not implemented");
+    }
 }
