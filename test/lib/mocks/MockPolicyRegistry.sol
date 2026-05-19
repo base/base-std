@@ -56,7 +56,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         revert("MockPolicyRegistry: not implemented");
     }
 
-    function nextPolicyId() external pure returns (uint64) {
+    function nextPolicyId(PolicyType) external pure returns (uint64) {
         revert("MockPolicyRegistry: not implemented");
     }
 
