@@ -1,43 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {BaseTest} from "test/lib/BaseTest.sol";
 
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 /// @notice Base test contract for `IPolicyRegistry` unit tests.
 ///
-/// `setUp` is mock-vs-live aware: the etch is skipped when the canonical
-/// precompile address already has code (live mode under `--fork-url`).
-/// In mock mode the mock contract is etched at the canonical address so
-/// the same test body executes against either backend without branching.
-///
-/// The mock contract is added in a follow-up PR; until then, calls to
-/// the registry revert at runtime under mock mode. The unit stubs in this
-/// spec PR are not yet implemented, so this is intentional.
-contract PolicyRegistryTest is Test {
-    // -- Actors --
-    address internal admin = makeAddr("admin");
-    address internal alice = makeAddr("alice");
-    address internal bob = makeAddr("bob");
-    address internal attacker = makeAddr("attacker");
-
+/// Inherits all precompile-mock etch wiring and common actors from
+/// `BaseTest`; adds the registry handle and policy create / admin
+/// rotation helpers.
+contract PolicyRegistryTest is BaseTest {
     // -- Precompile handle --
     IPolicyRegistry internal policyRegistry = StdPrecompiles.POLICY_REGISTRY;
-
-    // -- Setup --
-    function setUp() public virtual {
-        vm.label(StdPrecompiles.POLICY_REGISTRY_ADDRESS, "PolicyRegistry");
-        vm.label(admin, "admin");
-        vm.label(alice, "alice");
-        vm.label(bob, "bob");
-        vm.label(attacker, "attacker");
-
-        // TODO(mock PR): if (StdPrecompiles.POLICY_REGISTRY_ADDRESS.code.length == 0) {
-        //     vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
-        // }
-    }
 
     // -- Action wrappers --
 

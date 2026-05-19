@@ -1,55 +1,55 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
 
 import {IB20} from "src/interfaces/IB20.sol";
 
 /// @notice Base test contract for `IB20` unit tests.
 ///
-/// `setUp` is mock-vs-live aware: in mock mode the test factory + token
-/// implementation are etched and a default-variant token is deployed via
-/// the factory's `createToken` path so the token's identity bytes
-/// (variant byte at address `[10]`, decimals byte at `[11]`) match the
-/// real address schema. In live mode under `--fork-url`, the same flow
-/// hits the real precompile factory.
+/// Extends `TokenFactoryTest` because an IB20 token cannot exist
+/// without the factory: `setUp` calls `super.setUp()` to etch every
+/// precompile mock (via `BaseTest`) and pick up the factory create
+/// helpers, then deploys a default-variant token here so the token's
+/// identity bytes (variant byte at address `[10]`, decimals byte at
+/// `[11]`) match the real address schema. In live mode under
+/// `--fork-url`, the same flow hits the real precompile factory.
+///
+/// On top of the inherited factory actors, this contract adds the
+/// token-specific role-holders (`minter`, `burner`, `pauser`,
+/// `unpauser`, `burnBlocker`) so role-gated tests have explicit named
+/// accounts to grant roles to in setUp's initCalls.
 ///
 /// The mock contracts are added in a follow-up PR; until then, `token`
 /// is the zero address and the unit stubs in this spec PR are not yet
 /// implemented, so this is intentional.
-contract B20Test is Test {
-    // -- Actors --
-    address internal admin = makeAddr("admin");
+contract B20Test is TokenFactoryTest {
+    // -- Token-specific role-holder actors --
     address internal minter = makeAddr("minter");
     address internal burner = makeAddr("burner");
     address internal pauser = makeAddr("pauser");
     address internal unpauser = makeAddr("unpauser");
     address internal burnBlocker = makeAddr("burnBlocker");
-    address internal alice = makeAddr("alice");
-    address internal bob = makeAddr("bob");
-    address internal attacker = makeAddr("attacker");
 
     // -- Token under test --
     /// @notice Default-variant `IB20` token deployed in `setUp`.
     IB20 internal token;
 
     // -- Setup --
-    function setUp() public virtual {
-        vm.label(admin, "admin");
+    function setUp() public virtual override {
+        super.setUp();
+
         vm.label(minter, "minter");
         vm.label(burner, "burner");
         vm.label(pauser, "pauser");
         vm.label(unpauser, "unpauser");
         vm.label(burnBlocker, "burnBlocker");
-        vm.label(alice, "alice");
-        vm.label(bob, "bob");
-        vm.label(attacker, "attacker");
 
-        // TODO(mock PR): etch MockTokenFactory at StdPrecompiles.TOKEN_FACTORY_ADDRESS
-        // (mock-mode only) and deploy a default-variant token here via the factory
-        // with initCalls that grant MINT_ROLE / BURN_ROLE / PAUSE_ROLE / UNPAUSE_ROLE /
-        // BURN_BLOCKED_ROLE to the corresponding actors. Assign the returned address
-        // to `token` and `vm.label` it. Live mode under --fork-url skips the etch.
+        // TODO(mock PR): once MockTokenFactory is etched (in BaseTest.setUp),
+        // call `_createDefault(...)` with initCalls that grant MINT_ROLE /
+        // BURN_ROLE / PAUSE_ROLE / UNPAUSE_ROLE / BURN_BLOCKED_ROLE to the
+        // corresponding actors above. Cast the returned address to IB20 and
+        // assign to `token`; then `vm.label` it.
     }
 
     // -- ERC-20 action wrappers --
