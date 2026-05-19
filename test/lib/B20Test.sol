@@ -49,12 +49,11 @@ contract B20Test is TokenFactoryTest {
     ///         token via the factory mock; variant-specific bases (e.g.
     ///         `B20StablecoinTest`) override to deploy their variant while
     ///         reusing every other piece of `B20Test`.
-    /// @dev    The current `MockTokenFactory` only computes and returns the
-    ///         deterministic token address — no token code is deployed
-    ///         there yet, so any call against `token` (transfer, mint, ...)
-    ///         will revert. The unit stubs in this spec PR have no-op
-    ///         bodies, so this is intentional. The next PR plants real
-    ///         token bytecode at the returned address.
+    /// @dev    `MockTokenFactory.createToken` etches `MockB20` runtime
+    ///         bytecode at the computed address, then runs the bootstrap +
+    ///         initCalls flow before returning. Calls against the returned
+    ///         `token` (transfer, mint, ...) execute against a live mock
+    ///         token with the initial admin granted by `bootstrap`.
     function _deployToken() internal virtual returns (IB20) {
         return IB20(_createDefault());
     }

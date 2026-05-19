@@ -34,16 +34,25 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// reason about which precompiles they "depend on" — they're all just
 /// available, the way the EVM has `SLOAD`.
 ///
-/// **Mock status.** The placeholder mocks etched here implement the
-/// minimum needed for `setUp` to succeed across every base:
-///   - `MockTokenFactory` implements the address-derivation schema so
-///     `_deployToken` calls return real-shaped addresses.
-///   - `MockPolicyRegistry` implements the two built-in sentinel IDs
-///     (`0` → always-allow, `type(uint64).max` → always-reject).
-///   - `MockActivationRegistry` implements `admin()` to return the
-///     hardcoded test admin.
-/// Every other method reverts with `"MockX: not implemented"`. Real
-/// behavior fills in alongside test implementations in the next PR.
+/// **Mock status.**
+///   - `MockTokenFactory` is fully implemented: `createToken` decodes
+///     params, etches the variant-appropriate runtime bytecode at the
+///     computed B-20 address, runs the bootstrap + initCalls flow, and
+///     closes the privileged window before returning.
+///   - `MockB20` / `MockB20Stablecoin` (planted by the factory at token
+///     addresses) are fully implemented: every `IB20` / `IB20Stablecoin`
+///     surface function is live, with the bootstrap-window auth bypass
+///     for factory-originated calls and the standard role / policy /
+///     pause / supply-cap checks otherwise.
+///   - `MockPolicyRegistry` is a SKELETON: implements only the two
+///     built-in sentinel IDs (`0` → always-allow,
+///     `type(uint64).max` → always-reject) so the most common B-20 tests
+///     can exercise both authorize and forbid paths without any custom
+///     policy state. Tests that need custom policies (create, update
+///     membership, rotate admin, etc.) will fail until the full mock
+///     lands in a follow-up PR.
+///   - `MockActivationRegistry` is a SKELETON: implements only `admin()`
+///     to return the hardcoded test admin.
 abstract contract BaseTest is Test {
     // -- Actors --
     address internal admin = makeAddr("admin");
