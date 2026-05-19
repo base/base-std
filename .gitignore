@@ -5,7 +5,8 @@ broadcast/
 
 # Dependencies (we explicitly do NOT vendor third-party libs;
 # this is here only for any future Foundry-managed installs).
-lib/
+# Anchored to root so it does not match test/lib/ (per-contract base tests).
+/lib/
 
 # Environment
 .env

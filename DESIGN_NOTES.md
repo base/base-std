@@ -44,7 +44,7 @@ This leaves headroom in each range for v2 / v3 additions.
 
 #### Default IS Core (variant inheritance, no separate ICoreToken)
 
-`IStablecoin` and `ISecurityToken` both extend `IDefaultToken` directly
+`IB20Stablecoin` and `IB20Security` both extend `IB20` directly
 as siblings. There is no separate `ICoreToken` interface. The Default
 token IS the canonical "ERC-20 + memos + roles + permits + policy + pause
 + URI + supply cap" surface that every variant inherits.
@@ -109,7 +109,7 @@ those as illustrative, not gas-optimal.
 
 #### MINT_ROLE and BURN_ROLE are separate
 
-`IDefaultToken` exposes `MINT_ROLE` and `BURN_ROLE` as distinct role
+`IB20` exposes `MINT_ROLE` and `BURN_ROLE` as distinct role
 identifiers. Originally combined as `ISSUER_ROLE` (TIP-20 convention),
 we split them after reading CDP Custom Stablecoin (CCS), which has
 them separate.
@@ -380,7 +380,7 @@ Items below need your input. Status legend:
 - ✅ **RESOLVED**: confirmed and reflected in current code; kept for context
 - 🔴 **VERIFY**: ambiguity in source docs; resolved one way but worth confirming
 
-### IDefaultToken
+### IB20
 
 #### 🟡 OPEN: Should there be a `MEMOS_REQUIRED` capability bit?
 
@@ -429,7 +429,7 @@ Preset values:
 Worth verifying these match what real issuers (CCS, Tangor, Coinbase
 Wrapped Assets) would actually want.
 
-### IStablecoin
+### IB20Stablecoin
 
 #### ✅ RESOLVED: Per-minter rate limiting added
 
@@ -453,7 +453,7 @@ For yield-bearing stablecoins like Base USD's planned design. Mechanics
 are complex (rebase storage, snapshot timing, indexer compatibility).
 Defer to dedicated design pass; not added.
 
-### ISecurityToken
+### IB20Security
 
 #### ✅ RESOLVED: `redeemPolicyId` separate from `transferPolicyId`
 
@@ -595,7 +595,7 @@ items needing your input:
 1. `MEMOS_REQUIRED` capability bit — add now or defer? (My lean: add)
 2. Preset contents (`STANDARD_STABLECOIN`, `STANDARD_EQUITY`,
    `FIXED_SUPPLY`) — confirm reasonable defaults?
-3. Reserve attestation accessor on IStablecoin — add or defer to
+3. Reserve attestation accessor on IB20Stablecoin — add or defer to
    off-chain JSON?
 4. Indexed `bytes32 idHash` on `Announcement` event — add for
    filterability?

@@ -2,30 +2,76 @@
 pragma solidity >=0.8.20 <0.9.0;
 
 /// @title ITokenFactory
-/// @notice Singleton factory for creating B-20 tokens of any variant.
-///         A single precompile at a fixed address exposes three creation
-///         methods (`createDefault`, `createStablecoin`, `createSecurity`).
-///         Creation is permissionless: anyone may create a token of any
-///         variant, and the creator picks the initial admin.
+/// @notice Singleton factory precompile for creating B-20 tokens of any
+///         variant. A single entry point `createToken` dispatches on a
+///         `TokenVariant` discriminator; per-variant creation arguments
+///         are ABI-encoded into `params` and prefixed with a `version`
+///         byte so the encoding can evolve without breaking the factory's
+///         immutable surface. Creation is permissionless; the caller picks
+///         the initial admin.
 ///
-/// @dev    Each token is deployed at a deterministic address derived from
-///         `(variant, creator, salt)`. The variant is encoded in the
-///         address prefix, so the variant of any address is recoverable
-///         via `variantOf` without a storage lookup. Address prediction
-///         functions (`predict*Address`) let callers compute the address
-///         off-chain or pre-fund the address before deployment.
+/// @dev    **Factory address.** The factory lives at the fixed address
+///         `0xB20...000F`.
 ///
-///         The factory is a precompile and has no admin or governance.
-///         Each created token has its own independent admin and operates
-///         per the inherited `IDefaultToken` (and variant) surface.
+///         **Token address schema (20 bytes).**
+///         - `[0:10]`  — `bytes10(0xB20...000)` shared prefix identifying a
+///                       factory-created B-20.
+///         - `[10]`    — `bytes1(variant)` (matches `TokenVariant`).
+///         - `[11]`    — `bytes1(decimals)` — encoded in the address so
+///                       `decimals()` is recoverable statelessly from the
+///                       token address alone, avoiding a storage read on
+///                       hot integration paths (AMMs, lending markets,
+///                       wallets). For variants that hardcode decimals
+///                       (Stablecoin, Security: 6), this byte is fixed
+///                       at `0x06`.
+///         - `[12:20]` — `bytes8(keccak256(abi.encode(msg.sender, salt)))`.
+///
+///         **Variant evolution.** Adding new required fields to an
+///         existing variant after launch is NOT supported: the factory is
+///         an immutable precompile, and downstream protocols (e.g.
+///         Clanker-style launchers) depend on the surface. Schemas evolve
+///         in two ways:
+///         1. Bumping the `version` byte at the head of a variant's
+///            params struct and ABI-decoding accordingly. Old versions
+///            remain valid forever.
+///         2. Customizing per-token configuration via `initCalls` (see
+///            below) instead of growing the params struct.
+///
+///         **`initCalls`.** After the token is deployed and the bootstrap
+///         state is set, each entry in `initCalls` is invoked on the new
+///         token with `msg.sender == factory`. These calls are entirely
+///         privileged: every authorization gate the token would normally
+///         enforce against the caller (role checks, transfer-policy
+///         checks, capability gates) is bypassed for calls originating
+///         from the factory during the bootstrap window. The window
+///         closes the moment `createToken` returns; from that point
+///         forward every call is subject to the standard role and policy
+///         checks. The factory is NOT added to any role on the token;
+///         "privileged" means authorization is skipped for the bootstrap
+///         caller, not that the factory has been granted authority that
+///         persists. Invariants intrinsic to token correctness
+///         (supply-cap math, balance accounting, etc.) are still enforced.
+///
+///         This is the supported path for configuring optional
+///         post-creation state (initial mints, supply caps, policy slot
+///         assignments, contract URI, initial pause state, etc.)
+///         atomically in the same transaction as creation. The factory
+///         does not interpret the call data; any revert in an init call
+///         reverts the whole creation.
+///
+///         **Per-variant validation.** Variant-specific required-field
+///         checks (e.g. stablecoins must specify a non-empty `currency`)
+///         are applied at the end of the variant decode, after the
+///         common version check, so each variant owns its own invariants.
 interface ITokenFactory {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Variant of a B-20 token. Recoverable from the token's
-    ///         address prefix; `NONE` indicates the address is not a B-20
-    ///         token created by this factory.
+    /// @notice Variant of a B-20 token. Encoded in address byte `[10]`,
+    ///         so `getTokenVariant` is a pure address-prefix read with no
+    ///         storage lookup. `NONE` indicates the address is not a
+    ///         B-20 token created by this factory.
     enum TokenVariant {
         NONE,
         DEFAULT,
@@ -33,118 +79,77 @@ interface ITokenFactory {
         SECURITY
     }
 
-    /// @notice Creation parameters for a Default-variant token.
-    /// @param name                   ERC-20 token name. Mutable post-creation
-    ///                               via `setName` (admin-only).
-    /// @param symbol                 ERC-20 token symbol. Mutable
-    ///                               post-creation via `setSymbol`
-    ///                               (admin-only).
-    /// @param decimals               ERC-20 token decimals (issuer choice).
-    ///                               Immutable after creation.
-    /// @param admin                  Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param capabilities           Immutable capability bitfield. See
-    ///                               `Capabilities` for the bit definitions.
-    /// @param initialSupply          Amount minted atomically at creation.
-    ///                               Bypasses the transfer-policy check
-    ///                               (this is the bootstrap mint, not a
-    ///                               normal mint operation; the policy
-    ///                               may not be configured at creation
-    ///                               time).
-    /// @param initialSupplyRecipient Address that receives `initialSupply`.
-    ///                               Ignored when `initialSupply == 0`.
-    /// @param transferPolicyId       Initial value of `transferPolicyId`.
-    ///                               Must reference an existing policy in
-    ///                               the policy registry.
-    /// @param supplyCap              Initial value of `supplyCap`. Use
-    ///                               `type(uint256).max` for no cap. To
-    ///                               make the token permanently fixed-supply,
-    ///                               set this equal to `initialSupply` and
-    ///                               leave the `CAP_MUTABLE` capability
-    ///                               unset.
-    /// @param minimumRedeemable      Initial value of `minimumRedeemable`.
-    ///                               Use `0` to allow any non-zero amount
-    ///                               (the typical setting for tokens
-    ///                               without a redemption product). Mutable
-    ///                               post-creation via `setMinimumRedeemable`.
-    /// @param contractURI            Initial ERC-7572 contract URI.
-    /// @param salt                   Caller-chosen salt for deterministic
-    ///                               address derivation.
-    struct CreateDefaultTokenParams {
+    /// @notice Creation parameters for a Default-variant B-20 token.
+    ///         ABI-encoded into the `params` argument of `createToken`.
+    /// @param version       Encoding version. Currently `1`. Future
+    ///                      hardforks may introduce additional versions
+    ///                      with different field layouts; the leading
+    ///                      byte selects the decoder.
+    /// @param name          ERC-20 token name.
+    /// @param symbol        ERC-20 token symbol.
+    /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`. All
+    ///                      post-creation admin operations authorize
+    ///                      against this account (and any additional
+    ///                      admins it later grants). The bootstrap
+    ///                      `initCalls` are NOT subject to this check:
+    ///                      they execute with full privilege regardless
+    ///                      of role state, and the privileged window
+    ///                      closes the moment `createToken` returns.
+    /// @param decimals      ERC-20 decimals. MUST be in `[2, 18]`.
+    ///                      Encoded into address byte `[11]` for
+    ///                      stateless retrieval.
+    struct B20CreateParams {
+        uint8 version;
         string name;
         string symbol;
+        address initialAdmin;
         uint8 decimals;
-        address admin;
-        uint256 capabilities;
-        uint256 initialSupply;
-        address initialSupplyRecipient;
-        uint64 transferPolicyId;
-        uint256 supplyCap;
-        uint256 minimumRedeemable;
-        string contractURI;
-        bytes32 salt;
     }
 
-    /// @notice Creation parameters for a Stablecoin-variant token.
-    /// @param currency               Immutable currency identifier (e.g.
-    ///                               "USD", "EUR", "XAU"). See
-    ///                               `IStablecoin.currency` for the
-    ///                               convention.
-    /// @dev    All other fields have the same semantics as the Default
-    ///         params struct.
-    struct CreateStablecoinParams {
+    /// @notice Creation parameters for a Stablecoin-variant B-20 token.
+    /// @param version       Encoding version. Currently `1`.
+    /// @param name          ERC-20 token name.
+    /// @param symbol        ERC-20 token symbol.
+    /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
+    /// @param currency      Immutable currency identifier (e.g. "USD",
+    ///                      "EUR", "XAU"). Required: empty string
+    ///                      reverts. See `IB20Stablecoin.currency` for
+    ///                      the convention.
+    /// @dev    Decimals are fixed at `6` (the SPL stablecoin convention)
+    ///         and encoded as `0x06` in address byte `[11]`. There is no
+    ///         decimals field on this struct.
+    struct B20StablecoinCreateParams {
+        uint8 version;
         string name;
         string symbol;
-        uint8 decimals;
-        address admin;
-        uint256 capabilities;
-        uint256 initialSupply;
-        address initialSupplyRecipient;
-        uint64 transferPolicyId;
-        uint256 supplyCap;
-        uint256 minimumRedeemable;
-        string contractURI;
+        address initialAdmin;
         string currency;
-        bytes32 salt;
     }
 
-    /// @notice Creation parameters for a Security-variant token.
-    /// @param shareRatioNumerator     Initial share-ratio numerator. Must
-    ///                                be non-zero. Use `1` for 1:1 unless
-    ///                                the issuer wants headroom for
-    ///                                fractional ratio updates.
-    /// @param shareRatioDenominator   Initial share-ratio denominator.
-    ///                                Must be non-zero.
-    /// @param securityIdentifiers     Initial `[type, value]` pairs (e.g.
-    ///                                `[["isin", "US..."], ["cusip", "..."]]`).
-    ///                                May be empty; identifiers can be
-    ///                                added later via
-    ///                                `updateSecurityIdentifier`.
-    /// @dev    Security tokens have NO `initialSupply` parameter. All
-    ///         issuance goes through `create` (rate-limited compliant
-    ///         path) or `adminMint` (cold-path batch with announcement
-    ///         coupling) after creation. The supply cap is set at
-    ///         creation; `transferPolicyId` must reference an existing
-    ///         compound policy in the registry whose redeemer slot
-    ///         encodes the brokerage allowlist (typically a
-    ///         Coinbase-managed whitelist of KYC'd, brokerage-connected
-    ///         accounts).
-    ///
-    ///         All other fields have the same semantics as the Default
-    ///         params struct.
-    struct CreateSecurityTokenParams {
+    /// @notice Creation parameters for a Security-variant B-20 token.
+    /// @param version            Encoding version. Currently `1`.
+    /// @param name               ERC-20 token name.
+    /// @param symbol             ERC-20 token symbol.
+    /// @param initialAdmin       Initial holder of `DEFAULT_ADMIN_ROLE`.
+    /// @param isin               International Securities Identification
+    ///                           Number. Required: empty string reverts.
+    ///                           Additional identifiers (CUSIP, FIGI,
+    ///                           SEDOL) can be attached post-creation
+    ///                           via `IB20Security.updateSecurityIdentifier`.
+    /// @param minimumRedeemable  Initial value of `minimumRedeemable`.
+    ///                           Use `0` to allow any non-zero redemption.
+    /// @dev    Decimals are fixed at `6` and encoded as `0x06` in address
+    ///         byte `[11]`. Security tokens have no `initialSupply`
+    ///         parameter: all issuance flows through `create`
+    ///         (rate-limited compliant path) or `adminMint` (cold-path
+    ///         batch with announcement coupling) after deployment.
+    struct B20SecurityCreateParams {
+        uint8 version;
         string name;
         string symbol;
-        uint8 decimals;
-        address admin;
-        uint256 capabilities;
-        uint64 transferPolicyId;
-        uint256 supplyCap;
+        address initialAdmin;
+        string isin;
         uint256 minimumRedeemable;
-        uint48 shareRatioNumerator;
-        uint48 shareRatioDenominator;
-        string[2][] securityIdentifiers;
-        string contractURI;
-        bytes32 salt;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -152,135 +157,128 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice A token already exists at the deterministic address
-    ///         derived from `(variant, msg.sender, salt)`. Caller must
-    ///         use a different salt.
+    ///         derived from `(variant, decimals, msg.sender, salt)`.
+    ///         Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
-    /// @notice The provided policy ID does not exist in the policy
-    ///         registry.
-    error InvalidPolicyId(uint64 policyId);
+    /// @notice `variant` is not a recognized `TokenVariant` (or is
+    ///         `NONE`, which is invalid for creation).
+    error InvalidVariant();
 
-    /// @notice The provided share-ratio numerator or denominator is zero.
-    error InvalidShareRatio();
+    /// @notice The leading `version` byte in `params` does not match
+    ///         any known encoding for the requested variant.
+    error UnsupportedVersion(uint8 version);
 
-    /// @notice The provided decimals value is outside the allowed range
-    ///         (implementation-defined; typically 0..18 inclusive).
+    /// @notice The provided decimals value is outside the variant's
+    ///         allowed range. Default tokens require `[2, 18]`;
+    ///         Stablecoin and Security tokens hardcode `6` and do not
+    ///         accept a caller-supplied value.
     error InvalidDecimals(uint8 decimals);
 
     /// @notice A required address argument was the zero address.
     error ZeroAddress();
 
-    /// @notice The provided supply cap is below the configured initial
-    ///         supply, or is otherwise invalid.
-    error InvalidSupplyCap();
+    /// @notice A required string argument was the empty string (e.g.
+    ///         stablecoin `currency`, security `isin`).
+    error MissingRequiredField();
 
-    /// @notice A security identifier `type` was the empty string.
-    ///         Identifier types must be non-empty (typical values:
-    ///         "isin", "cusip", "figi", "sedol").
-    error EmptyIdentifierType();
+    /// @notice One of the `initCalls` reverted. The factory bubbles the
+    ///         underlying revert reason where the call returns one;
+    ///         this error wraps empty reverts.
+    error InitCallFailed(uint256 index);
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted when a Default-variant token is created.
-    event DefaultTokenCreated(
+    /// @notice Emitted once per `createToken` invocation. The common
+    ///         fields cover the universal token-identity surface; all
+    ///         variant-specific state changes (e.g. `currency`, `isin`,
+    ///         supply cap, policy slots) are observable via the
+    ///         token's own events as they're applied during the
+    ///         bootstrap and `initCalls`.
+    event TokenCreated(
         address indexed token,
-        address indexed creator,
-        address indexed admin,
+        TokenVariant indexed variant,
         string name,
         string symbol,
-        uint8 decimals,
-        uint256 capabilities,
-        uint256 initialSupply,
-        bytes32 salt
-    );
-
-    /// @notice Emitted when a Stablecoin-variant token is created.
-    event StablecoinCreated(
-        address indexed token,
-        address indexed creator,
-        address indexed admin,
-        string name,
-        string symbol,
-        uint8 decimals,
-        string currency,
-        uint256 capabilities,
-        uint256 initialSupply,
-        bytes32 salt
-    );
-
-    /// @notice Emitted when a Security-variant token is created.
-    event SecurityTokenCreated(
-        address indexed token,
-        address indexed creator,
-        address indexed admin,
-        string name,
-        string symbol,
-        uint8 decimals,
-        uint256 capabilities,
-        uint48 shareRatioNumerator,
-        uint48 shareRatioDenominator,
-        bytes32 salt
+        uint8 decimals
     );
 
     /*//////////////////////////////////////////////////////////////
-                            CREATION METHODS
+                                 CREATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Creates a Default-variant token at a deterministic address
-    ///         derived from `(DEFAULT, msg.sender, params.salt)`. Mints
-    ///         `params.initialSupply` to `params.initialSupplyRecipient`
-    ///         atomically. The bootstrap mint bypasses the policy check
-    ///         (the policy may not yet authorize the recipient at
-    ///         creation time); subsequent mints go through the normal
-    ///         policy hook.
-    /// @return token The address of the newly created token.
-    function createDefault(CreateDefaultTokenParams calldata params) external returns (address token);
-
-    /// @notice Creates a Stablecoin-variant token at a deterministic
-    ///         address derived from `(STABLECOIN, msg.sender, params.salt)`.
-    ///         Mints `params.initialSupply` to
-    ///         `params.initialSupplyRecipient` atomically (same bootstrap
-    ///         policy bypass as `createDefault`). Sets the immutable
-    ///         `currency` field.
-    function createStablecoin(CreateStablecoinParams calldata params) external returns (address token);
-
-    /// @notice Creates a Security-variant token at a deterministic
-    ///         address derived from `(SECURITY, msg.sender, params.salt)`.
-    ///         NO initial supply is minted; security tokens use `create`
-    ///         (rate-limited compliant issuance) or `adminMint`
-    ///         (cold-path batch with announcement coupling) for issuance
-    ///         after deployment.
-    function createSecurity(CreateSecurityTokenParams calldata params) external returns (address token);
+    /// @notice Creates a B-20 token of the given `variant` at the
+    ///         deterministic address derived from `(variant, decimals,
+    ///         msg.sender, salt)`. `params` MUST be the ABI-encoded
+    ///         variant-specific struct (`B20CreateParams`,
+    ///         `B20StablecoinCreateParams`, or `B20SecurityCreateParams`),
+    ///         leading with a `version` byte the factory uses to select
+    ///         the decoder.
+    ///
+    ///         After the token is constructed and its identity state
+    ///         (name, symbol, decimals, admin, variant-specific fields)
+    ///         is sealed, the factory invokes each entry in `initCalls`
+    ///         on the new token. These calls are entirely privileged:
+    ///         all authorization gates the token would normally enforce
+    ///         against the caller (role checks, transfer-policy checks,
+    ///         capability gates) are bypassed for calls from the factory
+    ///         during this bootstrap window. The factory is not added to
+    ///         any role; the bypass is bound to the call site, not to
+    ///         RBAC state. Once `createToken` returns, every subsequent
+    ///         call on the token is subject to the standard checks.
+    ///
+    ///         This is the supported path for configuring all optional
+    ///         post-creation state atomically: initial mints, supply
+    ///         caps, policy slot assignments, initial pause state,
+    ///         contract URI, etc. Any init-call revert reverts the
+    ///         entire creation.
+    ///
+    ///         Emits `TokenCreated` once the token's identity is sealed
+    ///         and before any `initCalls` are dispatched, so init-call
+    ///         effects appear strictly after the creation event in the
+    ///         log order.
+    /// @param variant    Which variant struct `params` decodes as.
+    /// @param salt       Caller-chosen salt for deterministic address
+    ///                   derivation.
+    /// @param params     ABI-encoded variant-specific creation struct,
+    ///                   leading with the version byte.
+    /// @param initCalls  Optional bootstrap calls invoked on the new
+    ///                   token after identity is sealed. Executed as
+    ///                   fully privileged calls from the factory: all
+    ///                   token-side authorization checks are bypassed
+    ///                   for this window only.
+    /// @return token     The address of the newly created token.
+    function createToken(
+        TokenVariant variant,
+        bytes32 salt,
+        bytes calldata params,
+        bytes[] calldata initCalls
+    ) external returns (address token);
 
     /*//////////////////////////////////////////////////////////////
-                          ADDRESS PREDICTION
+                            ADDRESS QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Returns the deterministic address that `createDefault`
-    ///         would assign for the given `(creator, salt)`. The address
-    ///         depends only on the variant, creator, and salt; not on
-    ///         any of the other creation parameters. Stable across all
-    ///         parameter choices for a given `(creator, salt)`.
-    function predictDefaultAddress(address creator, bytes32 salt) external view returns (address);
+    /// @notice Returns the deterministic address `createToken` would
+    ///         assign for `(variant, decimals, sender, salt)`. Address
+    ///         derivation depends only on these four inputs; the
+    ///         remaining `params` fields do not affect the address.
+    /// @dev    `variant` and `decimals` are both required because both
+    ///         are encoded into the address (bytes `[10]` and `[11]`).
+    ///         For Stablecoin and Security variants, pass `decimals = 6`.
+    function getTokenAddress(TokenVariant variant, uint8 decimals, address sender, bytes32 salt)
+        external
+        view
+        returns (address);
 
-    /// @notice Same as `predictDefaultAddress`, for the Stablecoin
-    ///         variant.
-    function predictStablecoinAddress(address creator, bytes32 salt) external view returns (address);
-
-    /// @notice Same as `predictDefaultAddress`, for the Security variant.
-    function predictSecurityAddress(address creator, bytes32 salt) external view returns (address);
-
-    /*//////////////////////////////////////////////////////////////
-                         VARIANT INTROSPECTION
-    //////////////////////////////////////////////////////////////*/
+    /// @notice Whether `token` was created by this factory. Recovered
+    ///         from the address prefix (bytes `[0:10]`); no storage read.
+    function isB20(address token) external view returns (bool);
 
     /// @notice Returns the variant of `token`. Returns `NONE` if `token`
-    ///         is not a B-20 token created by this factory. Recovered
-    ///         from the address prefix; no storage read.
-    function variantOf(address token) external view returns (TokenVariant);
-
-    /// @notice Convenience: `variantOf(token) != NONE`.
-    function isB20(address token) external view returns (bool);
+    ///         is not a factory-created B-20. Recovered from address
+    ///         byte `[10]`; no storage read.
+    function getTokenVariant(address token) external view returns (TokenVariant);
 }
