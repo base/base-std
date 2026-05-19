@@ -24,15 +24,18 @@ import {IB20} from "./IB20.sol";
 ///         1. `announce(...)` plus `SECURITY_OPERATOR_ROLE` for posting
 ///            holder-impacting disclosures (corporate actions, name
 ///            changes, splits, etc.).
-///         2. `shareRatio()` / `toShares(...)` / `sharesOf(...)` plus
-///            `updateShareRatio(...)` for split-safe DeFi-compatible
-///            share accounting.
-///         3. `mint(address[],uint256[])` and `burn(address[],uint256[])`
-///            batch functions for cold-path issuance and destruction.
-///            These are distinct functions from the inherited
-///            single-recipient `mint` and `burn`; they share the same
-///            role gates (`MINT_ROLE` and `BURN_ROLE`) but operate on
-///            arrays.
+///         2. `sharesToTokensRatio()` / `toShares(...)` / `sharesOf(...)`
+///            plus `updateShareRatio(...)` for split-safe
+///            DeFi-compatible share accounting.
+///         3. `batchMint(address[],uint256[])` and
+///            `batchBurn(address[],uint256[])` for the cold-path
+///            corporate-actions issuance and seizure flows. These are
+///            scoped to the security-token surface (not the base
+///            `IB20`) because batched destruction of third-party
+///            balances is a compliance-sensitive operation and the
+///            batched issuance path is paired with the announcement
+///            flow above. See the per-function natspec for role
+///            gating; `batchBurn` is held tighter than `batchMint`.
 ///         4. `redeem(...)` / `redeemWithMemo(...)` plus
 ///            `updateMinimumRedeemable(...)` and `minimumRedeemable()`
 ///            for the holder-initiated off-chain settlement path.
@@ -149,7 +152,7 @@ interface IB20Security is IB20 {
 
     /// @notice The current share-to-tokens ratio, scaled to the
     ///         implementation's `WAD_PRECISION`.
-    function shareRatio() external view returns (uint128 sharesToTokensRatio);
+    function sharesToTokensRatio() external view returns (uint128);
 
     /// @notice Converts a raw token balance to its current share count
     ///         via the active share ratio:
@@ -175,34 +178,53 @@ interface IB20Security is IB20 {
     function updateShareRatio(uint128 newSharesToTokensRatio) external;
 
     /*//////////////////////////////////////////////////////////////
-                       BATCHED ISSUANCE AND BURN
+                  BATCHED ISSUANCE AND CORP-ACTION SEIZURE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Mints `amounts[i]` tokens to `recipients[i]`. Distinct
-    ///         from the inherited single-recipient
-    ///         `mint(address,uint256)`; this batched form supports the
-    ///         cold-path issuance flow for corporate actions.
+    /// @notice Mints `amounts[i]` tokens to `recipients[i]`. The
+    ///         batched sibling of the inherited single-recipient
+    ///         `IB20.mint(address,uint256)`; supports cold-path
+    ///         issuance flows for corporate-actions events (initial
+    ///         allocations, secondary issuances, etc.) that need to
+    ///         land many recipients in one transaction.
     ///
     /// @dev    Requires `MINT_ROLE`. Subject to the `MINT_RECEIVER`
     ///         policy per recipient and to the `MINT` pause vector.
-    ///         Reverts on length mismatch or empty arrays.
+    ///         Reverts on length mismatch or empty arrays. Operators
+    ///         should pair this with a separate `announce(...)` call
+    ///         so the issuance is discoverable to indexers; this
+    ///         interface does not enforce the pairing on-chain.
     ///
     /// @param  recipients Accounts receiving the minted tokens.
     /// @param  amounts    Per-recipient amounts, parallel to
     ///                    `recipients`.
-    function mint(address[] calldata recipients, uint256[] calldata amounts) external;
+    function batchMint(address[] calldata recipients, uint256[] calldata amounts) external;
 
-    /// @notice Burns `amounts[i]` tokens from `accounts[i]`. Distinct
-    ///         from the inherited self-burn `burn(uint256)`; this
-    ///         batched form requires `BURN_ROLE` and operates on
-    ///         third-party balances for cold-path destruction.
+    /// @notice Burns `amounts[i]` tokens from `accounts[i]`. The
+    ///         batched sibling of the inherited
+    ///         `IB20.burnBlocked(address,uint256)`; supports cold-path
+    ///         compliance seizures (court-ordered claw-backs, sanctions
+    ///         enforcement against multiple addresses, etc.) that need
+    ///         to land many destructions in one transaction.
     ///
-    /// @dev    Requires `BURN_ROLE`. Subject to the `BURN` pause
-    ///         vector. Reverts on length mismatch or empty arrays.
+    /// @dev    Requires `BURN_BLOCKED_ROLE` (NOT `BURN_ROLE`, which is
+    ///         the self-burn role on `IB20`). Each `accounts[i]` MUST
+    ///         currently be unauthorized under the active
+    ///         `TRANSFER_SENDER` policy; otherwise reverts with
+    ///         `AccountNotBlocked(accounts[i])`. Subject to the `BURN`
+    ///         pause vector. Reverts on length mismatch or empty
+    ///         arrays. Emits `Transfer(accounts[i], address(0),
+    ///         amounts[i])` and `BurnedBlocked(caller, accounts[i],
+    ///         amounts[i])` per element, matching `burnBlocked`'s
+    ///         per-call semantics. Operators should pair this with a
+    ///         separate `announce(...)` call so the seizure is
+    ///         discoverable to indexers; this interface does not
+    ///         enforce the pairing on-chain.
     ///
-    /// @param  accounts Accounts whose balances will be debited.
+    /// @param  accounts Accounts whose balances will be debited. Each
+    ///                  MUST be unauthorized under `TRANSFER_SENDER`.
     /// @param  amounts  Per-account amounts, parallel to `accounts`.
-    function burn(address[] calldata accounts, uint256[] calldata amounts) external;
+    function batchBurn(address[] calldata accounts, uint256[] calldata amounts) external;
 
     /*//////////////////////////////////////////////////////////////
                               REDEMPTION
