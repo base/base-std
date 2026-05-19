@@ -209,8 +209,8 @@ interface IB20Security is IB20 {
     ///         operation on the caller's own balance, gated entirely by
     ///         the `REDEEMER_SENDER` policy slot. Tokens that do not
     ///         offer redemption configure the `REDEEMER_SENDER` slot to
-    ///         policy ID `0` (always-reject); calls to `redeem` then
-    ///         revert with `PolicyForbids` for every caller.
+    ///         policy ID `type(uint64).max` (always-reject); calls to
+    ///         `redeem` then revert with `PolicyForbids` for every caller.
     ///
     ///         Distinct from `burn` (which requires `BURN_ROLE` and
     ///         carries no off-chain settlement implication) and

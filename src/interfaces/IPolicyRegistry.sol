@@ -29,15 +29,18 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 ///         **Built-in policy IDs** (always present, never need to be
 ///         created):
-///         - `0` — always-reject. `isAuthorized(0, any)` returns false.
-///                  Useful as the safe default for newly created tokens
-///                  that should not transfer until compliance is configured,
-///                  and as a "kill switch" independent of token-level pause.
-///         - `1` — always-allow. `isAuthorized(1, any)` returns true.
-///                  Useful for tokens that opt out of policy gating for a
-///                  given role slot.
+///         - `0` — always-allow. `isAuthorized(0, any)` returns true.
+///                  Semantic: "there is no policy on this slot." This is
+///                  the default state of every unassigned policy slot on
+///                  a newly created token, matching the principle that
+///                  absence of a configured policy means no restriction.
+///         - `type(uint64).max` — always-reject. `isAuthorized(max, any)`
+///                  returns false. Useful as an explicit hard-deny on a
+///                  policy slot (e.g. disabling redemption by pointing
+///                  `REDEEMER_SENDER` at this sentinel), or as a "kill
+///                  switch" independent of token-level pause.
 ///
-///         Custom policy IDs start at `2` and are assigned monotonically
+///         Custom policy IDs start at `1` and are assigned monotonically
 ///         by `nextPolicyId`.
 ///
 ///         **Future extensions** (not in v1 scope, intended path):
@@ -205,8 +208,9 @@ interface IPolicyRegistry {
     ///           policy's member set.
     ///         - For BLOCKLIST: returns true iff `account` is NOT on the
     ///           policy's member set.
-    ///         - For built-in ID `0` (always-reject): always returns false.
-    ///         - For built-in ID `1` (always-allow): always returns true.
+    ///         - For built-in ID `0` (always-allow): always returns true.
+    ///         - For built-in ID `type(uint64).max` (always-reject):
+    ///           always returns false.
     /// @dev    Reverts with `PolicyNotFound` if `policyId` is neither a
     ///         built-in nor a previously-created policy.
     function isAuthorized(uint64 policyId, address account) external view returns (bool);
@@ -217,11 +221,14 @@ interface IPolicyRegistry {
 
     /// @notice The next policy ID that will be assigned by the next call
     ///         to `createPolicy` / `createPolicyWithAccounts`. Starts at
-    ///         `2` (IDs 0 and 1 are reserved for the built-ins).
+    ///         `1` (ID `0` is reserved for the always-allow built-in;
+    ///         `type(uint64).max` is reserved for the always-reject
+    ///         built-in but is never assigned by the monotonic counter).
     function nextPolicyId() external view returns (uint64);
 
-    /// @notice Whether `policyId` exists. The built-in IDs (0, 1) always
-    ///         exist; custom IDs (>= 2) exist iff they have been created.
+    /// @notice Whether `policyId` exists. The built-in IDs (`0` and
+    ///         `type(uint64).max`) always exist; custom IDs in
+    ///         `[1, nextPolicyId)` exist iff they have been created.
     function policyExists(uint64 policyId) external view returns (bool);
 
     /// @notice The type of `policyId`. Reverts with `PolicyNotFound` for
