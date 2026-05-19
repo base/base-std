@@ -267,9 +267,9 @@ interface IPolicyRegistry {
     function policyExists(uint64 policyId) external view returns (bool);
 
     /// @notice The type of `policyId`. Returns `PolicyType.ALWAYS_ALLOW`
-    ///         for built-in ID `0` and `PolicyType.ALWAYS_BLOCK` for
-    ///         built-in ID `1`. For custom IDs, extracts the type from
-    ///         the top byte of the ID with no storage read. Reverts with
+    ///         for built-in ID `0`, `PolicyType.ALWAYS_BLOCK` for built-in
+    ///         ID `1`, and the top-byte discriminator cast to `PolicyType`
+    ///         for custom IDs (no storage read). Reverts with
     ///         `PolicyNotFound` for unknown IDs.
     function policyType(uint64 policyId) external view returns (PolicyType);
 
