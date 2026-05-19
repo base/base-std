@@ -143,4 +143,42 @@ contract B20Test is TokenFactoryTest {
         vm.prank(pauser);
         token.pause(_singleFeature(feature));
     }
+
+    // -- Permit helpers --
+    /// @dev EIP-2612 permit type hash; matches MockB20's constant.
+    bytes32 internal constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    /// @notice Constructs and signs an EIP-2612 permit digest under the token's
+    ///         current DOMAIN_SEPARATOR, with `owner = vm.addr(privateKey)`.
+    /// @dev    Reads the current nonce for `owner` so the caller doesn't have to.
+    ///         Use `boundPrivateKey(uint256)` to derive a valid secp256k1 key
+    ///         from a fuzz seed.
+    function _signPermit(uint256 privateKey, address spender, uint256 value, uint256 deadline)
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        return _signPermitAs(privateKey, vm.addr(privateKey), spender, value, deadline);
+    }
+
+    /// @notice Constructs and signs an EIP-2612 permit digest where the struct's
+    ///         `owner` field is `claimedOwner`, separate from the signing key.
+    /// @dev    Used by "wrong-owner" revert tests: the resulting signature is
+    ///         well-formed for the digest the contract recomputes (which is
+    ///         keyed on `claimedOwner`), so ecrecover deterministically returns
+    ///         `vm.addr(privateKey)` rather than garbage.
+    function _signPermitAs(
+        uint256 privateKey,
+        address claimedOwner,
+        address spender,
+        uint256 value,
+        uint256 deadline
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        uint256 nonce = token.nonces(claimedOwner);
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, claimedOwner, spender, value, nonce, deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", token.DOMAIN_SEPARATOR(), structHash));
+        (v, r, s) = vm.sign(privateKey, digest);
+    }
 }

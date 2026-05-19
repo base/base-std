@@ -22,17 +22,6 @@ contract B20AllowanceTest is B20Test {
         assertEq(token.allowance(owner, spender), amount, "allowance must reflect approve");
     }
 
-    /// @notice Verifies allowance reflects the value set via permit
-    /// @dev Permit readback; canonical permit test lives in permit.t.sol.
-    ///      Skipped here: full EIP-712 signing setup (private key, domain separator,
-    ///      deadline, v/r/s) belongs in the permit-specific test file, not in the
-    ///      allowance-view test.
-    function test_allowance_success_reflectsPermit(uint256 /*ownerPrivateKey*/, address /*spender*/, uint256 /*amount*/)
-        public
-    {
-        vm.skip(true);
-    }
-
     /// @notice Verifies allowance decreases after a successful transferFrom
     /// @dev Spend-tracking readback; canonical transferFrom test lives in transferFrom.t.sol
     function test_allowance_success_decreasesAfterTransferFrom(
