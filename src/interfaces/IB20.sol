@@ -50,10 +50,11 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         variant-side additions are pure interface additions with no
 ///         change to the storage shape.
 ///
-///         Each policy slot defaults to built-in ID `0` (always-reject) so
-///         newly minted tokens cannot move balance until the admin
-///         configures their compliance regime. ID `1` (always-allow) is
-///         the explicit opt-out for a given role.
+///         Each policy slot defaults to built-in ID `0` (always-allow) so
+///         newly created tokens are unrestricted until the admin
+///         configures their compliance regime. ID `type(uint64).max`
+///         (always-reject) is the explicit hard-deny for a given role
+///         (e.g. disabling redemption on a non-redeemable token).
 ///
 ///         Asymmetric per-role configuration is expressed by pointing
 ///         different slots at different policies — for example, a
@@ -596,7 +597,7 @@ interface IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The current policy ID configured for `policyType`. Returns
-    ///         `0` (always-reject built-in) for any policy slot that has
+    ///         `0` (always-allow built-in) for any policy slot that has
     ///         never been assigned. Standard policy types are exposed as
     ///         the role-identifier constants `TRANSFER_SENDER()`,
     ///         `TRANSFER_RECEIVER()`, `TRANSFER_EXECUTOR()`, and
@@ -605,18 +606,20 @@ interface IB20 {
     ///         `IB20Security`). User-defined policy types are also
     ///         supported and may be used by periphery contracts that
     ///         layer additional gating on top.
-    /// @dev    All slots default to `0` (always-reject) at token creation:
-    ///         newly minted tokens cannot move balance until the admin
-    ///         configures their policy slots. To explicitly opt out of a
-    ///         given slot's enforcement, point it at `1` (always-allow).
+    /// @dev    All slots default to `0` (always-allow) at token creation:
+    ///         newly created tokens are unrestricted until the admin
+    ///         points each slot at a concrete policy. To explicitly
+    ///         hard-deny a slot (e.g. disabling redemption on a
+    ///         non-redeemable token), point it at `type(uint64).max`
+    ///         (always-reject).
     function policyId(bytes32 policyType) external view returns (uint64);
 
     /// @notice Updates the policy ID assigned to `policyType`. Requires
     ///         `DEFAULT_ADMIN_ROLE`. The target policy MUST exist in the
-    ///         registry (or be one of the built-in IDs `0` or `1`);
-    ///         otherwise reverts with `PolicyNotFound`. Takes effect
-    ///         immediately for the next operation that consults this
-    ///         slot. Emits `PolicyUpdated`.
+    ///         registry (or be one of the built-in IDs `0` or
+    ///         `type(uint64).max`); otherwise reverts with
+    ///         `PolicyNotFound`. Takes effect immediately for the next
+    ///         operation that consults this slot. Emits `PolicyUpdated`.
     function updatePolicy(bytes32 policyType, uint64 newPolicyId) external;
 
     /*//////////////////////////////////////////////////////////////
