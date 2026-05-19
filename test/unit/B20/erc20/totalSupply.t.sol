@@ -6,7 +6,7 @@ import {B20Test} from "test/lib/B20Test.sol";
 contract B20TotalSupplyTest is B20Test {
     /// @notice Verifies totalSupply returns the cumulative minted-minus-burned amount
     /// @dev Accounting invariant: totalSupply == sum of all balances == sum(mint) - sum(burn)
-    function test_totalSupply_success_tracksMintAndBurn(uint256 mintAmount, uint256 burnAmount) public {
+    function test_totalSupply_success_tracksMintAndBurn(address to, uint256 mintAmount, uint256 burnAmount) public {
         // unimplemented
     }
 

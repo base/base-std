@@ -24,7 +24,7 @@ contract PolicyRegistryPolicyAdminTest is PolicyRegistryTest {
 
     /// @notice Verifies policyAdmin returns address(0) after renounceAdmin
     /// @dev Post-renounce: admin slot is permanently cleared
-    function test_policyAdmin_success_zeroAfterRenounce() public {
+    function test_policyAdmin_success_zeroAfterRenounce(address admin_) public {
         // unimplemented
     }
 }

@@ -12,13 +12,13 @@ contract B20BalanceOfTest is B20Test {
 
     /// @notice Verifies balanceOf returns the amount credited via mint
     /// @dev Mint readback; canonical mint test lives in mint.t.sol
-    function test_balanceOf_success_reflectsMint(uint256 amount) public {
+    function test_balanceOf_success_reflectsMint(address to, uint256 amount) public {
         // unimplemented
     }
 
     /// @notice Verifies balanceOf reflects the post-transfer state for sender and receiver
     /// @dev Transfer readback; canonical transfer test lives in transfer.t.sol
-    function test_balanceOf_success_reflectsTransfer(uint256 amount) public {
+    function test_balanceOf_success_reflectsTransfer(address from, address to, uint256 amount) public {
         // unimplemented
     }
 }
