@@ -230,10 +230,7 @@ interface IPolicyRegistry {
     ///         built-in IDs `0` and `1` are pre-reserved.
     function nextPolicyId() external view returns (uint64);
 
-    /// @notice Whether `policyId` exists. Equivalent to
-    ///         `policyId < nextPolicyId()`: built-in IDs `0` and `1` are
-    ///         always below the counter, and custom IDs exist iff they
-    ///         have been assigned.
+    /// @notice Returns true iff `policyId < nextPolicyId()`.
     function policyExists(uint64 policyId) external view returns (bool);
 
     /// @notice The type of `policyId`. Returns `PolicyType.ALWAYS_ALLOW`
