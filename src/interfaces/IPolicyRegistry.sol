@@ -50,7 +50,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         Encoding layout for custom IDs:
 ///         ```
 ///         [63:56]  uint8 type discriminator = uint8(PolicyType)
-///         [55:0]   uint56 local ID within that type's space (max ~7.2e16)
+///         [55:0]   uint56 global policy counter (max ~7.2e16)
 ///         ```
 ///         Discriminators currently in use:
 ///         - `0x00` — ALWAYS_ALLOW (reserved; no custom policies carry this discriminator)
@@ -71,9 +71,9 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         SLOADs if the type required a separate storage lookup. The
 ///         built-in IDs cost 0 SLOADs (short-circuited).
 ///
-///         Custom policy IDs are assigned by per-type monotonic counters;
-///         see `nextPolicyId(PolicyType)` to predict the next ID for a
-///         given type.
+///         Custom policy IDs are assigned from a single monotonic global
+///         counter (starting at 2, to skip built-in IDs 0 and 1); see
+///         `nextPolicyId(PolicyType)` to predict the next ID for a given type.
 ///
 ///         **Future extensions** (not in v1 scope, intended path):
 ///         - Union / intersect policies: compose two same-typed policies
@@ -256,24 +256,22 @@ interface IPolicyRegistry {
                             POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The next fully-encoded policy ID that will be assigned by
-    ///         the next `createPolicy(_, policyType)` /
-    ///         `createPolicyWithAccounts(_, policyType, _)` call for the
-    ///         given type. Each `PolicyType` has its own monotonic local
-    ///         counter; the returned value is the local counter combined
-    ///         with the type's top-byte discriminator (see the contract
-    ///         docstring "Policy ID encoding" section for the layout).
-    /// @dev    Per-type counters start at local-ID `0`. The ALWAYS_ALLOW
-    ///         and ALWAYS_BLOCK discriminators (`0x00`, `0x01`) are
-    ///         reserved for built-ins and no custom policies are ever
-    ///         assigned those discriminators.
+    /// @notice The fully-encoded policy ID that would be assigned by the
+    ///         next `createPolicy(admin, policyType)` call for the given
+    ///         type. The low 56 bits are the current value of the single
+    ///         global counter; the top byte is `uint8(policyType)`. The
+    ///         global counter starts at `2` (skipping built-in IDs `0`
+    ///         and `1`) and increments by one per policy created,
+    ///         regardless of type.
+    /// @dev    ALWAYS_ALLOW and ALWAYS_BLOCK are not valid arguments;
+    ///         callers should only pass ALLOWLIST or BLOCKLIST.
     function nextPolicyId(PolicyType policyType) external view returns (uint64);
 
     /// @notice Whether `policyId` exists. The built-in IDs (`0` and `1`)
     ///         always exist; custom IDs exist iff they have been created.
     ///         Custom IDs are recognizable by their top-byte discriminator
-    ///         falling within the active type range and their local-ID
-    ///         falling below the per-type counter.
+    ///         falling within the active type range and their low 56 bits
+    ///         falling below the current global counter.
     function policyExists(uint64 policyId) external view returns (bool);
 
     /// @notice The type of `policyId`. Reverts with `PolicyNotFound` for
