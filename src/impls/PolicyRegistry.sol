@@ -50,17 +50,17 @@ contract PolicyRegistry is IPolicyRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IPolicyRegistry
-    function createPolicy(address admin, PolicyType pt) external returns (uint64 newPolicyId) {
-        newPolicyId = _create(admin, pt);
+    function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId) {
+        newPolicyId = _create(admin, policyType);
     }
 
     /// @inheritdoc IPolicyRegistry
-    function createPolicyWithAccounts(address admin, PolicyType pt, address[] calldata accounts)
+    function createPolicyWithAccounts(address admin, PolicyType policyType, address[] calldata accounts)
         external
         returns (uint64 newPolicyId)
     {
-        newPolicyId = _create(admin, pt);
-        _batchSetMembers(newPolicyId, pt, true, accounts);
+        newPolicyId = _create(admin, policyType);
+        _batchSetMembers({policyId: newPolicyId, policyType: policyType, value: true, accounts: accounts});
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -82,7 +82,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (pending == address(0)) revert NoPendingAdmin();
         if (pending != msg.sender) revert Unauthorized();
         address previousAdmin = _decodeAdmin(packed);
-        _policies[policyId] = _encode(_decodeType(packed), msg.sender);
+        _policies[policyId] = _encode({policyType: _decodeType(packed), admin: msg.sender});
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, previousAdmin, msg.sender);
     }
@@ -91,7 +91,7 @@ contract PolicyRegistry is IPolicyRegistry {
     function renounceAdmin(uint64 policyId) external {
         uint256 packed = _requireCustom(policyId);
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        _policies[policyId] = _encode(_decodeType(packed), address(0));
+        _policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});
         if (_pendingAdmins[policyId] != address(0)) delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, address(0));
     }
@@ -101,7 +101,7 @@ contract PolicyRegistry is IPolicyRegistry {
         uint256 packed = _requireCustom(policyId);
         if (_decodeType(packed) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        _batchSetMembers(policyId, PolicyType.ALLOWLIST, allowed, accounts);
+        _batchSetMembers({policyId: policyId, policyType: PolicyType.ALLOWLIST, value: allowed, accounts: accounts});
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -109,7 +109,7 @@ contract PolicyRegistry is IPolicyRegistry {
         uint256 packed = _requireCustom(policyId);
         if (_decodeType(packed) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        _batchSetMembers(policyId, PolicyType.BLOCKLIST, blocked, accounts);
+        _batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -165,8 +165,8 @@ contract PolicyRegistry is IPolicyRegistry {
                          INTERNAL HELPERS
     //////////////////////////////////////////////////////////////*/
 
-    function _create(address admin, PolicyType pt) internal returns (uint64 newPolicyId) {
-        if (pt != PolicyType.ALLOWLIST && pt != PolicyType.BLOCKLIST) revert InvalidPolicyType();
+    function _create(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
+        if (policyType != PolicyType.ALLOWLIST && policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();
         if (admin == address(0)) revert ZeroAddress();
         newPolicyId = _nextId;
         // Overflow is structurally impossible before heat death: uint64.max is the
@@ -174,14 +174,16 @@ contract PolicyRegistry is IPolicyRegistry {
         unchecked {
             ++_nextId;
         }
-        _policies[newPolicyId] = _encode(pt, admin);
-        emit PolicyCreated(newPolicyId, msg.sender, pt);
+        _policies[newPolicyId] = _encode({policyType: policyType, admin: admin});
+        emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
     }
 
-    function _batchSetMembers(uint64 policyId, PolicyType pt, bool value, address[] calldata accounts) internal {
+    function _batchSetMembers(uint64 policyId, PolicyType policyType, bool value, address[] calldata accounts)
+        internal
+    {
         mapping(address => bool) storage members = _members[policyId];
-        if (pt == PolicyType.ALLOWLIST) {
+        if (policyType == PolicyType.ALLOWLIST) {
             emit AllowlistUpdated(policyId, msg.sender, value, accounts);
             for (uint256 i = 0; i < accounts.length; ++i) {
                 members[accounts[i]] = value;
@@ -200,8 +202,8 @@ contract PolicyRegistry is IPolicyRegistry {
         if (packed == 0) revert PolicyNotFound();
     }
 
-    function _encode(PolicyType pt, address admin) internal pure returns (uint256) {
-        return uint256(pt) | (uint256(uint160(admin)) << ADMIN_SHIFT);
+    function _encode(PolicyType policyType, address admin) internal pure returns (uint256) {
+        return uint256(policyType) | (uint256(uint160(admin)) << ADMIN_SHIFT);
     }
 
     function _decodeType(uint256 packed) internal pure returns (PolicyType) {
