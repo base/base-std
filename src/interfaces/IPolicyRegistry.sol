@@ -34,11 +34,11 @@ pragma solidity >=0.8.20 <0.9.0;
 ///                  the default state of every unassigned policy slot on
 ///                  a newly created token, matching the principle that
 ///                  absence of a configured policy means no restriction.
-///         - `type(uint64).max` — always-reject. `isAuthorized(max, any)`
-///                  returns false. Useful as an explicit hard-deny on a
-///                  policy slot (e.g. disabling redemption by pointing
-///                  `REDEEMER_SENDER` at this sentinel), or as a "kill
-///                  switch" independent of token-level pause.
+///         - `1` — always-block. `isAuthorized(1, any)` returns false.
+///                  Useful as an explicit hard-deny on a policy slot
+///                  (e.g. disabling redemption by pointing `REDEEMER_SENDER`
+///                  at this ID), or as a kill switch independent of
+///                  token-level pause.
 ///
 ///         **Policy ID encoding.** Custom policy IDs encode the policy's
 ///         type directly into the top byte of the ID, so `policyType(id)`
@@ -50,53 +50,52 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         Encoding layout for custom IDs:
 ///         ```
 ///         [63:56]  uint8 type discriminator = uint8(PolicyType)
-///         [55:0]   uint56 local ID within that type's space (max ~7.2e16)
+///         [55:0]   uint56 global counter (max ~7.2e16)
 ///         ```
 ///         Discriminators currently in use:
-///         - `0x00` — ALLOWLIST
-///         - `0x01` — BLOCKLIST
-///         - `0x02` .. `0xFE` — reserved for future PolicyType enum values
-///         - `0xFF` — reserved (`type(uint64).max` is the always-reject
-///                    built-in; the entire 0xFF discriminator slot is
-///                    reserved to keep that sentinel unambiguous)
+///         - `0x00` — ALWAYS_ALLOW (reserved; no custom policies carry this discriminator)
+///         - `0x01` — ALWAYS_BLOCK (reserved; no custom policies carry this discriminator)
+///         - `0x02` — ALLOWLIST
+///         - `0x03` — BLOCKLIST
+///         - `0x04` .. `0xFF` — reserved for future PolicyType enum values
 ///
-///         The two built-in IDs (`0` and `type(uint64).max`) are
-///         special-cased BEFORE the encoding is consulted: implementations
-///         short-circuit on those exact ID values, so the fact that ID `0`
-///         numerically appears in the ALLOWLIST discriminator's local-ID
-///         space (and `type(uint64).max` appears in the reserved 0xFF
-///         space) does not create ambiguity at evaluation time. The
-///         per-type local-ID counter for ALLOWLIST skips local-ID `0` so
-///         no custom ALLOWLIST policy is ever assigned the encoded ID `0`.
+///         The two built-in IDs (`0` and `1`) are special-cased BEFORE
+///         the encoding is consulted: implementations short-circuit on
+///         those exact ID values. The ALWAYS_ALLOW and ALWAYS_BLOCK
+///         discriminators (`0x00`, `0x01`) are reserved solely for the
+///         built-ins; no custom policies are ever assigned IDs with those
+///         top bytes, so there is no ambiguity at evaluation time.
 ///
 ///         This encoding gives `isAuthorized(policyId, account)` a
 ///         best-case hot path of 1 SLOAD (the member set), compared to 2
 ///         SLOADs if the type required a separate storage lookup. The
 ///         built-in IDs cost 0 SLOADs (short-circuited).
 ///
-///         Custom policy IDs are assigned by per-type monotonic counters;
-///         see `nextPolicyId(PolicyType)` to predict the next ID for a
-///         given type.
+///         Custom policy IDs are assigned from a single global monotonic
+///         counter starting at `2` (reserving `0` and `1` for the
+///         built-ins); see `nextPolicyId(PolicyType)` to predict the
+///         next ID for a given type.
 ///
 ///         **Future extensions** (not in v1 scope, intended path):
 ///         - Union / intersect policies: compose two same-typed policies
-///           into a derived membership check. Would be added as new enum
-///           values (`UNION_ALLOWLIST`, `INTERSECT_ALLOWLIST`, and
-///           blocklist counterparts) with sibling `createUnionPolicy` /
-///           `createIntersectPolicy` creators. New types get new top-byte
-///           discriminators automatically (the encoding already reserves
-///           253 future type slots), so the storage shape does not need
-///           to change. Enum extension is backward-compatible; existing
-///           policies and consumers stay valid. Defer to a future hardfork.
+///           into a derived membership check. Would be added as new
+///           `PolicyType` enum values with sibling `createUnionPolicy` /
+///           `createIntersectPolicy` creators. Enum extension is
+///           backward-compatible; existing policies and consumers stay
+///           valid. Defer to a future hardfork.
 interface IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Policy type discriminator.
-    /// @param ALLOWLIST An account is authorized only if it is in the policy's set.
-    /// @param BLOCKLIST An account is authorized unless it is in the policy's set.
+    /// @param ALWAYS_ALLOW Built-in always-allow type; corresponds to policy ID `0`.
+    /// @param ALWAYS_BLOCK Built-in always-block type; corresponds to policy ID `1`.
+    /// @param ALLOWLIST    An account is authorized only if it is in the policy's set.
+    /// @param BLOCKLIST    An account is authorized unless it is in the policy's set.
     enum PolicyType {
+        ALWAYS_ALLOW,
+        ALWAYS_BLOCK,
         ALLOWLIST,
         BLOCKLIST
     }
@@ -246,8 +245,7 @@ interface IPolicyRegistry {
     ///         - For BLOCKLIST: returns true iff `account` is NOT on the
     ///           policy's member set.
     ///         - For built-in ID `0` (always-allow): always returns true.
-    ///         - For built-in ID `type(uint64).max` (always-reject):
-    ///           always returns false.
+    ///         - For built-in ID `1` (always-block): always returns false.
     /// @dev    Reverts with `PolicyNotFound` if `policyId` is neither a
     ///         built-in nor a previously-created policy.
     function isAuthorized(uint64 policyId, address account) external view returns (bool);
@@ -256,36 +254,22 @@ interface IPolicyRegistry {
                             POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The next fully-encoded policy ID that will be assigned by
-    ///         the next `createPolicy(_, policyType)` /
-    ///         `createPolicyWithAccounts(_, policyType, _)` call for the
-    ///         given type. Each `PolicyType` has its own monotonic local
-    ///         counter; the returned value is the local counter combined
-    ///         with the type's top-byte discriminator (see the contract
-    ///         docstring "Policy ID encoding" section for the layout).
-    /// @dev    For ALLOWLIST the per-type counter starts at local-ID `1`
-    ///         (skipping the encoded ID `0`, which is the always-allow
-    ///         built-in). For all other current and future types the
-    ///         per-type counter starts at local-ID `0`.
+    /// @notice The full policy ID that would be assigned by the next
+    ///         `createPolicy(admin, policyType)` call. Encodes `policyType`
+    ///         into the top byte combined with the current global counter
+    ///         in the low 56 bits. The counter starts at `2` and increments
+    ///         by one per policy created, regardless of type.
     function nextPolicyId(PolicyType policyType) external view returns (uint64);
 
-    /// @notice Whether `policyId` exists. The built-in IDs (`0` and
-    ///         `type(uint64).max`) always exist; custom IDs exist iff they
-    ///         have been created. Custom IDs are recognizable by their
-    ///         top-byte discriminator falling within the active type
-    ///         range and their local-ID falling below the per-type counter.
+    /// @notice Whether `policyId` exists. Returns true for built-in IDs
+    ///         `0` and `1`, and for any custom policy ID previously
+    ///         assigned by `createPolicy` or `createPolicyWithAccounts`.
     function policyExists(uint64 policyId) external view returns (bool);
 
-    /// @notice The type of `policyId`. Reverts with `PolicyNotFound` for
-    ///         unknown IDs. For built-in IDs the returned value is
-    ///         implementation-defined (the built-ins have no member set
-    ///         and are not categorized as ALLOWLIST or BLOCKLIST);
-    ///         callers should treat the built-ins as a separate case.
-    /// @dev    Per the policy-ID encoding scheme (see contract docstring),
-    ///         conforming implementations resolve this view via pure bit
-    ///         extraction from the top byte of `policyId` rather than via
-    ///         a storage read — except for the two built-in IDs, which are
-    ///         special-cased.
+    /// @notice The type of `policyId`. Returns `PolicyType.ALWAYS_ALLOW`
+    ///         for built-in ID `0`, `PolicyType.ALWAYS_BLOCK` for built-in
+    ///         ID `1`, or the stored type for custom IDs. Reverts with
+    ///         `PolicyNotFound` for unknown IDs.
     function policyType(uint64 policyId) external view returns (PolicyType);
 
     /// @notice The current admin of `policyId`. Returns `address(0)` for
