@@ -4,8 +4,7 @@ pragma solidity >=0.8.20 <0.9.0;
 /// @title IB20
 /// @notice The base Solidity surface every Base-native token (B-20) implements.
 ///         Variants (Stablecoin, Security, ...) extend this interface; nothing
-///         on this surface is variant-specific. A token created at the Default
-///         variant address presents exactly this interface.
+///         on this surface is variant-specific.
 ///
 /// @dev    Backward-compatible with ERC-20 at the function-selector level:
 ///         `transfer`, `transferFrom`, `approve`, `balanceOf`, `allowance`,
@@ -18,10 +17,19 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         six named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
 ///         `BURN_BLOCKED_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`) plus arbitrary
 ///         user-defined roles. `grantRole`, `revokeRole`, `renounceRole`, and
-///         `setRoleAdmin` work uniformly across all roles. The only
-///         protocol-level constraint is that the LAST holder of
-///         `DEFAULT_ADMIN_ROLE` cannot renounce: the token must always have
-///         at least one admin.
+///         `setRoleAdmin` work uniformly across all roles, with one
+///         protocol-level constraint: the LAST holder of
+///         `DEFAULT_ADMIN_ROLE` cannot renounce via `renounceRole` (this
+///         guards against accidentally bricking the token's admin
+///         surface). Tokens that DO want to permanently shed admin
+///         control (e.g. memecoins finalizing a fair launch, immutable
+///         tokens locking in their configuration) use the dedicated
+///         `renounceLastAdmin()` function, whose distinct name and
+///         existence is the explicit intent signal. After
+///         `renounceLastAdmin()` the token has zero admins forever: no
+///         further `grantRole(DEFAULT_ADMIN_ROLE, ...)`, no policy
+///         updates, no supply-cap changes, no name/symbol changes, no
+///         further admin operations of any kind.
 ///
 ///         **Pause model.** Pause is granular: `pause(PausableFeature[])`
 ///         halts a set of operation classes (transfer, mint, burn, ...)
@@ -58,11 +66,9 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         Asymmetric per-role configuration is expressed by pointing
 ///         different slots at different policies — for example, a
 ///         sanctions BLOCKLIST on `TRANSFER_SENDER` and an unrestricted
-///         always-allow on `MINT_RECEIVER`. The registry stays flat;
-///         all composition happens at the token layer.
-///
-///         `approve` is NOT gated by any policy (only the act of MOVING
-///         balance is gated).
+///         always-allow on `TRANSFER_RECEIVER`. The registry stays flat;
+///         all composition happens at the token layer. `approve` is NOT
+///         gated by any policy (only the act of MOVING balance is gated).
 ///
 ///         **Permit.** EIP-2612 permit, EOA signatures only. ERC-1271
 ///         contract signatures are NOT supported on the default surface
@@ -189,9 +195,20 @@ interface IB20 {
     error InvalidSigner(address signer, address owner);
 
     /// @notice `renounceRole(DEFAULT_ADMIN_ROLE, ...)` was called when the
-    ///         caller is the last admin. Tokens MUST always have at least
-    ///         one admin; rotate to a new admin first via `grantRole`.
+    ///         caller is the last admin. `renounceRole` is the routine
+    ///         "give up MY hold on this role" path and guards against
+    ///         accidentally leaving the token with zero admins; callers
+    ///         that intentionally want a permanently adminless token must
+    ///         use the dedicated `renounceLastAdmin()` function instead.
     error LastAdminCannotRenounce();
+
+    /// @notice `renounceLastAdmin()` was called by an account that is not
+    ///         the sole remaining holder of `DEFAULT_ADMIN_ROLE`. The
+    ///         function exists exclusively to transition the token from
+    ///         single-admin to zero-admin atomically; revoking other
+    ///         admins to reach single-admin state first is the caller's
+    ///         responsibility.
+    error NotSoleAdmin();
 
     /// @notice The `callerConfirmation` argument to `renounceRole` was not
     ///         `msg.sender`. This guard prevents accidental renunciation
@@ -250,6 +267,17 @@ interface IB20 {
     ///         `setRoleAdmin`.
     /// @dev    Matches OZ AccessControl's `RoleAdminChanged` event exactly.
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
+
+    /// @notice Emitted by `renounceLastAdmin` in addition to the
+    ///         standard `RoleRevoked(DEFAULT_ADMIN_ROLE, previousAdmin,
+    ///         previousAdmin)` event. Signals the irreversible
+    ///         transition of the token to a permanently adminless
+    ///         state: no `grantRole`, `revokeRole`, `setRoleAdmin`,
+    ///         `updatePolicy`, `setSupplyCap`, `setContractURI`,
+    ///         `setName`, or `setSymbol` call can ever succeed again.
+    ///         Indexers should treat this event as a one-way state
+    ///         transition.
+    event LastAdminRenounced(address indexed previousAdmin);
 
     /// @notice Emitted by `pause`. `features` is the argument to the
     ///         call (not the resulting paused state). `updater` is the
@@ -536,18 +564,48 @@ interface IB20 {
     function revokeRole(bytes32 role, address account) external;
 
     /// @notice Caller renounces `role` for themselves. Always permitted
-    ///         (no admin authorization needed).
+    ///         (no admin authorization needed), EXCEPT that
+    ///         `renounceRole(DEFAULT_ADMIN_ROLE, msg.sender)` reverts
+    ///         with `LastAdminCannotRenounce` when the caller is the
+    ///         sole remaining admin. Callers that intentionally want to
+    ///         transition the token to a permanently adminless state
+    ///         must use `renounceLastAdmin()` instead; the dedicated
+    ///         function name is the explicit intent signal that
+    ///         distinguishes "I'm giving up my hold on this role" from
+    ///         "the token should have zero admins forever."
     /// @dev    `callerConfirmation` MUST equal `msg.sender`; otherwise
     ///         reverts with `AccessControlBadConfirmation`. This guard
     ///         prevents a fat-fingered call from accidentally renouncing
     ///         for a different account.
-    ///
-    ///         Reverts with `LastAdminCannotRenounce` if `role` is
-    ///         `DEFAULT_ADMIN_ROLE` and `msg.sender` is the only current
-    ///         admin: the token must always have at least one admin.
-    ///         Rotate to a new admin first via `grantRole`, then
-    ///         renounce.
     function renounceRole(bytes32 role, address callerConfirmation) external;
+
+    /// @notice Permanently transitions the token to a zero-admin state.
+    ///         Revokes `DEFAULT_ADMIN_ROLE` from `msg.sender` and emits
+    ///         `LastAdminRenounced(msg.sender)` (in addition to the
+    ///         standard `RoleRevoked(DEFAULT_ADMIN_ROLE, msg.sender,
+    ///         msg.sender)`). After this call, the token has no admin
+    ///         and no holder of `DEFAULT_ADMIN_ROLE` can ever be
+    ///         reinstated: `grantRole(DEFAULT_ADMIN_ROLE, ...)` would
+    ///         require an admin caller and there is none. All
+    ///         admin-gated operations (`updatePolicy`, `setSupplyCap`,
+    ///         `setContractURI`, `setName`, `setSymbol`, and any
+    ///         `grantRole` / `revokeRole` / `setRoleAdmin` for other
+    ///         roles) become permanently uncallable.
+    /// @dev    Caller MUST be the sole remaining holder of
+    ///         `DEFAULT_ADMIN_ROLE`; otherwise reverts with
+    ///         `NotSoleAdmin` (when there are additional admins) or
+    ///         `AccessControlUnauthorizedAccount` (when `msg.sender`
+    ///         holds no admin role at all). To reach the single-admin
+    ///         state from a multi-admin starting point, the existing
+    ///         admin(s) must revoke or renounce other admins first via
+    ///         `revokeRole` / `renounceRole`, leaving exactly one.
+    ///
+    ///         No `callerConfirmation` argument: the dedicated function
+    ///         name is the intent signal. This mirrors the
+    ///         `renounceAdmin` pattern on `IPolicyRegistry`, which also
+    ///         has no confirmation argument and relies on its distinct
+    ///         name for accidental-misuse protection.
+    function renounceLastAdmin() external;
 
     /// @notice Sets the admin role for `role`. Caller MUST hold the
     ///         current admin role for `role`. Useful for delegating role
