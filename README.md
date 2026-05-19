@@ -1,6 +1,22 @@
+<br>
+<br>
+<p align="center">
+  <a href="https://base.org" target="_blank" rel="noopener noreferrer">
+    <img width="400" alt="Base_lockup_white" src="https://github.com/user-attachments/assets/5f399085-b0ad-46e5-8f2b-93de337342d4" />
+  </a>
+</p>
+<br>
+<br>
+
 # Base Standard Library
 
 Base Standard Library is a collection of Solidity interfaces, libraries, and mock implementations for Base precompiles.
+
+## Installation
+
+```bash
+forge install base/base-std
+```
 
 ## Scope
 
