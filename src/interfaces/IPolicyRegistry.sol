@@ -53,21 +53,21 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         [55:0]   uint56 local ID within that type's space (max ~7.2e16)
 ///         ```
 ///         Discriminators currently in use:
-///         - `0x00` — ALLOWLIST
-///         - `0x01` — BLOCKLIST
-///         - `0x02` .. `0xFE` — reserved for future PolicyType enum values
+///         - `0x00` — ALWAYS_ALLOW (reserved; no custom policies carry this discriminator)
+///         - `0x01` — ALWAYS_BLOCK (reserved; no custom policies carry this discriminator)
+///         - `0x02` — ALLOWLIST
+///         - `0x03` — BLOCKLIST
+///         - `0x04` .. `0xFE` — reserved for future PolicyType enum values
 ///         - `0xFF` — reserved (`type(uint64).max` is the always-reject
 ///                    built-in; the entire 0xFF discriminator slot is
 ///                    reserved to keep that sentinel unambiguous)
 ///
 ///         The two built-in IDs (`0` and `type(uint64).max`) are
 ///         special-cased BEFORE the encoding is consulted: implementations
-///         short-circuit on those exact ID values, so the fact that ID `0`
-///         numerically appears in the ALLOWLIST discriminator's local-ID
-///         space (and `type(uint64).max` appears in the reserved 0xFF
-///         space) does not create ambiguity at evaluation time. The
-///         per-type local-ID counter for ALLOWLIST skips local-ID `0` so
-///         no custom ALLOWLIST policy is ever assigned the encoded ID `0`.
+///         short-circuit on those exact ID values. The ALWAYS_ALLOW and
+///         ALWAYS_BLOCK discriminators (`0x00`, `0x01`) are reserved solely
+///         for the built-ins; no custom policies are ever assigned IDs with
+///         those top bytes, so there is no ambiguity at evaluation time.
 ///
 ///         This encoding gives `isAuthorized(policyId, account)` a
 ///         best-case hot path of 1 SLOAD (the member set), compared to 2
@@ -94,9 +94,13 @@ interface IPolicyRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Policy type discriminator.
-    /// @param ALLOWLIST An account is authorized only if it is in the policy's set.
-    /// @param BLOCKLIST An account is authorized unless it is in the policy's set.
+    /// @param ALWAYS_ALLOW Built-in always-allow type; corresponds to policy ID `0`.
+    /// @param ALWAYS_BLOCK Built-in always-block type; corresponds to policy ID `type(uint64).max`.
+    /// @param ALLOWLIST    An account is authorized only if it is in the policy's set.
+    /// @param BLOCKLIST    An account is authorized unless it is in the policy's set.
     enum PolicyType {
+        ALWAYS_ALLOW,
+        ALWAYS_BLOCK,
         ALLOWLIST,
         BLOCKLIST
     }
@@ -263,10 +267,10 @@ interface IPolicyRegistry {
     ///         counter; the returned value is the local counter combined
     ///         with the type's top-byte discriminator (see the contract
     ///         docstring "Policy ID encoding" section for the layout).
-    /// @dev    For ALLOWLIST the per-type counter starts at local-ID `1`
-    ///         (skipping the encoded ID `0`, which is the always-allow
-    ///         built-in). For all other current and future types the
-    ///         per-type counter starts at local-ID `0`.
+    /// @dev    Per-type counters start at local-ID `0`. The ALWAYS_ALLOW
+    ///         and ALWAYS_BLOCK discriminators (`0x00`, `0x01`) are
+    ///         reserved for built-ins and no custom policies are ever
+    ///         assigned those discriminators.
     function nextPolicyId(PolicyType policyType) external view returns (uint64);
 
     /// @notice Whether `policyId` exists. The built-in IDs (`0` and
@@ -277,15 +281,14 @@ interface IPolicyRegistry {
     function policyExists(uint64 policyId) external view returns (bool);
 
     /// @notice The type of `policyId`. Reverts with `PolicyNotFound` for
-    ///         unknown IDs. For built-in IDs the returned value is
-    ///         implementation-defined (the built-ins have no member set
-    ///         and are not categorized as ALLOWLIST or BLOCKLIST);
-    ///         callers should treat the built-ins as a separate case.
+    ///         unknown IDs. Returns `PolicyType.ALWAYS_ALLOW` for built-in
+    ///         ID `0` and `PolicyType.ALWAYS_BLOCK` for built-in ID
+    ///         `type(uint64).max`.
     /// @dev    Per the policy-ID encoding scheme (see contract docstring),
     ///         conforming implementations resolve this view via pure bit
     ///         extraction from the top byte of `policyId` rather than via
-    ///         a storage read — except for the two built-in IDs, which are
-    ///         special-cased.
+    ///         a storage read, except for the two built-in IDs which are
+    ///         special-cased before the encoding is consulted.
     function policyType(uint64 policyId) external view returns (PolicyType);
 
     /// @notice The current admin of `policyId`. Returns `address(0)` for
