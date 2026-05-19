@@ -184,16 +184,13 @@ contract PolicyRegistry is IPolicyRegistry {
         internal
     {
         mapping(address => bool) storage members = _members[policyId];
+        for (uint256 i = 0; i < accounts.length; ++i) {
+            members[accounts[i]] = value;
+        }
         if (policyType == PolicyType.ALLOWLIST) {
             emit AllowlistUpdated(policyId, msg.sender, value, accounts);
-            for (uint256 i = 0; i < accounts.length; ++i) {
-                members[accounts[i]] = value;
-            }
         } else {
             emit BlocklistUpdated(policyId, msg.sender, value, accounts);
-            for (uint256 i = 0; i < accounts.length; ++i) {
-                members[accounts[i]] = value;
-            }
         }
     }
 
