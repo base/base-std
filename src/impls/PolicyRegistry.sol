@@ -142,7 +142,8 @@ contract PolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function policyType(uint64 policyId) external view returns (PolicyType) {
-        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID) return PolicyType.ALLOWLIST;
+        if (policyId == ALWAYS_ALLOW_ID) revert AlwaysAllowPolicy();
+        if (policyId == ALWAYS_REJECT_ID) revert AlwaysRejectPolicy();
         uint256 packed = _policies[policyId];
         if (packed == 0) revert PolicyNotFound();
         return _decodeType(packed);
