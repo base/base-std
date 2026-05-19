@@ -10,13 +10,15 @@ import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 /// @dev Storage layout:
 ///
 ///      _policies[id]: packed uint256
-///        [255:168] unused
-///        [167:8]   admin address (160 bits)
+///        [255:169] unused
+///        [168]     created flag (always 1 for existing policies, never cleared)
+///        [167:8]   admin address (160 bits, 0 after renounceAdmin)
 ///        [7:0]     PolicyType (ALLOWLIST = 0, BLOCKLIST = 1)
 ///
-///      Existence sentinel: _policies[id] == 0 means the policy was
-///      never created. This is safe because createPolicy requires a
-///      non-zero admin, so a valid packed value is always non-zero.
+///      Existence sentinel: bit 168 (CREATED_BIT). A zero admin after
+///      renounceAdmin would make the packed slot zero for ALLOWLIST
+///      policies (type = 0), so we cannot use packed == 0 as the
+///      sentinel. CREATED_BIT is set at creation and never cleared.
 ///
 ///      Built-in IDs (0 and type(uint64).max) are never stored in
 ///      _policies; their behavior is handled via constants.
@@ -30,6 +32,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     uint256 private constant TYPE_MASK = 0xFF;
     uint256 private constant ADMIN_SHIFT = 8;
+    uint256 private constant CREATED_BIT = uint256(1) << 168;
 
     /*//////////////////////////////////////////////////////////////
                                 STORAGE
@@ -121,7 +124,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyId == ALWAYS_ALLOW_ID) return true;
         if (policyId == ALWAYS_REJECT_ID) return false;
         uint256 packed = _policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
+        if (packed & CREATED_BIT == 0) revert PolicyNotFound();
         bool member = _members[policyId][account];
         return _decodeType(packed) == PolicyType.ALLOWLIST ? member : !member;
     }
@@ -137,7 +140,7 @@ contract PolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function policyExists(uint64 policyId) external view returns (bool) {
-        return policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID || _policies[policyId] != 0;
+        return policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID || _policies[policyId] & CREATED_BIT != 0;
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -145,7 +148,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyId == ALWAYS_ALLOW_ID) revert AlwaysAllowPolicy();
         if (policyId == ALWAYS_REJECT_ID) revert AlwaysRejectPolicy();
         uint256 packed = _policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
+        if (packed & CREATED_BIT == 0) revert PolicyNotFound();
         return _decodeType(packed);
     }
 
@@ -153,7 +156,7 @@ contract PolicyRegistry is IPolicyRegistry {
     function policyAdmin(uint64 policyId) external view returns (address) {
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID) return address(0);
         uint256 packed = _policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
+        if (packed & CREATED_BIT == 0) revert PolicyNotFound();
         return _decodeAdmin(packed);
     }
 
@@ -170,8 +173,9 @@ contract PolicyRegistry is IPolicyRegistry {
         if (policyType != PolicyType.ALLOWLIST && policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();
         if (admin == address(0)) revert ZeroAddress();
         newPolicyId = _nextId;
-        // Overflow is structurally impossible before heat death: uint64.max is the
-        // ALWAYS_REJECT sentinel and is never reached by the monotonic counter.
+        // No overflow guard: at one policy per 2-second block, reaching uint64.max
+        // takes ~1.2 trillion years. An explicit revert would cost gas on every
+        // createPolicy call to protect against an unreachable condition.
         unchecked {
             ++_nextId;
         }
@@ -195,13 +199,14 @@ contract PolicyRegistry is IPolicyRegistry {
     }
 
     function _requireCustom(uint64 policyId) internal view returns (uint256 packed) {
-        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID) revert PolicyNotFound();
+        if (policyId == ALWAYS_ALLOW_ID) revert AlwaysAllowPolicy();
+        if (policyId == ALWAYS_REJECT_ID) revert AlwaysRejectPolicy();
         packed = _policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
+        if (packed & CREATED_BIT == 0) revert PolicyNotFound();
     }
 
     function _encode(PolicyType policyType, address admin) internal pure returns (uint256) {
-        return uint256(policyType) | (uint256(uint160(admin)) << ADMIN_SHIFT);
+        return CREATED_BIT | uint256(policyType) | (uint256(uint160(admin)) << ADMIN_SHIFT);
     }
 
     function _decodeType(uint256 packed) internal pure returns (PolicyType) {
