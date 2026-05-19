@@ -42,7 +42,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         token with `msg.sender == factory` and the factory acting as
 ///         if it held `DEFAULT_ADMIN_ROLE`. This is how callers configure
 ///         optional post-creation state (initial mints, supply caps,
-///         policy slot assignments, contract URI, pause vectors, etc.)
+///         policy slot assignments, contract URI, initial pause state, etc.)
 ///         atomically in the same transaction as creation. The factory
 ///         does not interpret the call data; any revert in an init call
 ///         reverts the whole creation.
@@ -209,7 +209,7 @@ interface ITokenFactory {
     ///         `DEFAULT_ADMIN_ROLE`. This is the supported path for
     ///         configuring all optional post-creation state atomically:
     ///         initial mints, supply caps, policy slot assignments,
-    ///         pause vectors, contract URI, etc. Any init-call revert
+    ///         initial pause state, contract URI, etc. Any init-call revert
     ///         reverts the entire creation.
     ///
     ///         Emits `TokenCreated` once the token's identity is sealed
