@@ -121,11 +121,8 @@ contract PolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address account) external view returns (bool) {
-        // Built-in short-circuits MUST remain before any storage read. A renounced
-        // ALLOWLIST policy has admin == address(0) in its packed slot, which looks
-        // identical to the always-allow built-in's admin — but they are distinguished
-        // by ID, not by data. If these checks are ever moved or removed, a renounced
-        // policy at ID 0 would become indistinguishable from always-allow.
+        // Built-in short-circuits MUST remain before any storage read: built-in IDs
+        // have no entry in _policies and must never reach the storage path.
         if (policyId == ALWAYS_ALLOW_ID) return true;
         if (policyId == ALWAYS_REJECT_ID) return false;
         uint256 packed = _policies[policyId];
