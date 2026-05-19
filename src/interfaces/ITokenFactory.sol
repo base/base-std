@@ -39,10 +39,22 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 ///         **`initCalls`.** After the token is deployed and the bootstrap
 ///         state is set, each entry in `initCalls` is invoked on the new
-///         token with `msg.sender == factory` and the factory acting as
-///         if it held `DEFAULT_ADMIN_ROLE`. This is how callers configure
-///         optional post-creation state (initial mints, supply caps,
-///         policy slot assignments, contract URI, initial pause state, etc.)
+///         token with `msg.sender == factory`. These calls are entirely
+///         privileged: every authorization gate the token would normally
+///         enforce against the caller (role checks, transfer-policy
+///         checks, capability gates) is bypassed for calls originating
+///         from the factory during the bootstrap window. The window
+///         closes the moment `createToken` returns; from that point
+///         forward every call is subject to the standard role and policy
+///         checks. The factory is NOT added to any role on the token;
+///         "privileged" means authorization is skipped for the bootstrap
+///         caller, not that the factory has been granted authority that
+///         persists. Invariants intrinsic to token correctness
+///         (supply-cap math, balance accounting, etc.) are still enforced.
+///
+///         This is the supported path for configuring optional
+///         post-creation state (initial mints, supply caps, policy slot
+///         assignments, contract URI, initial pause state, etc.)
 ///         atomically in the same transaction as creation. The factory
 ///         does not interpret the call data; any revert in an init call
 ///         reverts the whole creation.
@@ -76,10 +88,13 @@ interface ITokenFactory {
     /// @param name          ERC-20 token name.
     /// @param symbol        ERC-20 token symbol.
     /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`. All
-    ///                      post-creation admin operations (including any
-    ///                      ranout through `initCalls`) ultimately
-    ///                      authorize against this account once the
-    ///                      bootstrap init returns.
+    ///                      post-creation admin operations authorize
+    ///                      against this account (and any additional
+    ///                      admins it later grants). The bootstrap
+    ///                      `initCalls` are NOT subject to this check:
+    ///                      they execute with full privilege regardless
+    ///                      of role state, and the privileged window
+    ///                      closes the moment `createToken` returns.
     /// @param decimals      ERC-20 decimals. MUST be in `[2, 18]`.
     ///                      Encoded into address byte `[11]` for
     ///                      stateless retrieval.
@@ -205,12 +220,20 @@ interface ITokenFactory {
     ///         After the token is constructed and its identity state
     ///         (name, symbol, decimals, admin, variant-specific fields)
     ///         is sealed, the factory invokes each entry in `initCalls`
-    ///         on the new token, acting as if it held the token's
-    ///         `DEFAULT_ADMIN_ROLE`. This is the supported path for
-    ///         configuring all optional post-creation state atomically:
-    ///         initial mints, supply caps, policy slot assignments,
-    ///         initial pause state, contract URI, etc. Any init-call revert
-    ///         reverts the entire creation.
+    ///         on the new token. These calls are entirely privileged:
+    ///         all authorization gates the token would normally enforce
+    ///         against the caller (role checks, transfer-policy checks,
+    ///         capability gates) are bypassed for calls from the factory
+    ///         during this bootstrap window. The factory is not added to
+    ///         any role; the bypass is bound to the call site, not to
+    ///         RBAC state. Once `createToken` returns, every subsequent
+    ///         call on the token is subject to the standard checks.
+    ///
+    ///         This is the supported path for configuring all optional
+    ///         post-creation state atomically: initial mints, supply
+    ///         caps, policy slot assignments, initial pause state,
+    ///         contract URI, etc. Any init-call revert reverts the
+    ///         entire creation.
     ///
     ///         Emits `TokenCreated` once the token's identity is sealed
     ///         and before any `initCalls` are dispatched, so init-call
@@ -221,8 +244,11 @@ interface ITokenFactory {
     ///                   derivation.
     /// @param params     ABI-encoded variant-specific creation struct,
     ///                   leading with the version byte.
-    /// @param initCalls  Optional admin-context bootstrap calls invoked
-    ///                   on the new token after identity is sealed.
+    /// @param initCalls  Optional bootstrap calls invoked on the new
+    ///                   token after identity is sealed. Executed as
+    ///                   fully privileged calls from the factory: all
+    ///                   token-side authorization checks are bypassed
+    ///                   for this window only.
     /// @return token     The address of the newly created token.
     function createToken(
         TokenVariant variant,
