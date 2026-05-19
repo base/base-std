@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {B20Test} from "test/lib/B20Test.sol";
+
+import {IB20} from "src/interfaces/IB20.sol";
+
+/// @notice Base test contract for `IB20Stablecoin` unit tests.
+///
+/// Extends `B20Test` because `IB20Stablecoin is IB20`: the inherited
+/// surface (actors, labels, setUp wiring, the `_singleFeature` helper)
+/// applies unchanged to a stablecoin-variant token. The only
+/// stablecoin-specific concern at the base level is the variant of the
+/// deployed token, which `_deployToken` controls, and the currency
+/// string the test will compare against.
+///
+/// The inherited `token` member is typed `IB20`. Tests that need the
+/// variant-only method (`currency()`) cast inline:
+///   `IB20Stablecoin(address(token)).currency()`
+contract B20StablecoinTest is B20Test {
+    /// @notice The currency identifier passed at creation (e.g. "USD").
+    /// Tests compare against `IB20Stablecoin(address(token)).currency()`.
+    string internal currencyAtCreation = "USD";
+
+    /// @inheritdoc B20Test
+    /// @dev Override deploys a stablecoin-variant token via the factory
+    ///      mock. The mock returns the deterministic address per the B-20
+    ///      schema but does not yet deploy code there; the next PR plants
+    ///      real token bytecode at that address.
+    function _deployToken() internal virtual override returns (IB20) {
+        return IB20(_createStablecoin());
+    }
+}
