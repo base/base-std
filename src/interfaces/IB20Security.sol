@@ -39,13 +39,13 @@ import {IB20} from "./IB20.sol";
 ///         5. `securityIdentifier(...)` / `updateSecurityIdentifier(...)`
 ///            for ISIN, CUSIP, FIGI, and similar off-chain registry IDs.
 ///
-///         **Re-gated inherited functions.** Implementations re-gate the
-///         inherited `setName(...)` and `setSymbol(...)` from `IB20` so
-///         that on a security token they require
-///         `SECURITY_OPERATOR_ROLE` (not `DEFAULT_ADMIN_ROLE`). Name
-///         and symbol updates on a security token are corporate
-///         actions and follow the same operator path as `announce`,
-///         `updateShareRatio`, and `updateSecurityIdentifier`.
+///         **Metadata updates.** The inherited `setName(...)` and
+///         `setSymbol(...)` continue to be gated by `METADATA_ROLE`
+///         from `IB20`; this interface does NOT re-gate them. Security
+///         tokens that want the corporate-actions desk to be the sole
+///         caller of these functions grant `METADATA_ROLE` only to
+///         addresses that also hold `SECURITY_OPERATOR_ROLE`. That
+///         pairing is operational, not contract-enforced.
 ///
 ///         **Announcement pairing.** The corporate-actions operator is
 ///         expected to post an `announce(...)` alongside each
@@ -102,12 +102,15 @@ interface IB20Security is IB20 {
                             ROLE IDENTIFIERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Required to call `announce`, `updateShareRatio`,
-    ///         `updateSecurityIdentifier`, and the re-gated inherited
-    ///         `setName` and `setSymbol`. Held separately from
+    /// @notice Required to call `announce`, `updateShareRatio`, and
+    ///         `updateSecurityIdentifier`. Held separately from
     ///         `DEFAULT_ADMIN_ROLE` so corporate-actions operators can
     ///         be delegated without the broader admin powers (role
     ///         grants, policy changes, supply-cap changes, etc.).
+    ///         `setName` / `setSymbol` are NOT gated by this role; they
+    ///         are gated by the inherited `METADATA_ROLE` from `IB20`.
+    ///         See the contract-level notes for the recommended
+    ///         operational pairing.
     function SECURITY_OPERATOR_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
