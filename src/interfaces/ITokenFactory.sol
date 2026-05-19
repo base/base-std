@@ -57,7 +57,7 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Variant of a B-20 token. Encoded in address byte `[10]`,
-    ///         so `variantOf` is a pure address-prefix read with no
+    ///         so `getTokenVariant` is a pure address-prefix read with no
     ///         storage lookup. `NONE` indicates the address is not a
     ///         B-20 token created by this factory.
     enum TokenVariant {
@@ -254,5 +254,5 @@ interface ITokenFactory {
     /// @notice Returns the variant of `token`. Returns `NONE` if `token`
     ///         is not a factory-created B-20. Recovered from address
     ///         byte `[10]`; no storage read.
-    function variantOf(address token) external view returns (TokenVariant);
+    function getTokenVariant(address token) external view returns (TokenVariant);
 }
