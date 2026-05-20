@@ -7,10 +7,14 @@ import {B20Test} from "test/lib/B20Test.sol";
 
 contract B20MintTest is B20Test {
     /// @notice Verifies mint reverts when caller lacks MINT_ROLE
-    /// @dev Access control: only role-holders can mint; checks AccessControlUnauthorizedAccount
+    /// @dev Access control: only role-holders can mint; checks AccessControlUnauthorizedAccount.
+    ///      Note _mint's check order: InvalidReceiver(0) fires BEFORE the role check, so
+    ///      we filter to != 0 to exercise the role-check path specifically. The
+    ///      InvalidReceiver path is covered by test_mint_revert_zeroRecipient.
     function test_mint_revert_unauthorized(address caller, address to, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
+        vm.assume(to != address(0));
         // No MINT_ROLE granted to caller.
 
         vm.prank(caller);

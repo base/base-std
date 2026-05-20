@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {B20Test} from "test/lib/B20Test.sol";
 
-/// @notice Folds the six trivial role-identifier constant readers into one
+/// @notice Folds the seven trivial role-identifier constant readers into one
 ///         file since each is a one-stub assertion against a fixed keccak
 ///         digest. Substantive role-related functions (`grantRole`,
 ///         `revokeRole`, etc.) live in their own files.
@@ -49,5 +49,13 @@ contract B20RoleConstantsTest is B20Test {
     function test_UNPAUSE_ROLE_success_matchesExpected() public view {
         assertEq(token.UNPAUSE_ROLE(), keccak256("UNPAUSE_ROLE"), "UNPAUSE_ROLE digest");
         assertEq(token.UNPAUSE_ROLE(), UNPAUSE_ROLE, "must match B20Test's local constant");
+    }
+
+    /// @notice Verifies METADATA_ROLE returns keccak256("METADATA_ROLE")
+    /// @dev Identifier stability for off-chain consumers. METADATA_ROLE gates `setName`
+    ///      and `setSymbol` (separated from DEFAULT_ADMIN_ROLE per IB20 spec).
+    function test_METADATA_ROLE_success_matchesExpected() public view {
+        assertEq(token.METADATA_ROLE(), keccak256("METADATA_ROLE"), "METADATA_ROLE digest");
+        assertEq(token.METADATA_ROLE(), METADATA_ROLE, "must match B20Test's local constant");
     }
 }

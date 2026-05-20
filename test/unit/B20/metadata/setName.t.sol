@@ -6,15 +6,19 @@ import {IB20} from "src/interfaces/IB20.sol";
 import {B20Test} from "test/lib/B20Test.sol";
 
 contract B20SetNameTest is B20Test {
-    /// @notice Verifies setName reverts when caller lacks DEFAULT_ADMIN_ROLE
-    /// @dev Access control: only admin may rename; checks AccessControlUnauthorizedAccount
+    /// @notice Verifies setName reverts when caller lacks METADATA_ROLE
+    /// @dev Access control: only METADATA_ROLE holders may rename (separated from
+    ///      DEFAULT_ADMIN_ROLE per IB20 spec so metadata authority can be delegated
+    ///      to a corporate-actions desk). Checks AccessControlUnauthorizedAccount.
     function test_setName_revert_unauthorized(address caller, string calldata newName) public {
         _assumeValidCaller(caller);
-        vm.assume(caller != admin);
+        // Admin doesn't hold METADATA_ROLE by default either; only filter out callers we've
+        // explicitly granted the role.
+        vm.assume(!token.hasRole(METADATA_ROLE, caller));
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, METADATA_ROLE)
         );
         token.setName(newName);
     }
@@ -22,6 +26,7 @@ contract B20SetNameTest is B20Test {
     /// @notice Verifies setName updates name() to the new value
     /// @dev Read-after-write; canonical name readback test lives in name.t.sol
     function test_setName_success_updatesName(string calldata newName) public {
+        _grantRole(METADATA_ROLE, admin);
         vm.prank(admin);
         token.setName(newName);
         assertEq(token.name(), newName, "name() must return the new value");
@@ -30,6 +35,7 @@ contract B20SetNameTest is B20Test {
     /// @notice Verifies setName emits NameUpdated(updater, newName)
     /// @dev Event integrity; canonical NameUpdated emission test
     function test_setName_success_emitsNameUpdated(string calldata newName) public {
+        _grantRole(METADATA_ROLE, admin);
         vm.expectEmit(true, false, false, true, address(token));
         emit IB20.NameUpdated(admin, newName);
         vm.prank(admin);

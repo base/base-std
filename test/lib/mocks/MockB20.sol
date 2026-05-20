@@ -71,6 +71,7 @@ contract MockB20 is IB20 {
     bytes32 public constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
     bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 public constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
+    bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
     /// @notice Policy-type identifiers. Same `keccak256` convention.
     bytes32 public constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
@@ -160,13 +161,13 @@ contract MockB20 is IB20 {
     // ============================================================
 
     function setName(string calldata newName) external {
-        _requireAdmin();
+        _requireRole(METADATA_ROLE);
         MockB20Storage.layout().name = newName;
         emit NameUpdated(msg.sender, newName);
     }
 
     function setSymbol(string calldata newSymbol) external {
-        _requireAdmin();
+        _requireRole(METADATA_ROLE);
         MockB20Storage.layout().symbol = newSymbol;
         emit SymbolUpdated(msg.sender, newSymbol);
     }
@@ -452,6 +453,13 @@ contract MockB20 is IB20 {
         if (_isPrivileged()) return;
         if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
             revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);
+        }
+    }
+
+    function _requireRole(bytes32 role) internal view {
+        if (_isPrivileged()) return;
+        if (!hasRole(role, msg.sender)) {
+            revert AccessControlUnauthorizedAccount(msg.sender, role);
         }
     }
 

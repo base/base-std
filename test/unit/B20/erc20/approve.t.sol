@@ -15,6 +15,17 @@ contract B20ApproveTest is B20Test {
         token.approve(address(0), amount);
     }
 
+    /// @notice Verifies approve reverts when called by the zero address
+    /// @dev Defense-in-depth check fired before the spender guard. Reaching it requires
+    ///      pranking address(0) directly (our standard _assumeValidActor filter excludes
+    ///      it), so this test explicitly does so.
+    function test_approve_revert_zeroApprover(address spender, uint256 amount) public {
+        vm.assume(spender != address(0));
+        vm.prank(address(0));
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidApprover.selector, address(0)));
+        token.approve(spender, amount);
+    }
+
     /// @notice Verifies approve does NOT consult any pause or policy state
     /// @dev approve sets future-spend authorization, not movement; no gating
     function test_approve_success_succeedsWhilePaused(address owner, address spender, uint256 amount) public {
