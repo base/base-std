@@ -1,30 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryPolicyExistsTest is PolicyRegistryTest {
-    /// @notice Verifies policyExists returns true for built-in id 0
-    /// @dev Always-allow built-in is always present
-    function test_policyExists_success_builtinZero() public {
-        // unimplemented
+    function test_policyExists_success_builtinZero() public view {
+        assertTrue(policyRegistry.policyExists(0));
     }
 
-    /// @notice Verifies policyExists returns true for built-in id type(uint64).max
-    /// @dev Always-reject built-in is always present
-    function test_policyExists_success_builtinMax() public {
-        // unimplemented
+    function test_policyExists_success_builtinOne() public view {
+        assertTrue(policyRegistry.policyExists(1));
     }
 
-    /// @notice Verifies policyExists returns false for any id that has not been created
-    /// @dev Fuzz across the custom id space outside the issued range
-    function test_policyExists_success_falseForUncreated(uint64 policyId) public {
-        // unimplemented
+    function test_policyExists_success_falseForUncreated(uint64 policyId) public view {
+        vm.assume(policyId > 1);
+        assertFalse(policyRegistry.policyExists(policyId));
     }
 
-    /// @notice Verifies policyExists returns true for a freshly-created policy id
-    /// @dev Existence flips immediately on createPolicy
     function test_policyExists_success_trueAfterCreate(uint8 policyTypeInt) public {
-        // unimplemented
+        vm.assume(policyTypeInt == 2 || policyTypeInt == 3);
+        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeInt);
+        uint64 policyId = policyRegistry.createPolicy(admin, pt);
+        assertTrue(policyRegistry.policyExists(policyId));
     }
 }

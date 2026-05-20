@@ -1,13 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     /// @notice Verifies updateAllowlist reverts when called by any non-admin caller
     /// @dev Access control: only the current admin may mutate membership; checks Unauthorized() error
     function test_updateAllowlist_revert_unauthorized(address caller, bool allowed, address[] memory accounts) public {
-        // unimplemented
+        _assumeValidCaller(caller);
+        vm.assume(caller != admin);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
+        uint64 policyId = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
+        vm.prank(caller);
+        policyRegistry.updateAllowlist(policyId, allowed, accounts);
     }
 
     /// @notice Verifies updateAllowlist reverts when invoked on a BLOCKLIST policy
@@ -17,7 +26,13 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         bool allowed,
         address[] memory accounts
     ) public {
-        // unimplemented
+        vm.assume(currentAdmin != address(0));
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, allowed, accounts);
     }
 
     /// @notice Verifies updateAllowlist reverts for an unknown policy id
@@ -28,27 +43,59 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         bool allowed,
         address[] memory accounts
     ) public {
-        // unimplemented
+        _assumeValidCaller(caller);
+        vm.assume(policyId > 1);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
+        vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
+        vm.prank(caller);
+        policyRegistry.updateAllowlist(policyId, allowed, accounts);
     }
 
     /// @notice Verifies updateAllowlist(allowed = true) adds each account to the membership set
     /// @dev isAuthorized returns true for each added account afterward
     function test_updateAllowlist_success_addsAccounts(address currentAdmin, address[] memory accounts) public {
-        // unimplemented
+        vm.assume(currentAdmin != address(0));
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, true, accounts);
+        for (uint256 i = 0; i < accounts.length; ++i) {
+            assertTrue(policyRegistry.isAuthorized(policyId, accounts[i]));
+        }
     }
 
     /// @notice Verifies updateAllowlist(allowed = false) removes each account from the membership set
     /// @dev isAuthorized returns false for each removed account afterward
     function test_updateAllowlist_success_removesAccounts(address currentAdmin, address[] memory accounts) public {
-        // unimplemented
+        vm.assume(currentAdmin != address(0));
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, true, accounts);
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, false, accounts);
+        for (uint256 i = 0; i < accounts.length; ++i) {
+            assertFalse(policyRegistry.isAuthorized(policyId, accounts[i]));
+        }
     }
 
     /// @notice Verifies duplicate accounts within a single call are idempotent
     /// @dev Repeated entries do not change the final membership state
-    function test_updateAllowlist_success_idempotentDuplicates(address currentAdmin, address[] memory accounts)
-        public
-    {
-        // unimplemented
+    function test_updateAllowlist_success_idempotentDuplicates(address currentAdmin, address account) public {
+        vm.assume(currentAdmin != address(0));
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        address[] memory duped = new address[](2);
+        duped[0] = account;
+        duped[1] = account;
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, true, duped);
+        assertTrue(policyRegistry.isAuthorized(policyId, account));
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, false, duped);
+        assertFalse(policyRegistry.isAuthorized(policyId, account));
     }
 
     /// @notice Verifies updateAllowlist emits a single AllowlistUpdated carrying the full batch
@@ -58,6 +105,13 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         bool allowed,
         address[] memory accounts
     ) public {
-        // unimplemented
+        vm.assume(currentAdmin != address(0));
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        vm.expectEmit(address(policyRegistry));
+        emit IPolicyRegistry.AllowlistUpdated(policyId, currentAdmin, allowed, accounts);
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, allowed, accounts);
     }
 }

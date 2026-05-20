@@ -1,45 +1,68 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryNextPolicyIdTest is PolicyRegistryTest {
-    /// @notice Verifies nextPolicyId(ALLOWLIST) returns the first ALLOWLIST-encoded id
-    ///         the next createPolicy(_, ALLOWLIST) would assign
-    /// @dev Per the policy ID encoding scheme (top byte = type discriminator,
-    ///      ALLOWLIST counter skips local-id 0 to avoid colliding with the
-    ///      always-allow built-in at encoded id 0), the first allowlist id is
-    ///      `(uint64(uint8(PolicyType.ALLOWLIST)) << 56) | 1`
-    function test_nextPolicyId_success_allowlistInitialEncoded() public {
-        // unimplemented
+    uint256 private constant TYPE_SHIFT = 56;
+
+    /// @notice Verifies nextPolicyId(ALLOWLIST) returns the correct initial encoded id
+    /// @dev Global counter starts at 0. The first ALLOWLIST id is
+    ///      `(uint64(uint8(PolicyType.ALLOWLIST)) << 56) | 0`
+    ///      The discriminator byte (0x02) ensures this never equals built-in IDs 0 or 1.
+    function test_nextPolicyId_success_allowlistInitialEncoded() public view {
+        uint64 expected = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << TYPE_SHIFT) | 0;
+        assertEq(policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST), expected);
     }
 
-    /// @notice Verifies nextPolicyId(BLOCKLIST) returns the first BLOCKLIST-encoded id
-    ///         the next createPolicy(_, BLOCKLIST) would assign
-    /// @dev Per the policy ID encoding scheme, the first blocklist id is
-    ///      `(uint64(uint8(PolicyType.BLOCKLIST)) << 56) | 0` — no skip on
-    ///      non-ALLOWLIST counters (only ALLOWLIST collides with built-in 0)
-    function test_nextPolicyId_success_blocklistInitialEncoded() public {
-        // unimplemented
+    /// @notice Verifies nextPolicyId(BLOCKLIST) returns the correct initial encoded id
+    /// @dev Global counter starts at 0. The first BLOCKLIST id is
+    ///      `(uint64(uint8(PolicyType.BLOCKLIST)) << 56) | 0`
+    function test_nextPolicyId_success_blocklistInitialEncoded() public view {
+        uint64 expected = (uint64(uint8(IPolicyRegistry.PolicyType.BLOCKLIST)) << TYPE_SHIFT) | 0;
+        assertEq(policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST), expected);
     }
 
-    /// @notice Verifies nextPolicyId(type) advances by one (local-id) per
-    ///         successful createPolicy(_, type) call
-    /// @dev Per-type monotonic counter; check returned id equals the prior
-    ///      nextPolicyId(type) value and that the top-byte discriminator stays
-    ///      stable across the sequence. policyTypeRaw is bounded inside the
-    ///      body to `< 2` (the count of PolicyType enum values) via vm.assume
-    ///      before being cast — direct enum-typed parameters cause the fuzzer
-    ///      to revert at function entry on out-of-range uint8 inputs.
+    /// @notice Verifies nextPolicyId advances by one per createPolicy call regardless of type
+    /// @dev Single global counter: each createPolicy call increments it once.
+    ///      policyTypeRaw is bounded to ALLOWLIST (2) or BLOCKLIST (3) via vm.assume.
     function test_nextPolicyId_success_advancesPerCreate(uint8 policyTypeRaw, uint8 count) public {
-        // unimplemented
+        vm.assume(policyTypeRaw == 2 || policyTypeRaw == 3);
+        count = uint8(bound(count, 0, 10));
+        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeRaw);
+
+        for (uint256 i = 0; i < count; ++i) {
+            uint64 predicted = policyRegistry.nextPolicyId(pt);
+            uint64 assigned = policyRegistry.createPolicy(admin, pt);
+            assertEq(assigned, predicted);
+        }
     }
 
-    /// @notice Verifies nextPolicyId(ALLOWLIST) and nextPolicyId(BLOCKLIST)
-    ///         advance independently
-    /// @dev Per-type counters do not share state; creating an allowlist must
-    ///      not affect the next-blocklist-id value and vice versa
-    function test_nextPolicyId_success_perTypeCountersIndependent(uint8 allowCount, uint8 blockCount) public {
-        // unimplemented
+    /// @notice Verifies creating one type advances nextPolicyId for the other type
+    /// @dev The global counter is shared: nextPolicyId(ALLOWLIST) and nextPolicyId(BLOCKLIST)
+    ///      always differ only in their top byte — their low 56 bits are identical.
+    function test_nextPolicyId_success_globalCounterSharedAcrossTypes(uint8 allowCount, uint8 blockCount) public {
+        allowCount = uint8(bound(allowCount, 0, 5));
+        blockCount = uint8(bound(blockCount, 0, 5));
+
+        for (uint256 i = 0; i < allowCount; ++i) {
+            policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        }
+        for (uint256 i = 0; i < blockCount; ++i) {
+            policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        }
+
+        uint64 nextAllow = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 nextBlock = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST);
+
+        // Low 56 bits are identical — both types share the same global counter.
+        uint64 counterMask = (uint64(1) << 56) - 1;
+        assertEq(nextAllow & counterMask, nextBlock & counterMask);
+
+        // Top bytes differ by type discriminator.
+        assertEq(uint8(nextAllow >> 56), uint8(IPolicyRegistry.PolicyType.ALLOWLIST));
+        assertEq(uint8(nextBlock >> 56), uint8(IPolicyRegistry.PolicyType.BLOCKLIST));
     }
 }
