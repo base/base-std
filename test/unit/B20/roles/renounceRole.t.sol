@@ -31,6 +31,36 @@ contract B20RenounceRoleTest is B20Test {
         token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, admin);
     }
 
+    /// @notice Verifies a non-admin's renounceRole(DEFAULT_ADMIN_ROLE, self) is a silent no-op
+    ///         even when the token has exactly one admin (regression test for L-03)
+    /// @dev IB20.renounceRole NatSpec: "reverts with LastAdminCannotRenounce when the caller
+    ///      is the sole remaining admin." A non-admin caller is NOT the sole remaining admin
+    ///      and MUST NOT trigger that revert. The correct path: `_revokeRole` checks the
+    ///      caller's role bit and silently no-ops for non-holders. A buggy guard that fires
+    ///      on `adminCount == 1` alone (without checking `hasRole(DEFAULT_ADMIN_ROLE, caller)`)
+    ///      would block defensive batches and mislead Rust implementers copying the pattern.
+    function test_renounceRole_success_nonAdminRenounceIsNoOp(address nonAdmin) public {
+        _assumeValidActor(nonAdmin);
+        vm.assume(nonAdmin != admin);
+
+        // Precondition: nonAdmin doesn't hold the role and there is exactly one admin.
+        assertFalse(
+            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin),
+            "precondition: nonAdmin must not be admin"
+        );
+        assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "precondition: admin must be admin");
+
+        // Should succeed silently — caller doesn't hold the role, so _revokeRole no-ops.
+        vm.prank(nonAdmin);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin);
+
+        // Postconditions: nothing changed.
+        assertFalse(
+            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin), "nonAdmin still doesn't hold admin role"
+        );
+        assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin still holds admin role");
+    }
+
     /// @notice Verifies renounceRole sets hasRole(role, caller) to false
     /// @dev Read-after-write for self-revocation
     function test_renounceRole_success_clearsCallerRole(address caller, bytes32 role) public {
