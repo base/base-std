@@ -96,6 +96,29 @@ contract B20PermitTest is B20Test {
         assertEq(token.allowance(owner, spender), amount, "allowance must reflect permit");
     }
 
+    /// @notice Verifies a second permit REPLACES the prior allowance, not ADDS to it
+    /// @dev `permit` MUST set `allowance[owner][spender] = value`, not
+    ///      `allowance[owner][spender] += value`. A single permit success test can't
+    ///      catch the additive bug (0 + value == value), so we permit twice with
+    ///      distinct values and assert only the second value remains.
+    function test_permit_success_secondPermitReplacesAllowance(uint256 ownerPrivateKey, address spender) public {
+        ownerPrivateKey = boundPrivateKey(ownerPrivateKey);
+        vm.assume(spender != address(0));
+        uint256 deadline = type(uint256).max;
+        address owner = vm.addr(ownerPrivateKey);
+
+        uint256 first = 100;
+        uint256 second = 7;
+
+        (uint8 v1, bytes32 r1, bytes32 s1) = _signPermit(ownerPrivateKey, spender, first, deadline);
+        token.permit(owner, spender, first, deadline, v1, r1, s1);
+        assertEq(token.allowance(owner, spender), first, "first permit sets baseline");
+
+        (uint8 v2, bytes32 r2, bytes32 s2) = _signPermit(ownerPrivateKey, spender, second, deadline);
+        token.permit(owner, spender, second, deadline, v2, r2, s2);
+        assertEq(token.allowance(owner, spender), second, "second permit must REPLACE, not ADD");
+    }
+
     /// @notice Verifies permit advances nonces(owner) by exactly one
     /// @dev Replay protection; canonical nonces readback test lives in nonces.t.sol
     function test_permit_success_advancesNonce(uint256 ownerPrivateKey, address spender, uint256 amount) public {

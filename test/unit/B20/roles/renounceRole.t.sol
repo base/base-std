@@ -62,6 +62,27 @@ contract B20RenounceRoleTest is B20Test {
         assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin), "other admin still admin");
     }
 
+    /// @notice Verifies the internal adminCount tracker stays consistent with role state
+    /// @dev We can't read adminCount directly (it's internal storage), so we verify it
+    ///      indirectly: after one of two admins renounces, the SOLE remaining admin's
+    ///      own renounceRole should now trip the last-admin guard. A buggy impl that
+    ///      mis-tracked adminCount (e.g. incrementing on revoke instead of decrementing)
+    ///      would let the remaining admin renounce silently, bricking the token without
+    ///      surfacing the bug.
+    function test_renounceRole_success_adminCountStaysConsistent(address otherAdmin) public {
+        _assumeValidActor(otherAdmin);
+        vm.assume(otherAdmin != admin);
+
+        _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
+
+        vm.prank(admin);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, admin);
+
+        vm.prank(otherAdmin);
+        vm.expectRevert(IB20.LastAdminCannotRenounce.selector);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
+    }
+
     /// @notice Verifies renounceRole emits RoleRevoked(role, caller, caller)
     /// @dev Sender equals account for self-revocation; canonical RoleRevoked test lives in revokeRole.t.sol
     function test_renounceRole_success_emitsRoleRevoked(address caller, bytes32 role) public {
