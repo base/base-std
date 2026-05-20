@@ -207,17 +207,14 @@ interface IB20Security is IB20 {
     ///         enforcement against multiple addresses, etc.) that need
     ///         to land many destructions in one transaction.
     ///
-    /// @dev    Requires `BURN_BLOCKED_ROLE` (NOT `BURN_ROLE`, which is
-    ///         the self-burn role on `IB20`). Each `accounts[i]` MUST
+    /// @dev    Requires `BURN_ROLE`. Each `accounts[i]` MUST
     ///         currently be unauthorized under the active
     ///         `TRANSFER_SENDER` policy; otherwise reverts with
     ///         `AccountNotBlocked(accounts[i])`. Subject to the `BURN`
     ///         pause vector. Reverts on length mismatch or empty
     ///         arrays. Emits `Transfer(accounts[i], address(0),
-    ///         amounts[i])` and `BurnedBlocked(caller, accounts[i],
-    ///         amounts[i])` per element, matching `burnBlocked`'s
-    ///         per-call semantics. Operators should pair this with a
-    ///         separate `announce(...)` call so the seizure is
+    ///         amounts[i])` per element, Operators should pair this with
+    ///         a separate `announce(...)` call so the seizure is
     ///         discoverable to indexers; this interface does not
     ///         enforce the pairing on-chain.
     ///
@@ -243,8 +240,8 @@ interface IB20Security is IB20 {
     function redeem(uint256 amount) external;
 
     /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
-    ///         immediately after `SharesRedeemed`. See
-    ///         `IB20.transferWithMemo` for the memo convention; a memo
+    ///         immediately after `Transfer()` and before `SharesRedeemed`. 
+    ///         See `IB20.transferWithMemo` for the memo convention; a memo
     ///         of `bytes32(0)` is permitted.
     function redeemWithMemo(uint256 amount, bytes32 memo) external;
 
