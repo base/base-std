@@ -152,7 +152,7 @@ interface IB20Security is IB20 {
 
     /// @notice The current share-to-tokens ratio, scaled to the
     ///         implementation's `WAD_PRECISION`.
-    function sharesToTokensRatio() external view returns (uint128);
+    function sharesToTokensRatio() external view returns (uint256);
 
     /// @notice Converts a raw token balance to its current share count
     ///         via the active share ratio:
@@ -175,7 +175,7 @@ interface IB20Security is IB20 {
     ///
     /// @param  newSharesToTokensRatio The new ratio scaled to
     ///                                `WAD_PRECISION`.
-    function updateShareRatio(uint128 newSharesToTokensRatio) external;
+    function updateShareRatio(uint256 newSharesToTokensRatio) external;
 
     /*//////////////////////////////////////////////////////////////
                   BATCHED ISSUANCE AND CORP-ACTION SEIZURE
