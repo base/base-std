@@ -149,9 +149,10 @@ contract MockB20 is IB20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         if (!_isPrivileged() && msg.sender != from) {
             _consumeAllowance(from, msg.sender, amount);
-            // Read the executor policy ID out of the packed slot. Cold
-            // here; warm by the time _transfer reads the same slot.
-            uint64 executorPolicyId = uint64(MockB20Storage.layout().packedPolicyIds >> 128);
+            // Read the executor policy ID out of the transfer-side packed
+            // slot. Cold here; warm by the time _transfer reads the same
+            // slot for sender + receiver.
+            uint64 executorPolicyId = uint64(MockB20Storage.layout().transferPolicyIds >> 128);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
                 revert PolicyForbids(TRANSFER_EXECUTOR, executorPolicyId);
             }
@@ -181,7 +182,7 @@ contract MockB20 is IB20 {
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool) {
         if (!_isPrivileged() && msg.sender != from) {
             _consumeAllowance(from, msg.sender, amount);
-            uint64 executorPolicyId = uint64(MockB20Storage.layout().packedPolicyIds >> 128);
+            uint64 executorPolicyId = uint64(MockB20Storage.layout().transferPolicyIds >> 128);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
                 revert PolicyForbids(TRANSFER_EXECUTOR, executorPolicyId);
             }
@@ -237,8 +238,9 @@ contract MockB20 is IB20 {
             if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
             // The point of burnBlocked is to seize from policy-blocked
             // accounts. Read the transfer-sender policy ID out of the
-            // packed slot and reject if the target is currently authorized.
-            uint64 senderPolicyId = uint64(MockB20Storage.layout().packedPolicyIds);
+            // transfer-side packed slot and reject if the target is
+            // currently authorized.
+            uint64 senderPolicyId = uint64(MockB20Storage.layout().transferPolicyIds);
             if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
                 revert AccountNotBlocked(from);
             }
@@ -375,35 +377,35 @@ contract MockB20 is IB20 {
         emit PolicyUpdated(policyType, oldPolicyId, newPolicyId);
     }
 
-    /// @dev Reads a policy ID from storage. The four hot-path policy
-    ///      types live in a packed uint256 (one SLOAD, four uint64s);
-    ///      anything else falls through to the variant/user-defined
-    ///      mapping at the cold path.
+    /// @dev Reads a policy ID from storage. Hot-path types are routed to
+    ///      a per-operation packed slot (one SLOAD per op, four uint64s
+    ///      per slot); anything else falls through to the
+    ///      variant/user-defined mapping at the cold path.
     function _readPolicyId(bytes32 policyType) internal view returns (uint64) {
-        uint256 packed = MockB20Storage.layout().packedPolicyIds;
-        if (policyType == TRANSFER_SENDER) return uint64(packed);
-        if (policyType == TRANSFER_RECEIVER) return uint64(packed >> 64);
-        if (policyType == TRANSFER_EXECUTOR) return uint64(packed >> 128);
-        if (policyType == MINT_RECEIVER) return uint64(packed >> 192);
-        return MockB20Storage.layout().extraPolicyIds[policyType];
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        if (policyType == TRANSFER_SENDER) return uint64($.transferPolicyIds);
+        if (policyType == TRANSFER_RECEIVER) return uint64($.transferPolicyIds >> 64);
+        if (policyType == TRANSFER_EXECUTOR) return uint64($.transferPolicyIds >> 128);
+        if (policyType == MINT_RECEIVER) return uint64($.mintPolicyIds);
+        return $.extraPolicyIds[policyType];
     }
 
-    /// @dev Writes a policy ID to storage. Hot-path types update the
-    ///      packed slot in-place (preserving the other three policies);
-    ///      anything else writes to the extra-policies mapping. Done
-    ///      with explicit mask + shift so the Rust impl can replicate
-    ///      the exact bit layout.
+    /// @dev Writes a policy ID to storage. Hot-path types update their
+    ///      per-operation packed slot in-place (preserving the other
+    ///      three packed lanes); anything else writes to the
+    ///      extra-policies mapping. Done with explicit mask + shift so
+    ///      the Rust impl can replicate the exact bit layout.
     function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 mask = uint256(type(uint64).max);
         if (policyType == TRANSFER_SENDER) {
-            $.packedPolicyIds = ($.packedPolicyIds & ~mask) | uint256(newPolicyId);
+            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);
         } else if (policyType == TRANSFER_RECEIVER) {
-            $.packedPolicyIds = ($.packedPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);
+            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);
         } else if (policyType == TRANSFER_EXECUTOR) {
-            $.packedPolicyIds = ($.packedPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);
+            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);
         } else if (policyType == MINT_RECEIVER) {
-            $.packedPolicyIds = ($.packedPolicyIds & ~(mask << 192)) | (uint256(newPolicyId) << 192);
+            $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);
         } else {
             $.extraPolicyIds[policyType] = newPolicyId;
         }
@@ -581,8 +583,8 @@ contract MockB20 is IB20 {
             if (_isPaused(PausableFeature.TRANSFER)) revert ContractPaused(PausableFeature.TRANSFER);
             // One SLOAD pulls both policy IDs we need for the transfer
             // check (and was already warmed if we came in via transferFrom,
-            // which reads the executor slot first).
-            uint256 packed = MockB20Storage.layout().packedPolicyIds;
+            // which reads the executor lane of the same slot first).
+            uint256 packed = MockB20Storage.layout().transferPolicyIds;
             uint64 senderPolicyId = uint64(packed);
             uint64 receiverPolicyId = uint64(packed >> 64);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
@@ -609,7 +611,7 @@ contract MockB20 is IB20 {
         if (!_isPrivileged()) {
             if (!hasRole(MINT_ROLE, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE);
             if (_isPaused(PausableFeature.MINT)) revert ContractPaused(PausableFeature.MINT);
-            uint64 mintReceiverPolicyId = uint64(MockB20Storage.layout().packedPolicyIds >> 192);
+            uint64 mintReceiverPolicyId = uint64(MockB20Storage.layout().mintPolicyIds);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
                 revert PolicyForbids(MINT_RECEIVER, mintReceiverPolicyId);
             }
