@@ -185,7 +185,12 @@ contract MockTokenFactory is ITokenFactory {
         // -- 9. Close the bootstrap window by setting initialized=true.
         //       After this, the factory's privilege is gone; only
         //       role / policy / pause holders can mutate state.
-        _writeBool(token, MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET), true);
+        _writePackedBool(
+            token,
+            MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET),
+            MockB20Storage.INITIALIZED_BYTE_OFFSET,
+            true
+        );
     }
 
     /// @dev `DEFAULT_ADMIN_ROLE` per OZ AccessControl convention.
@@ -279,8 +284,12 @@ contract MockTokenFactory is ITokenFactory {
         vm.store(target, slot, bytes32(value));
     }
 
-    function _writeBool(address target, bytes32 slot, bool value) internal {
-        vm.store(target, slot, bytes32(uint256(value ? 1 : 0)));
+    function _writePackedBool(address target, bytes32 slot, uint8 byteOffset, bool value) internal {
+        uint256 shift = uint256(byteOffset) * 8;
+        uint256 mask = uint256(0xff) << shift;
+        uint256 current = uint256(vm.load(target, slot));
+        uint256 bit = value ? (uint256(1) << shift) : 0;
+        vm.store(target, slot, bytes32((current & ~mask) | bit));
     }
 
     /// @dev Solidity string storage encoding:
