@@ -83,12 +83,6 @@ contract MockB20Security is MockB20, IB20Security {
     ///         stored ratio.
     uint256 public constant WAD_PRECISION = 1e18;
 
-    /// @dev Selector for the announce function itself. Used by
-    ///      `_checkSelector` to deny recursive `announce` invocations
-    ///      from inside `internalCalls`, keeping the bracket exactly
-    ///      one level deep.
-    bytes4 internal constant ANNOUNCE_SELECTOR = IB20Security.announce.selector;
-
     // ============================================================
     //                        ANNOUNCEMENTS
     // ============================================================
@@ -295,6 +289,6 @@ contract MockB20Security is MockB20, IB20Security {
     function _checkSelector(bytes calldata call) internal pure {
         if (call.length < 4) revert InternalCallMalformed(call);
         bytes4 sel = bytes4(call[:4]);
-        if (sel == ANNOUNCE_SELECTOR) revert AnnouncementInProgress();
+        if (sel == IB20Security.announce.selector) revert AnnouncementInProgress();
     }
 }
