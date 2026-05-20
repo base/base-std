@@ -19,7 +19,11 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         slot layout the Rust impl mirrors. See `MockPolicyRegistryStorage`
 ///         for the full layout documentation and per-field slot offsets.
 ///
-///         **Policy ID encoding:**
+///         This implementation uses two independent encodings:
+///         1) `policyId` (uint64) packs type + counter only.
+///         2) `policies[policyId]` (uint256) packs policyType + mutable admin.
+///
+///         **Policy ID encoding (`policyId`):**
 ///           [63:56]  uint8(PolicyType) discriminator
 ///           [55:0]   nextCounter value at creation time
 ///         `_create` rejects ALWAYS_ALLOW and ALWAYS_BLOCK types, so no
@@ -35,12 +39,14 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     uint64 internal constant ALWAYS_ALLOW_ID = 0;
     uint64 internal constant ALWAYS_BLOCK_ID = 1;
+    uint56 internal constant INITIAL_CUSTOM_COUNTER = 2;
 
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
-    uint256 internal constant TYPE_SHIFT = 56;
+    uint64 internal constant POLICY_ID_TYPE_SHIFT = 56;
 
-    // Admin address occupies bits [167:8]; PolicyType occupies bits [7:0].
-    uint256 internal constant ADMIN_SHIFT = 8;
+    // Packed policy slot encoding (`policies[policyId]`):
+    // admin address occupies bits [167:8]; PolicyType occupies bits [7:0].
+    uint256 internal constant PACKED_ADMIN_SHIFT = 8;
 
     // ============================================================
     //                       POLICY CREATION
@@ -136,7 +142,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function nextPolicyId(PolicyType policyType) external view returns (uint64) {
-        return _makeId({policyType: policyType, counter: MockPolicyRegistryStorage.layout().nextCounter});
+        uint56 counter = MockPolicyRegistryStorage.layout().nextCounter;
+        if (counter < INITIAL_CUSTOM_COUNTER) counter = INITIAL_CUSTOM_COUNTER;
+        return _makeId({policyType: policyType, counter: counter});
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -177,6 +185,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         if (admin == address(0)) revert ZeroAddress();
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         uint56 counter = $.nextCounter;
+        if (counter < INITIAL_CUSTOM_COUNTER) counter = INITIAL_CUSTOM_COUNTER;
         // No overflow guard: at one policy per 2-second block, exhausting the
         // 56-bit counter space (~7.2e16 values) takes ~4.6 billion years.
         unchecked {
@@ -208,11 +217,11 @@ contract MockPolicyRegistry is IPolicyRegistry {
     }
 
     function _makeId(PolicyType policyType, uint56 counter) internal pure returns (uint64) {
-        return (uint64(uint8(policyType)) << TYPE_SHIFT) | uint64(counter);
+        return (uint64(uint8(policyType)) << POLICY_ID_TYPE_SHIFT) | uint64(counter);
     }
 
     function _encode(PolicyType policyType, address admin) internal pure returns (uint256) {
-        return (uint256(uint160(admin)) << ADMIN_SHIFT) | uint256(policyType);
+        return (uint256(uint160(admin)) << PACKED_ADMIN_SHIFT) | uint256(policyType);
     }
 
     function _decodeType(uint256 packed) internal pure returns (PolicyType) {
@@ -220,6 +229,6 @@ contract MockPolicyRegistry is IPolicyRegistry {
     }
 
     function _decodeAdmin(uint256 packed) internal pure returns (address) {
-        return address(uint160(packed >> ADMIN_SHIFT));
+        return address(uint160(packed >> PACKED_ADMIN_SHIFT));
     }
 }

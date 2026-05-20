@@ -6,22 +6,22 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryNextPolicyIdTest is PolicyRegistryTest {
-    uint256 private constant TYPE_SHIFT = 56;
+    uint64 private constant TYPE_SHIFT = 56;
+    uint56 private constant INITIAL_CUSTOM_COUNTER = 2;
 
     /// @notice Verifies nextPolicyId(ALLOWLIST) returns the correct initial encoded id
-    /// @dev Global counter starts at 0. The first ALLOWLIST id is
-    ///      `(uint64(uint8(PolicyType.ALLOWLIST)) << 56) | 0`
-    ///      The discriminator byte (0x02) ensures this never equals built-in IDs 0 or 1.
+    /// @dev Global counter starts at 2. The first ALLOWLIST id is
+    ///      `(uint64(uint8(PolicyType.ALLOWLIST)) << 56) | 2`.
     function test_nextPolicyId_success_allowlistInitialEncoded() public view {
-        uint64 expected = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << TYPE_SHIFT) | 0;
+        uint64 expected = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << TYPE_SHIFT) | INITIAL_CUSTOM_COUNTER;
         assertEq(policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST), expected);
     }
 
     /// @notice Verifies nextPolicyId(BLOCKLIST) returns the correct initial encoded id
-    /// @dev Global counter starts at 0. The first BLOCKLIST id is
-    ///      `(uint64(uint8(PolicyType.BLOCKLIST)) << 56) | 0`
+    /// @dev Global counter starts at 2. The first BLOCKLIST id is
+    ///      `(uint64(uint8(PolicyType.BLOCKLIST)) << 56) | 2`.
     function test_nextPolicyId_success_blocklistInitialEncoded() public view {
-        uint64 expected = (uint64(uint8(IPolicyRegistry.PolicyType.BLOCKLIST)) << TYPE_SHIFT) | 0;
+        uint64 expected = (uint64(uint8(IPolicyRegistry.PolicyType.BLOCKLIST)) << TYPE_SHIFT) | INITIAL_CUSTOM_COUNTER;
         assertEq(policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST), expected);
     }
 

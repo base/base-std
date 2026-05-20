@@ -71,6 +71,10 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         SLOADs if the type required a separate storage lookup. The
 ///         built-in IDs cost 0 SLOADs (short-circuited).
 ///
+///         Separately from `policyId` encoding, implementations store mutable
+///         per-policy state (notably admin) in policy-record storage keyed by
+///         `policyId`; admin is not encoded into the ID itself.
+///
 ///         Custom policy IDs are assigned from a single global monotonic
 ///         counter starting at `2` (reserving `0` and `1` for the
 ///         built-ins); see `nextPolicyId(PolicyType)` to predict the
