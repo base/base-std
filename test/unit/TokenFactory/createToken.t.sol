@@ -321,6 +321,41 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertEq(MockB20(tokenAddr).symbol(), longSymbol, "long symbol must round-trip via storage");
     }
 
+    /// @notice Verifies _writeString pivots into long-string encoding at exactly 32 bytes
+    /// @dev Solidity's storage spec: length < 32 -> short (single slot with bytes packed in
+    ///      high bytes, 2*length in low byte). length >= 32 -> long (marker slot stores
+    ///      2*length+1, data starts at keccak256(slot)). A buggy `<= 32` boundary would
+    ///      try to pack 32 bytes into a 31-byte short-string slot, silently losing data.
+    function test_createToken_success_writesStringsAtEncodingBoundary(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        string memory name32 = "abcdefghijklmnopqrstuvwxyzABCDEF";
+        string memory symbol33 = "abcdefghijklmnopqrstuvwxyzABCDEFG";
+        assertEq(bytes(name32).length, 32, "test setup: name must be exactly 32 bytes");
+        assertEq(bytes(symbol33).length, 33, "test setup: symbol must be exactly 33 bytes");
+
+        ITokenFactory.B20CreateParams memory p = _b20Params(name32, symbol33, admin, 18);
+        address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
+
+        assertEq(MockB20(tokenAddr).name(), name32, "32-byte name must round-trip (long path)");
+        assertEq(MockB20(tokenAddr).symbol(), symbol33, "33-byte symbol must round-trip (chunk-count boundary)");
+    }
+
+    /// @notice Pins down that _computeAddress uses abi.encode (not abi.encodePacked)
+    /// @dev Internal-determinism tests pass either way because both the predicted and
+    ///      actual paths share the same encoding choice. The Rust impl must agree on
+    ///      abi.encode specifically; this test recomputes the address externally using
+    ///      abi.encode and asserts the factory returns the same value.
+    function test_getTokenAddress_pinsDownAbiEncoding(address sender, bytes32 salt, uint8 decimals) public view {
+        decimals = uint8(bound(decimals, 2, 18));
+
+        bytes8 expectedTail = bytes8(keccak256(abi.encode(sender, salt)));
+        uint160 expectedAddr = (uint160(0xB2) << 152) | (uint160(uint8(ITokenFactory.TokenVariant.DEFAULT)) << 72)
+            | (uint160(decimals) << 64) | uint160(uint64(expectedTail));
+
+        address actual = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, decimals, sender, salt);
+        assertEq(actual, address(expectedAddr), "factory must derive address via abi.encode of (sender, salt)");
+    }
+
     /// @notice Verifies the decimals byte at address position [11] matches the created decimals
     /// @dev Address schema: decimals are encoded in the address for stateless decimals() lookup
     function test_createToken_success_encodesDecimalsByte(address caller, bytes32 salt, uint8 decimals) public {

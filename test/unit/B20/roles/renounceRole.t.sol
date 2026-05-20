@@ -73,14 +73,14 @@ contract B20RenounceRoleTest is B20Test {
         _assumeValidActor(otherAdmin);
         vm.assume(otherAdmin != admin);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, otherAdmin);
+        _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
 
         vm.prank(admin);
-        token.renounceRole(DEFAULT_ADMIN_ROLE, admin);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, admin);
 
         vm.prank(otherAdmin);
         vm.expectRevert(IB20.LastAdminCannotRenounce.selector);
-        token.renounceRole(DEFAULT_ADMIN_ROLE, otherAdmin);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
     }
 
     /// @notice Verifies renounceRole emits RoleRevoked(role, caller, caller)

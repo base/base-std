@@ -28,6 +28,18 @@ contract B20PausedFeaturesTest is B20Test {
         assertEq(uint256(features[1]), uint256(IB20.PausableFeature.BURN), "ordinal 2 second");
     }
 
+    /// @notice Verifies pausedFeatures correctly reports REDEEM when it is the only paused feature
+    /// @dev REDEEM is the last (highest-ordinal) feature in PausableFeature. A loop bound
+    ///      off-by-one (e.g. `i < 3` instead of `i < 4`) would silently miss REDEEM in the
+    ///      returned array. Explicit single-feature test catches the loop-bound bug.
+    function test_pausedFeatures_success_includesRedeem() public {
+        _pause(IB20.PausableFeature.REDEEM);
+
+        IB20.PausableFeature[] memory features = token.pausedFeatures();
+        assertEq(features.length, 1, "must list exactly one feature");
+        assertEq(uint256(features[0]), uint256(IB20.PausableFeature.REDEEM), "must be REDEEM");
+    }
+
     /// @notice Verifies pausedFeatures returns the set minus features removed via unpause
     /// @dev Readback after partial unpause
     function test_pausedFeatures_success_reflectsUnpauseCalls() public {
