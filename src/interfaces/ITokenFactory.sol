@@ -195,13 +195,7 @@ interface ITokenFactory {
     ///         `TokenCreated` is the token-identity signal only. The
     ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
     ///         skips the grant and emits no `RoleGranted` at bootstrap.
-    event TokenCreated(
-        address indexed token,
-        TokenVariant indexed variant,
-        string name,
-        string symbol,
-        uint8 decimals
-    );
+    event TokenCreated(address indexed token, TokenVariant indexed variant, string name, string symbol, uint8 decimals);
 
     /*//////////////////////////////////////////////////////////////
                                  CREATE
@@ -248,12 +242,9 @@ interface ITokenFactory {
     ///                   token-side authorization checks are bypassed
     ///                   for this window only.
     /// @return token     The address of the newly created token.
-    function createToken(
-        TokenVariant variant,
-        bytes32 salt,
-        bytes calldata params,
-        bytes[] calldata initCalls
-    ) external returns (address token);
+    function createToken(TokenVariant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
+        external
+        returns (address token);
 
     /*//////////////////////////////////////////////////////////////
                             ADDRESS QUERIES

@@ -165,6 +165,101 @@ library MockB20Storage {
     }
 }
 
+/// @title MockB20SecurityStorage
+/// @notice Slot-layout library for the `MockB20Security` variant's
+///         variant-specific state. Disjoint namespace from
+///         `MockB20Storage` so the variant composes additively
+///         without touching the base token's slot layout, mirroring
+///         how `MockB20StablecoinStorage` adds `currency` for the
+///         stablecoin variant.
+///
+/// @dev    **Namespace:** `base.b20.security`. The ERC-7201 location
+///         is `keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))`.
+///
+///         **Storage notes.**
+///         - `sharesToTokensRatio` stores the WAD-scaled
+///           share-to-tokens ratio. A stored value of `0` is
+///           interpreted by the read surface (`sharesToTokensRatio()`,
+///           `toShares(...)`, `sharesOf(...)`) as `WAD_PRECISION`, so a
+///           freshly-etched token reports a 1:1 ratio without
+///           requiring the factory to write the default value during
+///           bootstrap. `updateShareRatio` writes the new ratio
+///           verbatim; subsequent reads return the stored value as-is.
+///         - `redeemPolicyIds` is a per-operation packed slot,
+///           mirroring base's `transferPolicyIds` / `mintPolicyIds`
+///           layout: only `REDEEMER_SENDER` is defined today, with
+///           three reserved lanes for future redeem-side granularity
+///           (e.g. `REDEEMER_RECEIVER` if and when off-chain
+///           settlement counterparties get policy gating).
+///         - `usedAnnouncementIds` keys directly on the raw `string id`
+///           that callers pass to `announce` / `isAnnouncementIdUsed`,
+///           not on a hash, so the on-chain query mirrors the API.
+///         - `identifiers` keys directly on the raw `identifierType`
+///           string (e.g. `"ISIN"`); empty value means unset/removed.
+library MockB20SecurityStorage {
+    /// @custom:storage-location erc7201:base.b20.security
+    struct Layout {
+        // ---------- Share ratio ----------
+        // Scaled by WAD_PRECISION (1e18). Stored value of 0 is
+        // interpreted as WAD by the read surface.
+        uint256 sharesToTokensRatio;
+        // ---------- Redemption ----------
+        // Floor on `redeem` / `redeemWithMemo`, expressed in shares.
+        // Defaults to 0 (no floor); admin sets via updateMinimumRedeemable.
+        uint256 minimumRedeemable;
+        // ---------- Redeem-side policies (PACKED) ----------
+        // Layout:
+        //   [63:0]    redeemerSenderPolicyId
+        //   [127:64]  reserved
+        //   [191:128] reserved
+        //   [255:192] reserved
+        uint256 redeemPolicyIds;
+        // ---------- Announcements ----------
+        // Tracks consumed announcement IDs; flips to true on first
+        // `announce` for a given id, and remains true forever.
+        mapping(string id => bool used) usedAnnouncementIds;
+        // ---------- Security identifiers ----------
+        // ISIN, CUSIP, FIGI, etc. Empty string means unset/removed.
+        mapping(string identifierType => string value) identifiers;
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))
+    // Verified against the computation in derivedLocation() below.
+    bytes32 internal constant STORAGE_LOCATION = 0x4a21e1b7f963e21baf0daffe6bab858a1e5fecef1144f3aca3c0c4534c7ac600;
+
+    // ============================================================
+    //                     SLOT OFFSETS WITHIN LAYOUT
+    // ============================================================
+    // Sequential allocation matches `Layout` field order top-to-
+    // bottom. Mappings consume one slot each (their VALUES hash to
+    // unrelated locations); the factory uses these as base slots when
+    // deriving member slots via `keccak256(abi.encode(key, baseSlot))`.
+
+    uint256 internal constant SHARES_TO_TOKENS_RATIO_OFFSET = 0;
+    uint256 internal constant MINIMUM_REDEEMABLE_OFFSET = 1;
+    uint256 internal constant REDEEM_POLICY_IDS_OFFSET = 2;
+    uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 3;
+    uint256 internal constant IDENTIFIERS_OFFSET = 4;
+
+    /// @notice Absolute slot for a top-level field of `Layout`.
+    function slotOf(uint256 offset) internal pure returns (bytes32) {
+        return bytes32(uint256(STORAGE_LOCATION) + offset);
+    }
+
+    function layout() internal pure returns (Layout storage $) {
+        assembly {
+            $.slot := STORAGE_LOCATION
+        }
+    }
+
+    /// @notice Returns the storage location derived per the ERC-7201 formula
+    ///         from the namespace string. Used in tests to assert the
+    ///         hardcoded `STORAGE_LOCATION` constant matches the formula.
+    function derivedLocation() internal pure returns (bytes32) {
+        return keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff));
+    }
+}
+
 /// @title MockB20StablecoinStorage
 /// @notice Slot-layout library for the `MockB20Stablecoin` variant's
 ///         variant-specific state. Disjoint namespace from `MockB20Storage`

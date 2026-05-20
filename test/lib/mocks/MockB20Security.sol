@@ -10,10 +10,10 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 /// @title MockB20Security
 /// @author Coinbase
 /// @notice Reference implementation of the `IB20Security` variant.
-///         Extends `MockB20` with announcement, share-ratio,
-///         batched-issuance / batched-clawback, redemption, and
-///         security-identifier surfaces; all base behavior is
-///         inherited unchanged.
+///         Extends `MockB20` with the announcement bracket,
+///         share-ratio accounting, batched issuance / clawback,
+///         redemption, and security-identifier surfaces; all base
+///         behavior is inherited unchanged.
 ///
 /// @dev    Variant-specific state lives in `MockB20SecurityStorage`'s
 ///         own ERC-7201 namespace (`base.b20.security`), disjoint from
@@ -21,6 +21,22 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 ///         variant composes additively without touching the base's
 ///         slot layout. The Rust precompile mirrors both namespaces
 ///         the same way.
+///
+///         **Announcement bracketing.** `announce(...)` is the
+///         canonical disclosure-and-execute primitive: it emits
+///         `Announcement(...)`, runs the operator's `internalCalls`
+///         in-order via self-`delegatecall` (so `msg.sender` stays
+///         the operator and the inner functions' role checks pass
+///         normally), and emits `EndAnnouncement(id)`. Any inner
+///         revert unwinds the entire transaction, so an
+///         `Announcement` log is never observable without its
+///         matching `EndAnnouncement`. `_checkSelector` rejects
+///         recursive `announce` invocations (`AnnouncementInProgress`)
+///         to keep the bracket exactly one level deep. The Rust impl
+///         needs to mirror EVM `delegatecall` semantics exactly
+///         (caller and storage preserved); a plain `call` to self
+///         would change `msg.sender` to the contract address and
+///         break the inner role checks.
 ///
 ///         **Policy override.** `REDEEMER_SENDER` lives in this
 ///         variant's own `redeemPolicyIds` packed slot, mirroring the
@@ -67,16 +83,41 @@ contract MockB20Security is MockB20, IB20Security {
     ///         stored ratio.
     uint256 public constant WAD_PRECISION = 1e18;
 
+    /// @dev Selector for the announce function itself. Used by
+    ///      `_checkSelector` to deny recursive `announce` invocations
+    ///      from inside `internalCalls`, keeping the bracket exactly
+    ///      one level deep.
+    bytes4 internal constant ANNOUNCE_SELECTOR = IB20Security.announce.selector;
+
     // ============================================================
     //                        ANNOUNCEMENTS
     // ============================================================
 
-    function announce(string calldata id, string calldata description, string calldata uri) external {
+    function announce(
+        bytes[] calldata internalCalls,
+        string calldata id,
+        string calldata description,
+        string calldata uri
+    ) external {
         _requireRole(SECURITY_OPERATOR_ROLE);
+
         MockB20SecurityStorage.Layout storage $ = MockB20SecurityStorage.layout();
         if ($.usedAnnouncementIds[id]) revert AnnouncementIdAlreadyUsed(id);
+        // Mark consumed BEFORE the emit and BEFORE any inner calls so
+        // a delegatecall back into `announce` (defended-against by
+        // `_checkSelector`) would fail this guard even if the
+        // selector check were ever weakened.
         $.usedAnnouncementIds[id] = true;
+
         emit Announcement(msg.sender, id, description, uri);
+
+        for (uint256 i = 0; i < internalCalls.length; i++) {
+            _checkSelector(internalCalls[i]);
+            (bool success,) = address(this).delegatecall(internalCalls[i]);
+            if (!success) revert InternalCallFailed(internalCalls[i]);
+        }
+
+        emit EndAnnouncement(id);
     }
 
     function isAnnouncementIdUsed(string calldata id) external view returns (bool) {
@@ -229,5 +270,31 @@ contract MockB20Security is MockB20, IB20Security {
         // is never the holder's intent.
         if (shares == 0 || shares < minimum) revert BelowMinimumRedeemable(shares, minimum);
         _burnRaw(msg.sender, amount);
+    }
+
+    /// @dev Validates a single `internalCalls[i]` blob before
+    ///      `announce` issues the inner `delegatecall`. Two checks:
+    ///      (1) the blob carries at least four bytes (a function
+    ///      selector), else `InternalCallMalformed` — a too-short
+    ///      payload would otherwise hit the contract's fallback
+    ///      surface, which is not what an "internal call" is supposed
+    ///      to mean; (2) the selector is not `announce` itself, else
+    ///      `AnnouncementInProgress` — keeps the bracket one level
+    ///      deep so indexers can rely on `Announcement` /
+    ///      `EndAnnouncement` pairing without nesting.
+    ///
+    ///      The check is a denylist (only `announce` is blocked), not
+    ///      an allowlist of approved corp-action functions: the
+    ///      operator already needs both `SECURITY_OPERATOR_ROLE` to
+    ///      call `announce` AND whatever role each inner function
+    ///      requires (e.g. `MINT_ROLE` for `batchMint`), so the
+    ///      authorization story is already enforced by the inner
+    ///      functions' own gates. The recursion guard exists to
+    ///      protect the EVENT topology (no nested brackets), not the
+    ///      authorization topology.
+    function _checkSelector(bytes calldata call) internal pure {
+        if (call.length < 4) revert InternalCallMalformed(call);
+        bytes4 sel = bytes4(call[:4]);
+        if (sel == ANNOUNCE_SELECTOR) revert AnnouncementInProgress();
     }
 }

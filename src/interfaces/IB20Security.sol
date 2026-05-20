@@ -21,21 +21,24 @@ import {IB20} from "./IB20.sol";
 ///         these as-is and do not redeclare them here.
 ///
 ///         **Security-specific additions.** This interface adds:
-///         1. `announce(...)` plus `SECURITY_OPERATOR_ROLE` for posting
-///            holder-impacting disclosures (corporate actions, name
-///            changes, splits, etc.).
+///         1. `announce(bytes[],string,string,string)` plus
+///            `SECURITY_OPERATOR_ROLE`. The single canonical wrapper
+///            for posting a holder-impacting disclosure AND atomically
+///            executing the on-chain calls it discloses; see
+///            "Announcement pairing" below for the topology.
 ///         2. `sharesToTokensRatio()` / `toShares(...)` / `sharesOf(...)`
 ///            plus `updateShareRatio(...)` for split-safe
 ///            DeFi-compatible share accounting.
 ///         3. `batchMint(address[],uint256[])` and
 ///            `batchBurn(address[],uint256[])` for the cold-path
-///            corporate-actions issuance and seizure flows. These are
+///            corporate-actions issuance and clawback flows. These are
 ///            scoped to the security-token surface (not the base
 ///            `IB20`) because batched destruction of third-party
 ///            balances is a compliance-sensitive operation and the
-///            batched issuance path is paired with the announcement
-///            flow above. See the per-function natspec for role
-///            gating; `batchBurn` is held tighter than `batchMint`.
+///            batched issuance path is the natural target of the
+///            announcement bracket above. See the per-function
+///            natspec for role gating; `batchBurn` is held tighter
+///            than `batchMint`.
 ///         4. `redeem(...)` / `redeemWithMemo(...)` plus
 ///            `updateMinimumRedeemable(...)` and `minimumRedeemable()`
 ///            for the holder-initiated off-chain settlement path.
@@ -48,15 +51,45 @@ import {IB20} from "./IB20.sol";
 ///         tokens that want the corporate-actions desk to be the sole
 ///         caller of these functions grant `METADATA_ROLE` only to
 ///         addresses that also hold `SECURITY_OPERATOR_ROLE`. That
-///         pairing is operational, not contract-enforced.
+///         pairing is operational, not contract-enforced. The standard
+///         way to issue a name or symbol change is to wrap the
+///         `setName` / `setSymbol` call as an entry in
+///         `announce(...)`'s `internalCalls`, so the rebrand lands in
+///         the same `Announcement` ↔ `EndAnnouncement` bracket as the
+///         disclosure that explains it.
 ///
-///         **Announcement pairing.** The corporate-actions operator is
-///         expected to post an `announce(...)` alongside each
-///         state-changing operator call (`updateShareRatio`,
-///         `updateSecurityIdentifier`, `setName`, `setSymbol`) so that
-///         indexers can correlate the on-chain change with its
-///         off-chain disclosure. This interface does NOT enforce that
-///         pairing on-chain.
+///         **Announcement pairing.** Every state-changing operator
+///         call that affects holder-visible token semantics
+///         (`updateShareRatio`, `updateSecurityIdentifier`, `setName`,
+///         `setSymbol`, `batchMint`, `batchBurn`, and admin-level
+///         changes such as `updatePolicy` / `setSupplyCap` /
+///         `setContractURI` / `pause` / `unpause`) SHOULD be issued by
+///         encoding the call into the `internalCalls` parameter of
+///         `announce(...)`. The token then:
+///         1. emits `Announcement(caller, id, description, uri)`,
+///         2. `delegatecall`s each entry in `internalCalls` with
+///            `msg.sender` preserved (so the operator's own roles
+///            apply to the inner calls), reverting the entire
+///            announce if any inner call reverts, and
+///         3. emits `EndAnnouncement(id)`.
+///         This binds every change to its off-chain disclosure
+///         atomically: indexers never see a `Transfer`, a
+///         `ShareRatioUpdated`, or any other state-mutation event
+///         from a wrapped call without the surrounding bracket, and
+///         they never see a half-applied bracket because any inner
+///         revert unwinds the entire transaction including the
+///         `Announcement` event.
+///
+///         The bare functions remain individually callable by their
+///         role holders for emergency operator override, but
+///         unwrapped invocations produce no bracket events and so are
+///         indistinguishable from any other state mutation in the log
+///         stream. Production corporate-actions flows are expected to
+///         go through `announce(...)`; standalone calls are an escape
+///         hatch, not the standard path. Recursion (an inner call
+///         re-invoking `announce`) reverts with
+///         `AnnouncementInProgress` so the bracket is always exactly
+///         one level deep.
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -95,6 +128,30 @@ interface IB20Security is IB20 {
     ///         always rejected, regardless of `minimumRedeemable`).
     error BelowMinimumRedeemable(uint256 shares, uint256 minimum);
 
+    /// @notice Reverted by `announce` when one of its `internalCalls`
+    ///         tries to invoke `announce` itself. The recursion guard
+    ///         keeps the bracketing topology one level deep:
+    ///         exactly one `Announcement` and one matching
+    ///         `EndAnnouncement` per outer call, with no nesting.
+    ///         Indexers can therefore treat every `Announcement` log
+    ///         as the unambiguous start of a single bracket pairing.
+    error AnnouncementInProgress();
+
+    /// @notice Reverted by `announce` when one of its `internalCalls`
+    ///         is malformed (shorter than four bytes, no function
+    ///         selector to validate). Carries the offending raw
+    ///         calldata blob.
+    error InternalCallMalformed(bytes call);
+
+    /// @notice Reverted by `announce` when one of its `internalCalls`
+    ///         reverts during the inner `delegatecall`. Carries the
+    ///         offending raw calldata blob; the inner revert reason
+    ///         is intentionally not bubbled through so this error
+    ///         identifies the wrapped call deterministically. To debug
+    ///         a failing inner call, replay it as a direct invocation
+    ///         and read its native revert.
+    error InternalCallFailed(bytes call);
+
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -122,6 +179,18 @@ interface IB20Security is IB20 {
     ///         is posted. Indexers join this with subsequent
     ///         security-token state changes via `id`.
     event Announcement(address indexed caller, string id, string description, string uri);
+
+    /// @notice Emitted by `announce` immediately after every entry in
+    ///         `internalCalls` has executed successfully (or
+    ///         immediately after `Announcement` itself for a pure
+    ///         announcement with `internalCalls.length == 0`).
+    ///         Carries the same `id` as the paired `Announcement` so
+    ///         indexers can join start ↔ end on the id even when
+    ///         scanning logs in isolation. The recursion guard
+    ///         (`AnnouncementInProgress`) makes the pairing
+    ///         within-tx unambiguous; the `id` field hardens cross-tx
+    ///         indexing as well.
+    event EndAnnouncement(string id);
 
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
@@ -174,18 +243,78 @@ interface IB20Security is IB20 {
                               ANNOUNCEMENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Posts a holder-impacting announcement. Each `id` may be
+    /// @notice Posts a holder-impacting announcement and, in the same
+    ///         transaction, atomically executes the on-chain calls
+    ///         that the announcement describes. Each `id` may be
     ///         consumed at most once over the lifetime of the token;
     ///         subsequent calls that reuse `id` revert with
     ///         `AnnouncementIdAlreadyUsed`.
     ///
-    /// @dev    Requires `SECURITY_OPERATOR_ROLE`. Emits `Announcement`.
+    ///         Pass `internalCalls` as an empty array for a pure
+    ///         disclosure (no on-chain change to bracket); pass one
+    ///         or more ABI-encoded calldata blobs to bracket the
+    ///         corresponding state changes inside the announcement.
+    ///         For example, to disclose and execute a 2-for-1 split
+    ///         in one transaction:
     ///
-    /// @param  id          Caller-chosen announcement identifier.
-    /// @param  description Human-readable summary of the announcement.
-    /// @param  uri         Off-chain URI containing the full
-    ///                     announcement contents.
-    function announce(string calldata id, string calldata description, string calldata uri) external;
+    ///             announce({
+    ///                 internalCalls: [
+    ///                     abi.encodeCall(this.updateShareRatio, (newRatio))
+    ///                 ],
+    ///                 id: "2026-Q3-split",
+    ///                 description: "2-for-1 forward stock split",
+    ///                 uri: "https://disclosures.example.com/...",
+    ///             });
+    ///
+    /// @dev    Requires `SECURITY_OPERATOR_ROLE`. Topology:
+    ///         1. Marks `id` consumed and emits
+    ///            `Announcement(msg.sender, id, description, uri)`.
+    ///         2. For each `internalCalls[i]`:
+    ///            a. Validates the embedded function selector. Calls
+    ///               shorter than four bytes revert with
+    ///               `InternalCallMalformed(internalCalls[i])`. Calls
+    ///               whose selector is `announce` itself revert with
+    ///               `AnnouncementInProgress` so the bracket cannot
+    ///               nest.
+    ///            b. Issues `address(this).delegatecall(internalCalls[i])`,
+    ///               which preserves `msg.sender` so role checks on
+    ///               the inner function see the operator (not the
+    ///               token contract). On failure, reverts with
+    ///               `InternalCallFailed(internalCalls[i])`; the
+    ///               inner revert reason is intentionally not bubbled
+    ///               (replay the call directly to debug).
+    ///         3. Emits `EndAnnouncement(id)`.
+    ///
+    ///         Atomicity: any inner-call revert (including
+    ///         `InternalCallFailed`, `InternalCallMalformed`, or
+    ///         `AnnouncementInProgress`) unwinds the entire
+    ///         transaction, so no `Announcement` event is observable
+    ///         without its matching `EndAnnouncement`.
+    ///
+    ///         The inner functions invoked through `internalCalls`
+    ///         are subject to their normal authorization gates (role
+    ///         checks, policy checks, pause vectors); the announcement
+    ///         wrapper does not add or relax any of them. The
+    ///         operator therefore needs both `SECURITY_OPERATOR_ROLE`
+    ///         (to call `announce`) and whatever role each inner
+    ///         function requires (e.g. `MINT_ROLE` for `batchMint`,
+    ///         `METADATA_ROLE` for `setName`).
+    ///
+    /// @param  internalCalls ABI-encoded calldata blobs executed
+    ///                       in-order via self-`delegatecall`. May
+    ///                       be empty (pure disclosure).
+    /// @param  id            Caller-chosen announcement identifier;
+    ///                       single-use over the token's lifetime.
+    /// @param  description   Human-readable summary of the
+    ///                       announcement.
+    /// @param  uri           Off-chain URI containing the full
+    ///                       announcement contents.
+    function announce(
+        bytes[] calldata internalCalls,
+        string calldata id,
+        string calldata description,
+        string calldata uri
+    ) external;
 
     /// @notice Returns true if `id` has previously been consumed by
     ///         `announce`.
@@ -213,17 +342,20 @@ interface IB20Security is IB20 {
     ///         new ratio at read time, preserving DeFi composability.
     ///
     /// @dev    Requires `SECURITY_OPERATOR_ROLE`. Emits
-    ///         `ShareRatioUpdated`. Operators should pair this with a
-    ///         separate `announce(...)` call so the change is
-    ///         discoverable to indexers; this interface does not
-    ///         enforce the pairing on-chain.
+    ///         `ShareRatioUpdated`. Standard usage is to invoke this
+    ///         through `announce(...)`'s `internalCalls`, which
+    ///         brackets the ratio change with a matching disclosure
+    ///         atomically (see the contract-level "Announcement
+    ///         pairing" notes). Direct invocation by a role holder
+    ///         remains permitted for emergency override but produces
+    ///         no `Announcement` / `EndAnnouncement` bracket.
     ///
     /// @param  newSharesToTokensRatio The new ratio scaled to
     ///                                `WAD_PRECISION`.
     function updateShareRatio(uint256 newSharesToTokensRatio) external;
 
     /*//////////////////////////////////////////////////////////////
-                  BATCHED ISSUANCE AND CORP-ACTION SEIZURE
+                  BATCHED ISSUANCE AND CORP-ACTION CLAWBACK
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Mints `amounts[i]` tokens to `recipients[i]`. The
@@ -244,10 +376,13 @@ interface IB20Security is IB20 {
     ///         policy-blocked recipient), the entire transaction
     ///         reverts and no partial state is committed. Emits
     ///         `Transfer(address(0), recipients[i], amounts[i])` per
-    ///         element. Operators should pair this with a separate
-    ///         `announce(...)` call so the issuance is discoverable to
-    ///         indexers; this interface does not enforce the pairing
-    ///         on-chain.
+    ///         element. Standard usage is to invoke this through
+    ///         `announce(...)`'s `internalCalls`, which brackets the
+    ///         issuance with a matching disclosure atomically (see
+    ///         the contract-level "Announcement pairing" notes).
+    ///         Direct invocation by a role holder remains permitted
+    ///         for emergency override but produces no `Announcement` /
+    ///         `EndAnnouncement` bracket.
     ///
     /// @param  recipients Accounts receiving the minted tokens.
     /// @param  amounts    Per-recipient amounts, parallel to
@@ -279,10 +414,13 @@ interface IB20Security is IB20 {
     ///         committed. Emits `Transfer(accounts[i], address(0),
     ///         amounts[i])` per element; does NOT emit `BurnedBlocked`
     ///         (that event is reserved for `burnBlocked`'s sanctions
-    ///         semantics). Operators should pair this with a separate
-    ///         `announce(...)` call so the destruction is discoverable
-    ///         to indexers; this interface does not enforce the
-    ///         pairing on-chain.
+    ///         semantics). Standard usage is to invoke this through
+    ///         `announce(...)`'s `internalCalls`, which brackets the
+    ///         clawback with a matching disclosure atomically (see the
+    ///         contract-level "Announcement pairing" notes). Direct
+    ///         invocation by a role holder remains permitted for
+    ///         emergency override but produces no `Announcement` /
+    ///         `EndAnnouncement` bracket.
     ///
     /// @param  accounts Accounts whose balances will be debited.
     /// @param  amounts  Per-account amounts, parallel to `accounts`.
@@ -344,9 +482,14 @@ interface IB20Security is IB20 {
     ///
     /// @dev    Requires `SECURITY_OPERATOR_ROLE`. Emits
     ///         `IdentifierUpdated`. Reverts with `InvalidIdentifierType`
-    ///         if `identifierType` is the empty string. Operators
-    ///         should pair this with a separate `announce(...)` call;
-    ///         this interface does not enforce the pairing on-chain.
+    ///         if `identifierType` is the empty string. Standard
+    ///         usage is to invoke this through `announce(...)`'s
+    ///         `internalCalls`, which brackets the identifier change
+    ///         with a matching disclosure atomically (see the
+    ///         contract-level "Announcement pairing" notes). Direct
+    ///         invocation by a role holder remains permitted for
+    ///         emergency override but produces no `Announcement` /
+    ///         `EndAnnouncement` bracket.
     ///
     /// @param  identifierType Identifier category (e.g. "ISIN").
     /// @param  value          New value, or empty string to remove.
