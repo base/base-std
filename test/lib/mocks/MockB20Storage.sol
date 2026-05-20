@@ -55,24 +55,39 @@ library MockB20Storage {
         // LastAdminCannotRenounce in O(1). Bumped on grant, decremented on
         // revoke / renounce.
         uint256 adminCount;
-        // ---------- Policy slots (PACKED) ----------
-        // The four hot-path policy types (transfer sender / receiver /
-        // executor, mint receiver) are packed into a single 256-bit slot
-        // so the transfer and mint hot paths read all the policy IDs they
-        // need with ONE SLOAD instead of one per policy type. Layout:
+        // ---------- Policy slots (PACKED, per-operation) ----------
+        // Hot-path policy IDs live in per-operation packed slots so each
+        // op reads exactly one slot, AND so adding granularity to one op
+        // (e.g. future MINT_AUTHORIZER) doesn't push other ops' IDs into
+        // a second SLOAD. Each slot holds four uint64s; the 64-bit width
+        // matches `uint64 policyId` everywhere else in the system, and
+        // four IDs fit exactly into the 256-bit slot.
+        //
+        // Transfer-side policies (read by `_transfer`, `transferFrom*`,
+        // and the seize check in `burnBlocked`). Layout:
         //   [63:0]    transferSenderPolicyId
         //   [127:64]  transferReceiverPolicyId
         //   [191:128] transferExecutorPolicyId
-        //   [255:192] mintReceiverPolicyId
-        // The 64-bit width matches `uint64 policyId` everywhere else in
-        // the system; four IDs fit exactly into the 256-bit slot.
-        uint256 packedPolicyIds;
-        // Variant-defined and user-defined policy types (e.g.
-        // REDEEMER_SENDER on IB20Security, or any keccak256("CUSTOM_*")
-        // a wrapper introduces) live in this mapping. The cold path
-        // (variant-specific operations like `redeem`) pays the standard
-        // one-SLOAD-per-mapping-access cost.
-        mapping(bytes32 policyType => uint64 policyId) extraPolicyIds;
+        //   [255:192] reserved (for future transfer-side granularity)
+        uint256 transferPolicyIds;
+        // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER` is
+        // defined today; the remaining three uint64 slots are reserved
+        // for future granular mint-side policy types (e.g.
+        // MINT_AUTHORIZER) so adding one doesn't force a second SLOAD.
+        // Layout:
+        //   [63:0]    mintReceiverPolicyId
+        //   [127:64]  reserved
+        //   [191:128] reserved
+        //   [255:192] reserved
+        uint256 mintPolicyIds;
+        // There is no generic fallback mapping for "other" policy
+        // types. Each supported `policyType` lives in a fixed slot on
+        // this struct (or, for variant-specific operations, in the
+        // variant's own namespaced storage library — e.g. a future
+        // `MockB20SecurityStorage` adds `redeemPolicyIds` at namespace
+        // `base.b20.security`, mirroring how `MockB20StablecoinStorage`
+        // adds `currency` at `base.b20.stablecoin`). `updatePolicy` on
+        // an unsupported `policyType` reverts `UnsupportedPolicyType`.
         // ---------- Pause ----------
         // Bitmask: bit i set means PausableFeature(i) is paused. Translated
         // to/from the PausableFeature[] enum array at the IB20 surface
@@ -121,8 +136,8 @@ library MockB20Storage {
     uint256 internal constant ROLES_OFFSET = 6;
     uint256 internal constant ROLE_ADMINS_OFFSET = 7;
     uint256 internal constant ADMIN_COUNT_OFFSET = 8;
-    uint256 internal constant PACKED_POLICY_IDS_OFFSET = 9;
-    uint256 internal constant EXTRA_POLICY_IDS_OFFSET = 10;
+    uint256 internal constant TRANSFER_POLICY_IDS_OFFSET = 9;
+    uint256 internal constant MINT_POLICY_IDS_OFFSET = 10;
     uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;

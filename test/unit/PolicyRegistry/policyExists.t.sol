@@ -14,9 +14,21 @@ contract PolicyRegistryPolicyExistsTest is PolicyRegistryTest {
         assertTrue(policyRegistry.policyExists(1));
     }
 
-    function test_policyExists_success_falseForUncreated(uint64 policyId) public view {
-        vm.assume(policyId > 1);
+    /// @notice policyExists returns false for a well-formed but uncreated id.
+    /// @dev Uses a well-formed id (top byte in PolicyType range) so the malformed
+    ///      check passes and the storage-lookup miss returns false.
+    function test_policyExists_success_falseForUncreated(uint64 seed) public view {
+        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
         assertFalse(policyRegistry.policyExists(policyId));
+    }
+
+    /// @notice policyExists reverts MalformedPolicyId for any id whose top byte is
+    ///         outside the PolicyType enum range.
+    /// @dev Encoding invariant on the registry surface.
+    function test_policyExists_revert_malformedPolicyId(uint64 seed) public {
+        uint64 policyId = _malformedPolicyId(seed);
+        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.MalformedPolicyId.selector, policyId));
+        policyRegistry.policyExists(policyId);
     }
 
     function test_policyExists_success_trueAfterCreate(uint8 policyTypeInt) public {

@@ -41,21 +41,27 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         detail; the public surface speaks only in `PausableFeature`
 ///         values.
 ///
-///         **Policy model.** The token holds a generic `policyId` mapping
-///         keyed by `bytes32 policyType`, where each standard policy type
-///         is the `keccak256` hash of its name. Four standard types are
-///         exposed as constants on this base surface:
+///         **Policy model.** Each supported `bytes32 policyType` resolves
+///         to a dedicated storage slot on the token. The policy-type
+///         identifier is the `keccak256` hash of its name. Four standard
+///         types are exposed as constants on this base surface:
 ///         - `TRANSFER_SENDER`   — checked against `from` on every transfer
 ///         - `TRANSFER_RECEIVER` — checked against `to`   on every transfer
 ///         - `TRANSFER_EXECUTOR` — checked against `msg.sender` on `transferFrom`
 ///                                  (when distinct from `from`)
 ///         - `MINT_RECEIVER`     — checked against `to`   on every mint
-///         Variants may introduce additional policy-type constants for
-///         variant-specific operations (e.g. `IB20Security` adds
-///         `REDEEMER_SENDER` for its `redeem` path). The underlying
-///         `policyId` mapping accepts any `bytes32` key, so the
-///         variant-side additions are pure interface additions with no
-///         change to the storage shape.
+///         Variants extend this set by adding their own dedicated slots
+///         (e.g. `IB20Security` adds `REDEEMER_SENDER` for its `redeem`
+///         path, stored in the variant's own namespaced storage). There
+///         is no generic catch-all mapping: every `policyType` either
+///         resolves to a real slot or doesn't exist at all. Both reads
+///         (`policyId`) and writes (`updatePolicy`) for a `policyType`
+///         not supported by the token (or its variant) revert
+///         `UnsupportedPolicyType` — an unsupported `policyType` is
+///         nonsense the token can't parse, so the registry never gets
+///         consulted with it. (Reads stay strict, not silent-zero,
+///         because a typo'd query returning `0` would masquerade as
+///         "no restriction" instead of surfacing the bug.)
 ///
 ///         Each policy slot defaults to built-in ID `0` (always-allow) so
 ///         newly created tokens are unrestricted until the admin
@@ -174,6 +180,16 @@ interface IB20 {
     /// @notice The provided policy ID does not exist in the policy
     ///         registry.
     error PolicyNotFound(uint64 policyId);
+
+    /// @notice `policyId` or `updatePolicy` was called with a
+    ///         `policyType` that this token (and its variant, if any)
+    ///         does not recognize. Each token implementation defines a
+    ///         fixed set of supported policy types; both reads and
+    ///         writes for anything outside that set revert here so a
+    ///         typo'd query can never be silently interpreted as
+    ///         "no restriction", and an admin can never assign a policy
+    ///         to a slot that doesn't exist.
+    error UnsupportedPolicyType(bytes32 policyType);
 
     /// @notice `burnBlocked` was called against a `from` address that is
     ///         currently authorized under the active `TRANSFER_SENDER`
