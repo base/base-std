@@ -174,7 +174,10 @@ contract MockB20 is IB20 {
 
     function transferWithMemo(address to, uint256 amount, bytes32 memo) external returns (bool) {
         _transfer(msg.sender, to, amount);
-        emit Memo(memo);
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        uint256 nonce = $.memoNonce;
+        unchecked { $.memoNonce = nonce + 1; }
+        emit Memo(msg.sender, to, amount, memo, nonce);
         return true;
     }
 
@@ -187,7 +190,10 @@ contract MockB20 is IB20 {
             }
         }
         _transfer(from, to, amount);
-        emit Memo(memo);
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        uint256 nonce = $.memoNonce;
+        unchecked { $.memoNonce = nonce + 1; }
+        emit Memo(from, to, amount, memo, nonce);
         return true;
     }
 
@@ -217,7 +223,10 @@ contract MockB20 is IB20 {
 
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external {
         _mint(to, amount);
-        emit Memo(memo);
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        uint256 nonce = $.memoNonce;
+        unchecked { $.memoNonce = nonce + 1; }
+        emit Memo(address(0), to, amount, memo, nonce);
     }
 
     function burn(uint256 amount) external {
@@ -226,7 +235,10 @@ contract MockB20 is IB20 {
 
     function burnWithMemo(uint256 amount, bytes32 memo) external {
         _burnSelf(msg.sender, amount);
-        emit Memo(memo);
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        uint256 nonce = $.memoNonce;
+        unchecked { $.memoNonce = nonce + 1; }
+        emit Memo(msg.sender, address(0), amount, memo, nonce);
     }
 
     function burnBlocked(address from, uint256 amount) external {

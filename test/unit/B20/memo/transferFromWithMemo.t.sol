@@ -57,7 +57,8 @@ contract B20TransferFromWithMemoTest is B20Test {
     }
 
     /// @notice Verifies transferFromWithMemo emits Transfer then Memo, in that order
-    /// @dev Memo is the second log; canonical Memo test for the transferFrom path
+    /// @dev Memo is self-contained: carries from, to, amount, memo, and a unique nonce.
+    ///      nonce is 0 for the first memo'd operation on a freshly-etched token.
     function test_transferFromWithMemo_success_emitsTransferThenMemo(
         address caller,
         address from,
@@ -76,8 +77,8 @@ contract B20TransferFromWithMemoTest is B20Test {
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(from, to, amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(address(token));
+        emit IB20.Memo(from, to, amount, memo, 0);
         vm.prank(caller);
         token.transferFromWithMemo(from, to, amount, memo);
     }

@@ -34,16 +34,17 @@ contract B20BurnWithMemoTest is B20Test {
         assertEq(token.totalSupply(), supplyBefore - amount, "supply decreased");
     }
 
-    /// @notice Verifies burnWithMemo emits Transfer(caller, address(0), amount) then Memo(memo)
-    /// @dev Event ordering: Memo follows Transfer; canonical Memo test for the burn path
+    /// @notice Verifies burnWithMemo emits Transfer(caller, address(0), amount) then Memo
+    /// @dev Memo is self-contained: carries from, to, amount, memo, and a unique nonce.
+    ///      nonce is 0 for the first memo'd operation on a freshly-etched token.
     function test_burnWithMemo_success_emitsTransferThenMemo(uint256 amount, bytes32 memo) public {
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(burner, address(0), amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(address(token));
+        emit IB20.Memo(burner, address(0), amount, memo, 0);
         vm.prank(burner);
         token.burnWithMemo(amount, memo);
     }
