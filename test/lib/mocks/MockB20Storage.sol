@@ -54,7 +54,11 @@ library MockB20Storage {
         // Tracks DEFAULT_ADMIN_ROLE holder count so renounceRole can enforce
         // LastAdminCannotRenounce in O(1). Bumped on grant, decremented on
         // revoke / renounce.
-        uint256 adminCount;
+        uint248 adminCount;
+        // False from etch until the factory sets it true at the end of
+        // createToken. Packed with adminCount in the same slot to avoid
+        // dedicating a full slot to a single flag.
+        bool initialized;
         // ---------- Policy slots (PACKED, per-operation) ----------
         // Hot-path policy IDs live in per-operation packed slots so each
         // op reads exactly one slot, AND so adding granularity to one op
@@ -99,13 +103,6 @@ library MockB20Storage {
         uint256 supplyCap;
         // ---------- Permit (EIP-2612) ----------
         mapping(address owner => uint256 nonce) nonces;
-        // ---------- Bootstrap window flag ----------
-        // False from etch until the factory writes `true` directly (via
-        // vm.store, mirroring the Rust impl's direct slot write). While
-        // false, factory-originated calls bypass all token-side authorization
-        // gates (role / policy / pause checks). Token invariants (supply-cap
-        // math, balance accounting) are NOT bypassed.
-        bool initialized;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff))
@@ -138,12 +135,14 @@ library MockB20Storage {
     uint256 internal constant ROLES_OFFSET = 6;
     uint256 internal constant ROLE_ADMINS_OFFSET = 7;
     uint256 internal constant ADMIN_COUNT_OFFSET = 8;
+    uint256 internal constant INITIALIZED_OFFSET = 8;
+    // `initialized` is the high byte in slot 8 (packed after uint248 adminCount).
+    uint8 internal constant INITIALIZED_BYTE_OFFSET = 31;
     uint256 internal constant TRANSFER_POLICY_IDS_OFFSET = 9;
     uint256 internal constant MINT_POLICY_IDS_OFFSET = 10;
     uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;
-    uint256 internal constant INITIALIZED_OFFSET = 14;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the
