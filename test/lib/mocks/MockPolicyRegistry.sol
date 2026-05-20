@@ -15,14 +15,13 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 ///         **Storage layout** (Rust impl mirrors these fields in order):
 ///
 ///         `_policies[id]` — packed uint256:
-///           [255:169]  unused
-///           [168]      CREATED_BIT — set at creation, never cleared.
-///                      Required because a renounced policy has admin =
-///                      address(0), making bits [167:8] zero; without this
-///                      sentinel a renounced ALLOWLIST or BLOCKLIST policy
-///                      would be indistinguishable from an un-created slot.
+///           [255:168]  unused
 ///           [167:8]    admin address (160 bits). Zero after renounceAdmin.
-///           [7:0]      unused (reserved for future policy flags)
+///           [7:0]      PolicyType (ALLOWLIST = 2, BLOCKLIST = 3).
+///                      Since both values are non-zero, `packed == 0`
+///                      reliably means the policy was never created, even
+///                      after renounceAdmin zeroes the admin field. No
+///                      separate existence sentinel is required.
 ///
 ///         `_members[policyId][account]` — bool:
 ///           ALLOWLIST: true → account IS authorized.
@@ -56,12 +55,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
     uint256 internal constant TYPE_SHIFT = 56;
 
-    // Bit 168 of _policies[id]. Sits one bit above the 160-bit admin field
-    // at [167:8] so the two fields never overlap regardless of admin value.
-    uint256 internal constant CREATED_BIT = uint256(1) << 168;
-
-    // Admin address occupies bits [167:8]; bits [7:0] are reserved.
+    // Admin address occupies bits [167:8]; PolicyType occupies bits [7:0].
     uint256 internal constant ADMIN_SHIFT = 8;
+    uint256 internal constant TYPE_MASK = 0xFF;
 
     // ============================================================
     //                          STORAGE
@@ -73,8 +69,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     // Global monotonic counter for the low 56 bits of custom policy IDs.
     // Starts at 0. The discriminator byte in bits [63:56] ensures no custom ID
-    // can equal built-in 0 or 1 regardless of counter value (ALLOWLIST = 0x02,
-    // BLOCKLIST = 0x03, so the minimum custom ID is 0x0200000000000000).
+    // can equal built-in 0 or 1 regardless of counter value.
     uint56 private _nextCounter;
 
     // ============================================================
@@ -114,7 +109,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         if (pending == address(0)) revert NoPendingAdmin();
         if (pending != msg.sender) revert Unauthorized();
         address previousAdmin = _decodeAdmin(packed);
-        _policies[policyId] = _encode(msg.sender);
+        _policies[policyId] = _encode(_decodeType(packed), msg.sender);
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, previousAdmin, msg.sender);
     }
@@ -123,7 +118,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function renounceAdmin(uint64 policyId) external {
         uint256 packed = _requireCustom(policyId);
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        _policies[policyId] = _encode(address(0));
+        _policies[policyId] = _encode(_decodeType(packed), address(0));
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, address(0));
     }
@@ -131,7 +126,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function updateAllowlist(uint64 policyId, bool allowed, address[] calldata accounts) external {
         uint256 packed = _requireCustom(policyId);
-        if (_typeFromId(policyId) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
+        if (_decodeType(packed) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.ALLOWLIST, value: allowed, accounts: accounts});
     }
@@ -139,7 +134,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external {
         uint256 packed = _requireCustom(policyId);
-        if (_typeFromId(policyId) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
+        if (_decodeType(packed) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});
     }
@@ -155,9 +150,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
         if (policyId == ALWAYS_ALLOW_ID) return true;
         if (policyId == ALWAYS_BLOCK_ID) return false;
         uint256 packed = _policies[policyId];
-        if ((packed & CREATED_BIT) == 0) revert PolicyNotFound();
+        if (packed == 0) revert PolicyNotFound();
         bool member = _members[policyId][account];
-        return _typeFromId(policyId) == PolicyType.ALLOWLIST ? member : !member;
+        return _decodeType(packed) == PolicyType.ALLOWLIST ? member : !member;
     }
 
     // ============================================================
@@ -172,22 +167,23 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function policyExists(uint64 policyId) external view returns (bool) {
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
-        return (_policies[policyId] & CREATED_BIT) != 0;
+        return _policies[policyId] != 0;
     }
 
     /// @inheritdoc IPolicyRegistry
     function policyType(uint64 policyId) external view returns (PolicyType) {
         if (policyId == ALWAYS_ALLOW_ID) return PolicyType.ALWAYS_ALLOW;
         if (policyId == ALWAYS_BLOCK_ID) return PolicyType.ALWAYS_BLOCK;
-        if ((_policies[policyId] & CREATED_BIT) == 0) revert PolicyNotFound();
-        return _typeFromId(policyId);
+        uint256 packed = _policies[policyId];
+        if (packed == 0) revert PolicyNotFound();
+        return _decodeType(packed);
     }
 
     /// @inheritdoc IPolicyRegistry
     function policyAdmin(uint64 policyId) external view returns (address) {
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         uint256 packed = _policies[policyId];
-        if ((packed & CREATED_BIT) == 0) revert PolicyNotFound();
+        if (packed == 0) revert PolicyNotFound();
         return _decodeAdmin(packed);
     }
 
@@ -211,7 +207,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
             _nextCounter = counter + 1;
         }
         newPolicyId = _makeId(policyType, counter);
-        _policies[newPolicyId] = _encode(admin);
+        _policies[newPolicyId] = _encode(policyType, admin);
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
     }
@@ -232,20 +228,20 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     function _requireCustom(uint64 policyId) internal view returns (uint256 packed) {
         packed = _policies[policyId];
-        if ((packed & CREATED_BIT) == 0) revert PolicyNotFound();
+        if (packed == 0) revert PolicyNotFound();
     }
 
     function _makeId(PolicyType policyType, uint56 counter) internal pure returns (uint64) {
         return (uint64(uint8(policyType)) << TYPE_SHIFT) | uint64(counter);
     }
 
-    function _typeFromId(uint64 policyId) internal pure returns (PolicyType) {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return PolicyType(uint8(policyId >> TYPE_SHIFT));
+    function _encode(PolicyType policyType, address admin) internal pure returns (uint256) {
+        return (uint256(uint160(admin)) << ADMIN_SHIFT) | uint256(policyType);
     }
 
-    function _encode(address admin) internal pure returns (uint256) {
-        return CREATED_BIT | (uint256(uint160(admin)) << ADMIN_SHIFT);
+    function _decodeType(uint256 packed) internal pure returns (PolicyType) {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return PolicyType(packed & TYPE_MASK);
     }
 
     function _decodeAdmin(uint256 packed) internal pure returns (address) {
