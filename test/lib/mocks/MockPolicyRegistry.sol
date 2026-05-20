@@ -151,6 +151,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address account) external view returns (bool) {
+        _requireWellFormed(policyId);
         // Built-in short-circuits MUST precede any storage read: IDs 0 and 1
         // have no entry in storage and must never reach the storage path.
         if (policyId == ALWAYS_ALLOW_ID) return true;
@@ -175,12 +176,14 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function policyExists(uint64 policyId) external view returns (bool) {
+        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
         return MockPolicyRegistryStorage.layout().policies[policyId] != 0;
     }
 
     /// @inheritdoc IPolicyRegistry
     function policyType(uint64 policyId) external view returns (PolicyType) {
+        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID) return PolicyType.ALWAYS_ALLOW;
         if (policyId == ALWAYS_BLOCK_ID) return PolicyType.ALWAYS_BLOCK;
         uint256 packed = MockPolicyRegistryStorage.layout().policies[policyId];
@@ -190,6 +193,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function policyAdmin(uint64 policyId) external view returns (address) {
+        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         uint256 packed = MockPolicyRegistryStorage.layout().policies[policyId];
         if (packed == 0) revert PolicyNotFound();
@@ -198,6 +202,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function pendingPolicyAdmin(uint64 policyId) external view returns (address) {
+        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
     }
@@ -256,5 +261,17 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     function _decodeAdmin(uint256 packed) internal pure returns (address) {
         return address(uint160(packed >> PACKED_ADMIN_SHIFT));
+    }
+
+    /// @dev Reverts `MalformedPolicyId` if `policyId`'s top byte (the
+    ///      `PolicyType` discriminator) is outside the enum range. Every
+    ///      entry point that accepts a `policyId` calls this first, so
+    ///      malformed IDs are rejected distinctly from well-formed
+    ///      IDs that simply haven't been created (which still revert
+    ///      `PolicyNotFound`).
+    function _requireWellFormed(uint64 policyId) internal pure {
+        if (uint8(policyId >> POLICY_ID_TYPE_SHIFT) > uint8(type(PolicyType).max)) {
+            revert MalformedPolicyId(policyId);
+        }
     }
 }

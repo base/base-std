@@ -116,6 +116,15 @@ interface IPolicyRegistry {
     /// @notice The referenced policy ID does not exist (and is not built-in).
     error PolicyNotFound();
 
+    /// @notice The provided `uint64 policyId` is malformed: its top byte
+    ///         (the `PolicyType` discriminator) is outside the
+    ///         `PolicyType` enum range (i.e. greater than
+    ///         `uint8(type(PolicyType).max)`). Reverted by every entry
+    ///         point that accepts a `policyId`, distinct from
+    ///         `PolicyNotFound` (which fires for well-formed IDs that
+    ///         simply haven't been created).
+    error MalformedPolicyId(uint64 policyId);
+
     /// @notice The operation is incompatible with the policy's type. For
     ///         example, calling `updateAllowlist` on a BLOCKLIST policy.
     error IncompatiblePolicyType();

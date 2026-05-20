@@ -6,11 +6,21 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
-    /// @notice Verifies isAuthorized reverts for an unknown policy id
-    /// @dev Lookup guard for non-existent ids; checks PolicyNotFound() error
-    function test_isAuthorized_revert_policyNotFound(uint64 policyId, address account) public {
-        vm.assume(policyId > 1);
+    /// @notice Verifies isAuthorized reverts PolicyNotFound for a well-formed but uncreated id
+    /// @dev Lookup guard for non-existent ids; uses a well-formed id so the malformed
+    ///      check passes and the storage-lookup miss fires.
+    function test_isAuthorized_revert_policyNotFound(uint64 seed, address account) public {
+        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
+        policyRegistry.isAuthorized(policyId, account);
+    }
+
+    /// @notice Verifies isAuthorized reverts MalformedPolicyId for any id whose top byte
+    ///         is outside the PolicyType enum range.
+    /// @dev Encoding invariant on the registry surface.
+    function test_isAuthorized_revert_malformedPolicyId(uint64 seed, address account) public {
+        uint64 policyId = _malformedPolicyId(seed);
+        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.MalformedPolicyId.selector, policyId));
         policyRegistry.isAuthorized(policyId, account);
     }
 

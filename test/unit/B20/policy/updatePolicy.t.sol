@@ -25,14 +25,12 @@ contract B20UpdatePolicyTest is B20Test {
     }
 
     /// @notice Verifies updatePolicy reverts when the target policy id does not exist in the registry
-    /// @dev Cross-precompile guard; checks PolicyNotFound() error.
-    ///      MockPolicyRegistry only knows ids 0 and 1; everything else is unknown.
-    function test_updatePolicy_revert_policyNotFound(uint8 typeIdx, uint64 newPolicyId) public {
+    /// @dev Cross-precompile guard; checks PolicyNotFound() error. Fuzzes well-formed but
+    ///      uncreated registry IDs so the registry-side malformed check passes and the
+    ///      not-found path fires from MockB20.
+    function test_updatePolicy_revert_policyNotFound(uint8 typeIdx, uint64 seed) public {
         bytes32 policyType = _knownPolicyType(typeIdx);
-        vm.assume(
-            newPolicyId != PolicyRegistryConstants.ALWAYS_ALLOW_ID
-                && newPolicyId != PolicyRegistryConstants.ALWAYS_BLOCK_ID
-        );
+        uint64 newPolicyId = _wellFormedUncreatedPolicyId(seed);
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(IB20.PolicyNotFound.selector, newPolicyId));

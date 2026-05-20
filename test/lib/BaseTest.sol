@@ -7,6 +7,7 @@ import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol"
 import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {MockTokenFactory} from "test/lib/mocks/MockTokenFactory.sol";
 
+import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 /// @notice Common base for every test contract in this suite.
@@ -101,5 +102,44 @@ abstract contract BaseTest is Test {
         vm.assume(caller != StdPrecompiles.TOKEN_FACTORY_ADDRESS);
         vm.assume(caller != StdPrecompiles.POLICY_REGISTRY_ADDRESS);
         vm.assume(caller != StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS);
+    }
+
+    // ============================================================
+    //                  POLICY-ID ENCODING HELPERS
+    // ============================================================
+    // The registry validates the policyId encoding (top byte must be
+    // a valid `PolicyType` discriminator) before any other check, so
+    // tests fuzzing arbitrary uint64s need to partition their inputs
+    // into well-formed and malformed regions to assert the right error.
+
+    /// @notice True iff `policyId`'s top byte (the PolicyType
+    ///         discriminator) is in the valid `PolicyType` enum range.
+    function _isWellFormedPolicyId(uint64 policyId) internal pure returns (bool) {
+        return uint8(policyId >> 56) <= uint8(IPolicyRegistry.PolicyType.BLOCKLIST);
+    }
+
+    /// @notice Maps a fuzz seed to a well-formed but uncreated `policyId`.
+    ///         Top byte is forced into `{ALLOWLIST, BLOCKLIST}` (custom
+    ///         range, never sentinel) and low 56 bits are forced strictly
+    ///         above the sentinel range so the ID can never collide with
+    ///         a sentinel or with any policy a registry could create from
+    ///         a fresh state.
+    function _wellFormedUncreatedPolicyId(uint64 seed) internal pure returns (uint64) {
+        uint8 typeByte = uint8(IPolicyRegistry.PolicyType.ALLOWLIST) + uint8(seed % 2);
+        // Use bits [62:8] as the counter source so the top byte and the
+        // counter selection are independent. Force counter >= 2 to skip
+        // both sentinel IDs (0 and 1).
+        uint56 counter = uint56((seed >> 8) | 2);
+        return (uint64(typeByte) << 56) | uint64(counter);
+    }
+
+    /// @notice Maps a fuzz seed to a MALFORMED `policyId`: top byte is
+    ///         forced strictly above the `PolicyType` enum range so the
+    ///         registry rejects it with `MalformedPolicyId`.
+    function _malformedPolicyId(uint64 seed) internal pure returns (uint64) {
+        uint8 maxValidType = uint8(IPolicyRegistry.PolicyType.BLOCKLIST);
+        uint8 invalidRange = type(uint8).max - maxValidType;
+        uint8 typeByte = maxValidType + 1 + uint8(seed % invalidRange);
+        return (uint64(typeByte) << 56) | uint64(seed & ((1 << 56) - 1));
     }
 }
