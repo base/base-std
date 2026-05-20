@@ -35,7 +35,7 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
     }
 
     /// @notice Verifies different senders produce different addresses for the same (variant, salt)
-    /// @dev Sender is mixed into the trailing 8-byte hash at address bytes [12:20]
+    /// @dev Sender is mixed into the trailing 9-byte hash at address bytes [11:20]
     function test_getTokenAddress_success_differentSenderDiffers(
         uint8 variantInt,
         address s1,
@@ -50,7 +50,7 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
     }
 
     /// @notice Verifies different salts produce different addresses for the same (variant, sender)
-    /// @dev Salt is mixed into the trailing 8-byte hash at address bytes [12:20]
+    /// @dev Salt is mixed into the trailing 9-byte hash at address bytes [11:20]
     function test_getTokenAddress_success_differentSaltDiffers(
         uint8 variantInt,
         address sender,
@@ -93,8 +93,8 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
         assertEq(byteAt10, uint8(variant), "address byte [10] must equal variant ordinal");
     }
 
-    /// @notice Verifies byte [11] of the returned address is reserved (always zero)
-    function test_getTokenAddress_success_reservedByteAtPosition11(
+    /// @notice Verifies byte [11] comes from the hash tail entropy
+    function test_getTokenAddress_success_byte11DerivedFromTailEntropy(
         uint8 variantInt,
         address sender,
         bytes32 salt
@@ -102,9 +102,11 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
         ITokenFactory.TokenVariant variant = _boundVariant(variantInt);
         address a = factory.getTokenAddress(variant, sender, salt);
 
-        // Byte [11] = bits [64..71]. Mask after shift.
+        bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));
+        uint8 expectedByte11 = uint8(uint72(tail) >> 64);
+        // Byte [11] = bits [64..71] of the 72-bit tail.
         // forge-lint: disable-next-line(unsafe-typecast)
         uint8 byteAt11 = uint8(uint160(a) >> 64);
-        assertEq(byteAt11, 0, "address byte [11] is reserved and must be zero");
+        assertEq(byteAt11, expectedByte11, "address byte [11] must come from tail entropy");
     }
 }

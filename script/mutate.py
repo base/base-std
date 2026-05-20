@@ -219,9 +219,9 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_FACTORY,
-        "| uint160(uint64(tail));",
-        "| (uint160(uint64(tail)) << 8);",
-        "_computeAddress: tail shifted into reserved byte [11] (breaks deterministic addressing)",
+        "| uint160(uint72(tail));",
+        "| (uint160(uint72(tail)) << 8);",
+        "_computeAddress: tail shifted left by 8 bits (truncates entropy and breaks deterministic addressing)",
     ),
     Mutation(
         MOCK_FACTORY,
@@ -231,8 +231,8 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_FACTORY,
-        "bytes8 tail = bytes8(keccak256(abi.encode(sender, salt)));",
-        "bytes8 tail = bytes8(keccak256(abi.encodePacked(sender, salt)));",
+        "bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));",
+        "bytes9 tail = bytes9(keccak256(abi.encodePacked(sender, salt)));",
         "_computeAddress: encode vs encodePacked (different hash, breaks determinism contract)",
     ),
     # === Address prefix check ===

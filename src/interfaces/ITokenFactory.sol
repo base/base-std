@@ -20,8 +20,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         - `[0:10]`  — `bytes10(0xB200000000000000000000)` shared
 ///                       prefix identifying a factory-created B-20.
 ///         - `[10]`    — `bytes1(variant)` (matches `TokenVariant`).
-///         - `[11]`    — reserved for future use (currently `0x00`).
-///         - `[12:20]` — `bytes8(keccak256(abi.encode(msg.sender, salt)))`.
+///         - `[11:20]` — `bytes9(keccak256(abi.encode(msg.sender, salt)))`.
 ///
 ///         **Variant evolution.** Adding new required fields to an
 ///         existing variant after launch is NOT supported: the factory is

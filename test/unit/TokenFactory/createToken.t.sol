@@ -367,9 +367,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      abi.encode specifically; this test recomputes the address externally using
     ///      abi.encode and asserts the factory returns the same value.
     function test_getTokenAddress_pinsDownAbiEncoding(address sender, bytes32 salt) public view {
-        bytes8 expectedTail = bytes8(keccak256(abi.encode(sender, salt)));
+        bytes9 expectedTail = bytes9(keccak256(abi.encode(sender, salt)));
         uint160 expectedAddr = (uint160(0xB2) << 152) | (uint160(uint8(ITokenFactory.TokenVariant.DEFAULT)) << 72)
-            | uint160(uint64(expectedTail));
+            | uint160(uint72(expectedTail));
 
         address actual = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, sender, salt);
         assertEq(actual, address(expectedAddr), "factory must derive address via abi.encode of (sender, salt)");
@@ -416,8 +416,8 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
     }
 
-    /// @notice Verifies decimals are fixed by variant and not by address encoding
-    /// @dev Default tokens return 18, stablecoin tokens return 6, and address byte [11] stays reserved.
+    /// @notice Verifies decimals are fixed by variant and not encoded in address bytes
+    /// @dev Default tokens return 18, stablecoin tokens return 6.
     function test_createToken_success_decimalsFixedByVariant(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address defaultToken = _createDefault(caller, salt, _b20Params("Test", "TST", admin), new bytes[](0));
@@ -425,9 +425,5 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         assertEq(MockB20(defaultToken).decimals(), 18, "default decimals must be fixed at 18");
         assertEq(MockB20(stablecoinToken).decimals(), 6, "stablecoin decimals must be fixed at 6");
-        // forge-lint: disable-next-line(unsafe-typecast)
-        assertEq(uint8(uint160(defaultToken) >> 64), 0, "address byte [11] is reserved and must be zero");
-        // forge-lint: disable-next-line(unsafe-typecast)
-        assertEq(uint8(uint160(stablecoinToken) >> 64), 0, "address byte [11] is reserved and must be zero");
     }
 }

@@ -23,7 +23,7 @@ import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20St
 ///            byte and required-field invariants).
 ///         2. Compute the deterministic token address per the
 ///            documented schema (`[0:10]` shared prefix, `[10]` variant
-///            byte, `[11]` reserved, `[12:20]` derived from
+///            byte, `[11:20]` derived from
 ///            `(msg.sender, salt)`).
 ///         3. Refuse to overwrite an existing token (revert
 ///            `TokenAlreadyExists`).
@@ -223,15 +223,14 @@ contract MockTokenFactory is ITokenFactory {
     ///        byte [0]      = 0xB2
     ///        bytes [1:10]  = 0x00 (9 zero bytes)
     ///        byte [10]     = variant
-    ///        byte [11]     = 0x00 (reserved)
-    ///        bytes [12:20] = keccak256(sender, salt)[0:8]
+    ///        bytes [11:20] = keccak256(sender, salt)[0:9]
     function _computeAddress(TokenVariant variant, address sender, bytes32 salt)
         internal
         pure
         returns (address)
     {
-        bytes8 tail = bytes8(keccak256(abi.encode(sender, salt)));
-        uint160 addr = (uint160(0xB2) << 152) | (uint160(uint8(variant)) << 72) | uint160(uint64(tail));
+        bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));
+        uint160 addr = (uint160(0xB2) << 152) | (uint160(uint8(variant)) << 72) | uint160(uint72(tail));
         return address(addr);
     }
 
