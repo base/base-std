@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20MintTest is B20Test {
     /// @notice Verifies mint reverts when caller lacks MINT_ROLE
@@ -19,7 +21,7 @@ contract B20MintTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, MINT_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.MINT_ROLE)
         );
         token.mint(to, amount);
     }
@@ -28,7 +30,7 @@ contract B20MintTest is B20Test {
     /// @dev Pause guard; checks ContractPaused(MINT) error
     function test_mint_revert_whenMintPaused(address to, uint256 amount) public {
         _assumeValidActor(to);
-        _grantRole(MINT_ROLE, minter);
+        _grantRole(B20Constants.MINT_ROLE, minter);
         _pause(IB20.PausableFeature.MINT);
 
         vm.prank(minter);
@@ -47,7 +49,7 @@ contract B20MintTest is B20Test {
         vm.prank(admin);
         token.setSupplyCap(cap);
 
-        _grantRole(MINT_ROLE, minter);
+        _grantRole(B20Constants.MINT_ROLE, minter);
         vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20.SupplyCapExceeded.selector, cap, amount));
         token.mint(to, amount);
@@ -57,18 +59,18 @@ contract B20MintTest is B20Test {
     /// @dev Policy guard for issuance; checks PolicyForbids(MINT_RECEIVER, policyId)
     function test_mint_revert_receiverPolicyForbids(address to, uint256 amount) public {
         _assumeValidActor(to);
-        _grantRole(MINT_ROLE, minter);
-        _setPolicy(MINT_RECEIVER, ALWAYS_REJECT);
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        _setPolicy(B20Constants.MINT_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(minter);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, MINT_RECEIVER, ALWAYS_REJECT));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.MINT_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.mint(to, amount);
     }
 
     /// @notice Verifies mint reverts for the zero recipient address
     /// @dev OZ ERC-6093 invariant; checks InvalidReceiver(address(0)) error
     function test_mint_revert_zeroRecipient(uint256 amount) public {
-        _grantRole(MINT_ROLE, minter);
+        _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
@@ -99,7 +101,7 @@ contract B20MintTest is B20Test {
     /// @dev Event integrity for the mint path; mint represented as transfer from the zero address
     function test_mint_success_emitsTransferFromZero(address to, uint256 amount) public {
         _assumeValidActor(to);
-        _grantRole(MINT_ROLE, minter);
+        _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(address(0), to, amount);

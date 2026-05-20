@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20RenounceLastAdminTest is B20Test {
     /// @notice Verifies renounceLastAdmin reverts when caller does not hold DEFAULT_ADMIN_ROLE
@@ -16,7 +18,7 @@ contract B20RenounceLastAdminTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
         );
         token.renounceLastAdmin();
     }
@@ -30,7 +32,7 @@ contract B20RenounceLastAdminTest is B20Test {
         _assumeValidActor(otherAdmin);
         vm.assume(otherAdmin != admin);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, otherAdmin);
+        _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
 
         vm.prank(admin);
         vm.expectRevert(IB20.NotSoleAdmin.selector);
@@ -40,12 +42,12 @@ contract B20RenounceLastAdminTest is B20Test {
     /// @notice Verifies renounceLastAdmin clears DEFAULT_ADMIN_ROLE from the caller
     /// @dev    Read-after-write: hasRole(DEFAULT_ADMIN_ROLE, msg.sender) is false post-call.
     function test_renounceLastAdmin_success_clearsAdminRole() public {
-        assertTrue(token.hasRole(DEFAULT_ADMIN_ROLE, admin), "precondition: admin holds DEFAULT_ADMIN_ROLE");
+        assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "precondition: admin holds B20Constants.DEFAULT_ADMIN_ROLE");
 
         vm.prank(admin);
         token.renounceLastAdmin();
 
-        assertFalse(token.hasRole(DEFAULT_ADMIN_ROLE, admin), "admin no longer holds DEFAULT_ADMIN_ROLE");
+        assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin no longer holds B20Constants.DEFAULT_ADMIN_ROLE");
     }
 
     /// @notice Verifies admin-gated operations revert after renounceLastAdmin
@@ -57,7 +59,7 @@ contract B20RenounceLastAdminTest is B20Test {
     function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyType, uint64 newPolicyId) public {
         // Use a built-in policy ID so updatePolicy gets past policyExists() and would
         // otherwise succeed; the revert here is from the role check, not policy validation.
-        newPolicyId = newPolicyId % 2 == 0 ? ALWAYS_ALLOW : ALWAYS_REJECT;
+        newPolicyId = newPolicyId % 2 == 0 ? PolicyRegistryConstants.ALWAYS_ALLOW_ID : PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
         vm.prank(admin);
         token.renounceLastAdmin();
@@ -65,7 +67,7 @@ contract B20RenounceLastAdminTest is B20Test {
         // The original admin is no longer admin and cannot reach the admin-only setter.
         vm.prank(admin);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, B20Constants.DEFAULT_ADMIN_ROLE)
         );
         token.updatePolicy(policyType, newPolicyId);
     }
@@ -82,9 +84,9 @@ contract B20RenounceLastAdminTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
         );
-        token.grantRole(DEFAULT_ADMIN_ROLE, wouldBeNewAdmin);
+        token.grantRole(B20Constants.DEFAULT_ADMIN_ROLE, wouldBeNewAdmin);
     }
 
     /// @notice Verifies renounceLastAdmin emits LastAdminRenounced(previousAdmin)

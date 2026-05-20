@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20TransferFromTest is B20Test {
     /// @notice Verifies transferFrom reverts when the TRANSFER feature is paused
@@ -41,10 +43,10 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(from);
         token.approve(caller, amount);
-        _setPolicy(TRANSFER_EXECUTOR, ALWAYS_REJECT);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, TRANSFER_EXECUTOR, ALWAYS_REJECT));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_EXECUTOR, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transferFrom(from, to, amount);
     }
 
@@ -61,10 +63,10 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(from);
         token.approve(caller, amount);
-        _setPolicy(TRANSFER_SENDER, ALWAYS_REJECT);
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, TRANSFER_SENDER, ALWAYS_REJECT));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transferFrom(from, to, amount);
     }
 
@@ -81,10 +83,10 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(from);
         token.approve(caller, amount);
-        _setPolicy(TRANSFER_RECEIVER, ALWAYS_REJECT);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, TRANSFER_RECEIVER, ALWAYS_REJECT));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transferFrom(from, to, amount);
     }
 

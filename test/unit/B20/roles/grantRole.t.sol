@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20GrantRoleTest is B20Test {
     /// @notice Verifies grantRole reverts when caller does not hold the role's admin role
@@ -16,7 +17,7 @@ contract B20GrantRoleTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
         );
         token.grantRole(role, account);
     }
@@ -47,7 +48,7 @@ contract B20GrantRoleTest is B20Test {
     /// @dev Event integrity; canonical RoleGranted emission test
     function test_grantRole_success_emitsRoleGranted(bytes32 role, address account) public {
         // Filter the bootstrap admin grant (already held, idempotent → no emit).
-        vm.assume(!(role == DEFAULT_ADMIN_ROLE && account == admin));
+        vm.assume(!(role == B20Constants.DEFAULT_ADMIN_ROLE && account == admin));
 
         vm.expectEmit(true, true, true, false, address(token));
         emit IB20.RoleGranted(role, account, admin);

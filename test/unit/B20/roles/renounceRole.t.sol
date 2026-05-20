@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20RenounceRoleTest is B20Test {
     /// @notice Verifies renounceRole reverts when callerConfirmation does not equal msg.sender
@@ -27,7 +28,7 @@ contract B20RenounceRoleTest is B20Test {
         // Bootstrap admin is the only admin (adminCount == 1).
         vm.prank(admin);
         vm.expectRevert(IB20.LastAdminCannotRenounce.selector);
-        token.renounceRole(DEFAULT_ADMIN_ROLE, admin);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, admin);
     }
 
     /// @notice Verifies renounceRole sets hasRole(role, caller) to false
@@ -36,7 +37,7 @@ contract B20RenounceRoleTest is B20Test {
         _assumeValidCaller(caller);
         // Skip DEFAULT_ADMIN_ROLE here: that path has its own last-admin guard tested above
         // and an "admin with others" success test below.
-        vm.assume(role != DEFAULT_ADMIN_ROLE);
+        vm.assume(role != B20Constants.DEFAULT_ADMIN_ROLE);
 
         _grantRole(role, caller);
         assertTrue(token.hasRole(role, caller), "precondition");
@@ -52,20 +53,20 @@ contract B20RenounceRoleTest is B20Test {
         _assumeValidActor(otherAdmin);
         vm.assume(otherAdmin != admin);
 
-        _grantRole(DEFAULT_ADMIN_ROLE, otherAdmin);
+        _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
 
         vm.prank(admin);
-        token.renounceRole(DEFAULT_ADMIN_ROLE, admin);
+        token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, admin);
 
-        assertFalse(token.hasRole(DEFAULT_ADMIN_ROLE, admin), "original admin no longer admin");
-        assertTrue(token.hasRole(DEFAULT_ADMIN_ROLE, otherAdmin), "other admin still admin");
+        assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "original admin no longer admin");
+        assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin), "other admin still admin");
     }
 
     /// @notice Verifies renounceRole emits RoleRevoked(role, caller, caller)
     /// @dev Sender equals account for self-revocation; canonical RoleRevoked test lives in revokeRole.t.sol
     function test_renounceRole_success_emitsRoleRevoked(address caller, bytes32 role) public {
         _assumeValidCaller(caller);
-        vm.assume(role != DEFAULT_ADMIN_ROLE);
+        vm.assume(role != B20Constants.DEFAULT_ADMIN_ROLE);
 
         _grantRole(role, caller);
 

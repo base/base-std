@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20TotalSupplyTest is B20Test {
     /// @notice Verifies totalSupply returns the cumulative minted-minus-burned amount
@@ -15,7 +16,7 @@ contract B20TotalSupplyTest is B20Test {
         assertEq(token.totalSupply(), mintAmount, "totalSupply after mint");
 
         // Grant BURN_ROLE to the recipient so they can burn from their own balance.
-        _grantRole(BURN_ROLE, to);
+        _grantRole(B20Constants.BURN_ROLE, to);
         vm.prank(to);
         token.burn(burnAmount);
         assertEq(token.totalSupply(), mintAmount - burnAmount, "totalSupply after burn");

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20MintWithMemoTest is B20Test {
     /// @notice Verifies mintWithMemo inherits all mint guards
@@ -15,7 +16,7 @@ contract B20MintWithMemoTest is B20Test {
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, alice, MINT_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, alice, B20Constants.MINT_ROLE)
         );
         token.mintWithMemo(to, amount, memo);
     }
@@ -24,7 +25,7 @@ contract B20MintWithMemoTest is B20Test {
     /// @dev Accounting unchanged from mint; the memo does not alter accounting
     function test_mintWithMemo_success_creditsAndUpdatesSupply(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
-        _grantRole(MINT_ROLE, minter);
+        _grantRole(B20Constants.MINT_ROLE, minter);
 
         uint256 supplyBefore = token.totalSupply();
         uint256 balBefore = token.balanceOf(to);
@@ -40,7 +41,7 @@ contract B20MintWithMemoTest is B20Test {
     /// @dev Event ordering: Memo follows Transfer; canonical Memo test for the mint path
     function test_mintWithMemo_success_emitsTransferThenMemo(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
-        _grantRole(MINT_ROLE, minter);
+        _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(address(0), to, amount);
