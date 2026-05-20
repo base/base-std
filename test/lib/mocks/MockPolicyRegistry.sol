@@ -70,8 +70,10 @@ contract MockPolicyRegistry is IPolicyRegistry {
     mapping(uint64 policyId => address pendingAdmin) private _pendingAdmins;
 
     // Global monotonic counter for the low 56 bits of custom policy IDs.
-    // Starts at 2 to defensively skip the numeric values of the built-in IDs.
-    uint56 private _nextCounter = 2;
+    // Starts at 0. The discriminator byte in bits [63:56] ensures no custom ID
+    // can equal built-in 0 or 1 regardless of counter value (ALLOWLIST = 0x02,
+    // BLOCKLIST = 0x03, so the minimum custom ID is 0x0200000000000000).
+    uint56 private _nextCounter;
 
     // ============================================================
     //                       POLICY CREATION
