@@ -31,6 +31,7 @@ contract B20Test is TokenFactoryTest {
     bytes32 internal constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
+    bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
     // -- Policy-type identifiers --
     bytes32 internal constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
@@ -38,9 +39,9 @@ contract B20Test is TokenFactoryTest {
     bytes32 internal constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
     bytes32 internal constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
 
-    // -- Built-in policy sentinel IDs (MockPolicyRegistry-supported) --
+    // -- Built-in policy sentinel IDs (per IPolicyRegistry: ALWAYS_ALLOW=0, ALWAYS_BLOCK=1) --
     uint64 internal constant ALWAYS_ALLOW = 0;
-    uint64 internal constant ALWAYS_REJECT = type(uint64).max;
+    uint64 internal constant ALWAYS_REJECT = 1;
 
     // -- Token-specific role-holder actors --
     address internal minter = makeAddr("minter");

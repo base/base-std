@@ -12,8 +12,10 @@ contract B20SymbolTest is B20Test {
     }
 
     /// @notice Verifies symbol reflects updates made via setSymbol
-    /// @dev Mutable-metadata readback; canonical setter test lives in setSymbol.t.sol
+    /// @dev Mutable-metadata readback; canonical setter test lives in setSymbol.t.sol.
+    ///      setSymbol requires METADATA_ROLE, which is held by no one by default.
     function test_symbol_success_reflectsSetSymbol(string calldata newSymbol) public {
+        _grantRole(METADATA_ROLE, admin);
         vm.prank(admin);
         token.setSymbol(newSymbol);
         assertEq(token.symbol(), newSymbol, "symbol must reflect setSymbol");

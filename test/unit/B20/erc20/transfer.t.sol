@@ -65,6 +65,19 @@ contract B20TransferTest is B20Test {
         token.transfer(address(0), amount);
     }
 
+    /// @notice Verifies transfer reverts when called by the zero address
+    /// @dev Defense-in-depth check inside _transfer: from == address(0) reverts InvalidSender
+    ///      before any pause / policy / balance checks. For the public `transfer` path
+    ///      from = msg.sender, so reaching this branch requires pranking address(0)
+    ///      (filtered out of our normal fuzz tests by _assumeValidActor).
+    function test_transfer_revert_zeroSender(address to, uint256 amount) public {
+        _assumeValidActor(to);
+
+        vm.prank(address(0));
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
+        token.transfer(to, amount);
+    }
+
     /// @notice Verifies transfer debits the sender balance by amount
     /// @dev Accounting half: balanceOf(from) decreases by exactly amount
     function test_transfer_success_debitsSender(address from, address to, uint256 amount) public {

@@ -12,8 +12,10 @@ contract B20NameTest is B20Test {
     }
 
     /// @notice Verifies name reflects updates made via setName
-    /// @dev Mutable-metadata readback; canonical setter test lives in setName.t.sol
+    /// @dev Mutable-metadata readback; canonical setter test lives in setName.t.sol.
+    ///      setName requires METADATA_ROLE, which is held by no one by default.
     function test_name_success_reflectsSetName(string calldata newName) public {
+        _grantRole(METADATA_ROLE, admin);
         vm.prank(admin);
         token.setName(newName);
         assertEq(token.name(), newName, "name must reflect setName");

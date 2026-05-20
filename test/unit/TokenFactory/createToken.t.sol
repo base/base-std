@@ -30,7 +30,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         factory.createToken(ITokenFactory.TokenVariant.NONE, salt, abi.encode(_b20Params()), new bytes[](0));
     }
 
-    /// @notice Verifies createToken reverts for any unsupported params version byte
+    /// @notice Verifies createToken reverts for any unsupported params version byte (DEFAULT variant)
     /// @dev Fuzz confirms only the known version (1) decodes; checks UnsupportedVersion(version) error
     function test_createToken_revert_unsupportedVersion(address caller, uint8 badVersion, bytes32 salt) public {
         _assumeValidCaller(caller);
@@ -40,6 +40,21 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, badVersion));
         factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(p), new bytes[](0));
+    }
+
+    /// @notice Verifies createToken reverts for any unsupported version byte on the STABLECOIN variant
+    /// @dev Each variant arm has its own version check; this exercises the stablecoin arm's check
+    ///      (the default-variant arm has a parallel test above).
+    function test_createToken_revert_unsupportedVersion_stablecoin(address caller, uint8 badVersion, bytes32 salt)
+        public
+    {
+        _assumeValidCaller(caller);
+        vm.assume(badVersion != 1);
+        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams();
+        p.version = badVersion;
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, badVersion));
+        factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts for default-variant decimals outside [2, 18]
@@ -61,6 +76,22 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         vm.prank(caller);
         vm.expectRevert(ITokenFactory.MissingRequiredField.selector);
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+    }
+
+    /// @notice Verifies the SECURITY variant currently reverts UnsupportedVersion(0)
+    /// @dev Pins down the current "Security variant deferred to Katzman" behavior so it
+    ///      can't silently start succeeding before the variant impl actually lands. Delete
+    ///      this test when MockTokenFactory.createToken grows a real SECURITY arm.
+    function test_createToken_revert_securityVariantDeferred(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+
+        // Use a stablecoin params struct as a stand-in (the security struct doesn't matter:
+        // the factory reverts before decoding because the variant arm short-circuits).
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, uint8(0)));
+        factory.createToken(
+            ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(_stablecoinParams()), new bytes[](0)
+        );
     }
 
     /// @notice Verifies createToken reverts when (variant, decimals, sender, salt) collides
@@ -267,6 +298,26 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
             uint256(ITokenFactory.TokenVariant.STABLECOIN),
             "stablecoin variant byte mismatch"
         );
+    }
+
+    /// @notice Verifies createToken correctly stores name and symbol strings >= 32 bytes
+    /// @dev Solidity's storage layout switches encoding at length 32 (short vs long string).
+    ///      The factory's _writeString handles both paths via vm.store; this test exercises
+    ///      the long-string path explicitly. Short-string path is covered by every other
+    ///      success test (default name "Test", symbol "TST" are both < 32 bytes).
+    function test_createToken_success_writesLongStrings(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        // Both strings are 40 bytes -> exercises the long-string storage encoding.
+        string memory longName = "A token name that is forty bytes long!!!";
+        string memory longSymbol = "ASYMBOLALSODELIBERATELYFORTYBYTES.....!!";
+        assertEq(bytes(longName).length, 40, "test setup: longName must be 40 bytes");
+        assertEq(bytes(longSymbol).length, 40, "test setup: longSymbol must be 40 bytes");
+
+        ITokenFactory.B20CreateParams memory p = _b20Params(longName, longSymbol, admin, 18);
+        address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
+
+        assertEq(MockB20(tokenAddr).name(), longName, "long name must round-trip via storage");
+        assertEq(MockB20(tokenAddr).symbol(), longSymbol, "long symbol must round-trip via storage");
     }
 
     /// @notice Verifies the decimals byte at address position [11] matches the created decimals
