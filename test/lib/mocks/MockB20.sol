@@ -47,8 +47,8 @@ library B20Constants {
 ///           single ERC-7201 namespaced root. The struct field order IS
 ///           the slot layout the Rust impl mirrors; slot offsets are
 ///           named constants on `MockB20Storage`.
-///         - `decimals()` is decoded from address byte `[11]` — no
-///           storage slot. The Rust impl does the same.
+///         - `decimals()` is a fixed `18` on the default variant — no
+///           storage slot.
 ///         - **No factory-only entrypoints exist on this contract.**
 ///           Initial storage state (name, symbol, supply cap, admin
 ///           role, `initialized` flag) is written directly by the
@@ -118,11 +118,9 @@ contract MockB20 is IB20 {
         return MockB20Storage.layout().symbol;
     }
 
-    /// @notice Decimals are encoded in address byte `[11]` by the
-    ///         factory. Stateless retrieval; no storage slot.
-    function decimals() external view returns (uint8) {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return uint8(uint160(address(this)) >> 64);
+    /// @notice Default-variant decimals are fixed at 18.
+    function decimals() external pure virtual returns (uint8) {
+        return 18;
     }
 
     function totalSupply() external view returns (uint256) {

@@ -34,9 +34,9 @@ pragma solidity ^0.8.20;
 ///
 ///         Identity state (`name`, `symbol`) is kept in this struct rather
 ///         than encoded into the address because mutability is required
-///         (`setName` / `setSymbol` on the IB20 surface). `decimals` IS
-///         encoded into the address (byte `[11]`) and is retrieved via pure
-///         address-decode in `MockB20.decimals()` — no storage slot.
+///         (`setName` / `setSymbol` on the IB20 surface). `decimals` is
+///         variant-fixed (`18` for default, `6` for stablecoin/security)
+///         and read from code, not storage.
 library MockB20Storage {
     /// @custom:storage-location erc7201:base.b20
     struct Layout {

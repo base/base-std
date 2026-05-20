@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
+import {IB20} from "src/interfaces/IB20.sol";
 
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
@@ -21,6 +22,11 @@ import {MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 ///         (via `vm.store` at the variant namespace's `CURRENCY_OFFSET`)
 ///         during creation; there is no init function and no mutator.
 contract MockB20Stablecoin is MockB20, IB20Stablecoin {
+    /// @notice Stablecoin-variant decimals are fixed at 6.
+    function decimals() external pure override(MockB20, IB20) returns (uint8) {
+        return 6;
+    }
+
     /// @notice The immutable currency identifier (e.g. "USD", "EUR",
     ///         "XAU"). Written by the factory at creation.
     function currency() external view returns (string memory) {

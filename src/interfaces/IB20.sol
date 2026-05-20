@@ -419,10 +419,9 @@ interface IB20 {
     /// @notice Token symbol. Set at creation, mutable via `setSymbol`.
     function symbol() external view returns (string memory);
 
-    /// @notice Number of decimal places. Set at creation, immutable
-    ///         thereafter. The factory determines whether `decimals` is
-    ///         a per-token parameter or a fixed value (the choice is a
-    ///         factory concern, not a token concern).
+    /// @notice Number of decimal places. Immutable per token variant.
+    /// @dev    Current variant defaults are fixed by the factory:
+    ///         Default = 18, Stablecoin = 6, Security = 6.
     function decimals() external view returns (uint8);
 
     /// @notice Total token supply currently in circulation.
