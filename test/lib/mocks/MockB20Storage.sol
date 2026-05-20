@@ -64,21 +64,23 @@ library MockB20Storage {
         // four IDs fit exactly into the 256-bit slot.
         //
         // Transfer-side policies (read by `_transfer`, `transferFrom*`,
-        // and the seize check in `burnBlocked`). Layout:
-        //   [63:0]    transferSenderPolicyId
-        //   [127:64]  transferReceiverPolicyId
-        //   [191:128] transferExecutorPolicyId
-        //   [255:192] reserved (for future transfer-side granularity)
+        // and the seize check in `burnBlocked`).
+        // Packed as four uint64 lanes from least-significant to most-significant:
+        //   word0 (bytes  0.. 7, bits   0.. 63): transferSenderPolicyId
+        //   word1 (bytes  8..15, bits  64..127): transferReceiverPolicyId
+        //   word2 (bytes 16..23, bits 128..191): transferExecutorPolicyId
+        //   word3 (bytes 24..31, bits 192..255): reserved
+        // Note: bit ranges are shown low..high to avoid [end:start] ambiguity.
         uint256 transferPolicyIds;
         // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER` is
         // defined today; the remaining three uint64 slots are reserved
         // for future granular mint-side policy types (e.g.
         // MINT_AUTHORIZER) so adding one doesn't force a second SLOAD.
-        // Layout:
-        //   [63:0]    mintReceiverPolicyId
-        //   [127:64]  reserved
-        //   [191:128] reserved
-        //   [255:192] reserved
+        // Layout uses the same uint64 lane convention:
+        //   word0 (bytes  0.. 7, bits   0.. 63): mintReceiverPolicyId
+        //   word1 (bytes  8..15, bits  64..127): reserved
+        //   word2 (bytes 16..23, bits 128..191): reserved
+        //   word3 (bytes 24..31, bits 192..255): reserved
         uint256 mintPolicyIds;
         // There is no generic fallback mapping for "other" policy
         // types. Each supported `policyType` lives in a fixed slot on
