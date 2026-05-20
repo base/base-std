@@ -6,6 +6,33 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
+import {B20Constants} from "test/lib/mocks/MockB20.sol";
+
+/// @notice Canonical B-20 role and policy-type identifier constants.
+///         Declared as a library (not on the contract) so tests and
+///         downstream tooling can reference them at compile time via
+///         `MINT_ROLE` etc. — Solidity's `public constant`
+///         on a contract is only accessible via instance (e.g.
+///         `token.MINT_ROLE()`), which doesn't work where the token
+///         doesn't yet exist (factory creation tests, initCall
+///         construction).
+/// @dev    `MockB20` re-exposes each value as `bytes32 public constant`
+///         to satisfy `IB20`'s view-function ABI; the library is the
+///         single source of truth, the public constants delegate.
+library B20Constants {
+    bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
+    bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");
+    bytes32 internal constant BURN_ROLE = keccak256("BURN_ROLE");
+    bytes32 internal constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
+    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
+    bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");
+
+    bytes32 internal constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
+    bytes32 internal constant TRANSFER_RECEIVER = keccak256("TRANSFER_RECEIVER");
+    bytes32 internal constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
+    bytes32 internal constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
+}
 
 /// @title MockB20
 /// @notice Reference implementation of the `IB20` default-token surface.
@@ -61,23 +88,23 @@ contract MockB20 is IB20 {
 
     /// @notice Default top-level admin role. Equal to `bytes32(0)` per
     ///         the OZ AccessControl convention.
-    bytes32 public constant DEFAULT_ADMIN_ROLE = bytes32(0);
+    bytes32 public constant DEFAULT_ADMIN_ROLE = B20Constants.DEFAULT_ADMIN_ROLE;
 
-    /// @notice Role identifiers. Computed as `keccak256` of the role
-    ///         name per the OZ AccessControl convention, so the
-    ///         Rust impl can derive them identically.
-    bytes32 public constant MINT_ROLE = keccak256("MINT_ROLE");
-    bytes32 public constant BURN_ROLE = keccak256("BURN_ROLE");
-    bytes32 public constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
-    bytes32 public constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-    bytes32 public constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
-    bytes32 public constant METADATA_ROLE = keccak256("METADATA_ROLE");
+    /// @notice Role identifiers. Values delegate to `B20Constants` so the
+    ///         single-source-of-truth lives in one library; the Rust impl
+    ///         derives the same `keccak256` of each role name.
+    bytes32 public constant MINT_ROLE = B20Constants.MINT_ROLE;
+    bytes32 public constant BURN_ROLE = B20Constants.BURN_ROLE;
+    bytes32 public constant BURN_BLOCKED_ROLE = B20Constants.BURN_BLOCKED_ROLE;
+    bytes32 public constant PAUSE_ROLE = B20Constants.PAUSE_ROLE;
+    bytes32 public constant UNPAUSE_ROLE = B20Constants.UNPAUSE_ROLE;
+    bytes32 public constant METADATA_ROLE = B20Constants.METADATA_ROLE;
 
-    /// @notice Policy-type identifiers. Same `keccak256` convention.
-    bytes32 public constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
-    bytes32 public constant TRANSFER_RECEIVER = keccak256("TRANSFER_RECEIVER");
-    bytes32 public constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
-    bytes32 public constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
+    /// @notice Policy-type identifiers. Same `keccak256` convention as roles.
+    bytes32 public constant TRANSFER_SENDER = B20Constants.TRANSFER_SENDER;
+    bytes32 public constant TRANSFER_RECEIVER = B20Constants.TRANSFER_RECEIVER;
+    bytes32 public constant TRANSFER_EXECUTOR = B20Constants.TRANSFER_EXECUTOR;
+    bytes32 public constant MINT_RECEIVER = B20Constants.MINT_RECEIVER;
 
     // ============================================================
     //                          ERC-20: VIEWS
@@ -122,7 +149,12 @@ contract MockB20 is IB20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         if (!_isPrivileged() && msg.sender != from) {
             _consumeAllowance(from, msg.sender, amount);
-            _checkPolicy(TRANSFER_EXECUTOR, msg.sender);
+            // Read the executor policy ID out of the packed slot. Cold
+            // here; warm by the time _transfer reads the same slot.
+            uint64 executorPolicyId = uint64(MockB20Storage.layout().packedPolicyIds >> 128);
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
+                revert PolicyForbids(TRANSFER_EXECUTOR, executorPolicyId);
+            }
         }
         _transfer(from, to, amount);
         return true;
@@ -149,7 +181,10 @@ contract MockB20 is IB20 {
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool) {
         if (!_isPrivileged() && msg.sender != from) {
             _consumeAllowance(from, msg.sender, amount);
-            _checkPolicy(TRANSFER_EXECUTOR, msg.sender);
+            uint64 executorPolicyId = uint64(MockB20Storage.layout().packedPolicyIds >> 128);
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
+                revert PolicyForbids(TRANSFER_EXECUTOR, executorPolicyId);
+            }
         }
         _transfer(from, to, amount);
         emit Memo(memo);
@@ -201,9 +236,12 @@ contract MockB20 is IB20 {
             }
             if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
             // The point of burnBlocked is to seize from policy-blocked
-            // accounts. Calling it on an authorized account is rejected.
-            uint64 senderPolicyId = MockB20Storage.layout().policyIds[TRANSFER_SENDER];
-            if (_policyAuthorized(senderPolicyId, from)) revert AccountNotBlocked(from);
+            // accounts. Read the transfer-sender policy ID out of the
+            // packed slot and reject if the target is currently authorized.
+            uint64 senderPolicyId = uint64(MockB20Storage.layout().packedPolicyIds);
+            if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
+                revert AccountNotBlocked(from);
+            }
         }
         _burnRaw(from, amount);
         emit BurnedBlocked(msg.sender, from, amount);
@@ -323,7 +361,7 @@ contract MockB20 is IB20 {
     // ============================================================
 
     function policyId(bytes32 policyType) external view returns (uint64) {
-        return MockB20Storage.layout().policyIds[policyType];
+        return _readPolicyId(policyType);
     }
 
     function updatePolicy(bytes32 policyType, uint64 newPolicyId) external {
@@ -332,9 +370,43 @@ contract MockB20 is IB20 {
         if (!IPolicyRegistry(POLICY_REGISTRY).policyExists(newPolicyId)) {
             revert PolicyNotFound(newPolicyId);
         }
-        uint64 oldPolicyId = MockB20Storage.layout().policyIds[policyType];
-        MockB20Storage.layout().policyIds[policyType] = newPolicyId;
+        uint64 oldPolicyId = _readPolicyId(policyType);
+        _writePolicyId(policyType, newPolicyId);
         emit PolicyUpdated(policyType, oldPolicyId, newPolicyId);
+    }
+
+    /// @dev Reads a policy ID from storage. The four hot-path policy
+    ///      types live in a packed uint256 (one SLOAD, four uint64s);
+    ///      anything else falls through to the variant/user-defined
+    ///      mapping at the cold path.
+    function _readPolicyId(bytes32 policyType) internal view returns (uint64) {
+        uint256 packed = MockB20Storage.layout().packedPolicyIds;
+        if (policyType == TRANSFER_SENDER) return uint64(packed);
+        if (policyType == TRANSFER_RECEIVER) return uint64(packed >> 64);
+        if (policyType == TRANSFER_EXECUTOR) return uint64(packed >> 128);
+        if (policyType == MINT_RECEIVER) return uint64(packed >> 192);
+        return MockB20Storage.layout().extraPolicyIds[policyType];
+    }
+
+    /// @dev Writes a policy ID to storage. Hot-path types update the
+    ///      packed slot in-place (preserving the other three policies);
+    ///      anything else writes to the extra-policies mapping. Done
+    ///      with explicit mask + shift so the Rust impl can replicate
+    ///      the exact bit layout.
+    function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal {
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        uint256 mask = uint256(type(uint64).max);
+        if (policyType == TRANSFER_SENDER) {
+            $.packedPolicyIds = ($.packedPolicyIds & ~mask) | uint256(newPolicyId);
+        } else if (policyType == TRANSFER_RECEIVER) {
+            $.packedPolicyIds = ($.packedPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);
+        } else if (policyType == TRANSFER_EXECUTOR) {
+            $.packedPolicyIds = ($.packedPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);
+        } else if (policyType == MINT_RECEIVER) {
+            $.packedPolicyIds = ($.packedPolicyIds & ~(mask << 192)) | (uint256(newPolicyId) << 192);
+        } else {
+            $.extraPolicyIds[policyType] = newPolicyId;
+        }
     }
 
     // ============================================================
@@ -473,18 +545,6 @@ contract MockB20 is IB20 {
         return ((MockB20Storage.layout().pausedVectors >> uint8(feature)) & uint256(1)) == 1;
     }
 
-    /// @dev Resolves an authorization check against the policy registry.
-    ///      Reverts with `PolicyForbids` propagated from the caller, not
-    ///      raised here, so callers can include the right policyType.
-    function _policyAuthorized(uint64 _policyId, address account) internal view returns (bool) {
-        return IPolicyRegistry(POLICY_REGISTRY).isAuthorized(_policyId, account);
-    }
-
-    function _checkPolicy(bytes32 policyType, address account) internal view {
-        uint64 _policyId = MockB20Storage.layout().policyIds[policyType];
-        if (!_policyAuthorized(_policyId, account)) revert PolicyForbids(policyType, _policyId);
-    }
-
     function _grantRole(bytes32 role, address account) internal {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         if (!$.roles[role][account]) {
@@ -519,8 +579,18 @@ contract MockB20 is IB20 {
 
         if (!_isPrivileged()) {
             if (_isPaused(PausableFeature.TRANSFER)) revert ContractPaused(PausableFeature.TRANSFER);
-            _checkPolicy(TRANSFER_SENDER, from);
-            _checkPolicy(TRANSFER_RECEIVER, to);
+            // One SLOAD pulls both policy IDs we need for the transfer
+            // check (and was already warmed if we came in via transferFrom,
+            // which reads the executor slot first).
+            uint256 packed = MockB20Storage.layout().packedPolicyIds;
+            uint64 senderPolicyId = uint64(packed);
+            uint64 receiverPolicyId = uint64(packed >> 64);
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
+                revert PolicyForbids(TRANSFER_SENDER, senderPolicyId);
+            }
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(receiverPolicyId, to)) {
+                revert PolicyForbids(TRANSFER_RECEIVER, receiverPolicyId);
+            }
         }
 
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
@@ -539,7 +609,10 @@ contract MockB20 is IB20 {
         if (!_isPrivileged()) {
             if (!hasRole(MINT_ROLE, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE);
             if (_isPaused(PausableFeature.MINT)) revert ContractPaused(PausableFeature.MINT);
-            _checkPolicy(MINT_RECEIVER, to);
+            uint64 mintReceiverPolicyId = uint64(MockB20Storage.layout().packedPolicyIds >> 192);
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
+                revert PolicyForbids(MINT_RECEIVER, mintReceiverPolicyId);
+            }
         }
 
         MockB20Storage.Layout storage $ = MockB20Storage.layout();

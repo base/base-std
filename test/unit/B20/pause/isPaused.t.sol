@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20IsPausedTest is B20Test {
     /// @notice Verifies isPaused returns false for every feature on a freshly-created token
@@ -28,7 +29,7 @@ contract B20IsPausedTest is B20Test {
     function test_isPaused_success_falseAfterUnpause(uint8 featureInt) public {
         IB20.PausableFeature feature = IB20.PausableFeature(uint8(bound(uint256(featureInt), 0, 3)));
         _pause(feature);
-        _grantRole(UNPAUSE_ROLE, unpauser);
+        _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         vm.prank(unpauser);
         token.unpause(_singleFeature(feature));
         assertFalse(token.isPaused(feature), "feature must be unpaused after unpause call");

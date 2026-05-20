@@ -55,8 +55,24 @@ library MockB20Storage {
         // LastAdminCannotRenounce in O(1). Bumped on grant, decremented on
         // revoke / renounce.
         uint256 adminCount;
-        // ---------- Policy slots ----------
-        mapping(bytes32 policyType => uint64 policyId) policyIds;
+        // ---------- Policy slots (PACKED) ----------
+        // The four hot-path policy types (transfer sender / receiver /
+        // executor, mint receiver) are packed into a single 256-bit slot
+        // so the transfer and mint hot paths read all the policy IDs they
+        // need with ONE SLOAD instead of one per policy type. Layout:
+        //   [63:0]    transferSenderPolicyId
+        //   [127:64]  transferReceiverPolicyId
+        //   [191:128] transferExecutorPolicyId
+        //   [255:192] mintReceiverPolicyId
+        // The 64-bit width matches `uint64 policyId` everywhere else in
+        // the system; four IDs fit exactly into the 256-bit slot.
+        uint256 packedPolicyIds;
+        // Variant-defined and user-defined policy types (e.g.
+        // REDEEMER_SENDER on IB20Security, or any keccak256("CUSTOM_*")
+        // a wrapper introduces) live in this mapping. The cold path
+        // (variant-specific operations like `redeem`) pays the standard
+        // one-SLOAD-per-mapping-access cost.
+        mapping(bytes32 policyType => uint64 policyId) extraPolicyIds;
         // ---------- Pause ----------
         // Bitmask: bit i set means PausableFeature(i) is paused. Translated
         // to/from the PausableFeature[] enum array at the IB20 surface
@@ -105,11 +121,12 @@ library MockB20Storage {
     uint256 internal constant ROLES_OFFSET = 6;
     uint256 internal constant ROLE_ADMINS_OFFSET = 7;
     uint256 internal constant ADMIN_COUNT_OFFSET = 8;
-    uint256 internal constant POLICY_IDS_OFFSET = 9;
-    uint256 internal constant PAUSED_VECTORS_OFFSET = 10;
-    uint256 internal constant SUPPLY_CAP_OFFSET = 11;
-    uint256 internal constant NONCES_OFFSET = 12;
-    uint256 internal constant INITIALIZED_OFFSET = 13;
+    uint256 internal constant PACKED_POLICY_IDS_OFFSET = 9;
+    uint256 internal constant EXTRA_POLICY_IDS_OFFSET = 10;
+    uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
+    uint256 internal constant SUPPLY_CAP_OFFSET = 12;
+    uint256 internal constant NONCES_OFFSET = 13;
+    uint256 internal constant INITIALIZED_OFFSET = 14;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the

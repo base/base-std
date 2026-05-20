@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20UnpauseTest is B20Test {
     /// @notice Verifies unpause reverts when caller lacks UNPAUSE_ROLE
@@ -14,7 +15,7 @@ contract B20UnpauseTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, UNPAUSE_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.UNPAUSE_ROLE)
         );
         token.unpause(_singleFeature(IB20.PausableFeature.TRANSFER));
     }
@@ -22,7 +23,7 @@ contract B20UnpauseTest is B20Test {
     /// @notice Verifies unpause reverts for an empty features array
     /// @dev Input validation: empty unpause set is meaningless; checks EmptyFeatureSet() error
     function test_unpause_revert_emptyFeatureSet() public {
-        _grantRole(UNPAUSE_ROLE, unpauser);
+        _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
 
         vm.prank(unpauser);
         vm.expectRevert(IB20.EmptyFeatureSet.selector);
@@ -32,7 +33,7 @@ contract B20UnpauseTest is B20Test {
     /// @notice Verifies unpause clears each listed feature from pausedFeatures
     /// @dev State transition: each feature is removed; non-listed features remain unchanged
     function test_unpause_success_clearsListedFeatures() public {
-        _grantRole(UNPAUSE_ROLE, unpauser);
+        _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
 
         // Pause two features so we have something to unpause.
         _pause(IB20.PausableFeature.TRANSFER);
@@ -49,7 +50,7 @@ contract B20UnpauseTest is B20Test {
     /// @notice Verifies unpause is idempotent when called with not-currently-paused features
     /// @dev No state change and no revert for features that are already inactive
     function test_unpause_success_idempotentForUnpaused() public {
-        _grantRole(UNPAUSE_ROLE, unpauser);
+        _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
 
         // BURN is not paused.
         vm.prank(unpauser);
@@ -61,7 +62,7 @@ contract B20UnpauseTest is B20Test {
     /// @notice Verifies unpause emits Unpaused(caller, features) with the call's argument
     /// @dev Event integrity; canonical Unpaused emission test
     function test_unpause_success_emitsUnpaused() public {
-        _grantRole(UNPAUSE_ROLE, unpauser);
+        _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         _pause(IB20.PausableFeature.TRANSFER);
 
         IB20.PausableFeature[] memory features = _singleFeature(IB20.PausableFeature.TRANSFER);

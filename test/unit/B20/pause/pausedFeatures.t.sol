@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20PausedFeaturesTest is B20Test {
     /// @notice Verifies pausedFeatures returns an empty array on a freshly-created token
@@ -34,7 +35,7 @@ contract B20PausedFeaturesTest is B20Test {
         _pause(IB20.PausableFeature.MINT);
         _pause(IB20.PausableFeature.BURN);
 
-        _grantRole(UNPAUSE_ROLE, unpauser);
+        _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         vm.prank(unpauser);
         token.unpause(_singleFeature(IB20.PausableFeature.MINT));
 

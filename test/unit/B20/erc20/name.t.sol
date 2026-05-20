@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20NameTest is B20Test {
     /// @notice Verifies name returns the value passed to the factory at creation
@@ -15,7 +16,7 @@ contract B20NameTest is B20Test {
     /// @dev Mutable-metadata readback; canonical setter test lives in setName.t.sol.
     ///      setName requires METADATA_ROLE, which is held by no one by default.
     function test_name_success_reflectsSetName(string calldata newName) public {
-        _grantRole(METADATA_ROLE, admin);
+        _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
         token.setName(newName);
         assertEq(token.name(), newName, "name must reflect setName");

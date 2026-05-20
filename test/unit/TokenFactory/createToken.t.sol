@@ -7,15 +7,14 @@ import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 
-import {MockB20} from "test/lib/mocks/MockB20.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
 
 contract TokenFactoryCreateTokenTest is TokenFactoryTest {
-    // Role identifiers, matching MockB20's keccak256 derivations. Inlined here
-    // because Solidity contract constants are runtime getters, so MockB20(addr).MINT_ROLE()
-    // requires `addr` to have code -- and during createToken setup, the token doesn't exist yet.
-    bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");
-    bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
+    // Role identifiers are accessed as `MINT_ROLE` etc. — these are
+    // compile-time constants on the contract type, so they don't require an
+    // instantiated token (relevant during createToken setup where the token
+    // doesn't yet exist).
 
     /*//////////////////////////////////////////////////////////////
                                 REVERTS
@@ -168,7 +167,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     }
 
     /// @notice Verifies createToken emits TokenCreated with the correct identity fields
-    /// @dev Event integrity: token, variant, name, symbol, decimals must match the inputs
+    /// @dev Event integrity: token, variant, name, symbol, decimals must match the inputs.
+    ///      Admin role assignment is announced via RoleGranted, not as a field on this event;
+    ///      see test_createToken_success_emitsRoleGrantedForInitialAdmin for that.
     function test_createToken_success_emitsTokenCreated(address caller, bytes32 salt, uint8 decimals) public {
         _assumeValidCaller(caller);
         decimals = uint8(bound(decimals, 2, 18));
@@ -176,7 +177,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, decimals, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit ITokenFactory.TokenCreated(predicted, ITokenFactory.TokenVariant.DEFAULT, "MyToken", "MYT", decimals, admin);
+        emit ITokenFactory.TokenCreated(predicted, ITokenFactory.TokenVariant.DEFAULT, "MyToken", "MYT", decimals);
         _createDefault(caller, salt, p, new bytes[](0));
     }
 
@@ -191,13 +192,13 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // Grant MINT_ROLE to bob during the bootstrap window. This would normally
         // require msg.sender to hold DEFAULT_ADMIN_ROLE, but the factory holds no
         // role; the bypass lets the call through.
-        initCalls[0] = abi.encodeWithSelector(IB20.grantRole.selector, MINT_ROLE, bob);
+        initCalls[0] = abi.encodeWithSelector(IB20.grantRole.selector, B20Constants.MINT_ROLE, bob);
 
         address token = _createDefault(caller, salt, _b20Params(), initCalls);
-        assertTrue(MockB20(token).hasRole(MINT_ROLE, bob), "init call must have granted role");
+        assertTrue(MockB20(token).hasRole(B20Constants.MINT_ROLE, bob), "init call must have granted role");
         // Factory itself was never granted anything.
         assertFalse(
-            MockB20(token).hasRole(DEFAULT_ADMIN_ROLE, address(factory)),
+            MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(factory)),
             "factory must not hold admin role"
         );
     }
@@ -210,7 +211,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         _assumeValidCaller(caller);
         // Use an init call that emits a single, distinctive event we can find: grantRole emits RoleGranted.
         bytes[] memory initCalls = new bytes[](1);
-        initCalls[0] = abi.encodeWithSelector(IB20.grantRole.selector, MINT_ROLE, bob);
+        initCalls[0] = abi.encodeWithSelector(IB20.grantRole.selector, B20Constants.MINT_ROLE, bob);
 
         vm.recordLogs();
         _createDefault(caller, salt, _b20Params(), initCalls);
@@ -244,7 +245,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // role check, because the bootstrap window is closed.
         vm.prank(address(factory));
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, address(factory), MINT_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, address(factory), B20Constants.MINT_ROLE)
         );
         IB20(token).mint(bob, 1);
     }
@@ -262,9 +263,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address token = _createDefault(caller, salt, p, new bytes[](0));
 
         // No admin was granted. Any admin-gated call from any account reverts.
-        assertFalse(MockB20(token).hasRole(DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
-        assertFalse(MockB20(token).hasRole(DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
-        assertFalse(MockB20(token).hasRole(DEFAULT_ADMIN_ROLE, admin), "admin actor must not hold admin");
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin actor must not hold admin");
     }
 
     /// @notice Verifies stablecoin createToken executes with admin == address(0)
@@ -274,8 +275,8 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("NoOwner USD", "NOUSD", address(0), "USD");
         address token = _createStablecoin(caller, salt, p, new bytes[](0));
 
-        assertFalse(MockB20(token).hasRole(DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
-        assertFalse(MockB20(token).hasRole(DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
         // The stablecoin still got its variant data: currency is set.
         assertEq(IB20Stablecoin(token).currency(), "USD", "stablecoin currency must still be set");
     }

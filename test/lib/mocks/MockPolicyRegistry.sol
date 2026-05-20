@@ -5,6 +5,22 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
+/// @notice Canonical built-in policy ID constants. Declared as a library
+///         so tests can reference them at compile time via
+///         `PolicyRegistryConstants.ALWAYS_ALLOW_ID` — Solidity's
+///         `public constant` on a contract is only accessible via instance
+///         call, which doesn't work for compile-time constant contexts.
+/// @dev    `MockPolicyRegistry` re-exposes each value as `uint64 public
+///         constant` to satisfy the runtime-getter contract; this library
+///         is the single source of truth.
+library PolicyRegistryConstants {
+    /// @notice Built-in policy ID that always authorizes any account.
+    uint64 internal constant ALWAYS_ALLOW_ID = 0;
+
+    /// @notice Built-in policy ID that always rejects any account.
+    uint64 internal constant ALWAYS_BLOCK_ID = 1;
+}
+
 /// @title MockPolicyRegistry
 /// @notice Reference implementation of the `IPolicyRegistry` precompile.
 ///         Etched at the canonical policy-registry address via `vm.etch`
@@ -37,8 +53,18 @@ contract MockPolicyRegistry is IPolicyRegistry {
     //                         CONSTANTS
     // ============================================================
 
-    uint64 internal constant ALWAYS_ALLOW_ID = 0;
-    uint64 internal constant ALWAYS_BLOCK_ID = 1;
+    /// @notice Built-in policy ID that always authorizes any account.
+    /// @dev    The default value for an unconfigured policy slot.
+    uint64 public constant ALWAYS_ALLOW_ID = PolicyRegistryConstants.ALWAYS_ALLOW_ID;
+
+    /// @notice Built-in policy ID that always rejects any account.
+    /// @dev    Useful as an explicit hard-deny on a slot (e.g. disabling
+    ///         redemption by pointing `REDEEMER_SENDER` here).
+    uint64 public constant ALWAYS_BLOCK_ID = PolicyRegistryConstants.ALWAYS_BLOCK_ID;
+
+    /// @notice First counter value handed out to custom policies. Floors
+    ///         `nextCounter` so the low 56 bits of the first custom ID can
+    ///         never collide with the built-in IDs 0 / 1.
     uint56 internal constant INITIAL_CUSTOM_COUNTER = 2;
 
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.

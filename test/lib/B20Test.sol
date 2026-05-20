@@ -2,8 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 import {IB20} from "src/interfaces/IB20.sol";
+
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @notice Base test contract for `IB20` unit tests.
 ///
@@ -20,28 +23,15 @@ import {IB20} from "src/interfaces/IB20.sol";
 /// `unpauser`, `burnBlocker`) so role-gated tests have explicit named
 /// accounts to grant roles to in setUp's initCalls.
 contract B20Test is TokenFactoryTest {
-    // -- Role identifiers (match MockB20's keccak256 derivations) --
-    // Inlined here so tests can avoid `token.MINT_ROLE()` calls during
-    // setup paths where the token may not yet exist (e.g. createToken
-    // tests). Verified against MockB20's constants by direct equality
-    // in the role-constants test suite.
-    bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
-    bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");
-    bytes32 internal constant BURN_ROLE = keccak256("BURN_ROLE");
-    bytes32 internal constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
-    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
-    bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
-    bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");
-
-    // -- Policy-type identifiers --
-    bytes32 internal constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
-    bytes32 internal constant TRANSFER_RECEIVER = keccak256("TRANSFER_RECEIVER");
-    bytes32 internal constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
-    bytes32 internal constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
-
-    // -- Built-in policy sentinel IDs (per IPolicyRegistry: ALWAYS_ALLOW=0, ALWAYS_BLOCK=1) --
-    uint64 internal constant ALWAYS_ALLOW = 0;
-    uint64 internal constant ALWAYS_REJECT = 1;
+    // Role identifiers (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
+    // BURN_BLOCKED_ROLE, PAUSE_ROLE, UNPAUSE_ROLE, METADATA_ROLE) and
+    // policy-type identifiers (TRANSFER_SENDER, TRANSFER_RECEIVER,
+    // TRANSFER_EXECUTOR, MINT_RECEIVER) are NOT redeclared here.
+    // Tests reference them directly from MockB20 as `MINT_ROLE`
+    // etc. — single source of truth, no drift risk.
+    //
+    // Built-in policy sentinel IDs likewise live on MockPolicyRegistry as
+    // `ALWAYS_ALLOW_ID` / `ALWAYS_BLOCK_ID`.
 
     // -- Token-specific role-holder actors --
     address internal minter = makeAddr("minter");
@@ -123,7 +113,7 @@ contract B20Test is TokenFactoryTest {
     /// @dev Most balance-setup needs in tests reduce to "give this account some
     ///      tokens"; this helper avoids re-asserting the role-grant boilerplate.
     function _mint(address to, uint256 amount) internal {
-        if (!token.hasRole(MINT_ROLE, minter)) _grantRole(MINT_ROLE, minter);
+        if (!token.hasRole(B20Constants.MINT_ROLE, minter)) _grantRole(B20Constants.MINT_ROLE, minter);
         vm.prank(minter);
         token.mint(to, amount);
     }
@@ -140,7 +130,7 @@ contract B20Test is TokenFactoryTest {
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`
     ///         to the `pauser` actor on first call.
     function _pause(IB20.PausableFeature feature) internal {
-        if (!token.hasRole(PAUSE_ROLE, pauser)) _grantRole(PAUSE_ROLE, pauser);
+        if (!token.hasRole(B20Constants.PAUSE_ROLE, pauser)) _grantRole(B20Constants.PAUSE_ROLE, pauser);
         vm.prank(pauser);
         token.pause(_singleFeature(feature));
     }

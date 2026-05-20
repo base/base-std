@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20BurnBlockedTest is B20Test {
     /// @notice Verifies burnBlocked reverts when caller lacks BURN_BLOCKED_ROLE
@@ -14,7 +16,7 @@ contract B20BurnBlockedTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, BURN_BLOCKED_ROLE)
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE)
         );
         token.burnBlocked(from, amount);
     }
@@ -23,11 +25,11 @@ contract B20BurnBlockedTest is B20Test {
     /// @dev Pause guard; checks ContractPaused(BURN) error
     function test_burnBlocked_revert_whenBurnPaused(address from, uint256 amount) public {
         _assumeValidActor(from);
-        _grantRole(BURN_BLOCKED_ROLE, burnBlocker);
-        // We also need TRANSFER_SENDER set to ALWAYS_REJECT so the from-not-authorized
+        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
+        // We also need TRANSFER_SENDER set to ALWAYS_BLOCK_ID so the from-not-authorized
         // path is satisfied; otherwise the policy check inside burnBlocked fires
         // with AccountNotBlocked first.
-        _setPolicy(TRANSFER_SENDER, ALWAYS_REJECT);
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _pause(IB20.PausableFeature.BURN);
 
         vm.prank(burnBlocker);
@@ -39,8 +41,8 @@ contract B20BurnBlockedTest is B20Test {
     /// @dev Seizure is only permitted against policy-blocked addresses; checks AccountNotBlocked(from)
     function test_burnBlocked_revert_accountNotBlocked(address from, uint256 amount) public {
         _assumeValidActor(from);
-        _grantRole(BURN_BLOCKED_ROLE, burnBlocker);
-        // Default TRANSFER_SENDER is ALWAYS_ALLOW (0), so every address is "authorized" → not blocked.
+        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
+        // Default TRANSFER_SENDER is ALWAYS_ALLOW_ID (0), so every address is "authorized" → not blocked.
 
         vm.prank(burnBlocker);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotBlocked.selector, from));
@@ -52,8 +54,8 @@ contract B20BurnBlockedTest is B20Test {
     function test_burnBlocked_revert_insufficientBalance(address from, uint256 amount) public {
         _assumeValidActor(from);
         amount = bound(amount, 1, type(uint256).max);
-        _grantRole(BURN_BLOCKED_ROLE, burnBlocker);
-        _setPolicy(TRANSFER_SENDER, ALWAYS_REJECT); // from is policy-blocked
+        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID); // from is policy-blocked
 
         // from has zero balance.
         vm.prank(burnBlocker);
@@ -68,8 +70,8 @@ contract B20BurnBlockedTest is B20Test {
         // Mint while no policy is set so the mint isn't blocked.
         _mint(from, amount);
         // Now block from via TRANSFER_SENDER policy, then seize.
-        _setPolicy(TRANSFER_SENDER, ALWAYS_REJECT);
-        _grantRole(BURN_BLOCKED_ROLE, burnBlocker);
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
 
         vm.prank(burnBlocker);
         token.burnBlocked(from, amount);
@@ -81,8 +83,8 @@ contract B20BurnBlockedTest is B20Test {
     function test_burnBlocked_success_decreasesTotalSupply(address from, uint256 amount) public {
         _assumeValidActor(from);
         _mint(from, amount);
-        _setPolicy(TRANSFER_SENDER, ALWAYS_REJECT);
-        _grantRole(BURN_BLOCKED_ROLE, burnBlocker);
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
         uint256 before = token.totalSupply();
 
         vm.prank(burnBlocker);
@@ -95,8 +97,8 @@ contract B20BurnBlockedTest is B20Test {
     function test_burnBlocked_success_emitsTransferAndBurnedBlocked(address from, uint256 amount) public {
         _assumeValidActor(from);
         _mint(from, amount);
-        _setPolicy(TRANSFER_SENDER, ALWAYS_REJECT);
-        _grantRole(BURN_BLOCKED_ROLE, burnBlocker);
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(from, address(0), amount);
