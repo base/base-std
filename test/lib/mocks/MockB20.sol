@@ -275,7 +275,13 @@ contract MockB20 is IB20 {
 
     function renounceRole(bytes32 role, address callerConfirmation) external {
         if (callerConfirmation != msg.sender) revert AccessControlBadConfirmation();
-        if (role == DEFAULT_ADMIN_ROLE && MockB20Storage.layout().adminCount == 1) {
+        // The last-admin guard fires only when the caller IS the sole remaining admin,
+        // per IB20.renounceRole NatSpec. A non-admin caller is not the sole remaining
+        // admin and must fall through to _revokeRole, which silently no-ops for callers
+        // that don't hold the role — matching OZ AccessControl's renounceRole semantics
+        // and preventing defensive batches from reverting unexpectedly.
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        if (role == DEFAULT_ADMIN_ROLE && $.roles[DEFAULT_ADMIN_ROLE][msg.sender] && $.adminCount == 1) {
             // Sole admin must use the explicit renounceLastAdmin path.
             revert LastAdminCannotRenounce();
         }
