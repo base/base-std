@@ -3,8 +3,6 @@ pragma solidity ^0.8.20;
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
-
 contract PolicyRegistryNextPolicyIdTest is PolicyRegistryTest {
     /// @notice Verifies nextPolicyId(ALLOWLIST) returns the first ALLOWLIST-encoded id
     ///         the next createPolicy(_, ALLOWLIST) would assign
@@ -29,8 +27,11 @@ contract PolicyRegistryNextPolicyIdTest is PolicyRegistryTest {
     ///         successful createPolicy(_, type) call
     /// @dev Per-type monotonic counter; check returned id equals the prior
     ///      nextPolicyId(type) value and that the top-byte discriminator stays
-    ///      stable across the sequence
-    function test_nextPolicyId_success_advancesPerCreate(IPolicyRegistry.PolicyType policyType, uint8 count) public {
+    ///      stable across the sequence. policyTypeRaw is bounded inside the
+    ///      body to `< 2` (the count of PolicyType enum values) via vm.assume
+    ///      before being cast — direct enum-typed parameters cause the fuzzer
+    ///      to revert at function entry on out-of-range uint8 inputs.
+    function test_nextPolicyId_success_advancesPerCreate(uint8 policyTypeRaw, uint8 count) public {
         // unimplemented
     }
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IB20} from "src/interfaces/IB20.sol";
+
 import {B20Test} from "test/lib/B20Test.sol";
 
 contract B20RenounceLastAdminTest is B20Test {
@@ -9,7 +11,14 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         so authorization fails before the "are you the only one?" check.
     ///         Checks AccessControlUnauthorizedAccount(caller, DEFAULT_ADMIN_ROLE).
     function test_renounceLastAdmin_revert_callerNotAdmin(address caller) public {
-        // unimplemented
+        _assumeValidCaller(caller);
+        vm.assume(caller != admin);
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, DEFAULT_ADMIN_ROLE)
+        );
+        token.renounceLastAdmin();
     }
 
     /// @notice Verifies renounceLastAdmin reverts when caller is an admin but additional admins exist
@@ -18,13 +27,25 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         use renounceRole (which only allows non-last admins to renounce themselves).
     ///         Checks NotSoleAdmin() error.
     function test_renounceLastAdmin_revert_multipleAdmins(address otherAdmin) public {
-        // unimplemented
+        _assumeValidActor(otherAdmin);
+        vm.assume(otherAdmin != admin);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, otherAdmin);
+
+        vm.prank(admin);
+        vm.expectRevert(IB20.NotSoleAdmin.selector);
+        token.renounceLastAdmin();
     }
 
     /// @notice Verifies renounceLastAdmin clears DEFAULT_ADMIN_ROLE from the caller
     /// @dev    Read-after-write: hasRole(DEFAULT_ADMIN_ROLE, msg.sender) is false post-call.
     function test_renounceLastAdmin_success_clearsAdminRole() public {
-        // unimplemented
+        assertTrue(token.hasRole(DEFAULT_ADMIN_ROLE, admin), "precondition: admin holds DEFAULT_ADMIN_ROLE");
+
+        vm.prank(admin);
+        token.renounceLastAdmin();
+
+        assertFalse(token.hasRole(DEFAULT_ADMIN_ROLE, admin), "admin no longer holds DEFAULT_ADMIN_ROLE");
     }
 
     /// @notice Verifies admin-gated operations revert after renounceLastAdmin
@@ -34,7 +55,19 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         setName, setSymbol, grantRole / revokeRole / setRoleAdmin for any role.
     ///         No test should be able to reinstate an admin after this transition.
     function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyType, uint64 newPolicyId) public {
-        // unimplemented
+        // Use a built-in policy ID so updatePolicy gets past policyExists() and would
+        // otherwise succeed; the revert here is from the role check, not policy validation.
+        newPolicyId = newPolicyId % 2 == 0 ? ALWAYS_ALLOW : ALWAYS_REJECT;
+
+        vm.prank(admin);
+        token.renounceLastAdmin();
+
+        // The original admin is no longer admin and cannot reach the admin-only setter.
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, DEFAULT_ADMIN_ROLE)
+        );
+        token.updatePolicy(policyType, newPolicyId);
     }
 
     /// @notice Verifies grantRole(DEFAULT_ADMIN_ROLE, ...) cannot succeed post-renunciation
@@ -42,7 +75,16 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         the caller to hold the admin role for the target role; with zero admins,
     ///         every grant call (from any caller, for any account) reverts.
     function test_renounceLastAdmin_success_noPathToReinstateAdmin(address wouldBeNewAdmin, address caller) public {
-        // unimplemented
+        _assumeValidCaller(caller);
+
+        vm.prank(admin);
+        token.renounceLastAdmin();
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, DEFAULT_ADMIN_ROLE)
+        );
+        token.grantRole(DEFAULT_ADMIN_ROLE, wouldBeNewAdmin);
     }
 
     /// @notice Verifies renounceLastAdmin emits LastAdminRenounced(previousAdmin)
@@ -51,6 +93,9 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         canonical emission test lives in revokeRole.t.sol; this stub asserts
     ///         only the dedicated event.
     function test_renounceLastAdmin_success_emitsLastAdminRenounced() public {
-        // unimplemented
+        vm.expectEmit(true, false, false, false, address(token));
+        emit IB20.LastAdminRenounced(admin);
+        vm.prank(admin);
+        token.renounceLastAdmin();
     }
 }

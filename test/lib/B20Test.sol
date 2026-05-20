@@ -20,6 +20,28 @@ import {IB20} from "src/interfaces/IB20.sol";
 /// `unpauser`, `burnBlocker`) so role-gated tests have explicit named
 /// accounts to grant roles to in setUp's initCalls.
 contract B20Test is TokenFactoryTest {
+    // -- Role identifiers (match MockB20's keccak256 derivations) --
+    // Inlined here so tests can avoid `token.MINT_ROLE()` calls during
+    // setup paths where the token may not yet exist (e.g. createToken
+    // tests). Verified against MockB20's constants by direct equality
+    // in the role-constants test suite.
+    bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
+    bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");
+    bytes32 internal constant BURN_ROLE = keccak256("BURN_ROLE");
+    bytes32 internal constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
+    bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
+    bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
+
+    // -- Policy-type identifiers --
+    bytes32 internal constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
+    bytes32 internal constant TRANSFER_RECEIVER = keccak256("TRANSFER_RECEIVER");
+    bytes32 internal constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
+    bytes32 internal constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
+
+    // -- Built-in policy sentinel IDs (MockPolicyRegistry-supported) --
+    uint64 internal constant ALWAYS_ALLOW = 0;
+    uint64 internal constant ALWAYS_REJECT = type(uint64).max;
+
     // -- Token-specific role-holder actors --
     address internal minter = makeAddr("minter");
     address internal burner = makeAddr("burner");
@@ -49,12 +71,12 @@ contract B20Test is TokenFactoryTest {
     ///         token via the factory mock; variant-specific bases (e.g.
     ///         `B20StablecoinTest`) override to deploy their variant while
     ///         reusing every other piece of `B20Test`.
-    /// @dev    The current `MockTokenFactory` only computes and returns the
-    ///         deterministic token address — no token code is deployed
-    ///         there yet, so any call against `token` (transfer, mint, ...)
-    ///         will revert. The unit stubs in this spec PR have no-op
-    ///         bodies, so this is intentional. The next PR plants real
-    ///         token bytecode at the returned address.
+    /// @dev    `MockTokenFactory.createToken` etches `MockB20` runtime
+    ///         bytecode at the computed address, writes initial state
+    ///         directly via vm.store (no init function on the token),
+    ///         runs initCalls, then closes the bootstrap window. Calls
+    ///         against the returned `token` (transfer, mint, ...) execute
+    ///         against a live mock token with the initial admin granted.
     function _deployToken() internal virtual returns (IB20) {
         return IB20(_createDefault());
     }
@@ -69,5 +91,94 @@ contract B20Test is TokenFactoryTest {
     {
         features = new IB20.PausableFeature[](1);
         features[0] = feature;
+    }
+
+    /// @notice Filters out addresses that are unsafe to use as a fuzzed
+    ///         token-state actor (balance holder, allowance party, transfer
+    ///         counterparty).
+    ///
+    /// Extends `BaseTest._assumeValidCaller`'s precompile / VM / zero
+    /// filtering with the token's own address. Using the token as a
+    /// transfer recipient or balance holder is meaningless: the token
+    /// has no business holding its own balance, and the underlying
+    /// _transfer would still succeed (the policy slots default to
+    /// ALWAYS_ALLOW), producing confusing test state.
+    function _assumeValidActor(address account) internal view {
+        _assumeValidCaller(account);
+        vm.assume(account != address(token));
+    }
+
+    /// @notice Grants `role` to `account` as the admin actor.
+    /// @dev Pranks `admin` (initial holder of `DEFAULT_ADMIN_ROLE` from
+    ///      factory bootstrap), so this works even when the role has no
+    ///      explicit role-admin configured (defaults to `DEFAULT_ADMIN_ROLE`).
+    function _grantRole(bytes32 role, address account) internal {
+        vm.prank(admin);
+        token.grantRole(role, account);
+    }
+
+    /// @notice Mints `amount` to `to`, lazily granting `MINT_ROLE` to the
+    ///         `minter` actor on first call.
+    /// @dev Most balance-setup needs in tests reduce to "give this account some
+    ///      tokens"; this helper avoids re-asserting the role-grant boilerplate.
+    function _mint(address to, uint256 amount) internal {
+        if (!token.hasRole(MINT_ROLE, minter)) _grantRole(MINT_ROLE, minter);
+        vm.prank(minter);
+        token.mint(to, amount);
+    }
+
+    /// @notice Sets a policy slot on the token as the admin actor.
+    /// @dev Use `ALWAYS_ALLOW` (0) or `ALWAYS_REJECT` (type(uint64).max);
+    ///      these are the only two policy IDs `MockPolicyRegistry`
+    ///      supports today.
+    function _setPolicy(bytes32 policyType, uint64 policyId) internal {
+        vm.prank(admin);
+        token.updatePolicy(policyType, policyId);
+    }
+
+    /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`
+    ///         to the `pauser` actor on first call.
+    function _pause(IB20.PausableFeature feature) internal {
+        if (!token.hasRole(PAUSE_ROLE, pauser)) _grantRole(PAUSE_ROLE, pauser);
+        vm.prank(pauser);
+        token.pause(_singleFeature(feature));
+    }
+
+    // -- Permit helpers --
+    /// @dev EIP-2612 permit type hash; matches MockB20's constant.
+    bytes32 internal constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
+    /// @notice Constructs and signs an EIP-2612 permit digest under the token's
+    ///         current DOMAIN_SEPARATOR, with `owner = vm.addr(privateKey)`.
+    /// @dev    Reads the current nonce for `owner` so the caller doesn't have to.
+    ///         Use `boundPrivateKey(uint256)` to derive a valid secp256k1 key
+    ///         from a fuzz seed.
+    function _signPermit(uint256 privateKey, address spender, uint256 value, uint256 deadline)
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
+        return _signPermitAs(privateKey, vm.addr(privateKey), spender, value, deadline);
+    }
+
+    /// @notice Constructs and signs an EIP-2612 permit digest where the struct's
+    ///         `owner` field is `claimedOwner`, separate from the signing key.
+    /// @dev    Used by "wrong-owner" revert tests: the resulting signature is
+    ///         well-formed for the digest the contract recomputes (which is
+    ///         keyed on `claimedOwner`), so ecrecover deterministically returns
+    ///         `vm.addr(privateKey)` rather than garbage.
+    function _signPermitAs(
+        uint256 privateKey,
+        address claimedOwner,
+        address spender,
+        uint256 value,
+        uint256 deadline
+    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+        uint256 nonce = token.nonces(claimedOwner);
+        bytes32 structHash =
+            keccak256(abi.encode(PERMIT_TYPEHASH, claimedOwner, spender, value, nonce, deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", token.DOMAIN_SEPARATOR(), structHash));
+        (v, r, s) = vm.sign(privateKey, digest);
     }
 }

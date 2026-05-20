@@ -1,24 +1,36 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IB20} from "src/interfaces/IB20.sol";
+
 import {B20Test} from "test/lib/B20Test.sol";
 
 contract B20IsPausedTest is B20Test {
     /// @notice Verifies isPaused returns false for every feature on a freshly-created token
-    /// @dev Default state across all PausableFeature enum values
-    function test_isPaused_success_falseByDefault(uint8 featureInt) public {
-        // unimplemented
+    /// @dev Default state across all PausableFeature enum values. Bound the fuzz input to the
+    ///      4 defined ordinals (TRANSFER, MINT, BURN, REDEEM) to avoid Solidity's enum-decode
+    ///      revert on out-of-range values.
+    function test_isPaused_success_falseByDefault(uint8 featureInt) public view {
+        IB20.PausableFeature feature = IB20.PausableFeature(uint8(bound(uint256(featureInt), 0, 3)));
+        assertFalse(token.isPaused(feature), "fresh token must have no paused features");
     }
 
     /// @notice Verifies isPaused returns true after the feature is paused
     /// @dev State flip is observable per-feature
     function test_isPaused_success_trueAfterPause(uint8 featureInt) public {
-        // unimplemented
+        IB20.PausableFeature feature = IB20.PausableFeature(uint8(bound(uint256(featureInt), 0, 3)));
+        _pause(feature);
+        assertTrue(token.isPaused(feature), "feature must be paused after pause call");
     }
 
     /// @notice Verifies isPaused returns false again after the feature is unpaused
     /// @dev State flip back to inactive
     function test_isPaused_success_falseAfterUnpause(uint8 featureInt) public {
-        // unimplemented
+        IB20.PausableFeature feature = IB20.PausableFeature(uint8(bound(uint256(featureInt), 0, 3)));
+        _pause(feature);
+        _grantRole(UNPAUSE_ROLE, unpauser);
+        vm.prank(unpauser);
+        token.unpause(_singleFeature(feature));
+        assertFalse(token.isPaused(feature), "feature must be unpaused after unpause call");
     }
 }
