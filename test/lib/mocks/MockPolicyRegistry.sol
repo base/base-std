@@ -57,7 +57,6 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     // Admin address occupies bits [167:8]; PolicyType occupies bits [7:0].
     uint256 internal constant ADMIN_SHIFT = 8;
-    uint256 internal constant TYPE_MASK = 0xFF;
 
     // ============================================================
     //                          STORAGE
@@ -240,12 +239,10 @@ contract MockPolicyRegistry is IPolicyRegistry {
     }
 
     function _decodeType(uint256 packed) internal pure returns (PolicyType) {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return PolicyType(packed & TYPE_MASK);
+        return PolicyType(uint8(packed));
     }
 
     function _decodeAdmin(uint256 packed) internal pure returns (address) {
-        // forge-lint: disable-next-line(unsafe-typecast)
         return address(uint160(packed >> ADMIN_SHIFT));
     }
 }
