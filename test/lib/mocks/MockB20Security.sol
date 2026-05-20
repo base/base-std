@@ -211,7 +211,7 @@ contract MockB20Security is MockB20, IB20Security {
         _requireRole(SECURITY_OPERATOR_ROLE);
         if (bytes(identifierType).length == 0) revert InvalidIdentifierType();
         MockB20SecurityStorage.layout().identifiers[identifierType] = value;
-        emit IdentifierUpdated(identifierType, value);
+        emit SecurityIdentifierUpdated(identifierType, value);
     }
 
     // ============================================================
