@@ -73,6 +73,28 @@ interface IB20Security is IB20 {
     ///         entry instead.
     error InvalidIdentifierType();
 
+    /// @notice A batched function (`batchMint`, `batchBurn`) was called
+    ///         with parallel arrays of differing lengths. The two
+    ///         lengths are reported verbatim in the order the function
+    ///         declares them (`recipients`/`amounts` for `batchMint`;
+    ///         `accounts`/`amounts` for `batchBurn`).
+    error LengthMismatch(uint256 leftLen, uint256 rightLen);
+
+    /// @notice A batched function (`batchMint`, `batchBurn`) was called
+    ///         with empty arrays. Empty batches are rejected so the
+    ///         caller cannot accidentally emit a no-op corp-actions
+    ///         transaction.
+    error EmptyBatch();
+
+    /// @notice `redeem` / `redeemWithMemo` was called with an `amount`
+    ///         that resolves to a share count below the active redemption
+    ///         floor. `shares` is the computed share count
+    ///         (`amount * sharesToTokensRatio / WAD_PRECISION`);
+    ///         `minimum` is the configured `minimumRedeemable`. Also
+    ///         emitted when the resulting share count is zero (which is
+    ///         always rejected, regardless of `minimumRedeemable`).
+    error BelowMinimumRedeemable(uint256 shares, uint256 minimum);
+
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -115,6 +137,29 @@ interface IB20Security is IB20 {
     ///         See the contract-level notes for the recommended
     ///         operational pairing.
     function SECURITY_OPERATOR_ROLE() external view returns (bytes32);
+
+    /// @notice Required to call `batchBurn`. Held separately from
+    ///         `BURN_ROLE` (which gates burn-of-self) and from
+    ///         `BURN_BLOCKED_ROLE` (which gates seizure of
+    ///         policy-blocked accounts) so the authority to destroy
+    ///         third-party balances WITHOUT a blocked-status precondition
+    ///         can be delegated narrowly to the corporate-actions desk
+    ///         for clawbacks, consolidations, and similar batched
+    ///         destructions. Tokens that do not need a batched-clawback
+    ///         path simply never grant this role.
+    function BURN_FROM_ROLE() external view returns (bytes32);
+
+    /*//////////////////////////////////////////////////////////////
+                              PRECISION
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Fixed-point precision used to scale `sharesToTokensRatio`.
+    ///         Equal to `1e18` (one WAD). Exposed on the ABI so callers
+    ///         that read `sharesToTokensRatio()` directly can interpret
+    ///         the value without hardcoding the constant; typical
+    ///         callers should prefer `toShares(...)` / `sharesOf(...)`,
+    ///         which apply the precision internally.
+    function WAD_PRECISION() external view returns (uint256);
 
     /*//////////////////////////////////////////////////////////////
                           POLICY TYPE IDENTIFIERS
@@ -190,36 +235,56 @@ interface IB20Security is IB20 {
     ///
     /// @dev    Requires `MINT_ROLE`. Subject to the `MINT_RECEIVER_POLICY`
     ///         policy per recipient and to the `MINT` pause vector.
-    ///         Reverts on length mismatch or empty arrays. Operators
-    ///         should pair this with a separate `announce(...)` call
-    ///         so the issuance is discoverable to indexers; this
-    ///         interface does not enforce the pairing on-chain.
+    ///         Reverts with `LengthMismatch(recipients.length,
+    ///         amounts.length)` if the parallel arrays disagree, and
+    ///         with `EmptyBatch()` if either array is empty.
+    ///         All-or-nothing: if any element reverts (e.g.
+    ///         `SupplyCapExceeded` after a partial accumulation, or
+    ///         `PolicyForbids(MINT_RECEIVER_POLICY, ...)` for a
+    ///         policy-blocked recipient), the entire transaction
+    ///         reverts and no partial state is committed. Emits
+    ///         `Transfer(address(0), recipients[i], amounts[i])` per
+    ///         element. Operators should pair this with a separate
+    ///         `announce(...)` call so the issuance is discoverable to
+    ///         indexers; this interface does not enforce the pairing
+    ///         on-chain.
     ///
     /// @param  recipients Accounts receiving the minted tokens.
     /// @param  amounts    Per-recipient amounts, parallel to
     ///                    `recipients`.
     function batchMint(address[] calldata recipients, uint256[] calldata amounts) external;
 
-    /// @notice Burns `amounts[i]` tokens from `accounts[i]`. The
-    ///         batched sibling of the inherited
-    ///         `IB20.burnBlocked(address,uint256)`; supports cold-path
-    ///         compliance seizures (court-ordered claw-backs, sanctions
-    ///         enforcement against multiple addresses, etc.) that need
-    ///         to land many destructions in one transaction.
+    /// @notice Burns `amounts[i]` tokens from `accounts[i]`. Distinct
+    ///         from the inherited `IB20.burnBlocked(address,uint256)`:
+    ///         where `burnBlocked` exists for sanctions-style seizure
+    ///         and refuses to operate against accounts that are still
+    ///         authorized under `TRANSFER_SENDER_POLICY`, `batchBurn` is the
+    ///         general corporate-actions clawback path and operates
+    ///         unconditionally on the supplied accounts. Supports
+    ///         cold-path consolidations, redemptions-in-kind, and
+    ///         court-ordered destructions that need to land many
+    ///         debits in one transaction without first arranging for
+    ///         each account to be policy-blocked.
     ///
-    /// @dev    Requires `BURN_ROLE`. Each `accounts[i]` MUST
-    ///         currently be unauthorized under the active
-    ///         `TRANSFER_SENDER_POLICY` policy; otherwise reverts with
-    ///         `AccountNotBlocked(accounts[i])`. Subject to the `BURN`
-    ///         pause vector. Reverts on length mismatch or empty
-    ///         arrays. Emits `Transfer(accounts[i], address(0),
-    ///         amounts[i])` per element, Operators should pair this with
-    ///         a separate `announce(...)` call so the seizure is
-    ///         discoverable to indexers; this interface does not
-    ///         enforce the pairing on-chain.
+    /// @dev    Requires `BURN_FROM_ROLE`. NOT gated by any policy:
+    ///         the corporate-actions desk is trusted to pick the right
+    ///         set of accounts off-chain, and the role grant is the
+    ///         on-chain authorization. Subject to the `BURN` pause
+    ///         vector. Reverts with `LengthMismatch(accounts.length,
+    ///         amounts.length)` if the parallel arrays disagree, and
+    ///         with `EmptyBatch()` if either array is empty.
+    ///         All-or-nothing: if any element reverts (e.g.
+    ///         `InsufficientBalance(accounts[k], balance, amounts[k])`),
+    ///         the entire transaction reverts and no partial state is
+    ///         committed. Emits `Transfer(accounts[i], address(0),
+    ///         amounts[i])` per element; does NOT emit `BurnedBlocked`
+    ///         (that event is reserved for `burnBlocked`'s sanctions
+    ///         semantics). Operators should pair this with a separate
+    ///         `announce(...)` call so the destruction is discoverable
+    ///         to indexers; this interface does not enforce the
+    ///         pairing on-chain.
     ///
-    /// @param  accounts Accounts whose balances will be debited. Each
-    ///                  MUST be unauthorized under `TRANSFER_SENDER_POLICY`.
+    /// @param  accounts Accounts whose balances will be debited.
     /// @param  amounts  Per-account amounts, parallel to `accounts`.
     function batchBurn(address[] calldata accounts, uint256[] calldata amounts) external;
 
@@ -231,16 +296,22 @@ interface IB20Security is IB20 {
     ///         to settle off-chain.
     ///
     /// @dev    Subject to the `REDEEMER_SENDER_POLICY` policy and to the
-    ///         `REDEEM` pause vector. Reverts when the corresponding
-    ///         share amount (`amount * sharesToTokensRatio /
-    ///         WAD_PRECISION`) is below `minimumRedeemable`. Emits
-    ///         `Redeemed`.
+    ///         `REDEEM` pause vector. Reverts with
+    ///         `BelowMinimumRedeemable(shares, minimumRedeemable)` if
+    ///         the corresponding share amount (`amount *
+    ///         sharesToTokensRatio / WAD_PRECISION`) is zero OR is
+    ///         strictly less than `minimumRedeemable`. Zero-share
+    ///         redemptions are always rejected, regardless of
+    ///         `minimumRedeemable`'s configured value, so a holder
+    ///         cannot burn token dust that resolves to no shares.
+    ///         Emits `Transfer(caller, address(0), amount)` followed by
+    ///         `Redeemed(caller, amount, sharesToTokensRatio)`.
     ///
     /// @param  amount Token amount to redeem from the caller's balance.
     function redeem(uint256 amount) external;
 
     /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
-    ///         immediately after `Transfer()` and before `Redeemed`. 
+    ///         immediately after `Transfer()` and before `Redeemed`.
     ///         See `IB20.transferWithMemo` for the memo convention; a memo
     ///         of `bytes32(0)` is permitted.
     function redeemWithMemo(uint256 amount, bytes32 memo) external;
