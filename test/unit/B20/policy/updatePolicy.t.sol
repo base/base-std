@@ -80,6 +80,26 @@ contract B20UpdatePolicyTest is B20Test {
         assertEq(token.policyId(policyType), newPolicyId, "slot must equal newPolicyId after write");
     }
 
+    /// @notice Verifies updatePolicy on one lane leaves other lanes unchanged
+    /// @dev Policy slots are packed into shared storage slots (one for transfer-side,
+    ///      one for mint-side). A buggy write mask that doesn't isolate the target lane
+    ///      would silently zero adjacent lanes. We set every supported policy slot to
+    ///      ALWAYS_BLOCK first, then update TRANSFER_SENDER to ALWAYS_ALLOW, and verify
+    ///      the other three slots are still ALWAYS_BLOCK.
+    function test_updatePolicy_success_writeIsolatedToTargetLane() public {
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.MINT_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+
+        assertEq(token.policyId(B20Constants.TRANSFER_SENDER), PolicyRegistryConstants.ALWAYS_ALLOW_ID, "SENDER updated");
+        assertEq(token.policyId(B20Constants.TRANSFER_RECEIVER), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "RECEIVER must be untouched");
+        assertEq(token.policyId(B20Constants.TRANSFER_EXECUTOR), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "EXECUTOR must be untouched");
+        assertEq(token.policyId(B20Constants.MINT_RECEIVER), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "MINT_RECEIVER must be untouched");
+    }
+
     /// @notice Verifies updatePolicy emits PolicyUpdated(policyType, oldId, newId)
     /// @dev Event integrity; canonical PolicyUpdated emission test.
     ///      Fresh slot has oldId == ALWAYS_ALLOW_ID (0); the first write transitions from there.
