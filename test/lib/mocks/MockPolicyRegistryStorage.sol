@@ -53,10 +53,10 @@ library MockPolicyRegistryStorage {
     // so the Rust impl can derive member slots via keccak256(key, baseSlot).
     // They MUST stay in sync with the field order of Layout above.
 
-    uint256 internal constant POLICIES_OFFSET       = 0;
-    uint256 internal constant MEMBERS_OFFSET        = 1;
+    uint256 internal constant POLICIES_OFFSET = 0;
+    uint256 internal constant MEMBERS_OFFSET = 1;
     uint256 internal constant PENDING_ADMINS_OFFSET = 2;
-    uint256 internal constant NEXT_COUNTER_OFFSET   = 3;
+    uint256 internal constant NEXT_COUNTER_OFFSET = 3;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {

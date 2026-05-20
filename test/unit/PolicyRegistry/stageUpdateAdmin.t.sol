@@ -40,9 +40,7 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
 
     /// @notice Verifies a second stageUpdateAdmin overwrites a previously-staged candidate
     /// @dev Latest call wins; the prior candidate loses ability to finalize
-    function test_stageUpdateAdmin_success_overwritesPrior(address currentAdmin, address first, address second)
-        public
-    {
+    function test_stageUpdateAdmin_success_overwritesPrior(address currentAdmin, address first, address second) public {
         vm.assume(currentAdmin != address(0));
         vm.assume(first != second);
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);

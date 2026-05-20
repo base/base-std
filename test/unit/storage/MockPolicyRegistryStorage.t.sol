@@ -27,8 +27,7 @@ contract MockPolicyRegistryStorageLocationTest is Test {
     /// @notice The policy-registry namespace must not collide with `base.b20`.
     /// @dev Sanity check: different precompiles must have disjoint storage roots.
     function test_MockPolicyRegistryStorage_storageLocation_disjointFromB20() public pure {
-        bytes32 b20Location =
-            keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff));
+        bytes32 b20Location = keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff));
         assertTrue(
             MockPolicyRegistryStorage.STORAGE_LOCATION != b20Location,
             "policy_registry and b20 namespaces must derive to disjoint roots"
