@@ -10,9 +10,9 @@ contract PolicyRegistryPolicyExistsTest is PolicyRegistryTest {
         // unimplemented
     }
 
-    /// @notice Verifies policyExists returns true for built-in id type(uint64).max
-    /// @dev Always-reject built-in is always present
-    function test_policyExists_success_builtinMax() public {
+    /// @notice Verifies policyExists returns true for built-in id 1 (always-block)
+    /// @dev Always-block built-in is always present
+    function test_policyExists_success_builtinOne() public {
         // unimplemented
     }
 

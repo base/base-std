@@ -11,7 +11,7 @@ contract PolicyRegistryPolicyAdminTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies policyAdmin returns address(0) for built-in policies
-    /// @dev Built-ins have no admin; both id 0 and id type(uint64).max return zero
+    /// @dev Built-ins have no admin; both id 0 and id 1 return zero
     function test_policyAdmin_success_zeroForBuiltins() public {
         // unimplemented
     }

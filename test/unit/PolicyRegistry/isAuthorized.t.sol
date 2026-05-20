@@ -16,9 +16,9 @@ contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
         // unimplemented
     }
 
-    /// @notice Verifies isAuthorized returns false for any account under built-in id type(uint64).max
-    /// @dev Built-in sentinel semantics: id uint64.max returns false unconditionally
-    function test_isAuthorized_success_alwaysRejectBuiltin(address account) public {
+    /// @notice Verifies isAuthorized returns false for any account under built-in id 1 (always-block)
+    /// @dev Built-in sentinel semantics: id 1 returns false unconditionally
+    function test_isAuthorized_success_alwaysBlockBuiltin(address account) public {
         // unimplemented
     }
 
