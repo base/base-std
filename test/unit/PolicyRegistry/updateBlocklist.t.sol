@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
+import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
     /// @notice Verifies updateBlocklist reverts when called by any non-admin caller
@@ -11,7 +11,8 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
     function test_updateBlocklist_revert_unauthorized(address caller, bool blocked, address[] memory accounts) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 policyId = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
         vm.prank(caller);
@@ -26,7 +27,8 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
         address[] memory accounts
     ) public {
         vm.assume(currentAdmin != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
         vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
         vm.prank(currentAdmin);
@@ -43,7 +45,8 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(policyId > 1);
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         vm.prank(caller);
         policyRegistry.updateBlocklist(policyId, blocked, accounts);
@@ -53,7 +56,8 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
     /// @dev isAuthorized returns false for each added account afterward
     function test_updateBlocklist_success_addsAccounts(address currentAdmin, address[] memory accounts) public {
         vm.assume(currentAdmin != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.prank(currentAdmin);
         policyRegistry.updateBlocklist(policyId, true, accounts);
@@ -66,7 +70,8 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
     /// @dev isAuthorized returns true for each removed account afterward
     function test_updateBlocklist_success_removesAccounts(address currentAdmin, address[] memory accounts) public {
         vm.assume(currentAdmin != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.prank(currentAdmin);
         policyRegistry.updateBlocklist(policyId, true, accounts);
@@ -101,7 +106,8 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
         address[] memory accounts
     ) public {
         vm.assume(currentAdmin != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.BlocklistUpdated(policyId, currentAdmin, blocked, accounts);

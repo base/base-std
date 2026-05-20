@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
+import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryPolicyExistsTest is PolicyRegistryTest {
     function test_policyExists_success_builtinZero() public view {

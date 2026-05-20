@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
+import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryFinalizeUpdateAdminTest is PolicyRegistryTest {
     /// @notice Verifies finalizeUpdateAdmin reverts when no admin transfer is in flight

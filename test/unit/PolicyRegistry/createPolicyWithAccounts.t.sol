@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
+import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @notice Verifies createPolicyWithAccounts reverts when admin is the zero address
@@ -29,7 +29,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         vm.assume(admin_ != address(0));
         vm.assume(policyTypeInt != 2 && policyTypeInt != 3);
         vm.assume(policyTypeInt < 4);
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         IPolicyRegistry.PolicyType invalidType = IPolicyRegistry.PolicyType(policyTypeInt);
         vm.expectRevert(IPolicyRegistry.InvalidPolicyType.selector);
         vm.prank(caller);
@@ -45,7 +46,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         vm.prank(caller);
         uint64 policyId =
             policyRegistry.createPolicyWithAccounts(admin_, IPolicyRegistry.PolicyType.ALLOWLIST, accounts);
@@ -63,7 +65,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         vm.prank(caller);
         uint64 policyId =
             policyRegistry.createPolicyWithAccounts(admin_, IPolicyRegistry.PolicyType.BLOCKLIST, accounts);
@@ -81,7 +84,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 expectedId = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.AllowlistUpdated(expectedId, caller, true, accounts);
@@ -98,7 +102,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(accounts.length <= 5);
+        uint256 len = bound(accounts.length, 0, 5);
+        assembly { mstore(accounts, len) }
         uint64 expectedId = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.BlocklistUpdated(expectedId, caller, true, accounts);

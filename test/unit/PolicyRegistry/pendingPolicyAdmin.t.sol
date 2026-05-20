@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+
+import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryPendingPolicyAdminTest is PolicyRegistryTest {
     /// @notice Verifies pendingPolicyAdmin returns address(0) before any transfer is staged

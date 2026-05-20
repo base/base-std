@@ -108,7 +108,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         if (pending == address(0)) revert NoPendingAdmin();
         if (pending != msg.sender) revert Unauthorized();
         address previousAdmin = _decodeAdmin(packed);
-        _policies[policyId] = _encode(_decodeType(packed), msg.sender);
+        _policies[policyId] = _encode({policyType: _decodeType(packed), admin: msg.sender});
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, previousAdmin, msg.sender);
     }
@@ -117,7 +117,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function renounceAdmin(uint64 policyId) external {
         uint256 packed = _requireCustom(policyId);
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        _policies[policyId] = _encode(_decodeType(packed), address(0));
+        _policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, address(0));
     }
@@ -160,7 +160,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function nextPolicyId(PolicyType policyType) external view returns (uint64) {
-        return _makeId(policyType, _nextCounter);
+        return _makeId({policyType: policyType, counter: _nextCounter});
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -205,8 +205,8 @@ contract MockPolicyRegistry is IPolicyRegistry {
         unchecked {
             _nextCounter = counter + 1;
         }
-        newPolicyId = _makeId(policyType, counter);
-        _policies[newPolicyId] = _encode(policyType, admin);
+        newPolicyId = _makeId({policyType: policyType, counter: counter});
+        _policies[newPolicyId] = _encode({policyType: policyType, admin: admin});
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
     }
