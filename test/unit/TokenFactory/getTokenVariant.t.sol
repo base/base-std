@@ -43,13 +43,12 @@ contract TokenFactoryGetTokenVariantTest is TokenFactoryTest {
     /// @notice Verifies getTokenVariant returns NONE for B-20-prefixed addresses with an invalid variant byte
     /// @dev Bytes >= 4 in position [10] are not valid TokenVariant ordinals; impl returns NONE rather than
     ///      reverting on out-of-range enum cast.
-    function test_getTokenVariant_success_noneForInvalidVariantByte(uint8 invalidByte, uint8 decimals, bytes8 tail)
+    function test_getTokenVariant_success_noneForInvalidVariantByte(uint8 invalidByte, bytes9 tail)
         public
         view
     {
         invalidByte = uint8(bound(uint256(invalidByte), 4, 255));
-        uint160 addr = (uint160(0xB2) << 152) | (uint160(invalidByte) << 72) | (uint160(decimals) << 64)
-            | uint160(uint64(tail));
+        uint160 addr = (uint160(0xB2) << 152) | (uint160(invalidByte) << 72) | uint160(uint72(tail));
         assertEq(
             uint256(factory.getTokenVariant(address(addr))),
             uint256(ITokenFactory.TokenVariant.NONE),

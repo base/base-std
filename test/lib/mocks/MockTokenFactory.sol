@@ -23,7 +23,7 @@ import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20St
 ///            byte and required-field invariants).
 ///         2. Compute the deterministic token address per the
 ///            documented schema (`[0:10]` shared prefix, `[10]` variant
-///            byte, `[11]` decimals byte, `[12:20]` derived from
+///            byte, `[11:20]` derived from
 ///            `(msg.sender, salt)`).
 ///         3. Refuse to overwrite an existing token (revert
 ///            `TokenAlreadyExists`).
@@ -90,7 +90,7 @@ contract MockTokenFactory is ITokenFactory {
         external
         returns (address token)
     {
-        // -- 1. Decode + validate, get the four params every variant needs --
+        // -- 1. Decode + validate, get the common params --
         string memory name_;
         string memory symbol_;
         address admin;
@@ -100,11 +100,10 @@ contract MockTokenFactory is ITokenFactory {
         if (variant == TokenVariant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version);
-            if (p.decimals < 2 || p.decimals > 18) revert InvalidDecimals(p.decimals);
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
-            decimals = p.decimals;
+            decimals = 18;
         } else if (variant == TokenVariant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version);
@@ -125,7 +124,7 @@ contract MockTokenFactory is ITokenFactory {
         }
 
         // -- 2-3. Compute address; refuse to overwrite --
-        token = _computeAddress(variant, decimals, msg.sender, salt);
+        token = _computeAddress(variant, msg.sender, salt);
         if (token.code.length != 0) revert TokenAlreadyExists(token);
 
         // -- 4. Etch the variant-appropriate runtime bytecode --
@@ -193,12 +192,12 @@ contract MockTokenFactory is ITokenFactory {
     bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
 
     /// @inheritdoc ITokenFactory
-    function getTokenAddress(TokenVariant variant, uint8 decimals, address sender, bytes32 salt)
+    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt)
         external
         pure
         returns (address)
     {
-        return _computeAddress(variant, decimals, sender, salt);
+        return _computeAddress(variant, sender, salt);
     }
 
     /// @inheritdoc ITokenFactory
@@ -219,21 +218,19 @@ contract MockTokenFactory is ITokenFactory {
     //                     ADDRESS SCHEMA HELPERS
     // ============================================================
 
-    /// @dev Encodes (variant, decimals, sender, salt) into the canonical
+    /// @dev Encodes (variant, sender, salt) into the canonical
     ///      B-20 address layout:
     ///        byte [0]      = 0xB2
     ///        bytes [1:10]  = 0x00 (9 zero bytes)
     ///        byte [10]     = variant
-    ///        byte [11]     = decimals
-    ///        bytes [12:20] = keccak256(sender, salt)[0:8]
-    function _computeAddress(TokenVariant variant, uint8 decimals, address sender, bytes32 salt)
+    ///        bytes [11:20] = keccak256(sender, salt)[0:9]
+    function _computeAddress(TokenVariant variant, address sender, bytes32 salt)
         internal
         pure
         returns (address)
     {
-        bytes8 tail = bytes8(keccak256(abi.encode(sender, salt)));
-        uint160 addr = (uint160(0xB2) << 152) | (uint160(uint8(variant)) << 72) | (uint160(decimals) << 64)
-            | uint160(uint64(tail));
+        bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));
+        uint160 addr = (uint160(0xB2) << 152) | (uint160(uint8(variant)) << 72) | uint160(uint72(tail));
         return address(addr);
     }
 

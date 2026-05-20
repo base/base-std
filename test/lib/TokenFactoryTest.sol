@@ -21,23 +21,17 @@ contract TokenFactoryTest is BaseTest {
     // -- Param builders --
 
     /// @notice Build a `B20CreateParams` with explicit fields.
-    function _b20Params(string memory name_, string memory symbol_, address initialAdmin_, uint8 decimals_)
+    function _b20Params(string memory name_, string memory symbol_, address initialAdmin_)
         internal
         pure
         returns (ITokenFactory.B20CreateParams memory)
     {
-        return ITokenFactory.B20CreateParams({
-            version: 1,
-            name: name_,
-            symbol: symbol_,
-            initialAdmin: initialAdmin_,
-            decimals: decimals_
-        });
+        return ITokenFactory.B20CreateParams({version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_});
     }
 
-    /// @notice Build a default `B20CreateParams` (`Test`/`TST`, admin, 18 decimals).
+    /// @notice Build a default `B20CreateParams` (`Test`/`TST`, admin).
     function _b20Params() internal view returns (ITokenFactory.B20CreateParams memory) {
-        return _b20Params("Test", "TST", admin, 18);
+        return _b20Params("Test", "TST", admin);
     }
 
     /// @notice Build a `B20StablecoinCreateParams` with explicit fields.

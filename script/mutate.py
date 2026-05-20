@@ -219,9 +219,9 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_FACTORY,
-        "(uint160(decimals) << 64)",
-        "(uint160(decimals) << 56)",
-        "_computeAddress: decimals byte shifted to wrong position (overlaps tail bytes)",
+        "| uint160(uint72(tail));",
+        "| (uint160(uint72(tail)) << 8);",
+        "_computeAddress: tail shifted left by 8 bits (truncates entropy and breaks deterministic addressing)",
     ),
     Mutation(
         MOCK_FACTORY,
@@ -231,8 +231,8 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_FACTORY,
-        "bytes8 tail = bytes8(keccak256(abi.encode(sender, salt)));",
-        "bytes8 tail = bytes8(keccak256(abi.encodePacked(sender, salt)));",
+        "bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));",
+        "bytes9 tail = bytes9(keccak256(abi.encodePacked(sender, salt)));",
         "_computeAddress: encode vs encodePacked (different hash, breaks determinism contract)",
     ),
     # === Address prefix check ===
@@ -266,19 +266,6 @@ MUTATIONS: list[Mutation] = [
         "uint256 chunks = (data.length + 31) / 32;",
         "uint256 chunks = (data.length + 30) / 32;",
         "_writeString: chunk count off-by-one (loses trailing bytes for non-aligned lengths)",
-    ),
-    # === Factory decimals validation boundaries ===
-    Mutation(
-        MOCK_FACTORY,
-        "if (p.decimals < 2 || p.decimals > 18) revert InvalidDecimals(p.decimals);",
-        "if (p.decimals <= 2 || p.decimals > 18) revert InvalidDecimals(p.decimals);",
-        "createToken: rejects decimals == 2 (lower bound off-by-one)",
-    ),
-    Mutation(
-        MOCK_FACTORY,
-        "if (p.decimals < 2 || p.decimals > 18) revert InvalidDecimals(p.decimals);",
-        "if (p.decimals < 2 || p.decimals >= 18) revert InvalidDecimals(p.decimals);",
-        "createToken: rejects decimals == 18 (upper bound off-by-one)",
     ),
     # === Factory TokenAlreadyExists check ===
     Mutation(

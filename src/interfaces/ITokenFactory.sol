@@ -20,14 +20,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         - `[0:10]`  — `bytes10(0xB200000000000000000000)` shared
 ///                       prefix identifying a factory-created B-20.
 ///         - `[10]`    — `bytes1(variant)` (matches `TokenVariant`).
-///         - `[11]`    — `bytes1(decimals)` — encoded in the address so
-///                       `decimals()` is recoverable statelessly from the
-///                       token address alone, avoiding a storage read on
-///                       hot integration paths (AMMs, lending markets,
-///                       wallets). For variants that hardcode decimals
-///                       (Stablecoin, Security: 6), this byte is fixed
-///                       at `0x06`.
-///         - `[12:20]` — `bytes8(keccak256(abi.encode(msg.sender, salt)))`.
+///         - `[11:20]` — `bytes9(keccak256(abi.encode(msg.sender, salt)))`.
 ///
 ///         **Variant evolution.** Adding new required fields to an
 ///         existing variant after launch is NOT supported: the factory is
@@ -107,15 +100,11 @@ interface ITokenFactory {
     ///                      `renounceLastAdmin` path is the alternative
     ///                      for tokens that need an admin during setup
     ///                      and then want to evolve to admin-less.
-    /// @param decimals      ERC-20 decimals. MUST be in `[2, 18]`.
-    ///                      Encoded into address byte `[11]` for
-    ///                      stateless retrieval.
     struct B20CreateParams {
         uint8 version;
         string name;
         string symbol;
         address initialAdmin;
-        uint8 decimals;
     }
 
     /// @notice Creation parameters for a Stablecoin-variant B-20 token.
@@ -127,9 +116,8 @@ interface ITokenFactory {
     ///                      "EUR", "XAU"). Required: empty string
     ///                      reverts. See `IB20Stablecoin.currency` for
     ///                      the convention.
-    /// @dev    Decimals are fixed at `6` (the SPL stablecoin convention)
-    ///         and encoded as `0x06` in address byte `[11]`. There is no
-    ///         decimals field on this struct.
+    /// @dev    Decimals are fixed at `6` (the SPL stablecoin convention).
+    ///         There is no decimals field on this struct.
     struct B20StablecoinCreateParams {
         uint8 version;
         string name;
@@ -150,8 +138,7 @@ interface ITokenFactory {
     ///                           via `IB20Security.updateSecurityIdentifier`.
     /// @param minimumRedeemable  Initial value of `minimumRedeemable`.
     ///                           Use `0` to allow any non-zero redemption.
-    /// @dev    Decimals are fixed at `6` and encoded as `0x06` in address
-    ///         byte `[11]`. Security tokens have no `initialSupply`
+    /// @dev    Decimals are fixed at `6`. Security tokens have no `initialSupply`
     ///         parameter: all issuance flows through `create`
     ///         (rate-limited compliant path) or `adminMint` (cold-path
     ///         batch with announcement coupling) after deployment.
@@ -169,7 +156,7 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice A token already exists at the deterministic address
-    ///         derived from `(variant, decimals, msg.sender, salt)`.
+    ///         derived from `(variant, msg.sender, salt)`.
     ///         Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
@@ -180,12 +167,6 @@ interface ITokenFactory {
     /// @notice The leading `version` byte in `params` does not match
     ///         any known encoding for the requested variant.
     error UnsupportedVersion(uint8 version);
-
-    /// @notice The provided decimals value is outside the variant's
-    ///         allowed range. Default tokens require `[2, 18]`;
-    ///         Stablecoin and Security tokens hardcode `6` and do not
-    ///         accept a caller-supplied value.
-    error InvalidDecimals(uint8 decimals);
 
     /// @notice A required string argument was the empty string (e.g.
     ///         stablecoin `currency`, security `isin`).
@@ -227,8 +208,8 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Creates a B-20 token of the given `variant` at the
-    ///         deterministic address derived from `(variant, decimals,
-    ///         msg.sender, salt)`. `params` MUST be the ABI-encoded
+    ///         deterministic address derived from `(variant, msg.sender, salt)`.
+    ///         `params` MUST be the ABI-encoded
     ///         variant-specific struct (`B20CreateParams`,
     ///         `B20StablecoinCreateParams`, or `B20SecurityCreateParams`),
     ///         leading with a `version` byte the factory uses to select
@@ -279,13 +260,11 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Returns the deterministic address `createToken` would
-    ///         assign for `(variant, decimals, sender, salt)`. Address
-    ///         derivation depends only on these four inputs; the
-    ///         remaining `params` fields do not affect the address.
-    /// @dev    `variant` and `decimals` are both required because both
-    ///         are encoded into the address (bytes `[10]` and `[11]`).
-    ///         For Stablecoin and Security variants, pass `decimals = 6`.
-    function getTokenAddress(TokenVariant variant, uint8 decimals, address sender, bytes32 salt)
+    ///         assign for `(variant, sender, salt)`. Address derivation
+    ///         depends only on these inputs; the remaining `params`
+    ///         fields (including decimals, which are fixed by variant)
+    ///         do not affect the address.
+    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt)
         external
         view
         returns (address);

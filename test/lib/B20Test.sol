@@ -14,8 +14,8 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 /// without the factory: `setUp` calls `super.setUp()` to etch every
 /// precompile mock (via `BaseTest`) and pick up the factory create
 /// helpers, then deploys a default-variant token here so the token's
-/// identity bytes (variant byte at address `[10]`, decimals byte at
-/// `[11]`) match the real address schema. In live mode under
+/// identity byte (variant at address `[10]`) matches the real address
+/// schema. In live mode under
 /// `--fork-url`, the same flow hits the real precompile factory.
 ///
 /// On top of the inherited factory actors, this contract adds the
