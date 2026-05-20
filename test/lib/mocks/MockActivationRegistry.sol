@@ -7,9 +7,14 @@ import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
 ///
 /// Implements `admin()` returning the same hardcoded address the live
 /// precompile uses (per base/base#2733: 0xcb00…0000), so test setUp
-/// can resolve `activationAdmin` without reverting. Every other
-/// method reverts pending the full mock implementation in a follow-up
-/// PR.
+/// can resolve `activationAdmin` without reverting. `isActivated`
+/// returns `false` for every feature id, per the IActivationRegistry
+/// NatSpec (L45-47) which carves it out from `FeatureNotActivated`:
+/// "not raised by `isActivated`, which returns `false` instead." This
+/// matches the production Rust precompile, where unactivated features
+/// are observably false rather than triggering an error path.
+/// `activate` and `deactivate` revert pending the full state-bearing
+/// mock implementation in a follow-up PR.
 contract MockActivationRegistry is IActivationRegistry {
     address internal constant ADMIN = 0xCB00000000000000000000000000000000000000;
 
@@ -18,7 +23,7 @@ contract MockActivationRegistry is IActivationRegistry {
     }
 
     function isActivated(bytes32) external pure returns (bool) {
-        revert("MockActivationRegistry: not implemented");
+        return false;
     }
 
     function activate(bytes32) external pure {
