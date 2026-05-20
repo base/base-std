@@ -233,13 +233,18 @@ interface IB20 {
 
     /// @notice Emitted by `transferWithMemo`, `transferFromWithMemo`,
     ///         `mintWithMemo`, and `burnWithMemo` immediately AFTER the
-    ///         underlying ERC-20 `Transfer` event. The memo carries no
-    ///         from/to/amount fields; indexers join it to the preceding
-    ///         `Transfer` log via `(transactionHash, logIndex - 1)`.
+    ///         underlying ERC-20 `Transfer` event. Carries `from`, `to`,
+    ///         `amount`, and a contract-global `nonce` so it is fully
+    ///         self-contained — no join to the preceding `Transfer` log
+    ///         is required. `nonce` is a monotonically incrementing
+    ///         counter scoped to this token; it uniquely identifies each
+    ///         memo'd operation even when `(from, to, amount, memo)` repeats
+    ///         (e.g. repeated payments of the same invoice).
     /// @dev    Variants may emit this event from additional functions
     ///         (e.g. `redeem` on a Security token); the event signature
-    ///         is shared.
-    event Memo(bytes32 indexed memo);
+    ///         is shared. For mint variants `from == address(0)`; for
+    ///         burn variants `to == address(0)`.
+    event Memo(address indexed from, address indexed to, uint256 amount, bytes32 indexed memo, uint256 nonce);
 
     /// @notice Emitted by `burnBlocked` in addition to the standard
     ///         `Transfer(from, address(0), amount)`. Distinguishes

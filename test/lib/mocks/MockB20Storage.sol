@@ -89,6 +89,11 @@ library MockB20Storage {
         // gates (role / policy / pause checks). Token invariants (supply-cap
         // math, balance accounting) are NOT bypassed.
         bool initialized;
+        // ---------- Memo nonce ----------
+        // Monotonically incrementing counter for memo'd transfers, mints, and
+        // burns. Incremented on each *WithMemo call so the Memo event carries
+        // a globally unique nonce even when (from, to, amount, memo) repeats.
+        uint256 memoNonce;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff))
@@ -127,6 +132,7 @@ library MockB20Storage {
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;
     uint256 internal constant INITIALIZED_OFFSET = 14;
+    uint256 internal constant MEMO_NONCE_OFFSET = 15;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the

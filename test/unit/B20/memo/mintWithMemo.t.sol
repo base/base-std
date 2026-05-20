@@ -37,16 +37,17 @@ contract B20MintWithMemoTest is B20Test {
         assertEq(token.totalSupply(), supplyBefore + amount, "supply increased");
     }
 
-    /// @notice Verifies mintWithMemo emits Transfer(address(0), to, amount) then Memo(memo)
-    /// @dev Event ordering: Memo follows Transfer; canonical Memo test for the mint path
+    /// @notice Verifies mintWithMemo emits Transfer(address(0), to, amount) then Memo
+    /// @dev Memo is self-contained: carries from, to, amount, memo, and a unique nonce.
+    ///      nonce is 0 for the first memo'd operation on a freshly-etched token.
     function test_mintWithMemo_success_emitsTransferThenMemo(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(address(0), to, amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(address(token));
+        emit IB20.Memo(address(0), to, amount, memo, 0);
         vm.prank(minter);
         token.mintWithMemo(to, amount, memo);
     }
