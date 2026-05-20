@@ -13,26 +13,31 @@ import {IPolicyRegistry} from "../interfaces/IPolicyRegistry.sol";
 ///        [255:169] unused
 ///        [168]     created flag (always 1 for existing policies, never cleared)
 ///        [167:8]   admin address (160 bits, 0 after renounceAdmin)
-///        [7:0]     PolicyType (ALLOWLIST = 0, BLOCKLIST = 1)
+///        [7:0]     unused
 ///
-///      Existence sentinel: bit 168 (CREATED_BIT). A zero admin after
-///      renounceAdmin would make the packed slot zero for ALLOWLIST
-///      policies (type = 0), so we cannot use packed == 0 as the
-///      sentinel. CREATED_BIT is set at creation and never cleared.
+///      Existence sentinel: bit 168 (CREATED_BIT). A renounced policy has
+///      admin = address(0), making bits [167:8] zero; CREATED_BIT prevents
+///      that from being confused with a never-created slot.
 ///
-///      Built-in IDs (0 and type(uint64).max) are never stored in
-///      _policies; their behavior is handled via constants.
+///      Policy type is NOT stored in the packed slot. It is encoded in the
+///      top byte of the policy ID itself per the IPolicyRegistry encoding
+///      scheme, and recovered via _typeFromId() with no storage read.
+///
+///      Built-in IDs (0 and 1) are never stored in _policies; their
+///      behavior is handled via constants.
 contract PolicyRegistry is IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                                CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
     uint64 private constant ALWAYS_ALLOW_ID = 0;
-    uint64 private constant ALWAYS_REJECT_ID = type(uint64).max;
+    uint64 private constant ALWAYS_BLOCK_ID = 1;
 
-    uint256 private constant TYPE_MASK = 0xFF;
-    uint256 private constant ADMIN_SHIFT = 8;
+    // Policy ID encoding: [63:56] = uint8(PolicyType), [55:0] = global counter.
+    uint256 private constant TYPE_SHIFT = 56;
+
     uint256 private constant CREATED_BIT = uint256(1) << 168;
+    uint256 private constant ADMIN_SHIFT = 8;
 
     /*//////////////////////////////////////////////////////////////
                                 STORAGE
@@ -46,7 +51,9 @@ contract PolicyRegistry is IPolicyRegistry {
 
     mapping(uint64 policyId => address pendingAdmin) private _pendingAdmins;
 
-    uint64 private _nextId = 1;
+    // Global monotonic counter for the low 56 bits of custom policy IDs.
+    // Starts at 2: IDs 0 and 1 are reserved for the built-ins.
+    uint56 private _nextCounter = 2;
 
     /*//////////////////////////////////////////////////////////////
                            POLICY CREATION
@@ -85,7 +92,7 @@ contract PolicyRegistry is IPolicyRegistry {
         if (pending == address(0)) revert NoPendingAdmin();
         if (pending != msg.sender) revert Unauthorized();
         address previousAdmin = _decodeAdmin(packed);
-        _policies[policyId] = _encode({policyType: _decodeType(packed), admin: msg.sender});
+        _policies[policyId] = _encode(msg.sender);
         delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, previousAdmin, msg.sender);
     }
@@ -94,7 +101,7 @@ contract PolicyRegistry is IPolicyRegistry {
     function renounceAdmin(uint64 policyId) external {
         uint256 packed = _requireCustom(policyId);
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        _policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});
+        _policies[policyId] = _encode(address(0));
         if (_pendingAdmins[policyId] != address(0)) delete _pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, address(0));
     }
@@ -102,7 +109,7 @@ contract PolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function updateAllowlist(uint64 policyId, bool allowed, address[] calldata accounts) external {
         uint256 packed = _requireCustom(policyId);
-        if (_decodeType(packed) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
+        if (_typeFromId(policyId) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.ALLOWLIST, value: allowed, accounts: accounts});
     }
@@ -110,7 +117,7 @@ contract PolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external {
         uint256 packed = _requireCustom(policyId);
-        if (_decodeType(packed) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
+        if (_typeFromId(policyId) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});
     }
@@ -124,11 +131,11 @@ contract PolicyRegistry is IPolicyRegistry {
         // Built-in short-circuits MUST remain before any storage read: built-in IDs
         // have no entry in _policies and must never reach the storage path.
         if (policyId == ALWAYS_ALLOW_ID) return true;
-        if (policyId == ALWAYS_REJECT_ID) return false;
+        if (policyId == ALWAYS_BLOCK_ID) return false;
         uint256 packed = _policies[policyId];
         if (packed & CREATED_BIT == 0) revert PolicyNotFound();
         bool member = _members[policyId][account];
-        return _decodeType(packed) == PolicyType.ALLOWLIST ? member : !member;
+        return _typeFromId(policyId) == PolicyType.ALLOWLIST ? member : !member;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -136,27 +143,27 @@ contract PolicyRegistry is IPolicyRegistry {
     //////////////////////////////////////////////////////////////*/
 
     /// @inheritdoc IPolicyRegistry
-    function nextPolicyId() external view returns (uint64) {
-        return _nextId;
+    function nextPolicyId(PolicyType policyType) external view returns (uint64) {
+        return _makeId(policyType, _nextCounter);
     }
 
     /// @inheritdoc IPolicyRegistry
     function policyExists(uint64 policyId) external view returns (bool) {
-        return policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID || _policies[policyId] & CREATED_BIT != 0;
+        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
+        return _policies[policyId] & CREATED_BIT != 0;
     }
 
     /// @inheritdoc IPolicyRegistry
     function policyType(uint64 policyId) external view returns (PolicyType) {
-        if (policyId == ALWAYS_ALLOW_ID) revert AlwaysAllowPolicy();
-        if (policyId == ALWAYS_REJECT_ID) revert AlwaysRejectPolicy();
-        uint256 packed = _policies[policyId];
-        if (packed & CREATED_BIT == 0) revert PolicyNotFound();
-        return _decodeType(packed);
+        if (policyId == ALWAYS_ALLOW_ID) return PolicyType.ALWAYS_ALLOW;
+        if (policyId == ALWAYS_BLOCK_ID) return PolicyType.ALWAYS_BLOCK;
+        if (_policies[policyId] & CREATED_BIT == 0) revert PolicyNotFound();
+        return _typeFromId(policyId);
     }
 
     /// @inheritdoc IPolicyRegistry
     function policyAdmin(uint64 policyId) external view returns (address) {
-        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_REJECT_ID) return address(0);
+        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         uint256 packed = _policies[policyId];
         if (packed & CREATED_BIT == 0) revert PolicyNotFound();
         return _decodeAdmin(packed);
@@ -174,14 +181,14 @@ contract PolicyRegistry is IPolicyRegistry {
     function _create(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
         if (policyType != PolicyType.ALLOWLIST && policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();
         if (admin == address(0)) revert ZeroAddress();
-        newPolicyId = _nextId;
-        // No overflow guard: at one policy per 2-second block, reaching uint64.max
-        // takes ~1.2 trillion years. An explicit revert would cost gas on every
-        // createPolicy call to protect against an unreachable condition.
+        uint56 counter = _nextCounter;
+        // No overflow guard: at one policy per 2-second block, exhausting the 56-bit
+        // counter space (~7.2e16 IDs) takes ~4.6 billion years.
         unchecked {
-            ++_nextId;
+            _nextCounter = counter + 1;
         }
-        _policies[newPolicyId] = _encode({policyType: policyType, admin: admin});
+        newPolicyId = _makeId(policyType, counter);
+        _policies[newPolicyId] = _encode(admin);
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
     }
@@ -201,18 +208,21 @@ contract PolicyRegistry is IPolicyRegistry {
     }
 
     function _requireCustom(uint64 policyId) internal view returns (uint256 packed) {
-        if (policyId == ALWAYS_ALLOW_ID) revert AlwaysAllowPolicy();
-        if (policyId == ALWAYS_REJECT_ID) revert AlwaysRejectPolicy();
         packed = _policies[policyId];
         if (packed & CREATED_BIT == 0) revert PolicyNotFound();
     }
 
-    function _encode(PolicyType policyType, address admin) internal pure returns (uint256) {
-        return CREATED_BIT | uint256(policyType) | (uint256(uint160(admin)) << ADMIN_SHIFT);
+    function _makeId(PolicyType policyType, uint56 counter) internal pure returns (uint64) {
+        return (uint64(uint8(policyType)) << TYPE_SHIFT) | uint64(counter);
     }
 
-    function _decodeType(uint256 packed) internal pure returns (PolicyType) {
-        return PolicyType(packed & TYPE_MASK);
+    function _typeFromId(uint64 policyId) internal pure returns (PolicyType) {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return PolicyType(uint8(policyId >> TYPE_SHIFT));
+    }
+
+    function _encode(address admin) internal pure returns (uint256) {
+        return CREATED_BIT | (uint256(uint160(admin)) << ADMIN_SHIFT);
     }
 
     function _decodeAdmin(uint256 packed) internal pure returns (address) {
