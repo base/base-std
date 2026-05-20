@@ -80,14 +80,14 @@ library MockB20Storage {
         //   [191:128] reserved
         //   [255:192] reserved
         uint256 mintPolicyIds;
-        // Variant-defined and user-defined policy types live in this
-        // mapping. Variants that want a packed hot-path slot for their
-        // own operation (e.g. `redeem` on `IB20Security`) add their own
-        // namespaced storage library with a `redeemPolicyIds` slot, the
-        // same way `MockB20StablecoinStorage` adds the `currency` field.
-        // The cold path (everything else) pays the standard
-        // one-SLOAD-per-mapping-access cost.
-        mapping(bytes32 policyType => uint64 policyId) extraPolicyIds;
+        // There is no generic fallback mapping for "other" policy
+        // types. Each supported `policyType` lives in a fixed slot on
+        // this struct (or, for variant-specific operations, in the
+        // variant's own namespaced storage library — e.g. a future
+        // `MockB20SecurityStorage` adds `redeemPolicyIds` at namespace
+        // `base.b20.security`, mirroring how `MockB20StablecoinStorage`
+        // adds `currency` at `base.b20.stablecoin`). `updatePolicy` on
+        // an unsupported `policyType` reverts `UnsupportedPolicyType`.
         // ---------- Pause ----------
         // Bitmask: bit i set means PausableFeature(i) is paused. Translated
         // to/from the PausableFeature[] enum array at the IB20 surface
@@ -138,11 +138,10 @@ library MockB20Storage {
     uint256 internal constant ADMIN_COUNT_OFFSET = 8;
     uint256 internal constant TRANSFER_POLICY_IDS_OFFSET = 9;
     uint256 internal constant MINT_POLICY_IDS_OFFSET = 10;
-    uint256 internal constant EXTRA_POLICY_IDS_OFFSET = 11;
-    uint256 internal constant PAUSED_VECTORS_OFFSET = 12;
-    uint256 internal constant SUPPLY_CAP_OFFSET = 13;
-    uint256 internal constant NONCES_OFFSET = 14;
-    uint256 internal constant INITIALIZED_OFFSET = 15;
+    uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
+    uint256 internal constant SUPPLY_CAP_OFFSET = 12;
+    uint256 internal constant NONCES_OFFSET = 13;
+    uint256 internal constant INITIALIZED_OFFSET = 14;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the

@@ -245,9 +245,9 @@ contract MockTokenFactory is ITokenFactory {
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.SYMBOL_OFFSET), symbol_);
         _writeUint(token, MockB20Storage.slotOf(MockB20Storage.SUPPLY_CAP_OFFSET), type(uint256).max);
         // Everything else (totalSupply, allowances, roles, roleAdmins,
-        // adminCount, transferPolicyIds, mintPolicyIds, extraPolicyIds,
-        // pausedVectors, nonces, contractURI, initialized) defaults to
-        // the EVM's zero state, which is correct for a fresh token.
+        // adminCount, transferPolicyIds, mintPolicyIds, pausedVectors,
+        // nonces, contractURI, initialized) defaults to the EVM's zero
+        // state, which is correct for a fresh token.
     }
 
     /// @dev Writes the stablecoin variant's `currency` field at its

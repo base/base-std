@@ -377,25 +377,30 @@ contract MockB20 is IB20 {
         emit PolicyUpdated(policyType, oldPolicyId, newPolicyId);
     }
 
-    /// @dev Reads a policy ID from storage. Hot-path types are routed to
-    ///      a per-operation packed slot (one SLOAD per op, four uint64s
-    ///      per slot); anything else falls through to the
-    ///      variant/user-defined mapping at the cold path.
-    function _readPolicyId(bytes32 policyType) internal view returns (uint64) {
+    /// @dev Reads a policy ID from storage. Each supported policy type
+    ///      is routed to its per-operation packed slot (one SLOAD per op,
+    ///      four uint64s per slot). Unsupported types return 0
+    ///      (ALWAYS_ALLOW) — there is no fallback storage, so the
+    ///      "absent" state is observably equivalent to "unconfigured".
+    ///      Variants that add their own policy types override this to
+    ///      check their own slots before falling through to `super`.
+    function _readPolicyId(bytes32 policyType) internal view virtual returns (uint64) {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         if (policyType == TRANSFER_SENDER) return uint64($.transferPolicyIds);
         if (policyType == TRANSFER_RECEIVER) return uint64($.transferPolicyIds >> 64);
         if (policyType == TRANSFER_EXECUTOR) return uint64($.transferPolicyIds >> 128);
         if (policyType == MINT_RECEIVER) return uint64($.mintPolicyIds);
-        return $.extraPolicyIds[policyType];
+        return 0;
     }
 
     /// @dev Writes a policy ID to storage. Hot-path types update their
     ///      per-operation packed slot in-place (preserving the other
-    ///      three packed lanes); anything else writes to the
-    ///      extra-policies mapping. Done with explicit mask + shift so
+    ///      three packed lanes); anything else reverts
+    ///      `UnsupportedPolicyType` — the token has no slot for it.
+    ///      Variants override to handle their own policy types before
+    ///      falling through to `super`. Mask + shift are explicit so
     ///      the Rust impl can replicate the exact bit layout.
-    function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal {
+    function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal virtual {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 mask = uint256(type(uint64).max);
         if (policyType == TRANSFER_SENDER) {
@@ -407,7 +412,7 @@ contract MockB20 is IB20 {
         } else if (policyType == MINT_RECEIVER) {
             $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);
         } else {
-            $.extraPolicyIds[policyType] = newPolicyId;
+            revert UnsupportedPolicyType(policyType);
         }
     }
 

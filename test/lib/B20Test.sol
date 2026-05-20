@@ -127,6 +127,32 @@ contract B20Test is TokenFactoryTest {
         token.updatePolicy(policyType, policyId);
     }
 
+    /// @notice Maps a fuzzed `uint8` to one of the four base-token policy
+    ///         types. Tests that exercise `policyId` / `updatePolicy`
+    ///         must fuzz over the supported set; writes to an
+    ///         unsupported `bytes32` revert `UnsupportedPolicyType`.
+    /// @dev    Variant tests can wrap this with their own indexer that
+    ///         extends the codomain (e.g. a Security test that also
+    ///         covers `REDEEMER_SENDER`).
+    function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
+        uint8 i = idx % 4;
+        if (i == 0) return B20Constants.TRANSFER_SENDER;
+        if (i == 1) return B20Constants.TRANSFER_RECEIVER;
+        if (i == 2) return B20Constants.TRANSFER_EXECUTOR;
+        return B20Constants.MINT_RECEIVER;
+    }
+
+    /// @notice True iff `policyType` is one of the four base-token
+    ///         supported policy types. Used by tests that fuzz arbitrary
+    ///         `bytes32` and need to filter to the supported / unsupported
+    ///         partition.
+    function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
+        return policyType == B20Constants.TRANSFER_SENDER
+            || policyType == B20Constants.TRANSFER_RECEIVER
+            || policyType == B20Constants.TRANSFER_EXECUTOR
+            || policyType == B20Constants.MINT_RECEIVER;
+    }
+
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`
     ///         to the `pauser` actor on first call.
     function _pause(IB20.PausableFeature feature) internal {
