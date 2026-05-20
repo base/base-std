@@ -29,34 +29,54 @@ import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20St
 ///            `TokenAlreadyExists`).
 ///         4. Etch the variant-appropriate mock token bytecode at
 ///            the computed address.
-///         5. **Write the token's initial storage directly** via
-///            `vm.store` at the slot offsets declared in
-///            `MockB20Storage`. Production Rust precompiles have full
-///            chain-state access and write storage the same way; this
-///            mock reaches for the same pattern via cheatcode so the
-///            Solidity reference and the Rust impl agree on the slot
-///            layout slot-for-slot. The token has NO factory-only
+///         5. **Write the token's initial identity / supply-cap state
+///            directly** via `vm.store` at the slot offsets declared in
+///            `MockB20Storage`. The token has NO factory-only
 ///            entrypoints; its surface is exactly `IB20`.
-///         6. Dispatch each `initCalls[i]` via low-level `.call()`
+///         6. Emit `TokenCreated` (now WITHOUT an `admin` field —
+///            see step 7).
+///         7. Grant the initial admin role via a single low-level
+///            `token.grantRole(DEFAULT_ADMIN_ROLE, admin)` call during
+///            the bootstrap-privileged window (`!initialized`). This is
+///            the canonical role-grant path: the storage write happens
+///            inside `_grantRole` exactly as it would for any later
+///            `grantRole` call, and it emits the standard
+///            `RoleGranted(DEFAULT_ADMIN_ROLE, admin, factory)` from
+///            the token's own context. There is no separate "bootstrap
+///            admin write" or "TokenCreated.admin" field; the canonical
+///            event for role changes is always `RoleGranted` regardless
+///            of when it fires. Skipped when `admin == address(0)`
+///            (the "demonstrate no owner" path).
+///         8. Dispatch each `initCalls[i]` via low-level `.call()`
 ///            so `msg.sender` arrives at the token as `address(this)`
-///            (the factory). During the bootstrap window
-///            (`!initialized`, set via the same `vm.store`), the token
+///            (the factory). During the bootstrap window the token
 ///            bypasses all authorization gates for factory-originated
 ///            calls per the "fully privileged" semantics on
 ///            `ITokenFactory`.
-///         7. Flip the `initialized` flag (also via `vm.store`),
-///            closing the privileged window. After this point the
-///            factory has no special access; all subsequent operations
-///            on the token go through standard role / policy / pause
-///            checks.
-///         8. Emit `TokenCreated` (which includes `admin`, the
-///            canonical signal for the initial role grant since no
-///            `RoleGranted` event is emitted during direct storage
-///            writes).
+///         9. Flip the `initialized` flag (via `vm.store`), closing the
+///            privileged window. After this point the factory has no
+///            special access; all subsequent operations on the token
+///            go through standard role / policy / pause checks.
 ///
 ///         Token invariants (supply-cap math, balance accounting) are
 ///         NOT bypassed during the privileged window: `initCalls` that
 ///         would violate an invariant still revert.
+///
+///         **Why a `grantRole` call for the initial admin instead of a
+///         direct `vm.store`?** The chain Rust impl will write the role
+///         slot directly AND push the corresponding `RoleGranted` log
+///         atomically — it's one operation from the precompile's
+///         perspective. In Solidity we can't push an LOG with a foreign
+///         emitter address; the LOG opcode uses the executing contract's
+///         address. To get the log to appear emitted from the token,
+///         code must execute at the token's address. The factory's
+///         single `token.grantRole(...)` call is the smallest possible
+///         such call: it goes through the privileged-window bypass (no
+///         extra surface on the token), it writes the same storage slot
+///         the Rust impl would, and it emits the same event. The Rust
+///         impl's behavior matches the *observable result* even though
+///         the path differs (atomic slot-write + log-push vs. a single
+///         self-call frame).
 contract MockTokenFactory is ITokenFactory {
     /// @dev Hardcoded forge-std VM address. The factory uses `vm.etch`
     ///      to plant token bytecode at the deterministic address and
@@ -116,38 +136,47 @@ contract MockTokenFactory is ITokenFactory {
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
         }
 
-        // -- 5. Write initial storage directly via vm.store. No call
-        //       into the token; storage layout is the contract between
-        //       this factory and the Rust impl, which writes the same
-        //       slots the same way.
-        _writeBaseStorage(token, name_, symbol_, admin);
+        // -- 5. Write initial identity / supply-cap state via vm.store.
+        //       The admin role is NOT written here; it goes through the
+        //       canonical grantRole path in step 7 so RoleGranted fires
+        //       from the token.
+        _writeBaseStorage(token, name_, symbol_);
         if (variant == TokenVariant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
         }
 
-        // -- 6. Emit creation event BEFORE initCalls dispatch (per
-        //       ITokenFactory natspec) so init-call effects appear
-        //       strictly after the creation event in the log order.
-        //       Includes admin since there's no separate RoleGranted
-        //       at bootstrap.
-        emit TokenCreated(token, variant, name_, symbol_, decimals, admin);
+        // -- 6. Emit TokenCreated. Identity-only signal; admin role
+        //       assignment is announced via the standard RoleGranted
+        //       event from step 7.
+        emit TokenCreated(token, variant, name_, symbol_, decimals);
 
-        // -- 7. Dispatch initCalls. msg.sender at the token is
-        //       address(this) == factory, and `initialized` is still
-        //       false (default zero in the freshly-written storage),
-        //       so the token's _isPrivileged() returns true and gates
-        //       are bypassed. Init-call reverts roll up to abort the
-        //       whole creation.
+        // -- 7. Grant the initial admin role via the canonical path.
+        //       msg.sender at the token is address(this) == factory,
+        //       and `initialized` is still false (default zero from
+        //       fresh storage), so _isPrivileged() returns true and the
+        //       role-admin check is bypassed. The grantRole call writes
+        //       the role slot AND emits RoleGranted from the token.
+        //       Skipped on the zero-admin path.
+        if (admin != address(0)) {
+            MockB20(token).grantRole(DEFAULT_ADMIN_ROLE, admin);
+        }
+
+        // -- 8. Dispatch initCalls. Same privileged-window bypass as
+        //       step 7; init-call reverts roll up to abort the whole
+        //       creation.
         for (uint256 i = 0; i < initCalls.length; i++) {
             (bool ok,) = token.call(initCalls[i]);
             if (!ok) revert InitCallFailed(i);
         }
 
-        // -- 8. Close the bootstrap window by setting initialized=true.
+        // -- 9. Close the bootstrap window by setting initialized=true.
         //       After this, the factory's privilege is gone; only
         //       role / policy / pause holders can mutate state.
         _writeBool(token, MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET), true);
     }
+
+    /// @dev `DEFAULT_ADMIN_ROLE` per OZ AccessControl convention.
+    bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
 
     /// @inheritdoc ITokenFactory
     function getTokenAddress(TokenVariant variant, uint8 decimals, address sender, bytes32 salt)
@@ -208,28 +237,17 @@ contract MockTokenFactory is ITokenFactory {
     // ERC-7201 namespace are the storage-layout contract between the
     // two implementations.
 
-    /// @dev Writes the identity + role + supply-cap state every B-20
-    ///      starts with. Mappings get derived slots via the standard
-    ///      Solidity rule: `keccak256(abi.encode(key, baseSlot))`.
-    function _writeBaseStorage(address token, string memory name_, string memory symbol_, address admin) internal {
+    /// @dev Writes the identity + supply-cap state every B-20 starts
+    ///      with. The admin role is NOT written here — see the
+    ///      `grantRole` call in `createToken` step 7 for why.
+    function _writeBaseStorage(address token, string memory name_, string memory symbol_) internal {
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET), name_);
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.SYMBOL_OFFSET), symbol_);
         _writeUint(token, MockB20Storage.slotOf(MockB20Storage.SUPPLY_CAP_OFFSET), type(uint256).max);
-
-        if (admin != address(0)) {
-            // roles[DEFAULT_ADMIN_ROLE][admin] = true
-            // Mapping slot derivation: m[k] is at keccak256(abi.encode(k, baseSlot)),
-            // where baseSlot is the mapping field's ABSOLUTE storage slot.
-            bytes32 rolesBaseSlot = MockB20Storage.slotOf(MockB20Storage.ROLES_OFFSET);
-            bytes32 outerSlot = keccak256(abi.encode(bytes32(0), rolesBaseSlot));
-            bytes32 innerSlot = keccak256(abi.encode(admin, outerSlot));
-            _writeBool(token, innerSlot, true);
-            // adminCount = 1
-            _writeUint(token, MockB20Storage.slotOf(MockB20Storage.ADMIN_COUNT_OFFSET), 1);
-        }
-        // Everything else (totalSupply, allowances, roleAdmins, policyIds,
-        // pausedVectors, nonces, contractURI, initialized) defaults to the
-        // EVM's zero state, which is correct for a fresh token.
+        // Everything else (totalSupply, allowances, roles, roleAdmins,
+        // adminCount, packedPolicyIds, extraPolicyIds, pausedVectors,
+        // nonces, contractURI, initialized) defaults to the EVM's zero
+        // state, which is correct for a fresh token.
     }
 
     /// @dev Writes the stablecoin variant's `currency` field at its

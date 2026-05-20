@@ -200,25 +200,26 @@ interface ITokenFactory {
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted once per `createToken` invocation. The common
-    ///         fields cover the universal token-identity surface; all
+    /// @notice Emitted once per `createToken` invocation. The fields
+    ///         cover the universal token-identity surface only;
     ///         variant-specific state changes (e.g. `currency`, `isin`,
     ///         supply cap, policy slots) are observable via the
     ///         token's own events as they're applied during `initCalls`.
-    /// @dev    The factory writes the token's initial storage directly
-    ///         (no `bootstrap` call into the token), so the initial
-    ///         admin grant does not produce a separate `RoleGranted`
-    ///         event. This event is the canonical signal for both
-    ///         "token created" AND "initial admin set". A zero `admin`
-    ///         indicates the "demonstrate no owner" path. Post-creation
-    ///         role grants emit `RoleGranted` from the token as usual.
+    /// @dev    The initial admin grant (when `initialAdmin != address(0)`)
+    ///         is announced via the standard `RoleGranted(DEFAULT_ADMIN_ROLE,
+    ///         admin, factory)` event emitted from the token's own
+    ///         context during the same transaction — NOT as a field on
+    ///         this event. Role state is always observable via the
+    ///         `RoleGranted` / `RoleRevoked` event stream from the token;
+    ///         `TokenCreated` is the token-identity signal only. The
+    ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
+    ///         skips the grant and emits no `RoleGranted` at bootstrap.
     event TokenCreated(
         address indexed token,
         TokenVariant indexed variant,
         string name,
         string symbol,
-        uint8 decimals,
-        address admin
+        uint8 decimals
     );
 
     /*//////////////////////////////////////////////////////////////
