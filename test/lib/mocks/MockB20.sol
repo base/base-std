@@ -368,29 +368,36 @@ contract MockB20 is IB20 {
 
     function updatePolicy(bytes32 policyType, uint64 newPolicyId) external {
         _requireAdmin();
+        // Read the old ID first: this both supplies the value for the
+        // event and validates that `policyType` is supported (reverts
+        // UnsupportedPolicyType cheaply, before the cross-contract
+        // registry call).
+        uint64 oldPolicyId = _readPolicyId(policyType);
         // Verify the target policy exists in the registry (or is built-in).
+        // Registry rejects malformed IDs (top byte outside PolicyType
+        // enum range) with its own MalformedPolicyId revert.
         if (!IPolicyRegistry(POLICY_REGISTRY).policyExists(newPolicyId)) {
             revert PolicyNotFound(newPolicyId);
         }
-        uint64 oldPolicyId = _readPolicyId(policyType);
         _writePolicyId(policyType, newPolicyId);
         emit PolicyUpdated(policyType, oldPolicyId, newPolicyId);
     }
 
     /// @dev Reads a policy ID from storage. Each supported policy type
     ///      is routed to its per-operation packed slot (one SLOAD per op,
-    ///      four uint64s per slot). Unsupported types return 0
-    ///      (ALWAYS_ALLOW) — there is no fallback storage, so the
-    ///      "absent" state is observably equivalent to "unconfigured".
-    ///      Variants that add their own policy types override this to
-    ///      check their own slots before falling through to `super`.
+    ///      four uint64s per slot). Unsupported types REVERT
+    ///      `UnsupportedPolicyType` — there is no fallback storage, and
+    ///      silently returning 0 (ALWAYS_ALLOW) would let a typo'd query
+    ///      masquerade as "no restriction". Variants that add their own
+    ///      policy types override this to check their own slots before
+    ///      falling through to `super`.
     function _readPolicyId(bytes32 policyType) internal view virtual returns (uint64) {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         if (policyType == TRANSFER_SENDER) return uint64($.transferPolicyIds);
         if (policyType == TRANSFER_RECEIVER) return uint64($.transferPolicyIds >> 64);
         if (policyType == TRANSFER_EXECUTOR) return uint64($.transferPolicyIds >> 128);
         if (policyType == MINT_RECEIVER) return uint64($.mintPolicyIds);
-        return 0;
+        revert UnsupportedPolicyType(policyType);
     }
 
     /// @dev Writes a policy ID to storage. Hot-path types update their

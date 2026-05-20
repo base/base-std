@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IB20} from "src/interfaces/IB20.sol";
+
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
@@ -27,16 +29,14 @@ contract B20PolicyIdTest is B20Test {
         assertEq(token.policyId(policyType), newPolicyId, "slot must reflect updatePolicy");
     }
 
-    /// @notice Verifies policyId returns 0 for an unsupported policyType (no fallback storage).
-    /// @dev Reading an unsupported type is observably equivalent to reading an unconfigured
-    ///      supported type — both return ALWAYS_ALLOW_ID. Writes are the strict operation
-    ///      (they revert UnsupportedPolicyType); reads stay silent.
-    function test_policyId_success_zeroForUnknownType(bytes32 policyType) public view {
+    /// @notice Verifies policyId reverts UnsupportedPolicyType for any policyType
+    ///         outside the token's supported set.
+    /// @dev Reads are strict: there is no fallback storage, and silently returning
+    ///      0 (ALWAYS_ALLOW) for an unsupported type would let a typo'd query
+    ///      masquerade as "no restriction". Both reads and writes revert symmetrically.
+    function test_policyId_revert_unsupportedPolicyType(bytes32 policyType) public {
         vm.assume(!_isKnownPolicyType(policyType));
-        assertEq(
-            token.policyId(policyType),
-            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
-            "unsupported policyType read must return 0"
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.UnsupportedPolicyType.selector, policyType));
+        token.policyId(policyType);
     }
 }
