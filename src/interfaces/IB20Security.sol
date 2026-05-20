@@ -81,7 +81,7 @@ interface IB20Security is IB20 {
     ///         redeems tokens. `amt` is in tokens; the corresponding
     ///         share amount is `amt * sharesToTokensRatio /
     ///         WAD_PRECISION`.
-    event SharesRedeemed(address indexed from, uint256 amt, uint128 sharesToTokensRatio);
+    event Redeemed(address indexed from, uint256 amt, uint256 sharesToTokensRatio);
 
     /// @notice Emitted by `updateMinimumRedeemable` when the redemption
     ///         floor is changed.
@@ -89,7 +89,7 @@ interface IB20Security is IB20 {
 
     /// @notice Emitted by `updateShareRatio` when the share-to-tokens
     ///         ratio is changed.
-    event ShareRatioUpdated(uint128 sharesToTokensRatio);
+    event ShareRatioUpdated(uint256 sharesToTokensRatio);
 
     /// @notice Emitted by `updateSecurityIdentifier` when an identifier
     ///         entry is set, updated, or removed. An empty `value`
@@ -234,19 +234,19 @@ interface IB20Security is IB20 {
     ///         `REDEEM` pause vector. Reverts when the corresponding
     ///         share amount (`amount * sharesToTokensRatio /
     ///         WAD_PRECISION`) is below `minimumRedeemable`. Emits
-    ///         `SharesRedeemed`.
+    ///         `Redeemed`.
     ///
     /// @param  amount Token amount to redeem from the caller's balance.
     function redeem(uint256 amount) external;
 
     /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
-    ///         immediately after `Transfer()` and before `SharesRedeemed`. 
+    ///         immediately after `Transfer()` and before `Redeemed`. 
     ///         See `IB20.transferWithMemo` for the memo convention; a memo
     ///         of `bytes32(0)` is permitted.
     function redeemWithMemo(uint256 amount, bytes32 memo) external;
 
     /// @notice Sets a new minimum-redeemable threshold in shares.
-    ///         `redeem` reverts if the resulting share amount would be
+    ///         `redeemShares` reverts if the resulting share amount would be
     ///         below this value.
     ///
     /// @dev    Requires `DEFAULT_ADMIN_ROLE`. Emits
