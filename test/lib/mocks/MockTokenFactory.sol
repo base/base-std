@@ -281,11 +281,22 @@ contract MockTokenFactory is ITokenFactory {
     ///                         and runs sequentially.
     function _writeString(address target, bytes32 slot, string memory value) internal {
         bytes memory data = bytes(value);
-        if (data.length < 32) {
+        if (data.length == 0) {
+            // Solidity's short-string encoding for "" is a zeroed slot: high portion
+            // empty, low byte = data.length * 2 = 0. Writing this explicitly avoids
+            // reading adjacent memory at `data + 32`, which would otherwise pick up
+            // whatever the next allocation placed there (e.g. another string's length
+            // word) and produce a corrupted slot. EVM zero-initialization means an
+            // unwritten slot is already 0x00...00, so we can no-op; we still call
+            // vm.store to remain explicit and idempotent for re-creation paths.
+            vm.store(target, slot, bytes32(0));
+        } else if (data.length < 32) {
             bytes32 packed;
             assembly {
-                // High portion: first 32 bytes of memory at data+32 (the string body,
-                // with implicit zero padding past data.length since memory is fresh).
+                // High portion: first 32 bytes of memory at data+32 (the string body).
+                // Safe because data.length > 0 guarantees at least one body byte is
+                // allocated; trailing bytes are implicit-zero-padded within the same
+                // 32-byte word that Solidity allocates for short bytes/string types.
                 // Low byte: data.length * 2 (low bit clear marks "short string").
                 packed := or(mload(add(data, 32)), mul(mload(data), 2))
             }

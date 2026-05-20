@@ -356,6 +356,47 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertEq(actual, address(expectedAddr), "factory must derive address via abi.encode of (sender, salt)");
     }
 
+    /// @notice Verifies an empty `name` round-trips as the empty string (regression test for L-04)
+    /// @dev The factory's `_writeString` short-string path uses `mload(add(data, 32))` even when
+    ///      `data.length == 0`, which reads adjacent memory rather than zero bytes. With name=""
+    ///      and symbol="ETH", the ABI decoder places symbol's length word at name's data+32, so
+    ///      the slot ends up packed with `or(3, 0) = 0x03`. Solidity's short/long discriminator
+    ///      reads the low bit (1 -> long string), then computes length as (3-1)/2 = 1, and reads
+    ///      keccak256(slot) for content, returning garbage. The assertion below catches both the
+    ///      length-1 long-string interpretation AND any future regressions of the same shape.
+    function test_createToken_success_emptyName_roundTripsAsEmpty(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        ITokenFactory.B20CreateParams memory p = _b20Params("", "ETH", admin, 18);
+        address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
+
+        assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
+    }
+
+    /// @notice Verifies an empty `symbol` round-trips as the empty string (regression test for L-04)
+    /// @dev Symmetric to the empty-name test. Symbol is the second string written so the OOB read
+    ///      reads past it, into whatever the next memory allocation placed there. Whether it's
+    ///      garbage from the free-memory pointer or padded zeros depends on calling context; we
+    ///      assert the result is the empty string regardless.
+    function test_createToken_success_emptySymbol_roundTripsAsEmpty(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        ITokenFactory.B20CreateParams memory p = _b20Params("Token", "", admin, 18);
+        address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
+
+        assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
+    }
+
+    /// @notice Verifies both empty name and empty symbol round-trip correctly (regression test for L-04)
+    /// @dev Belt-and-suspenders: both strings empty is the most degenerate case and would be
+    ///      most likely to surface memory-layout assumptions in the writer.
+    function test_createToken_success_bothEmpty_roundTripAsEmpty(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        ITokenFactory.B20CreateParams memory p = _b20Params("", "", admin, 18);
+        address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
+
+        assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
+        assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
+    }
+
     /// @notice Verifies the decimals byte at address position [11] matches the created decimals
     /// @dev Address schema: decimals are encoded in the address for stateless decimals() lookup
     function test_createToken_success_encodesDecimalsByte(address caller, bytes32 salt, uint8 decimals) public {
