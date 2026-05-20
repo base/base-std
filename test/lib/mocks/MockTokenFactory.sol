@@ -163,10 +163,24 @@ contract MockTokenFactory is ITokenFactory {
 
         // -- 8. Dispatch initCalls. Same privileged-window bypass as
         //       step 7; init-call reverts roll up to abort the whole
-        //       creation.
+        //       creation. Per ITokenFactory.InitCallFailed NatSpec, we
+        //       bubble the underlying revert data when present so
+        //       developers see the actual cause (e.g. InvalidReceiver,
+        //       SupplyCapExceeded) rather than an opaque wrapper. Only
+        //       empty reverts get wrapped with InitCallFailed(i), which
+        //       preserves the "which index failed" signal that the
+        //       bubbled-error case provides implicitly via the error
+        //       itself.
         for (uint256 i = 0; i < initCalls.length; i++) {
-            (bool ok,) = token.call(initCalls[i]);
-            if (!ok) revert InitCallFailed(i);
+            (bool ok, bytes memory reason) = token.call(initCalls[i]);
+            if (!ok) {
+                if (reason.length > 0) {
+                    assembly {
+                        revert(add(reason, 32), mload(reason))
+                    }
+                }
+                revert InitCallFailed(i);
+            }
         }
 
         // -- 9. Close the bootstrap window by setting initialized=true.

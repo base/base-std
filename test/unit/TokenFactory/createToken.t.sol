@@ -105,23 +105,61 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         );
     }
 
-    /// @notice Verifies createToken reverts when any entry in initCalls reverts
-    /// @dev Init-call atomicity: a single failing init call reverts the entire creation
-    function test_createToken_revert_initCallFailed(address caller, bytes32 salt) public {
+    /// @notice Verifies a failing initCall bubbles the underlying revert reason (regression test for L-01)
+    /// @dev ITokenFactory.InitCallFailed NatSpec (L194-197) specifies two-tier error behavior:
+    ///      bubble the underlying revert reason when the call returns one; wrap empty reverts
+    ///      with InitCallFailed(index). `mint(address(0), 1)` reverts with `InvalidReceiver(0)`
+    ///      inside the token, and the factory MUST surface that error verbatim, not swallow
+    ///      it into `InitCallFailed(0)`. A buggy impl that discards revert data via `(bool ok,)`
+    ///      surfaces the opaque wrapper instead.
+    function test_createToken_revert_initCallFailed_bubblesRevertReason(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        // mint to address(0) reverts InvalidReceiver inside the token,
-        // which bubbles up as InitCallFailed(0) at the factory.
         bytes[] memory initCalls = new bytes[](1);
         initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
         vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
+        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+    }
+
+    /// @notice Verifies an empty-revert initCall is wrapped as InitCallFailed(index) (L-01 complement)
+    /// @dev The InitCallFailed wrapper is reserved for empty reverts where the underlying call
+    ///      returned no data. We trigger this by calling a non-existent selector on the etched
+    ///      token; MockB20 has no fallback, so Solidity's dispatcher reverts with empty data.
+    ///      Without this carve-out the caller would receive a generic "" revert with no signal
+    ///      about which init index failed.
+    function test_createToken_revert_initCallFailed_wrapsEmptyRevert(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        bytes[] memory initCalls = new bytes[](1);
+        // Non-existent selector "0xdeadbeef" -> MockB20 dispatcher rejects with empty data.
+        initCalls[0] = abi.encodeWithSelector(bytes4(0xdeadbeef));
+        vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InitCallFailed.selector, uint256(0)));
+        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+    }
+
+    /// @notice Verifies bubble + index for the SECOND init call (L-01 index correctness)
+    /// @dev When the failing call is not at index 0, the bubble must still surface the
+    ///      underlying error. A buggy impl that swallows revert data would mask not just
+    ///      the error but also the implicit "which index" signal a developer needs to
+    ///      debug a multi-call setup.
+    function test_createToken_revert_initCallFailed_bubblesFromLaterIndex(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        bytes[] memory initCalls = new bytes[](2);
+        // Index 0 is benign — set the supply cap to 100. Index 1 attempts to mint to
+        // address(0) and reverts InvalidReceiver(0); we expect that error to bubble.
+        initCalls[0] = abi.encodeWithSelector(IB20.setSupplyCap.selector, uint256(100));
+        initCalls[1] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies a failing initCall leaves the deterministic address empty
     /// @dev Atomicity at the storage level: a revert in initCalls means no bytecode was
     ///      committed at the predicted address, so a subsequent createToken with the same
-    ///      (variant, decimals, sender, salt) succeeds.
+    ///      (variant, decimals, sender, salt) succeeds. After L-01 the revert reason is
+    ///      bubbled (InvalidReceiver) rather than wrapped (InitCallFailed), but atomicity
+    ///      is unchanged.
     function test_createToken_revert_initCallFailed_revertsWholeCreation(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         ITokenFactory.B20CreateParams memory p = _b20Params();
@@ -132,7 +170,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InitCallFailed.selector, uint256(0)));
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(p), initCalls);
 
         // After the failed creation, the predicted address has no code,
