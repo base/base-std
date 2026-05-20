@@ -66,6 +66,21 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
     }
 
+    /// @notice Verifies clearing the pending slot (stage address(0)) causes finalizeUpdateAdmin to revert
+    /// @dev Round-trip: stage a candidate, cancel it, confirm finalize no longer works
+    function test_stageUpdateAdmin_success_cancelBlocksFinalize(address currentAdmin, address first) public {
+        vm.assume(currentAdmin != address(0));
+        vm.assume(first != address(0));
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        vm.prank(currentAdmin);
+        policyRegistry.stageUpdateAdmin(policyId, first);
+        vm.prank(currentAdmin);
+        policyRegistry.stageUpdateAdmin(policyId, address(0));
+        vm.expectRevert(IPolicyRegistry.NoPendingAdmin.selector);
+        vm.prank(first);
+        policyRegistry.finalizeUpdateAdmin(policyId);
+    }
+
     /// @notice Verifies stageUpdateAdmin emits PolicyAdminStaged with the correct args
     /// @dev Event integrity: policyId, currentAdmin, pendingAdmin match the call
     function test_stageUpdateAdmin_success_emitsPolicyAdminStaged(address currentAdmin, address newAdmin) public {

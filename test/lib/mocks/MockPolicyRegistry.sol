@@ -31,8 +31,10 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 ///         `_pendingAdmins[policyId]` — address staged by stageUpdateAdmin.
 ///
 ///         `_nextCounter` — uint56 global counter for the low 56 bits of
-///           custom policy IDs. Starts at 2; values 0 and 1 are defensively
-///           skipped to avoid any numeric overlap with the built-in IDs.
+///           custom policy IDs. Starts at 0. The discriminator byte in bits
+///           [63:56] ensures no custom ID can equal built-in 0 or 1
+///           (ALLOWLIST = 0x02, BLOCKLIST = 0x03, minimum custom ID is
+///           0x0200000000000000).
 ///
 ///         **Policy ID encoding:**
 ///           [63:56]  uint8(PolicyType) discriminator

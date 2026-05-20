@@ -51,11 +51,12 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
     }
 
-    /// @notice Verifies renounceAdmin freezes membership and admin operations on the policy
+    /// @notice Verifies renounceAdmin freezes all mutation on the policy
     /// @dev Post-renounce: stageUpdateAdmin / updateAllowlist / updateBlocklist all revert Unauthorized
     function test_renounceAdmin_success_freezesMutation(address currentAdmin) public {
         vm.assume(currentAdmin != address(0));
-        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        // Use BLOCKLIST so we can test both updateAllowlist (incompatible) and updateBlocklist (frozen)
+        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.prank(currentAdmin);
         policyRegistry.renounceAdmin(policyId);
 
@@ -67,7 +68,7 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
 
         vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
         vm.prank(currentAdmin);
-        policyRegistry.updateAllowlist(policyId, true, accounts);
+        policyRegistry.updateBlocklist(policyId, true, accounts);
     }
 
     /// @notice Verifies renounceAdmin emits PolicyAdminUpdated with newAdmin = address(0)
