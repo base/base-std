@@ -36,8 +36,8 @@ library MockPolicyRegistryStorage {
         // Staged pending admin for in-flight two-step admin transfers.
         mapping(uint64 policyId => address pendingAdmin) pendingAdmins;
         // Global monotonic counter for the low 56 bits of custom policy IDs.
-        // Starts at 0 (ERC-7201 default). The discriminator byte in bits [63:56]
-        // of any custom ID ensures it can never equal built-in IDs 0 or 1.
+        // MockPolicyRegistry floors this to 2 on first read/write so the first
+        // custom ID explicitly reserves built-ins 0 and 1.
         uint56 nextCounter;
     }
 
