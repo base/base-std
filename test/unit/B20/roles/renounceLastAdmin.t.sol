@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20RenounceLastAdminTest is B20Test {
@@ -87,6 +88,22 @@ contract B20RenounceLastAdminTest is B20Test {
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
         );
         token.grantRole(B20Constants.DEFAULT_ADMIN_ROLE, wouldBeNewAdmin);
+    }
+
+    /// @notice Verifies renounceLastAdmin drives the internal adminCount tracker to zero
+    /// @dev    adminCount is internal state with no public getter, so we read the slot
+    ///         directly via vm.load. A buggy impl that cleared the role but left
+    ///         adminCount > 0 would be otherwise undetectable from the public surface
+    ///         (since with no admins, no path that reads adminCount is reachable).
+    ///         Directly inspecting storage closes the loop on the rusty-storage contract.
+    function test_renounceLastAdmin_success_adminCountDrivenToZero() public {
+        bytes32 adminCountSlot = MockB20Storage.slotOf(MockB20Storage.ADMIN_COUNT_OFFSET);
+        assertEq(uint256(vm.load(address(token), adminCountSlot)), 1, "precondition: count is 1");
+
+        vm.prank(admin);
+        token.renounceLastAdmin();
+
+        assertEq(uint256(vm.load(address(token), adminCountSlot)), 0, "adminCount must be 0 post-renounce");
     }
 
     /// @notice Verifies renounceLastAdmin emits LastAdminRenounced(previousAdmin)

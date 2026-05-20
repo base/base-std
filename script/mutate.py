@@ -24,6 +24,8 @@ REPO = Path(__file__).resolve().parent.parent
 
 MOCK_B20 = REPO / "test/lib/mocks/MockB20.sol"
 MOCK_FACTORY = REPO / "test/lib/mocks/MockTokenFactory.sol"
+MOCK_POLICY = REPO / "test/lib/mocks/MockPolicyRegistry.sol"
+MOCK_STABLECOIN = REPO / "test/lib/mocks/MockB20Stablecoin.sol"
 
 
 @dataclass
@@ -117,11 +119,11 @@ MUTATIONS: list[Mutation] = [
         "            // mint receiver policy check elided\n            if (false) revert PolicyForbids(MINT_RECEIVER, mintReceiverPolicyId);",
         "_mint: drop MINT_RECEIVER policy check entirely",
     ),
-    # === MockB20: lastAdmin guard off-by-one ===
+    # === MockB20: lastAdmin guard off-by-one (post-#40 inline conjunction) ===
     Mutation(
         MOCK_B20,
-        "if (role == DEFAULT_ADMIN_ROLE && MockB20Storage.layout().adminCount == 1) {",
-        "if (role == DEFAULT_ADMIN_ROLE && MockB20Storage.layout().adminCount == 2) {",
+        "if (role == DEFAULT_ADMIN_ROLE && $.roles[DEFAULT_ADMIN_ROLE][msg.sender] && $.adminCount == 1) {",
+        "if (role == DEFAULT_ADMIN_ROLE && $.roles[DEFAULT_ADMIN_ROLE][msg.sender] && $.adminCount == 2) {",
         "renounceRole: last-admin guard off-by-one (trips at count=2 instead of count=1)",
     ),
     # === MockB20: adminCount underflow (wrong direction) ===
@@ -328,10 +330,10 @@ MUTATIONS: list[Mutation] = [
     ),
     # === MockB20Stablecoin variant ===
     Mutation(
-        Path("/Users/amiecorso/base-std/test/lib/mocks/MockB20Stablecoin.sol"),
+        MOCK_STABLECOIN,
         "return MockB20StablecoinStorage.layout().currency;",
-        "return MockB20Storage.layout().name;",
-        "MockB20Stablecoin.currency: returns base-token NAME instead of currency",
+        "return \"\";",
+        "MockB20Stablecoin.currency: returns empty string instead of configured value",
     ),
     # === Order-sensitivity in _transfer balance updates ===
     Mutation(
@@ -339,6 +341,158 @@ MUTATIONS: list[Mutation] = [
         "$.balances[from] = fromBalance - amount;\n            $.balances[to] += amount;",
         "$.balances[from] = fromBalance + amount;\n            $.balances[to] -= amount;",
         "_transfer: signs reversed on both balance updates (sender gains, receiver loses)",
+    ),
+    # === MockPolicyRegistry: authorization core ===
+    Mutation(
+        MOCK_POLICY,
+        "return _decodeType(packed) == PolicyType.ALLOWLIST ? member : !member;",
+        "return _decodeType(packed) == PolicyType.ALLOWLIST ? !member : member;",
+        "isAuthorized: ALLOWLIST/BLOCKLIST polarity flipped (allowlist becomes blocklist and vice versa)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "if (policyId == ALWAYS_ALLOW_ID) return true;\n        if (policyId == ALWAYS_BLOCK_ID) return false;",
+        "if (policyId == ALWAYS_ALLOW_ID) return false;\n        if (policyId == ALWAYS_BLOCK_ID) return true;",
+        "isAuthorized: ALWAYS_ALLOW and ALWAYS_BLOCK semantics swapped",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;\n        return MockPolicyRegistryStorage.layout().policies[policyId] != 0;",
+        "if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return false;\n        return MockPolicyRegistryStorage.layout().policies[policyId] != 0;",
+        "policyExists: built-ins report as nonexistent (breaks token updatePolicy guard)",
+    ),
+    # === MockPolicyRegistry: policy creation ===
+    Mutation(
+        MOCK_POLICY,
+        "if (policyType != PolicyType.ALLOWLIST && policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();",
+        "if (policyType != PolicyType.ALLOWLIST || policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();",
+        "_create: && -> || in PolicyType guard (rejects every policy type, including valid ones)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "if (admin == address(0)) revert ZeroAddress();",
+        "if (admin != address(0)) revert ZeroAddress();",
+        "_create: zero-admin guard inverted (only zero-admin is allowed)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "$.nextCounter = counter + 1;",
+        "$.nextCounter = counter;",
+        "_create: nextCounter doesn't advance (every create returns the same policy ID)",
+    ),
+    # === MockPolicyRegistry: admin management ===
+    Mutation(
+        MOCK_POLICY,
+        "        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();\n        MockPolicyRegistryStorage.layout().pendingAdmins[policyId] = newAdmin;",
+        "        if (_decodeAdmin(packed) == msg.sender) revert Unauthorized();\n        MockPolicyRegistryStorage.layout().pendingAdmins[policyId] = newAdmin;",
+        "stageUpdateAdmin: admin auth check inverted (current admin is forbidden to stage)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "if (pending != msg.sender) revert Unauthorized();",
+        "if (pending == msg.sender) revert Unauthorized();",
+        "finalizeUpdateAdmin: pending check inverted (only NON-pending callers succeed)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();\n        $.policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});",
+        "        if (_decodeAdmin(packed) == msg.sender) revert Unauthorized();\n        $.policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});",
+        "renounceAdmin: admin auth check inverted (anyone but admin can renounce)",
+    ),
+    # === MockPolicyRegistry: list membership ===
+    Mutation(
+        MOCK_POLICY,
+        "if (_decodeType(packed) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();",
+        "if (_decodeType(packed) == PolicyType.ALLOWLIST) revert IncompatiblePolicyType();",
+        "updateAllowlist: type check inverted (only NON-allowlists accepted)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "if (_decodeType(packed) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();",
+        "if (_decodeType(packed) == PolicyType.BLOCKLIST) revert IncompatiblePolicyType();",
+        "updateBlocklist: type check inverted",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "_batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});",
+        "_batchSetMembers({policyId: policyId, policyType: PolicyType.ALLOWLIST, value: blocked, accounts: accounts});",
+        "updateBlocklist: passes ALLOWLIST to batch helper (emits wrong event)",
+    ),
+    # === MockPolicyRegistry: encoding primitives ===
+    Mutation(
+        MOCK_POLICY,
+        "return (uint64(uint8(policyType)) << POLICY_ID_TYPE_SHIFT) | uint64(counter);",
+        "return (uint64(uint8(policyType)) << (POLICY_ID_TYPE_SHIFT - 8)) | uint64(counter);",
+        "_makeId: type byte shifted to wrong position (collides with counter)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "return address(uint160(packed >> PACKED_ADMIN_SHIFT));",
+        "return address(uint160(packed));",
+        "_decodeAdmin: omits the shift (returns garbage that includes the policyType byte)",
+    ),
+    Mutation(
+        MOCK_POLICY,
+        "if (uint8(policyId >> POLICY_ID_TYPE_SHIFT) > uint8(type(PolicyType).max)) {\n            revert MalformedPolicyId(policyId);\n        }",
+        "if (uint8(policyId >> POLICY_ID_TYPE_SHIFT) >= uint8(type(PolicyType).max)) {\n            revert MalformedPolicyId(policyId);\n        }",
+        "_requireWellFormed: off-by-one (rejects last valid PolicyType discriminator)",
+    ),
+    # === _writePolicyId lane writes (MockB20, mirror of the read mutations) ===
+    Mutation(
+        MOCK_B20,
+        "if (policyType == TRANSFER_SENDER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
+        "if (policyType == TRANSFER_SENDER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
+        "_writePolicyId: TRANSFER_SENDER writes to RECEIVER lane (lane swap)",
+    ),
+    Mutation(
+        MOCK_B20,
+        "} else if (policyType == TRANSFER_RECEIVER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
+        "} else if (policyType == TRANSFER_RECEIVER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);",
+        "_writePolicyId: TRANSFER_RECEIVER writes to EXECUTOR lane",
+    ),
+    Mutation(
+        MOCK_B20,
+        "} else if (policyType == MINT_RECEIVER) {\n            $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);",
+        "} else if (policyType == MINT_RECEIVER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
+        "_writePolicyId: MINT_RECEIVER writes to transferPolicyIds slot (wrong storage var)",
+    ),
+    Mutation(
+        MOCK_B20,
+        "$.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
+        "$.transferPolicyIds = ($.transferPolicyIds & mask) | uint256(newPolicyId);",
+        "_writePolicyId: mask not inverted on SENDER write (zeroes RECEIVER + EXECUTOR lanes)",
+    ),
+    # === _writeStablecoinStorage ===
+    Mutation(
+        MOCK_FACTORY,
+        "_writeString(\n            token,\n            MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),\n            currency_\n        );",
+        "_writeString(\n            token,\n            MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET),\n            currency_\n        );",
+        "_writeStablecoinStorage: writes currency to base-token NAME slot instead of variant namespace",
+    ),
+    Mutation(
+        MOCK_FACTORY,
+        "        _writeString(\n            token,\n            MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),\n            currency_\n        );\n    }",
+        "        // currency write elided\n    }",
+        "_writeStablecoinStorage: never writes the currency field (silent: currency() returns empty)",
+    ),
+    # === renounceLastAdmin ===
+    Mutation(
+        MOCK_B20,
+        "if (!$.roles[DEFAULT_ADMIN_ROLE][msg.sender]) {\n            revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);\n        }\n        if ($.adminCount != 1) revert NotSoleAdmin();",
+        "if ($.roles[DEFAULT_ADMIN_ROLE][msg.sender]) {\n            revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);\n        }\n        if ($.adminCount != 1) revert NotSoleAdmin();",
+        "renounceLastAdmin: role-holder check inverted (only NON-admins can call)",
+    ),
+    Mutation(
+        MOCK_B20,
+        "if ($.adminCount != 1) revert NotSoleAdmin();",
+        "if ($.adminCount != 0) revert NotSoleAdmin();",
+        "renounceLastAdmin: sole-admin guard wrong (only adminCount==0 case passes)",
+    ),
+    Mutation(
+        MOCK_B20,
+        "        $.roles[DEFAULT_ADMIN_ROLE][msg.sender] = false;\n        $.adminCount = 0;",
+        "        $.roles[DEFAULT_ADMIN_ROLE][msg.sender] = false;\n        $.adminCount = 1;",
+        "renounceLastAdmin: leaves adminCount==1 after revoke (hasRole says no but bookkeeping says yes)",
     ),
 ]
 
