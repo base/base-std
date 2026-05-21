@@ -63,12 +63,16 @@ MUTATIONS: list[Mutation] = [
         "if (!_isPaused(PausableFeature.TRANSFER)) revert ContractPaused(PausableFeature.TRANSFER);",
         "_transfer: invert pause check (paused transfers succeed, unpaused revert)",
     ),
-    # === MockB20: role check in _mint ===
+    # === MockB20: role check in _requireRole (the onlyRole modifier body) ===
+    # After the modifier refactor, role checks at the call site (mint, pause,
+    # unpause, burn, burnBlocked, setName, setSymbol, etc.) all funnel through
+    # _requireRole. Inverting it inverts every onlyRole-gated path at once;
+    # the mint role-revert test (and many others) should still kill it.
     Mutation(
         MOCK_B20,
-        "if (!hasRole(MINT_ROLE, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE);",
-        "if (hasRole(MINT_ROLE, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE);",
-        "_mint: invert role check (only non-MINT_ROLE callers can mint)",
+        "if (!hasRole(role, msg.sender)) {\n            revert AccessControlUnauthorizedAccount(msg.sender, role);\n        }",
+        "if (hasRole(role, msg.sender)) {\n            revert AccessControlUnauthorizedAccount(msg.sender, role);\n        }",
+        "_requireRole: invert role check (role-holders fail every onlyRole gate)",
     ),
     # === MockB20: supply cap off-by-one ===
     Mutation(
