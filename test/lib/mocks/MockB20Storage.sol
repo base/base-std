@@ -472,7 +472,6 @@ library MockB20StablecoinStorage {
     ///         with `length * 2` in the low byte when `length < 32`;
     ///         otherwise the slot stores `length * 2 + 1` and the data
     ///         starts at `keccak256(slot)`).
-    function currencySlot() internal pure returns (bytes32) {
-        return slotOf(CURRENCY_OFFSET);
-    }
+    // forgefmt: disable-next-item
+    function currencySlot() internal pure returns (bytes32) { return slotOf(CURRENCY_OFFSET); }
 }
