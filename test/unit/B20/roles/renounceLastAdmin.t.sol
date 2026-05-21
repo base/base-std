@@ -96,22 +96,14 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         adminCount > 0 would be otherwise undetectable from the public surface
     ///         (since with no admins, no path that reads adminCount is reachable).
     ///         Directly inspecting storage closes the loop on the rusty-storage contract.
-    ///
-    ///         `adminCount` is `uint248` packed with the `bool initialized` flag in
-    ///         the same slot (initialized at byte 31, adminCount in the low 248 bits),
-    ///         so we mask out the high byte before comparing.
     function test_renounceLastAdmin_success_adminCountDrivenToZero() public {
         bytes32 adminCountSlot = MockB20Storage.slotOf(MockB20Storage.ADMIN_COUNT_OFFSET);
-        uint256 adminCountMask = (uint256(1) << 248) - 1;
-
-        uint256 rawBefore = uint256(vm.load(address(token), adminCountSlot));
-        assertEq(rawBefore & adminCountMask, 1, "precondition: count is 1");
+        assertEq(uint256(vm.load(address(token), adminCountSlot)), 1, "precondition: count is 1");
 
         vm.prank(admin);
         token.renounceLastAdmin();
 
-        uint256 rawAfter = uint256(vm.load(address(token), adminCountSlot));
-        assertEq(rawAfter & adminCountMask, 0, "adminCount must be 0 post-renounce");
+        assertEq(uint256(vm.load(address(token), adminCountSlot)), 0, "adminCount must be 0 post-renounce");
     }
 
     /// @notice Verifies renounceLastAdmin emits LastAdminRenounced(previousAdmin)
