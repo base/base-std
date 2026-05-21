@@ -144,14 +144,14 @@ interface ITokenFactory {
     ///         (rate-limited compliant path) or `adminMint` (cold-path
     ///         batch with announcement coupling) after deployment.
     ///
-    ///         For the Security variant, the `REDEEMER_SENDER_POLICY`
+    ///         For the Security variant, the `REDEEM_SENDER_POLICY`
     ///         slot defaults to the always-block built-in (policy ID
     ///         `1`) rather than always-allow, so redemption is closed by
     ///         default and an admin must opt-in by pointing the slot at
     ///         an allowlist (or another policy) before any holder can
     ///         call `redeem`. To open redemption at creation, override
     ///         the slot atomically by including an
-    ///         `updatePolicy(REDEEMER_SENDER_POLICY, <policyId>)` entry
+    ///         `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` entry
     ///         in `initCalls`.
     struct B20SecurityCreateParams {
         uint8 version;

@@ -51,7 +51,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///                                  (when distinct from `from`)
 ///         - `MINT_RECEIVER_POLICY`     — checked against `to`   on every mint
 ///         Variants extend this set by adding their own dedicated slots
-///         (e.g. `IB20Security` adds `REDEEMER_SENDER_POLICY` for its `redeem`
+///         (e.g. `IB20Security` adds `REDEEM_SENDER_POLICY` for its `redeem`
 ///         path, stored in the variant's own namespaced storage). There
 ///         is no generic catch-all mapping: every `policyType` either
 ///         resolves to a real slot or doesn't exist at all. Both reads
@@ -692,7 +692,7 @@ interface IB20 {
     ///         the role-identifier constants `TRANSFER_SENDER_POLICY()`,
     ///         `TRANSFER_RECEIVER_POLICY()`, `TRANSFER_EXECUTOR_POLICY()`, and
     ///         `MINT_RECEIVER_POLICY()`. Variants add their own constants for
-    ///         variant-specific operations (e.g. `REDEEMER_SENDER_POLICY()` on
+    ///         variant-specific operations (e.g. `REDEEM_SENDER_POLICY()` on
     ///         `IB20Security`). User-defined policy types are also
     ///         supported and may be used by periphery contracts that
     ///         layer additional gating on top.
