@@ -18,11 +18,22 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// layer on their own helpers and any test-class-specific state.
 ///
 /// **Mock-vs-live.** `setUp` etches each precompile mock at its
-/// canonical address only when the address currently has no code. When
-/// forking a node where the live precompile is already deployed, the
-/// etch is skipped silently and the same test body executes against
-/// the live impl. No env vars or flags — the fork URL alone selects
-/// the backend.
+/// canonical address by default. Set the `LIVE_PRECOMPILES`
+/// environment variable to `true` to skip etching so calls dispatch
+/// to whatever's deployed at the precompile addresses on the forked
+/// chain. The canonical fork-test invocation is:
+///
+///     LIVE_PRECOMPILES=true FOUNDRY_PROFILE=fork forge test --fork-url vibenet
+///
+/// Why an explicit env var rather than auto-detecting whether the
+/// live precompile is deployed? Native EVM precompiles (which is what
+/// the Rust impls are deployed as on vibenet) return zero code via
+/// `eth_getCode` even when they respond to calls. The previous
+/// `code.length == 0` check was unreliable for that reason and would
+/// silently clobber a live precompile with the mock, producing
+/// false-pass results that mask layout / behavior mismatches between
+/// the Solidity reference and the Rust impl. An explicit opt-in is
+/// the surface that makes the intent unambiguous.
 ///
 /// **Cross-precompile dependency model.** Every test gets all three
 /// precompile mocks etched. Token tests need the factory mock to
@@ -71,13 +82,13 @@ abstract contract BaseTest is Test {
         vm.label(StdPrecompiles.POLICY_REGISTRY_ADDRESS, "PolicyRegistry");
         vm.label(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, "ActivationRegistry");
 
-        if (StdPrecompiles.TOKEN_FACTORY_ADDRESS.code.length == 0) {
+        // Etch the mocks unless the user explicitly opts into
+        // running against the live precompiles. See the contract-
+        // level NatSpec for the rationale on the env var rather than
+        // auto-detection.
+        if (!vm.envOr("LIVE_PRECOMPILES", false)) {
             vm.etch(StdPrecompiles.TOKEN_FACTORY_ADDRESS, type(MockTokenFactory).runtimeCode);
-        }
-        if (StdPrecompiles.POLICY_REGISTRY_ADDRESS.code.length == 0) {
             vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
-        }
-        if (StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS.code.length == 0) {
             vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
         }
     }
