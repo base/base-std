@@ -12,13 +12,13 @@ contract B20NameTest is B20Test {
         assertEq(token.name(), "Test", "name must match creation value");
     }
 
-    /// @notice Verifies name reflects updates made via setName
-    /// @dev Mutable-metadata readback; canonical setter test lives in setName.t.sol.
-    ///      setName requires METADATA_ROLE, which is held by no one by default.
+    /// @notice Verifies name reflects updates made via updateName
+    /// @dev Mutable-metadata readback; canonical setter test lives in updateName.t.sol.
+    ///      updateName requires METADATA_ROLE, which is held by no one by default.
     function test_name_success_reflectsSetName(string calldata newName) public {
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        token.setName(newName);
-        assertEq(token.name(), newName, "name must reflect setName");
+        token.updateName(newName);
+        assertEq(token.name(), newName, "name must reflect updateName");
     }
 }

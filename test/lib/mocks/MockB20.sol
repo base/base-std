@@ -8,7 +8,6 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {B20Constants} from "src/lib/B20Constants.sol";
 
-
 /// @title MockB20
 /// @notice Reference implementation of the `IB20` default-token surface.
 ///         Etched at every default-variant B-20 token's factory-derived
@@ -98,7 +97,7 @@ contract MockB20 is IB20 {
     /// @dev Gates a function on `msg.sender` holding the admin role
     ///      that governs `role` (per `getRoleAdmin`). Same factory
     ///      bypass as `onlyRole`. Used by `grantRole` / `revokeRole`
-    ///      / `setRoleAdmin`, where the gate is over the meta-role,
+    ///      / `updateRoleAdmin`, where the gate is over the meta-role,
     ///      not the role itself.
     modifier onlyRoleAdmin(bytes32 role) {
         if (!_isPrivileged()) _requireRoleAdmin(role);
@@ -172,7 +171,7 @@ contract MockB20 is IB20 {
 
     function transferWithMemo(address to, uint256 amount, bytes32 memo) external returns (bool) {
         _transfer(msg.sender, to, amount);
-        emit Memo(memo);
+        emit Memo(msg.sender, memo);
         return true;
     }
 
@@ -185,7 +184,7 @@ contract MockB20 is IB20 {
             }
         }
         _transfer(from, to, amount);
-        emit Memo(memo);
+        emit Memo(msg.sender, memo);
         return true;
     }
 
@@ -193,12 +192,12 @@ contract MockB20 is IB20 {
     //                         METADATA UPDATES
     // ============================================================
 
-    function setName(string calldata newName) external onlyRole(METADATA_ROLE) {
+    function updateName(string calldata newName) external onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().name = newName;
         emit NameUpdated(msg.sender, newName);
     }
 
-    function setSymbol(string calldata newSymbol) external onlyRole(METADATA_ROLE) {
+    function updateSymbol(string calldata newSymbol) external onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().symbol = newSymbol;
         emit SymbolUpdated(msg.sender, newSymbol);
     }
@@ -213,7 +212,7 @@ contract MockB20 is IB20 {
 
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external {
         _mint(to, amount);
-        emit Memo(memo);
+        emit Memo(msg.sender, memo);
     }
 
     function burn(uint256 amount) external {
@@ -222,7 +221,7 @@ contract MockB20 is IB20 {
 
     function burnWithMemo(uint256 amount, bytes32 memo) external {
         _burnSelf(msg.sender, amount);
-        emit Memo(memo);
+        emit Memo(msg.sender, memo);
     }
 
     function burnBlocked(address from, uint256 amount) external onlyRole(BURN_BLOCKED_ROLE) {
@@ -251,7 +250,7 @@ contract MockB20 is IB20 {
 
     function getRoleAdmin(bytes32 role) external view returns (bytes32) {
         bytes32 adminRole = MockB20Storage.layout().roleAdmins[role];
-        // Default admin if not explicitly overridden via setRoleAdmin.
+        // Default admin if not explicitly overridden via updateRoleAdmin.
         return adminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE ? DEFAULT_ADMIN_ROLE : adminRole;
     }
 
@@ -290,7 +289,7 @@ contract MockB20 is IB20 {
         emit LastAdminRenounced(msg.sender);
     }
 
-    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRoleAdmin(role) {
+    function updateRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRoleAdmin(role) {
         bytes32 previousAdminRole = MockB20Storage.layout().roleAdmins[role];
         // Default admin if not explicitly set; expose it in the event.
         if (previousAdminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE) {
@@ -415,7 +414,7 @@ contract MockB20 is IB20 {
         return MockB20Storage.layout().supplyCap;
     }
 
-    function setSupplyCap(uint256 newSupplyCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateSupplyCap(uint256 newSupplyCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 currentSupply = MockB20Storage.layout().totalSupply;
         if (newSupplyCap < currentSupply) revert InvalidSupplyCap(currentSupply, newSupplyCap);
         uint256 oldSupplyCap = MockB20Storage.layout().supplyCap;
@@ -500,7 +499,7 @@ contract MockB20 is IB20 {
         return MockB20Storage.layout().contractURI;
     }
 
-    function setContractURI(string calldata newURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateContractURI(string calldata newURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
         MockB20Storage.layout().contractURI = newURI;
         emit ContractURIUpdated();
     }

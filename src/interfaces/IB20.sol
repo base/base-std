@@ -17,7 +17,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         seven named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
 ///         `BURN_BLOCKED_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`, `METADATA_ROLE`)
 ///         plus arbitrary user-defined roles. `grantRole`, `revokeRole`, `renounceRole`, and
-///         `setRoleAdmin` work uniformly across all roles, with one
+///         `updateRoleAdmin` work uniformly across all roles, with one
 ///         protocol-level constraint: the LAST holder of
 ///         `DEFAULT_ADMIN_ROLE` cannot renounce via `renounceRole` (this
 ///         guards against accidentally bricking the token's admin
@@ -107,7 +107,7 @@ interface IB20 {
     ///         role-based access checks: function-level role gates
     ///         (`MINT_ROLE`, `BURN_ROLE`, etc.), `grantRole` /
     ///         `revokeRole` when the caller does not hold the admin role
-    ///         for the target role, and `setRoleAdmin` when the caller
+    ///         for the target role, and `updateRoleAdmin` when the caller
     ///         does not hold the current admin role for the target role.
     /// @dev    Matches OZ AccessControl's `AccessControlUnauthorizedAccount`
     ///         error exactly.
@@ -249,13 +249,17 @@ interface IB20 {
 
     /// @notice Emitted by `transferWithMemo`, `transferFromWithMemo`,
     ///         `mintWithMemo`, and `burnWithMemo` immediately AFTER the
-    ///         underlying ERC-20 `Transfer` event. The memo carries no
-    ///         from/to/amount fields; indexers join it to the preceding
-    ///         `Transfer` log via `(transactionHash, logIndex - 1)`.
+    ///         underlying ERC-20 `Transfer` event. `caller` is the
+    ///         `msg.sender` of the memo'd call (the spender on
+    ///         `transferFromWithMemo`, the holder on the others).
+    ///         The memo carries no from/to/amount fields; indexers join
+    ///         it to the preceding `Transfer` log via
+    ///         `(transactionHash, logIndex - 1)`, and may additionally
+    ///         filter on `caller` for per-account memo streams.
     /// @dev    Variants may emit this event from additional functions
     ///         (e.g. `redeem` on a Security token); the event signature
     ///         is shared.
-    event Memo(bytes32 indexed memo);
+    event Memo(address indexed caller, bytes32 indexed memo);
 
     /// @notice Emitted by `burnBlocked` in addition to the standard
     ///         `Transfer(from, address(0), amount)`. Distinguishes
@@ -280,7 +284,12 @@ interface IB20 {
     event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
 
     /// @notice Emitted when the admin role for `role` is changed via
-    ///         `setRoleAdmin`.
+    ///         `updateRoleAdmin`. Named with the `*Changed` suffix
+    ///         (rather than the `*Updated` convention used elsewhere on
+    ///         this interface) to preserve exact signature compatibility
+    ///         with OZ AccessControl's `RoleAdminChanged` event, so
+    ///         indexers built on top of OZ continue to decode it
+    ///         without a separate handler.
     /// @dev    Matches OZ AccessControl's `RoleAdminChanged` event exactly.
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
 
@@ -288,8 +297,8 @@ interface IB20 {
     ///         standard `RoleRevoked(DEFAULT_ADMIN_ROLE, previousAdmin,
     ///         previousAdmin)` event. Signals the irreversible
     ///         transition of the token to a permanently adminless
-    ///         state: no `grantRole`, `revokeRole`, `setRoleAdmin`,
-    ///         `updatePolicy`, `setSupplyCap`, or `setContractURI` call
+    ///         state: no `grantRole`, `revokeRole`, `updateRoleAdmin`,
+    ///         `updatePolicy`, `updateSupplyCap`, or `updateContractURI` call
     ///         can ever succeed again. Existing role holders
     ///         (`MINT_ROLE`, `BURN_ROLE`, `METADATA_ROLE`, etc.) retain
     ///         their abilities, but no new grants are possible.
@@ -315,20 +324,20 @@ interface IB20 {
     ///         emitted via `PolicyUpdated` with `oldPolicyId == 0`.
     event PolicyUpdated(bytes32 indexed policyType, uint64 oldPolicyId, uint64 newPolicyId);
 
-    /// @notice Emitted by `setSupplyCap`. Includes the prior cap for
+    /// @notice Emitted by `updateSupplyCap`. Includes the prior cap for
     ///         indexer convenience.
     event SupplyCapUpdated(address indexed updater, uint256 oldSupplyCap, uint256 newSupplyCap);
 
-    /// @notice Emitted by `setContractURI`. Per ERC-7572, this event is
+    /// @notice Emitted by `updateContractURI`. Per ERC-7572, this event is
     ///         intentionally parameterless: integrators re-fetch
     ///         `contractURI()` after seeing it.
     event ContractURIUpdated();
 
-    /// @notice Emitted by `setName`. Carries the new name string for
+    /// @notice Emitted by `updateName`. Carries the new name string for
     ///         indexer consumption.
     event NameUpdated(address indexed updater, string newName);
 
-    /// @notice Emitted by `setSymbol`. Carries the new symbol string for
+    /// @notice Emitted by `updateSymbol`. Carries the new symbol string for
     ///         indexer consumption.
     event SymbolUpdated(address indexed updater, string newSymbol);
 
@@ -339,8 +348,8 @@ interface IB20 {
     /// @notice The default top-level admin role, equal to `bytes32(0)` per
     ///         the OpenZeppelin AccessControl convention. The admin
     ///         manages all other roles via `grantRole`, `revokeRole`, and
-    ///         `setRoleAdmin`. The admin can also `updatePolicy`,
-    ///         `setSupplyCap`, and `setContractURI`. Name and symbol
+    ///         `updateRoleAdmin`. The admin can also `updatePolicy`,
+    ///         `updateSupplyCap`, and `updateContractURI`. Name and symbol
     ///         updates are gated by `METADATA_ROLE`, not by this role.
     /// @dev    There is NO two-step delay-protected transfer for this
     ///         role. `grantRole(DEFAULT_ADMIN_ROLE, ...)` and
@@ -377,7 +386,7 @@ interface IB20 {
     ///         action than the pause itself.
     function UNPAUSE_ROLE() external view returns (bytes32);
 
-    /// @notice Required to call `setName` and `setSymbol`. Held
+    /// @notice Required to call `updateName` and `updateSymbol`. Held
     ///         separately from `DEFAULT_ADMIN_ROLE` so the authority to
     ///         re-brand or legally-restructure the token can be
     ///         delegated to a metadata operator (e.g. corporate-actions
@@ -413,10 +422,10 @@ interface IB20 {
                                   ERC-20
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Token name. Set at creation, mutable via `setName`.
+    /// @notice Token name. Set at creation, mutable via `updateName`.
     function name() external view returns (string memory);
 
-    /// @notice Token symbol. Set at creation, mutable via `setSymbol`.
+    /// @notice Token symbol. Set at creation, mutable via `updateSymbol`.
     function symbol() external view returns (string memory);
 
     /// @notice Number of decimal places. Immutable per token variant.
@@ -484,11 +493,11 @@ interface IB20 {
     ///         post-deployment for re-branding or legal-restructuring
     ///         events. Tokens that do not want to update their name
     ///         simply never grant `METADATA_ROLE`.
-    function setName(string calldata newName) external;
+    function updateName(string calldata newName) external;
 
     /// @notice Updates the token's `symbol`. Requires `METADATA_ROLE`.
     ///         No length restrictions. Emits `SymbolUpdated`.
-    function setSymbol(string calldata newSymbol) external;
+    function updateSymbol(string calldata newSymbol) external;
 
     /*//////////////////////////////////////////////////////////////
                           MEMO TRANSFER VARIANTS
@@ -579,7 +588,7 @@ interface IB20 {
 
     /// @notice Returns the role required to grant or revoke `role`.
     ///         Defaults to `DEFAULT_ADMIN_ROLE` if not explicitly set via
-    ///         `setRoleAdmin`.
+    ///         `updateRoleAdmin`.
     function getRoleAdmin(bytes32 role) external view returns (bytes32);
 
     /// @notice Grants `role` to `account`. Caller MUST hold the admin
@@ -614,11 +623,11 @@ interface IB20 {
     ///         and no holder of `DEFAULT_ADMIN_ROLE` can ever be
     ///         reinstated: `grantRole(DEFAULT_ADMIN_ROLE, ...)` would
     ///         require an admin caller and there is none. All
-    ///         admin-gated operations (`updatePolicy`, `setSupplyCap`,
-    ///         `setContractURI`, and any `grantRole` / `revokeRole` /
-    ///         `setRoleAdmin` for other roles) become permanently
+    ///         admin-gated operations (`updatePolicy`, `updateSupplyCap`,
+    ///         `updateContractURI`, and any `grantRole` / `revokeRole` /
+    ///         `updateRoleAdmin` for other roles) become permanently
     ///         uncallable. Operations gated by other roles
-    ///         (`setName` / `setSymbol` via `METADATA_ROLE`, `mint` via
+    ///         (`updateName` / `updateSymbol` via `METADATA_ROLE`, `mint` via
     ///         `MINT_ROLE`, etc.) remain callable by their existing
     ///         role holders, but no new grants for those roles are
     ///         possible.
@@ -641,7 +650,7 @@ interface IB20 {
     /// @notice Sets the admin role for `role`. Caller MUST hold the
     ///         current admin role for `role`. Useful for delegating role
     ///         management to a different role hierarchy.
-    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external;
+    function updateRoleAdmin(bytes32 role, bytes32 newAdminRole) external;
 
     /*//////////////////////////////////////////////////////////////
                                   PAUSE
@@ -716,7 +725,7 @@ interface IB20 {
     ///         the current `totalSupply` (we never invalidate
     ///         already-issued supply). The cap may be raised or lowered
     ///         freely otherwise. Emits `SupplyCapUpdated`.
-    function setSupplyCap(uint256 newSupplyCap) external;
+    function updateSupplyCap(uint256 newSupplyCap) external;
 
     /*//////////////////////////////////////////////////////////////
                        PERMIT (EIP-2612 + ERC-5267)
@@ -778,5 +787,5 @@ interface IB20 {
     /// @notice Updates `contractURI`. Requires `DEFAULT_ADMIN_ROLE`. Emits
     ///         the parameterless `ContractURIUpdated` event per ERC-7572;
     ///         integrators re-fetch `contractURI()` after observing it.
-    function setContractURI(string calldata newURI) external;
+    function updateContractURI(string calldata newURI) external;
 }

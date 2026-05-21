@@ -68,10 +68,7 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
             assertTrue(policyRegistry.isAuthorized(policyId, accounts[i]));
             assertEq(
                 uint256(
-                    vm.load(
-                        address(policyRegistry),
-                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
-                    )
+                    vm.load(address(policyRegistry), MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i]))
                 ),
                 uint256(1),
                 "members[id][account] slot must be set after allowed=true"
@@ -96,10 +93,7 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
             assertFalse(policyRegistry.isAuthorized(policyId, accounts[i]));
             assertEq(
                 uint256(
-                    vm.load(
-                        address(policyRegistry),
-                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
-                    )
+                    vm.load(address(policyRegistry), MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i]))
                 ),
                 uint256(0),
                 "members[id][account] slot must be cleared after allowed=false"

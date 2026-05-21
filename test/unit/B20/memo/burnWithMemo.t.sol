@@ -54,8 +54,8 @@ contract B20BurnWithMemoTest is B20Test {
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(burner, address(0), amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(true, true, false, false, address(token));
+        emit IB20.Memo(burner, memo);
         vm.prank(burner);
         token.burnWithMemo(amount, memo);
     }

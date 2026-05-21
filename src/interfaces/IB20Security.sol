@@ -45,25 +45,25 @@ import {IB20} from "./IB20.sol";
 ///         5. `securityIdentifier(...)` / `updateSecurityIdentifier(...)`
 ///            for ISIN, CUSIP, FIGI, and similar off-chain registry IDs.
 ///
-///         **Metadata updates.** The inherited `setName(...)` and
-///         `setSymbol(...)` continue to be gated by `METADATA_ROLE`
+///         **Metadata updates.** The inherited `updateName(...)` and
+///         `updateSymbol(...)` continue to be gated by `METADATA_ROLE`
 ///         from `IB20`; this interface does NOT re-gate them. Security
 ///         tokens that want the corporate-actions desk to be the sole
 ///         caller of these functions grant `METADATA_ROLE` only to
 ///         addresses that also hold `SECURITY_OPERATOR_ROLE`. That
 ///         pairing is operational, not contract-enforced. The standard
 ///         way to issue a name or symbol change is to wrap the
-///         `setName` / `setSymbol` call as an entry in
+///         `updateName` / `updateSymbol` call as an entry in
 ///         `announce(...)`'s `internalCalls`, so the rebrand lands in
 ///         the same `Announcement` ↔ `EndAnnouncement` bracket as the
 ///         disclosure that explains it.
 ///
 ///         **Announcement pairing.** Every state-changing operator
 ///         call that affects holder-visible token semantics
-///         (`updateShareRatio`, `updateSecurityIdentifier`, `setName`,
-///         `setSymbol`, `batchMint`, `batchBurn`, and admin-level
-///         changes such as `updatePolicy` / `setSupplyCap` /
-///         `setContractURI` / `pause` / `unpause`) SHOULD be issued by
+///         (`updateShareRatio`, `updateSecurityIdentifier`, `updateName`,
+///         `updateSymbol`, `batchMint`, `batchBurn`, and admin-level
+///         changes such as `updatePolicy` / `updateSupplyCap` /
+///         `updateContractURI` / `pause` / `unpause`) SHOULD be issued by
 ///         encoding the call into the `internalCalls` parameter of
 ///         `announce(...)`. The token then:
 ///         1. emits `Announcement(caller, id, description, uri)`,
@@ -201,7 +201,7 @@ interface IB20Security is IB20 {
     ///         `DEFAULT_ADMIN_ROLE` so corporate-actions operators can
     ///         be delegated without the broader admin powers (role
     ///         grants, policy changes, supply-cap changes, etc.).
-    ///         `setName` / `setSymbol` are NOT gated by this role; they
+    ///         `updateName` / `updateSymbol` are NOT gated by this role; they
     ///         are gated by the inherited `METADATA_ROLE` from `IB20`.
     ///         See the contract-level notes for the recommended
     ///         operational pairing.
@@ -298,7 +298,7 @@ interface IB20Security is IB20 {
     ///         operator therefore needs both `SECURITY_OPERATOR_ROLE`
     ///         (to call `announce`) and whatever role each inner
     ///         function requires (e.g. `MINT_ROLE` for `batchMint`,
-    ///         `METADATA_ROLE` for `setName`).
+    ///         `METADATA_ROLE` for `updateName`).
     ///
     /// @param  internalCalls ABI-encoded calldata blobs executed
     ///                       in-order via self-`delegatecall`. May

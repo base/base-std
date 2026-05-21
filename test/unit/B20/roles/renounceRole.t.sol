@@ -46,8 +46,7 @@ contract B20RenounceRoleTest is B20Test {
 
         // Precondition: nonAdmin doesn't hold the role and there is exactly one admin.
         assertFalse(
-            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin),
-            "precondition: nonAdmin must not be admin"
+            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin), "precondition: nonAdmin must not be admin"
         );
         assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "precondition: admin must be admin");
 
@@ -56,9 +55,7 @@ contract B20RenounceRoleTest is B20Test {
         token.renounceRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin);
 
         // Postconditions: nothing changed.
-        assertFalse(
-            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin), "nonAdmin still doesn't hold admin role"
-        );
+        assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, nonAdmin), "nonAdmin still doesn't hold admin role");
         assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin still holds admin role");
     }
 

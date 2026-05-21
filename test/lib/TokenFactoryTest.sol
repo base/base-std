@@ -42,11 +42,7 @@ contract TokenFactoryTest is BaseTest {
         string memory currency_
     ) internal pure returns (ITokenFactory.B20StablecoinCreateParams memory) {
         return ITokenFactory.B20StablecoinCreateParams({
-            version: 1,
-            name: name_,
-            symbol: symbol_,
-            initialAdmin: initialAdmin_,
-            currency: currency_
+            version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_, currency: currency_
         });
     }
 

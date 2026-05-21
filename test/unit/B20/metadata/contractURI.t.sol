@@ -12,11 +12,11 @@ contract B20ContractURITest is B20Test {
         assertEq(token.contractURI(), "", "fresh token's contractURI must be the empty string");
     }
 
-    /// @notice Verifies contractURI reflects updates made via setContractURI
-    /// @dev Mutable-metadata readback; canonical setter test lives in setContractURI.t.sol
+    /// @notice Verifies contractURI reflects updates made via updateContractURI
+    /// @dev Mutable-metadata readback; canonical setter test lives in updateContractURI.t.sol
     function test_contractURI_success_reflectsSetContractURI(string calldata newURI) public {
         vm.prank(admin);
-        token.setContractURI(newURI);
-        assertEq(token.contractURI(), newURI, "contractURI must reflect setContractURI");
+        token.updateContractURI(newURI);
+        assertEq(token.contractURI(), newURI, "contractURI must reflect updateContractURI");
     }
 }

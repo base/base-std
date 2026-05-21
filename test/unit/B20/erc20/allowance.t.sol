@@ -50,9 +50,7 @@ contract B20AllowanceTest is B20Test {
         token.transferFrom(owner, to, spendAmount);
 
         assertEq(
-            token.allowance(owner, spender),
-            allowanceAmount - spendAmount,
-            "allowance must decrease by spent amount"
+            token.allowance(owner, spender), allowanceAmount - spendAmount, "allowance must decrease by spent amount"
         );
     }
 }

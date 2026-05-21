@@ -16,7 +16,9 @@ contract B20RevokeRoleTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
+            )
         );
         token.revokeRole(role, account);
     }

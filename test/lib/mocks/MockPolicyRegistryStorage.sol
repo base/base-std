@@ -82,10 +82,21 @@ library MockPolicyRegistryStorage {
     // the Rust impl validator) can read each declared field without
     // remembering the offset constant.
 
-    function policiesBaseSlot() internal pure returns (bytes32) { return slotOf(POLICIES_OFFSET); }
-    function membersBaseSlot() internal pure returns (bytes32) { return slotOf(MEMBERS_OFFSET); }
-    function pendingAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(PENDING_ADMINS_OFFSET); }
-    function nextCounterSlot() internal pure returns (bytes32) { return slotOf(NEXT_COUNTER_OFFSET); }
+    function policiesBaseSlot() internal pure returns (bytes32) {
+        return slotOf(POLICIES_OFFSET);
+    }
+
+    function membersBaseSlot() internal pure returns (bytes32) {
+        return slotOf(MEMBERS_OFFSET);
+    }
+
+    function pendingAdminsBaseSlot() internal pure returns (bytes32) {
+        return slotOf(PENDING_ADMINS_OFFSET);
+    }
+
+    function nextCounterSlot() internal pure returns (bytes32) {
+        return slotOf(NEXT_COUNTER_OFFSET);
+    }
 
     // ============================================================
     //                     MAPPING MEMBER SLOTS

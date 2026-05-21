@@ -65,11 +65,12 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Variant of a B-20 token. Encoded in address byte `[10]`,
-    ///         so `getTokenVariant` is a pure address-prefix read with no
-    ///         storage lookup. `NONE` indicates the address is not a
-    ///         B-20 token created by this factory.
+    ///         so the variant of a B-20 address is a pure address-prefix
+    ///         read with no storage lookup. Whether an address is a
+    ///         factory-created B-20 in the first place is answered by
+    ///         `isB20` (a prefix check on bytes `[0:10]`); the variant
+    ///         byte itself does not need an "absent" sentinel.
     enum TokenVariant {
-        NONE,
         DEFAULT,
         STABLECOIN,
         SECURITY
@@ -142,6 +143,16 @@ interface ITokenFactory {
     ///         parameter: all issuance flows through `create`
     ///         (rate-limited compliant path) or `adminMint` (cold-path
     ///         batch with announcement coupling) after deployment.
+    ///
+    ///         For the Security variant, the `REDEEMER_SENDER_POLICY`
+    ///         slot defaults to the always-block built-in (policy ID
+    ///         `1`) rather than always-allow, so redemption is closed by
+    ///         default and an admin must opt-in by pointing the slot at
+    ///         an allowlist (or another policy) before any holder can
+    ///         call `redeem`. To open redemption at creation, override
+    ///         the slot atomically by including an
+    ///         `updatePolicy(REDEEMER_SENDER_POLICY, <policyId>)` entry
+    ///         in `initCalls`.
     struct B20SecurityCreateParams {
         uint8 version;
         string name;
@@ -160,8 +171,10 @@ interface ITokenFactory {
     ///         Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
-    /// @notice `variant` is not a recognized `TokenVariant` (or is
-    ///         `NONE`, which is invalid for creation).
+    /// @notice `variant` is not a recognized `TokenVariant`. Reached
+    ///         only when the factory is invoked with a raw variant byte
+    ///         outside the enum range (typed `createToken` callers are
+    ///         rejected by ABI decoding before this check fires).
     error InvalidVariant();
 
     /// @notice The leading `version` byte in `params` does not match
@@ -255,17 +268,20 @@ interface ITokenFactory {
     ///         depends only on these inputs; the remaining `params`
     ///         fields (including decimals, which are fixed by variant)
     ///         do not affect the address.
-    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt)
-        external
-        view
-        returns (address);
+    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt) external view returns (address);
 
     /// @notice Whether `token` was created by this factory. Recovered
     ///         from the address prefix (bytes `[0:10]`); no storage read.
     function isB20(address token) external view returns (bool);
 
-    /// @notice Returns the variant of `token`. Returns `NONE` if `token`
-    ///         is not a factory-created B-20. Recovered from address
-    ///         byte `[10]`; no storage read.
-    function getTokenVariant(address token) external view returns (TokenVariant);
+    /// @notice Whether the token at `token` has been initialized by this
+    ///         factory (i.e. `createToken` ran to completion at that
+    ///         address). Returns `false` for B-20-prefixed addresses
+    ///         whose deterministic slot has not yet been claimed by a
+    ///         `createToken` call, and for any address that is not a
+    ///         B-20 at all. The bootstrap window (the `initCalls` loop
+    ///         inside `createToken`) is fully privileged but not yet
+    ///         initialized; this flag flips exactly once, at the moment
+    ///         `createToken` returns.
+    function isInitialized(address token) external view returns (bool);
 }

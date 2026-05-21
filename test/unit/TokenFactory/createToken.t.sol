@@ -21,13 +21,25 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
                                 REVERTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Verifies createToken reverts for the NONE variant
-    /// @dev Variant guard fires before any param decoding; checks InvalidVariant() error
-    function test_createToken_revert_invalidVariant(address caller, bytes32 salt) public {
+    /// @notice Verifies createToken rejects raw variant bytes outside the TokenVariant enum range
+    /// @dev TokenVariant has no "NONE" sentinel; typed callers cannot construct an out-of-range
+    ///      value. The ABI decoder rejects out-of-range enum bytes with a Panic(0x21) before the
+    ///      factory body's `else { revert InvalidVariant(); }` branch is ever reached, so the
+    ///      observable behavior from a raw-bytes caller is a decode-time panic rather than a
+    ///      typed factory revert.
+    function test_createToken_revert_outOfRangeVariant(address caller, bytes32 salt, uint8 badVariant) public {
         _assumeValidCaller(caller);
+        badVariant = uint8(bound(uint256(badVariant), uint256(type(ITokenFactory.TokenVariant).max) + 1, 255));
         vm.prank(caller);
-        vm.expectRevert(ITokenFactory.InvalidVariant.selector);
-        factory.createToken(ITokenFactory.TokenVariant.NONE, salt, abi.encode(_b20Params()), new bytes[](0));
+        // ABI decoder panic for out-of-range enum value.
+        vm.expectRevert();
+        (bool ok,) = address(factory)
+            .call(
+                abi.encodeWithSelector(
+                    ITokenFactory.createToken.selector, badVariant, salt, abi.encode(_b20Params()), new bytes[](0)
+                )
+            );
+        ok; // silence unused warning; the revert is asserted via vm.expectRevert.
     }
 
     /// @notice Verifies createToken reverts for any unsupported params version byte (DEFAULT variant)
@@ -78,9 +90,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // the factory reverts before decoding because the variant arm short-circuits).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, uint8(0)));
-        factory.createToken(
-            ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(_stablecoinParams()), new bytes[](0)
-        );
+        factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(_stablecoinParams()), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts when (variant, sender, salt) collides
@@ -90,9 +100,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address first = _createDefault(caller, salt, _b20Params(), new bytes[](0));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(ITokenFactory.TokenAlreadyExists.selector, first));
-        factory.createToken(
-            ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), new bytes[](0)
-        );
+        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), new bytes[](0));
     }
 
     /// @notice Verifies a failing initCall bubbles the underlying revert reason (regression test for L-01)
@@ -137,7 +145,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         bytes[] memory initCalls = new bytes[](2);
         // Index 0 is benign — set the supply cap to 100. Index 1 attempts to mint to
         // address(0) and reverts InvalidReceiver(0); we expect that error to bubble.
-        initCalls[0] = abi.encodeWithSelector(IB20.setSupplyCap.selector, uint256(100));
+        initCalls[0] = abi.encodeWithSelector(IB20.updateSupplyCap.selector, uint256(100));
         initCalls[1] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
@@ -236,7 +244,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
             "roles[MINT_ROLE][bob] slot must be set by init-call grantRole"
         );
         assertEq(
-            uint256(vm.load(token, MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, address(factory)))),
+            uint256(
+                vm.load(token, MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, address(factory)))
+            ),
             uint256(0),
             "factory must NOT appear in roles[ADMIN] slot"
         );
@@ -298,7 +308,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // role check, because the bootstrap window is closed.
         vm.prank(address(factory));
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, address(factory), B20Constants.MINT_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, address(factory), B20Constants.MINT_ROLE
+            )
         );
         IB20(token).mint(bob, 1);
     }
@@ -351,20 +363,21 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     }
 
     /// @notice Verifies the variant byte at address position [10] matches the created variant
-    /// @dev Address schema: getTokenVariant(token) recovers the variant statelessly
+    /// @dev Address schema: byte [10] of the token address IS the variant; readable
+    ///      statelessly off the address with no factory lookup.
     function test_createToken_success_encodesVariantByte(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
 
         address defaultToken = _createDefault(caller, salt, _b20Params(), new bytes[](0));
         assertEq(
-            uint256(factory.getTokenVariant(defaultToken)),
+            uint256(uint8(uint160(defaultToken) >> 72)),
             uint256(ITokenFactory.TokenVariant.DEFAULT),
             "default variant byte mismatch"
         );
 
         address stablecoinToken = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
         assertEq(
-            uint256(factory.getTokenVariant(stablecoinToken)),
+            uint256(uint8(uint160(stablecoinToken) >> 72)),
             uint256(ITokenFactory.TokenVariant.STABLECOIN),
             "stablecoin variant byte mismatch"
         );
@@ -465,11 +478,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // Paired slot assertion: the empty-string encoding zeroes the
         // entire field slot. A regression of the OOB-read bug would
         // leave non-zero garbage in the low bits and we'd catch it here.
-        assertEq(
-            vm.load(tokenAddr, MockB20Storage.nameSlot()),
-            bytes32(0),
-            "empty name field slot must be all-zero"
-        );
+        assertEq(vm.load(tokenAddr, MockB20Storage.nameSlot()), bytes32(0), "empty name field slot must be all-zero");
     }
 
     /// @notice Verifies an empty `symbol` round-trips as the empty string (regression test for L-04)
@@ -484,9 +493,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
         assertEq(
-            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
-            bytes32(0),
-            "empty symbol field slot must be all-zero"
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()), bytes32(0), "empty symbol field slot must be all-zero"
         );
     }
 
@@ -500,15 +507,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
         assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
+        assertEq(vm.load(tokenAddr, MockB20Storage.nameSlot()), bytes32(0), "empty name field slot must be all-zero");
         assertEq(
-            vm.load(tokenAddr, MockB20Storage.nameSlot()),
-            bytes32(0),
-            "empty name field slot must be all-zero"
-        );
-        assertEq(
-            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
-            bytes32(0),
-            "empty symbol field slot must be all-zero"
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()), bytes32(0), "empty symbol field slot must be all-zero"
         );
     }
 

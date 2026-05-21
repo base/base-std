@@ -34,7 +34,7 @@ pragma solidity ^0.8.20;
 ///
 ///         Identity state (`name`, `symbol`) is kept in this struct rather
 ///         than encoded into the address because mutability is required
-///         (`setName` / `setSymbol` on the IB20 surface). `decimals` is
+///         (`updateName` / `updateSymbol` on the IB20 surface). `decimals` is
 ///         variant-fixed (`18` for default, `6` for stablecoin/security)
 ///         and read from code, not storage.
 library MockB20Storage {
@@ -171,20 +171,61 @@ library MockB20Storage {
     // the Rust impl validator) can read each field without remembering
     // the offset constant. Inlined by the compiler; zero runtime cost.
 
-    function nameSlot() internal pure returns (bytes32) { return slotOf(NAME_OFFSET); }
-    function symbolSlot() internal pure returns (bytes32) { return slotOf(SYMBOL_OFFSET); }
-    function contractURISlot() internal pure returns (bytes32) { return slotOf(CONTRACT_URI_OFFSET); }
-    function totalSupplySlot() internal pure returns (bytes32) { return slotOf(TOTAL_SUPPLY_OFFSET); }
-    function balancesBaseSlot() internal pure returns (bytes32) { return slotOf(BALANCES_OFFSET); }
-    function allowancesBaseSlot() internal pure returns (bytes32) { return slotOf(ALLOWANCES_OFFSET); }
-    function rolesBaseSlot() internal pure returns (bytes32) { return slotOf(ROLES_OFFSET); }
-    function roleAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(ROLE_ADMINS_OFFSET); }
-    function adminCountAndInitializedSlot() internal pure returns (bytes32) { return slotOf(ADMIN_COUNT_OFFSET); }
-    function transferPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(TRANSFER_POLICY_IDS_OFFSET); }
-    function mintPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(MINT_POLICY_IDS_OFFSET); }
-    function pausedVectorsSlot() internal pure returns (bytes32) { return slotOf(PAUSED_VECTORS_OFFSET); }
-    function supplyCapSlot() internal pure returns (bytes32) { return slotOf(SUPPLY_CAP_OFFSET); }
-    function noncesBaseSlot() internal pure returns (bytes32) { return slotOf(NONCES_OFFSET); }
+    function nameSlot() internal pure returns (bytes32) {
+        return slotOf(NAME_OFFSET);
+    }
+
+    function symbolSlot() internal pure returns (bytes32) {
+        return slotOf(SYMBOL_OFFSET);
+    }
+
+    function contractURISlot() internal pure returns (bytes32) {
+        return slotOf(CONTRACT_URI_OFFSET);
+    }
+
+    function totalSupplySlot() internal pure returns (bytes32) {
+        return slotOf(TOTAL_SUPPLY_OFFSET);
+    }
+
+    function balancesBaseSlot() internal pure returns (bytes32) {
+        return slotOf(BALANCES_OFFSET);
+    }
+
+    function allowancesBaseSlot() internal pure returns (bytes32) {
+        return slotOf(ALLOWANCES_OFFSET);
+    }
+
+    function rolesBaseSlot() internal pure returns (bytes32) {
+        return slotOf(ROLES_OFFSET);
+    }
+
+    function roleAdminsBaseSlot() internal pure returns (bytes32) {
+        return slotOf(ROLE_ADMINS_OFFSET);
+    }
+
+    function adminCountAndInitializedSlot() internal pure returns (bytes32) {
+        return slotOf(ADMIN_COUNT_OFFSET);
+    }
+
+    function transferPolicyIdsSlot() internal pure returns (bytes32) {
+        return slotOf(TRANSFER_POLICY_IDS_OFFSET);
+    }
+
+    function mintPolicyIdsSlot() internal pure returns (bytes32) {
+        return slotOf(MINT_POLICY_IDS_OFFSET);
+    }
+
+    function pausedVectorsSlot() internal pure returns (bytes32) {
+        return slotOf(PAUSED_VECTORS_OFFSET);
+    }
+
+    function supplyCapSlot() internal pure returns (bytes32) {
+        return slotOf(SUPPLY_CAP_OFFSET);
+    }
+
+    function noncesBaseSlot() internal pure returns (bytes32) {
+        return slotOf(NONCES_OFFSET);
+    }
 
     // ============================================================
     //                     MAPPING MEMBER SLOTS
@@ -394,7 +435,7 @@ library MockB20RedeemStorage {
             $.slot := STORAGE_LOCATION
         }
     }
-    
+
     /// @custom:storage-location erc7201:base.b20.redeem
     struct Layout {
         // ---------- Redemption ----------
@@ -469,5 +510,7 @@ library MockB20StablecoinStorage {
     ///         with `length * 2` in the low byte when `length < 32`;
     ///         otherwise the slot stores `length * 2 + 1` and the data
     ///         starts at `keccak256(slot)`).
-    function currencySlot() internal pure returns (bytes32) { return slotOf(CURRENCY_OFFSET); }
+    function currencySlot() internal pure returns (bytes32) {
+        return slotOf(CURRENCY_OFFSET);
+    }
 }

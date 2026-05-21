@@ -7,11 +7,14 @@ import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
 
 contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
     /// @notice Wraps an arbitrary uint8 into a valid TokenVariant ordinal.
-    /// @dev Bounds to [0, 3] (NONE, DEFAULT, STABLECOIN, SECURITY). The address derivation
+    /// @dev Bounds to the enum range (DEFAULT, STABLECOIN, SECURITY). The address derivation
     ///      is happy with the raw byte but Solidity reverts at function entry on an
     ///      out-of-range enum input from a fuzzer.
     function _boundVariant(uint8 variantInt) internal pure returns (ITokenFactory.TokenVariant) {
-        return ITokenFactory.TokenVariant(uint8(bound(uint256(variantInt), 0, 3)));
+        return
+            ITokenFactory.TokenVariant(
+                uint8(bound(uint256(variantInt), 0, uint256(type(ITokenFactory.TokenVariant).max)))
+            );
     }
 
     /// @notice Verifies getTokenAddress is deterministic for the same inputs
@@ -36,12 +39,10 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
 
     /// @notice Verifies different senders produce different addresses for the same (variant, salt)
     /// @dev Sender is mixed into the trailing 9-byte hash at address bytes [11:20]
-    function test_getTokenAddress_success_differentSenderDiffers(
-        uint8 variantInt,
-        address s1,
-        address s2,
-        bytes32 salt
-    ) public view {
+    function test_getTokenAddress_success_differentSenderDiffers(uint8 variantInt, address s1, address s2, bytes32 salt)
+        public
+        view
+    {
         vm.assume(s1 != s2);
         ITokenFactory.TokenVariant variant = _boundVariant(variantInt);
         address a = factory.getTokenAddress(variant, s1, salt);
@@ -51,12 +52,10 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
 
     /// @notice Verifies different salts produce different addresses for the same (variant, sender)
     /// @dev Salt is mixed into the trailing 9-byte hash at address bytes [11:20]
-    function test_getTokenAddress_success_differentSaltDiffers(
-        uint8 variantInt,
-        address sender,
-        bytes32 s1,
-        bytes32 s2
-    ) public view {
+    function test_getTokenAddress_success_differentSaltDiffers(uint8 variantInt, address sender, bytes32 s1, bytes32 s2)
+        public
+        view
+    {
         vm.assume(s1 != s2);
         ITokenFactory.TokenVariant variant = _boundVariant(variantInt);
         address a = factory.getTokenAddress(variant, sender, s1);
@@ -78,12 +77,11 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
     }
 
     /// @notice Verifies byte [10] of the returned address equals the variant ordinal
-    /// @dev Address schema: variant byte enables stateless getTokenVariant lookup
-    function test_getTokenAddress_success_variantByteAtPosition10(
-        uint8 variantInt,
-        address sender,
-        bytes32 salt
-    ) public view {
+    /// @dev Address schema: variant byte is readable statelessly off the address
+    function test_getTokenAddress_success_variantByteAtPosition10(uint8 variantInt, address sender, bytes32 salt)
+        public
+        view
+    {
         ITokenFactory.TokenVariant variant = _boundVariant(variantInt);
         address a = factory.getTokenAddress(variant, sender, salt);
 
@@ -94,11 +92,10 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
     }
 
     /// @notice Verifies byte [11] comes from the hash tail entropy
-    function test_getTokenAddress_success_byte11DerivedFromTailEntropy(
-        uint8 variantInt,
-        address sender,
-        bytes32 salt
-    ) public view {
+    function test_getTokenAddress_success_byte11DerivedFromTailEntropy(uint8 variantInt, address sender, bytes32 salt)
+        public
+        view
+    {
         ITokenFactory.TokenVariant variant = _boundVariant(variantInt);
         address a = factory.getTokenAddress(variant, sender, salt);
 

@@ -21,9 +21,10 @@ contract B20UpdatePolicyTest is B20Test {
     ///         `policyId(policyType)` return.
     function _readPolicyLane(bytes32 policyType) internal view returns (uint64) {
         if (policyType == B20Constants.MINT_RECEIVER_POLICY) {
-            return MockB20Storage.mintReceiverPolicyId(
-                uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()))
-            );
+            return
+                MockB20Storage.mintReceiverPolicyId(
+                    uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()))
+                );
         }
         uint256 transferPacked = uint256(vm.load(address(token), MockB20Storage.transferPolicyIdsSlot()));
         if (policyType == B20Constants.TRANSFER_SENDER_POLICY) {
@@ -37,6 +38,7 @@ contract B20UpdatePolicyTest is B20Test {
         // `_knownPolicyType` or the named constants.
         return MockB20Storage.transferExecutorPolicyId(transferPacked);
     }
+
     /// @notice Verifies updatePolicy reverts when caller lacks DEFAULT_ADMIN_ROLE
     /// @dev Access control: only the admin may reassign policy slots; checks AccessControlUnauthorizedAccount.
     ///      Auth fires before policy-type / registry checks, so any bytes32 fuzz is fine here.
@@ -140,10 +142,26 @@ contract B20UpdatePolicyTest is B20Test {
 
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
-        assertEq(token.policyId(B20Constants.TRANSFER_SENDER_POLICY), PolicyRegistryConstants.ALWAYS_ALLOW_ID, "SENDER updated");
-        assertEq(token.policyId(B20Constants.TRANSFER_RECEIVER_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "RECEIVER must be untouched");
-        assertEq(token.policyId(B20Constants.TRANSFER_EXECUTOR_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "EXECUTOR must be untouched");
-        assertEq(token.policyId(B20Constants.MINT_RECEIVER_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "MINT_RECEIVER_POLICY must be untouched");
+        assertEq(
+            token.policyId(B20Constants.TRANSFER_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "SENDER updated"
+        );
+        assertEq(
+            token.policyId(B20Constants.TRANSFER_RECEIVER_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "RECEIVER must be untouched"
+        );
+        assertEq(
+            token.policyId(B20Constants.TRANSFER_EXECUTOR_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "EXECUTOR must be untouched"
+        );
+        assertEq(
+            token.policyId(B20Constants.MINT_RECEIVER_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "MINT_RECEIVER_POLICY must be untouched"
+        );
 
         // Paired packed-slot assertions: explicitly read the packed
         // slot and decode every lane to confirm the write mask only

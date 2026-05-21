@@ -37,5 +37,4 @@ contract PolicyRegistryTest is BaseTest {
     function _createBlocklist() internal returns (uint64 policyId) {
         policyId = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
     }
-
 }

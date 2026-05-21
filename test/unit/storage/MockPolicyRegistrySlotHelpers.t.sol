@@ -23,8 +23,7 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
 
         uint64 policyId = _createAllowlist(admin, policyAdmin);
 
-        uint256 packed =
-            uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
+        uint256 packed = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
 
         assertEq(
             MockPolicyRegistryStorage.policyAdminFromPacked(packed),
@@ -105,9 +104,9 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
         policyRegistry.stageUpdateAdmin(policyId, pending);
 
         assertEq(
-            address(uint160(uint256(
-                vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))
-            ))),
+            address(
+                uint160(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))))
+            ),
             pending,
             "pendingAdminSlot must locate the staged admin"
         );
