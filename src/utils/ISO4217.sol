@@ -210,6 +210,11 @@ library ISO4217 {
     /// @notice Returns true iff `code` is on the active ISO 4217
     ///         circulating-fiat allowlist (exactly three ASCII bytes,
     ///         uppercase, on the curated set).
+    /// @dev    O(1) per call: first-byte dispatch routes to a single
+    ///         letter bucket of at most 15 entries (S is the largest;
+    ///         most are <10). Worst case ≈ 16 word-equality
+    ///         comparisons, vs ≈ 155 for a flat chain. Letters with
+    ///         no allowlist entries fall through to `return false`.
     function isValidFiatCode(string memory code) internal pure returns (bool) {
         bytes memory b = bytes(code);
         if (b.length != 3) return false;
@@ -220,56 +225,62 @@ library ISO4217 {
         assembly {
             c := mload(add(b, 32))
         }
+        bytes1 first = bytes1(c);
 
-        if (
-            c == AED || c == AFN || c == ALL || c == AMD || c == ANG || c == AOA || c == ARS || c == AUD
-                || c == AWG || c == AZN
-        ) return true;
-        if (
-            c == BAM || c == BBD || c == BDT || c == BGN || c == BHD || c == BIF || c == BMD || c == BND
-                || c == BOB || c == BRL || c == BSD || c == BTN || c == BWP || c == BYN || c == BZD
-        ) return true;
-        if (
-            c == CAD || c == CDF || c == CHF || c == CNY || c == COP || c == CRC || c == CUP || c == CVE
-                || c == CZK
-        ) return true;
-        if (c == DJF || c == DKK || c == DOP || c == DZD) return true;
-        if (c == EGP || c == ERN || c == ETB || c == EUR) return true;
-        if (c == FJD || c == FKP) return true;
-        if (
-            c == GBP || c == GEL || c == GHS || c == GIP || c == GMD || c == GNF || c == GTQ || c == GYD
-        ) return true;
-        if (c == HKD || c == HNL || c == HTG || c == HUF) return true;
-        if (c == IDR || c == ILS || c == INR || c == IQD || c == IRR || c == ISK) return true;
-        if (c == JMD || c == JOD || c == JPY) return true;
-        if (
-            c == KES || c == KGS || c == KHR || c == KMF || c == KPW || c == KRW || c == KWD || c == KYD
-                || c == KZT
-        ) return true;
-        if (c == LAK || c == LBP || c == LKR || c == LRD || c == LSL || c == LYD) return true;
-        if (
-            c == MAD || c == MDL || c == MGA || c == MKD || c == MMK || c == MNT || c == MOP || c == MRU
-                || c == MUR || c == MVR || c == MWK || c == MXN || c == MYR || c == MZN
-        ) return true;
-        if (c == NAD || c == NGN || c == NIO || c == NOK || c == NPR || c == NZD) return true;
-        if (c == OMR) return true;
-        if (c == PAB || c == PEN || c == PGK || c == PHP || c == PKR || c == PLN || c == PYG) return true;
-        if (c == QAR) return true;
-        if (c == RON || c == RSD || c == RUB || c == RWF) return true;
-        if (
-            c == SAR || c == SBD || c == SCR || c == SDG || c == SEK || c == SGD || c == SHP || c == SLE
-                || c == SOS || c == SRD || c == SSP || c == STN || c == SVC || c == SYP || c == SZL
-        ) return true;
-        if (
-            c == THB || c == TJS || c == TMT || c == TND || c == TOP || c == TRY || c == TTD || c == TWD
-                || c == TZS
-        ) return true;
-        if (c == UAH || c == UGX || c == USD || c == UYU || c == UZS) return true;
-        if (c == VED || c == VES || c == VND || c == VUV) return true;
-        if (c == WST) return true;
-        if (c == XAF || c == XCD || c == XOF || c == XPF) return true;
-        if (c == YER) return true;
-        if (c == ZAR || c == ZMW || c == ZWG) return true;
+        if (first == "A") {
+            return c == AED || c == AFN || c == ALL || c == AMD || c == ANG || c == AOA || c == ARS
+                || c == AUD || c == AWG || c == AZN;
+        }
+        if (first == "B") {
+            return c == BAM || c == BBD || c == BDT || c == BGN || c == BHD || c == BIF || c == BMD
+                || c == BND || c == BOB || c == BRL || c == BSD || c == BTN || c == BWP || c == BYN
+                || c == BZD;
+        }
+        if (first == "C") {
+            return c == CAD || c == CDF || c == CHF || c == CNY || c == COP || c == CRC || c == CUP
+                || c == CVE || c == CZK;
+        }
+        if (first == "D") return c == DJF || c == DKK || c == DOP || c == DZD;
+        if (first == "E") return c == EGP || c == ERN || c == ETB || c == EUR;
+        if (first == "F") return c == FJD || c == FKP;
+        if (first == "G") {
+            return c == GBP || c == GEL || c == GHS || c == GIP || c == GMD || c == GNF || c == GTQ
+                || c == GYD;
+        }
+        if (first == "H") return c == HKD || c == HNL || c == HTG || c == HUF;
+        if (first == "I") return c == IDR || c == ILS || c == INR || c == IQD || c == IRR || c == ISK;
+        if (first == "J") return c == JMD || c == JOD || c == JPY;
+        if (first == "K") {
+            return c == KES || c == KGS || c == KHR || c == KMF || c == KPW || c == KRW || c == KWD
+                || c == KYD || c == KZT;
+        }
+        if (first == "L") return c == LAK || c == LBP || c == LKR || c == LRD || c == LSL || c == LYD;
+        if (first == "M") {
+            return c == MAD || c == MDL || c == MGA || c == MKD || c == MMK || c == MNT || c == MOP
+                || c == MRU || c == MUR || c == MVR || c == MWK || c == MXN || c == MYR || c == MZN;
+        }
+        if (first == "N") return c == NAD || c == NGN || c == NIO || c == NOK || c == NPR || c == NZD;
+        if (first == "O") return c == OMR;
+        if (first == "P") {
+            return c == PAB || c == PEN || c == PGK || c == PHP || c == PKR || c == PLN || c == PYG;
+        }
+        if (first == "Q") return c == QAR;
+        if (first == "R") return c == RON || c == RSD || c == RUB || c == RWF;
+        if (first == "S") {
+            return c == SAR || c == SBD || c == SCR || c == SDG || c == SEK || c == SGD || c == SHP
+                || c == SLE || c == SOS || c == SRD || c == SSP || c == STN || c == SVC || c == SYP
+                || c == SZL;
+        }
+        if (first == "T") {
+            return c == THB || c == TJS || c == TMT || c == TND || c == TOP || c == TRY || c == TTD
+                || c == TWD || c == TZS;
+        }
+        if (first == "U") return c == UAH || c == UGX || c == USD || c == UYU || c == UZS;
+        if (first == "V") return c == VED || c == VES || c == VND || c == VUV;
+        if (first == "W") return c == WST;
+        if (first == "X") return c == XAF || c == XCD || c == XOF || c == XPF;
+        if (first == "Y") return c == YER;
+        if (first == "Z") return c == ZAR || c == ZMW || c == ZWG;
 
         return false;
     }
