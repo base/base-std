@@ -3,113 +3,16 @@ pragma solidity ^0.8.20;
 
 /// @title  ISO4217
 /// @notice Helpers anchored in the ISO 4217 currency-code standard.
-///         Currently exposes two primitives:
-///         - `isValidFiatCode`: a static allowlist of active ISO 4217
-///           alphabetic codes that correspond to **circulating national
-///           fiat currencies**, used by the `TokenFactory` precompile
-///           to validate the `currency` field passed to the STABLECOIN
-///           variant of `createToken`.
-///         - `excludedCount` / `excludedAt`: an enumerable record of
-///           the ISO 4217 codes that are on the standard but
-///           deliberately excluded from the fiat allowlist, with
-///           inline comments explaining each exclusion. This makes the
-///           rejected set readable as data rather than as the absence
-///           of an entry, and lets tests fuzz over the blocklist to
-///           prove every documented exclusion actually reverts.
-///
-///         The library scope is left intentionally broad so that
-///         further ISO 4217 helpers (numeric-code lookup,
-///         decimal-exponent lookup, etc.) can land in this file
-///         without restructuring imports.
-///
-/// @dev    **Scope.** "Fiat" here means a currency that is issued by
-///         a sovereign or supranational monetary authority and
-///         circulates as a means of payment — i.e., something you can
-///         hold and settle in. This is narrower than "every ISO 4217
-///         alphabetic code": ISO 4217 also enumerates funds codes
-///         (indexing units, internal accounting devices), bond-market
-///         composite units, supranational synthetic reserve assets,
-///         precious metals, and sentinel codes, none of which are
-///         circulating currencies.
-///
-///         **The X-prefix is NOT a categorical exclusion rule.** ISO
-///         4217 reserves the X-prefix for codes where no single ISO
-///         3166 country code applies. That covers both "not a
-///         currency" (metals, sentinels, synthetic units) AND
-///         "currency shared across multiple countries by a
-///         supranational central bank." The latter category contains
-///         four real circulating fiat currencies used by tens of
-///         millions of people, which the allowlist DOES include:
-///         - `XOF` — CFA Franc BCEAO (8 West African states, BCEAO)
-///         - `XAF` — CFA Franc BEAC (6 Central African states, BEAC)
-///         - `XCD` — East Caribbean Dollar (8 Caribbean states, ECCB)
-///         - `XPF` — CFP Franc (French Pacific territories)
-///
-///         **Why an allowlist at all.** `currency` is a self-declared,
-///         immutable identifier. It is NOT a trust signal: a token can
-///         declare any code without anyone checking that the token is
-///         actually backed by the named currency. The allowlist
-///         provides three concrete benefits regardless:
-///           1. Standardized value space — every stablecoin's
-///              `currency()` returns a code from one well-known
-///              registry, so tooling can categorize the field without
-///              having to parse free-form strings or invent its own
-///              taxonomy.
-///           2. Typo / garbage rejection at creation — `"usd"`,
-///              `"USDT"`, `"US"`, `""` all revert at the factory rather
-///              than silently shipping an unreadable identifier.
-///           3. Forced design discussion for new categories — any
-///              consumer that wants to ship tokens outside the fiat
-///              category (commodity-backed, crypto-tracking, governance
-///              tokens with stablecoin operational surface) is pushed
-///              into the variant discussion rather than smuggling
-///              through this field. The B-20 Security variant is the
-///              intended home for commodity-backed tokens.
-///
-///         **What's excluded (enumerated by `excludedAt`).**
-///         - **Precious metals** (XAU/XAG/XPT/XPD): commodities, not
-///           means of payment. Commodity-backed tokens belong on the
-///           Security variant.
-///         - **European composite units** (XBA-XBD): defunct
-///           supranational accounting units (EURCO, E.M.U.-6, E.U.A.-9,
-///           E.U.A.-17). Retained on ISO 4217 for historical
-///           reconciliation only.
-///         - **Other supranational synthetic units** (XDR/XSU/XUA):
-///           IMF Special Drawing Rights, Sucre, ADB Unit of Account.
-///           Synthetic reserve assets, not circulating currencies.
-///         - **Sentinels** (XXX/XTS): "no currency" marker and the
-///           reserved test code. Neither is a currency.
-///         - **Funds codes** (BOV, CHE, CHW, CLF, COU, MXV, USN, UYI,
-///           UYW): indexing units, internal accounting devices, and
-///           forex conventions. Most exist to denominate
-///           inflation-indexed obligations or settlement timing; a
-///           stablecoin pegged to "CLF" or "USN" is not coherent
-///           because those aren't things one can hold or settle in.
-///
-///         **Trust model recap.** The allowlist gates the *format and
-///         membership* of the identifier, not the truthfulness of the
-///         issuer's claim. A factory call with `currency = "USD"` and
-///         no backing reserves still succeeds at this layer. Any
-///         protocol that consumes `currency()` to make an authorization
-///         or routing decision is responsible for its own admission
-///         logic on top.
-///
-///         **Implementation note.** Allowlist membership is tested by
-///         comparing `keccak256(bytes(code))` against the hash of each
-///         allowlist entry. Hashes of string literals are constant
-///         expressions under the optimizer, so the per-call cost is
-///         one keccak256 on the 3-byte input plus a chain of 32-byte
-///         equalities. The alternative — direct `bytes3` comparison
-///         via casts — trips forge-lint's `unsafe-typecast` rule on
-///         every literal and requires ~150 inline suppressions; this
-///         form keeps the lint clean without sacrificing readability.
-///
-///         **Updating the lists.** Adding a new ISO 4217 active code
-///         (rare; registrations happen on the order of once per year)
-///         is a contract change here or in the Rust precompile that
-///         mirrors it. Both lists are organized alphabetically by
-///         leading letter (allowlist) or by exclusion category
-///         (blocklist) for ease of audit and diff.
+///         Exposes two primitives:
+///         - `isValidFiatCode` — allowlist of active ISO 4217 alphabetic
+///           codes for circulating national fiat currencies.
+///         - `excludedCount` / `excludedAt` — enumerable record of ISO
+///           4217 codes that are on the standard but deliberately
+///           excluded, with per-entry rationale inline in `excludedAt`.
+/// @dev    See `docs/iso4217-filter.md` for scope, exclusion categories,
+///         and the regulatory framing behind the narrow fiat scope.
+///         Any future Rust precompile implementation must mirror both
+///         lists exactly.
 library ISO4217 {
     /// @notice Thrown by `excludedAt` when `idx` exceeds `excludedCount`.
     error IndexOutOfBounds(uint256 idx);
@@ -228,34 +131,21 @@ library ISO4217 {
         return false;
     }
 
-    /// @notice The number of ISO 4217 alphabetic codes that are on
-    ///         the standard but deliberately excluded from
+    /// @notice Number of ISO 4217 codes deliberately excluded from
     ///         `isValidFiatCode`. Pair with `excludedAt` to enumerate.
-    ///
-    /// @dev    The blocklist exists to document — rather than silently
-    ///         drop — every ISO 4217 entry that was considered for
-    ///         inclusion and rejected, so the rejected set is readable
-    ///         as data (with per-entry rationale in `excludedAt`'s
-    ///         body) and so tests can fuzz over the full blocklist to
-    ///         prove the validator's exclusions match the documented
-    ///         design. Deprecated / withdrawn codes (CUC, HRK, VEF,
-    ///         ZWL, etc.) are NOT in the blocklist because they're no
-    ///         longer on the ISO 4217 active list at all; the
-    ///         universal-rejection guarantee of `isValidFiatCode`
-    ///         covers them by default.
+    ///         Excludes only currently-active ISO 4217 entries; deprecated
+    ///         codes (CUC, HRK, VEF, ZWL, etc.) are caught by absence
+    ///         from the allowlist instead.
     function excludedCount() internal pure returns (uint256) {
         return 22;
     }
 
-    /// @notice Returns the ISO 4217 alphabetic code at index `idx` in
-    ///         the blocklist. See `excludedCount` for the rationale and
-    ///         the per-category inline comments below for why each
-    ///         entry is excluded.
-    ///
-    /// @dev    Index order is stable across categories — adding new
-    ///         entries appends to the end. Tests fuzzing the blocklist
-    ///         should drive `idx` by `seed % excludedCount()` so they
-    ///         pick up new entries automatically as the list grows.
+    /// @notice Returns the excluded code at index `idx`. Per-entry
+    ///         rationale is inline in this function's body, grouped by
+    ///         exclusion category.
+    /// @dev    Index order is stable; new entries append. Fuzz tests
+    ///         drive `idx` via `seed % excludedCount()` to pick up new
+    ///         entries automatically.
     function excludedAt(uint256 idx) internal pure returns (string memory) {
         // Precious metals (commodities, not means of payment).
         // Commodity-backed tokens belong on the B-20 Security variant.
