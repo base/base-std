@@ -11,6 +11,58 @@ import {IB20} from "./IB20.sol";
 ///         protocol that wants to group tokens by the asset they peg
 ///         to) to categorize the token.
 ///
+/// @dev    **Scope and industry-naming notes.** "Stablecoin" is used
+///         in industry and regulation to describe a wider set of
+///         instruments than this variant accepts. The Financial
+///         Stability Board and the Bank for International Settlements
+///         define a stablecoin broadly as "a crypto-asset that aims
+///         to maintain a stable value relative to a specified asset,
+///         or a pool or basket of assets" — which covers fiat,
+///         commodities, baskets, and other crypto. This variant
+///         deliberately scopes to the narrower category, aligning
+///         with the regulators that have sub-divided the term:
+///
+///         - **EU MiCA** defines *E-Money Tokens (EMTs)* — single fiat
+///           currency, our scope — as a distinct category from
+///           *Asset-Referenced Tokens (ARTs)*, which cover
+///           commodities, baskets, and multi-currency pegs.
+///         - **MAS Singapore** defines *Single-Currency Stablecoins
+///           (SCS)* — pegged to one G10 fiat currency — as the
+///           regulated category; other asset-referenced tokens fall
+///           outside the SCS framework.
+///         - **US payment-stablecoin legislative proposals** (GENIUS
+///           Act, Clarity for Payment Stablecoins Act, and
+///           predecessors) generally define "payment stablecoin" as
+///           fiat-backed only.
+///
+///         This variant lines up with the EMT / SCS / payment-
+///         stablecoin definition specifically. Concretely:
+///
+///         - **Commodity-backed tokens** that market themselves as
+///           "stablecoins" — e.g. PAXG, XAUT (gold-backed) — are
+///           structurally claims on a vault and are securities-shaped
+///           instruments. They belong on the `IB20Security` variant,
+///           not here.
+///         - **Crypto-collateralized stablecoins** that still peg to
+///           a fiat currency — e.g. DAI, LUSD, crvUSD — fit this
+///           variant. The mechanism backing the peg (custodial
+///           reserves vs. on-chain collateral vs. T-bills) is
+///           irrelevant to `currency()`; what matters is what the
+///           token tracks. If it tracks USD, declare `"USD"`.
+///         - **Basket-pegged tokens** (historically Libra/Diem) and
+///           **algorithmic non-pegged stable assets** (Ampleforth,
+///           historically Terra UST) have no current B-20 home — a
+///           future basket / ART variant or use of the Default
+///           variant would be the path for those, not a relaxation
+///           of this one.
+///
+///         The naming friction is real: PAXG calls itself a
+///         "stablecoin" and would not be admitted here. We accept
+///         that friction because it preserves a clean, regulator-
+///         aligned semantic for the variant — `IB20Stablecoin` means
+///         "fiat-tracking stablecoin" specifically, and downstream
+///         tooling can rely on `currency()` returning an ISO 4217
+///         fiat code from any token of this variant.
 interface IB20Stablecoin is IB20 {
     /*//////////////////////////////////////////////////////////////
                           CURRENCY IDENTIFIER
