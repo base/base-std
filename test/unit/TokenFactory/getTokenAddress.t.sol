@@ -91,6 +91,20 @@ contract TokenFactoryGetTokenAddressTest is TokenFactoryTest {
         assertEq(byteAt10, uint8(variant), "address byte [10] must equal variant ordinal");
     }
 
+    /// @notice Pins the absolute numeric ordinals of TokenVariant
+    /// @dev The variant byte at address[10] equals the enum ordinal (see
+    ///      test_getTokenAddress_success_variantByteAtPosition10), so the
+    ///      ordinals are part of the on-chain address contract. Any
+    ///      deliberate reorder must update these constants; this test
+    ///      exists so an accidental reorder (e.g. inserting a new
+    ///      variant between existing ones) fails loudly instead of
+    ///      silently shifting every deployed address.
+    function test_tokenVariant_success_ordinalsPinned() public pure {
+        assertEq(uint8(ITokenFactory.TokenVariant.DEFAULT), 0, "DEFAULT ordinal must be 0");
+        assertEq(uint8(ITokenFactory.TokenVariant.STABLECOIN), 1, "STABLECOIN ordinal must be 1");
+        assertEq(uint8(ITokenFactory.TokenVariant.SECURITY), 2, "SECURITY ordinal must be 2");
+    }
+
     /// @notice Verifies byte [11] comes from the hash tail entropy
     function test_getTokenAddress_success_byte11DerivedFromTailEntropy(uint8 variantInt, address sender, bytes32 salt)
         public
