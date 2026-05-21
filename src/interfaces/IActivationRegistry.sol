@@ -40,6 +40,10 @@ interface IActivationRegistry {
     ///         activated.
     error AlreadyActivated(bytes32 feature);
 
+    /// @notice `deactivate` was called on a feature that is already
+    ///         deactivated.
+    error AlreadyDeactivated(bytes32 feature);
+
     /// @notice `feature` is not activated. Returned by `deactivate` and
     ///         by precompiles that consult the registry as a hard gate
     ///         (the chain node uses an `assertActivated`-style flow for
@@ -91,8 +95,8 @@ interface IActivationRegistry {
     function activate(bytes32 feature) external;
 
     /// @notice Deactivates `feature`. Caller MUST equal `admin()` (else
-    ///         `Unauthorized`). Reverts with `FeatureNotActivated` if
-    ///         the feature is not currently activated; reverts with
+    ///         `Unauthorized`). Reverts with `AlreadyDeactivated` if
+    ///         the feature is already deactivated; reverts with
     ///         `StaticCallNotAllowed` if invoked under `STATICCALL`.
     ///         Emits `FeatureDeactivated` on success.
     function deactivate(bytes32 feature) external;
