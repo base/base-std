@@ -63,7 +63,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
     ///      via `vm.assume(!isValidFiatCode)`.
-    function test_fuzz_createToken_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
+    function test_createToken_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
@@ -76,7 +76,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     /// @notice Every entry in the explicit ISO 4217 blocklist reverts.
     /// @dev Pins the documented exclusions; new entries are picked up automatically.
-    function test_fuzz_createToken_revert_currency_blocklist(uint256 seed, address caller) public {
+    function test_createToken_revert_currency_blocklist(uint256 seed, address caller) public {
         _assumeValidCaller(caller);
         uint256 idx = seed % ISO4217.excludedCount();
         string memory code = ISO4217.excludedAt(idx);
