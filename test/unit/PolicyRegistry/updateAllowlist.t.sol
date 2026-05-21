@@ -12,9 +12,8 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     function test_updateAllowlist_revert_unauthorized(address caller, bool allowed, address[] memory accounts) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
-        uint64 policyId = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        accounts = _boundAccounts(accounts);
+        uint64 policyId = _createAllowlist();
         vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
         vm.prank(caller);
         policyRegistry.updateAllowlist(policyId, allowed, accounts);
@@ -28,9 +27,8 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         address[] memory accounts
     ) public {
         vm.assume(currentAdmin != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
-        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        accounts = _boundAccounts(accounts);
+        uint64 policyId = _createBlocklist(admin, currentAdmin);
         vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
         vm.prank(currentAdmin);
         policyRegistry.updateAllowlist(policyId, allowed, accounts);
@@ -46,8 +44,7 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(policyId > 1);
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
+        accounts = _boundAccounts(accounts);
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         vm.prank(caller);
         policyRegistry.updateAllowlist(policyId, allowed, accounts);
@@ -59,9 +56,8 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     ///      reads back as 1.
     function test_updateAllowlist_success_addsAccounts(address currentAdmin, address[] memory accounts) public {
         vm.assume(currentAdmin != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
-        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        accounts = _boundAccounts(accounts);
+        uint64 policyId = _createAllowlist(admin, currentAdmin);
         vm.prank(currentAdmin);
         policyRegistry.updateAllowlist(policyId, true, accounts);
         for (uint256 i = 0; i < accounts.length; ++i) {
@@ -82,9 +78,8 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     ///      reads back as 0.
     function test_updateAllowlist_success_removesAccounts(address currentAdmin, address[] memory accounts) public {
         vm.assume(currentAdmin != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
-        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        accounts = _boundAccounts(accounts);
+        uint64 policyId = _createAllowlist(admin, currentAdmin);
         vm.prank(currentAdmin);
         policyRegistry.updateAllowlist(policyId, true, accounts);
         vm.prank(currentAdmin);
@@ -105,7 +100,7 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     /// @dev Repeated entries do not change the final membership state
     function test_updateAllowlist_success_idempotentDuplicates(address currentAdmin, address account) public {
         vm.assume(currentAdmin != address(0));
-        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 policyId = _createAllowlist(admin, currentAdmin);
         address[] memory duped = new address[](2);
         duped[0] = account;
         duped[1] = account;
@@ -125,9 +120,8 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         address[] memory accounts
     ) public {
         vm.assume(currentAdmin != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
-        uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        accounts = _boundAccounts(accounts);
+        uint64 policyId = _createAllowlist(admin, currentAdmin);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.AllowlistUpdated(policyId, currentAdmin, allowed, accounts);
         vm.prank(currentAdmin);

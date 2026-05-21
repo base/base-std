@@ -29,7 +29,7 @@ contract B20StablecoinFullLayoutTest is B20StablecoinTest {
     /// @notice Verifies the variant namespace's `currency` slot holds
     ///         the canonical short-string encoding of the bootstrap
     ///         currency value.
-    /// @dev    Bootstrap-default `currencyAtCreation = "USD"` is a
+    /// @dev    Bootstrap-default `CURRENCY_AT_CREATION` ("USD") is a
     ///         3-byte short string. The slot must hold
     ///         `("USD" left-justified in high portion) | (3 * 2)`.
     function test_b20StablecoinLayout_success_currencySlotMatchesEncoding() public view {

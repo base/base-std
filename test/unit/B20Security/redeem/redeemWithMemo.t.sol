@@ -70,18 +70,9 @@ contract B20SecurityRedeemWithMemoTest is B20SecurityTest {
         security().redeemWithMemo(amount, memo);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 transferSig = IB20.Transfer.selector;
-        bytes32 memoSig = IB20.Memo.selector;
-        bytes32 redeemedSig = IB20Security.Redeemed.selector;
-        int256 transferAt = -1;
-        int256 memoAt = -1;
-        int256 redeemedAt = -1;
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics.length == 0) continue;
-            if (logs[i].topics[0] == transferSig && transferAt < 0) transferAt = int256(i);
-            if (logs[i].topics[0] == memoSig && memoAt < 0) memoAt = int256(i);
-            if (logs[i].topics[0] == redeemedSig && redeemedAt < 0) redeemedAt = int256(i);
-        }
+        int256 transferAt = _firstLogIndex(logs, IB20.Transfer.selector);
+        int256 memoAt = _firstLogIndex(logs, IB20.Memo.selector);
+        int256 redeemedAt = _firstLogIndex(logs, IB20Security.Redeemed.selector);
         assertGt(transferAt, -1, "Transfer must be present in the log");
         assertGt(memoAt, -1, "Memo must be present in the log");
         assertGt(redeemedAt, -1, "Redeemed must be present in the log");

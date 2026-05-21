@@ -31,9 +31,8 @@ contract PolicyRegistryPolicyExistsTest is PolicyRegistryTest {
         policyRegistry.policyExists(policyId);
     }
 
-    function test_policyExists_success_trueAfterCreate(uint8 policyTypeInt) public {
-        vm.assume(policyTypeInt == 2 || policyTypeInt == 3);
-        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeInt);
+    function test_policyExists_success_trueAfterCreate(uint8 typeIdx) public {
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
         uint64 policyId = policyRegistry.createPolicy(admin, pt);
         assertTrue(policyRegistry.policyExists(policyId));
     }

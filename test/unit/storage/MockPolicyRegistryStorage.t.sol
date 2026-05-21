@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @notice Asserts the hardcoded `STORAGE_LOCATION` constant on
@@ -27,9 +28,8 @@ contract MockPolicyRegistryStorageLocationTest is Test {
     /// @notice The policy-registry namespace must not collide with `base.b20`.
     /// @dev Sanity check: different precompiles must have disjoint storage roots.
     function test_MockPolicyRegistryStorage_storageLocation_disjointFromB20() public pure {
-        bytes32 b20Location = keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff));
         assertTrue(
-            MockPolicyRegistryStorage.STORAGE_LOCATION != b20Location,
+            MockPolicyRegistryStorage.STORAGE_LOCATION != MockB20Storage.derivedLocation(),
             "policy_registry and b20 namespaces must derive to disjoint roots"
         );
     }

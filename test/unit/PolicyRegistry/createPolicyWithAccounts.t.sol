@@ -11,28 +11,24 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @dev Required-field guard; checks ZeroAddress() error
     function test_createPolicyWithAccounts_revert_zeroAdmin(address caller, address[] memory accounts) public {
         _assumeValidCaller(caller);
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
+        accounts = _boundAccounts(accounts);
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
         vm.prank(caller);
         policyRegistry.createPolicyWithAccounts(address(0), IPolicyRegistry.PolicyType.ALLOWLIST, accounts);
     }
 
-    /// @notice Verifies createPolicyWithAccounts reverts for any policyType outside the enum
-    /// @dev Fuzz confirms only ALLOWLIST / BLOCKLIST are accepted; checks InvalidPolicyType() error
+    /// @notice Verifies createPolicyWithAccounts reverts for any policyType outside the creatable set
+    /// @dev Fuzz confirms only ALLOWLIST / BLOCKLIST are accepted; checks InvalidPolicyType() error.
     function test_createPolicyWithAccounts_revert_invalidPolicyType(
         address caller,
         address admin_,
-        uint8 policyTypeInt,
+        uint8 typeIdx,
         address[] memory accounts
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(policyTypeInt != 2 && policyTypeInt != 3);
-        vm.assume(policyTypeInt < 4);
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
-        IPolicyRegistry.PolicyType invalidType = IPolicyRegistry.PolicyType(policyTypeInt);
+        accounts = _boundAccounts(accounts);
+        IPolicyRegistry.PolicyType invalidType = _nonCreatablePolicyType(typeIdx);
         vm.expectRevert(IPolicyRegistry.InvalidPolicyType.selector);
         vm.prank(caller);
         policyRegistry.createPolicyWithAccounts(admin_, invalidType, accounts);
@@ -49,8 +45,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
+        accounts = _boundAccounts(accounts);
         vm.prank(caller);
         uint64 policyId =
             policyRegistry.createPolicyWithAccounts(admin_, IPolicyRegistry.PolicyType.ALLOWLIST, accounts);
@@ -80,8 +75,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
+        accounts = _boundAccounts(accounts);
         vm.prank(caller);
         uint64 policyId =
             policyRegistry.createPolicyWithAccounts(admin_, IPolicyRegistry.PolicyType.BLOCKLIST, accounts);
@@ -106,8 +100,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
+        accounts = _boundAccounts(accounts);
         uint64 expectedId = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.AllowlistUpdated(expectedId, caller, true, accounts);
@@ -124,8 +117,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        uint256 len = bound(accounts.length, 0, 5);
-        assembly { mstore(accounts, len) }
+        accounts = _boundAccounts(accounts);
         uint64 expectedId = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.BlocklistUpdated(expectedId, caller, true, accounts);
@@ -135,13 +127,10 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
 
     /// @notice Verifies createPolicyWithAccounts succeeds with an empty accounts array
     /// @dev Equivalent to createPolicy when accounts.length == 0; no batch event emitted
-    function test_createPolicyWithAccounts_success_emptyAccounts(address caller, address admin_, uint8 policyTypeInt)
-        public
-    {
+    function test_createPolicyWithAccounts_success_emptyAccounts(address caller, address admin_, uint8 typeIdx) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(policyTypeInt == 2 || policyTypeInt == 3);
-        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeInt);
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
         address[] memory empty = new address[](0);
         vm.prank(caller);
         uint64 policyId = policyRegistry.createPolicyWithAccounts(admin_, pt, empty);

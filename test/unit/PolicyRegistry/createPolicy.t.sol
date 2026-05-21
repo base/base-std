@@ -9,23 +9,22 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     /// @notice Verifies createPolicy reverts when admin is the zero address
     /// @dev Required-field guard; checks ZeroAddress() error
-    function test_createPolicy_revert_zeroAdmin(address caller, uint8 policyTypeInt) public {
+    function test_createPolicy_revert_zeroAdmin(address caller, uint8 typeIdx) public {
         _assumeValidCaller(caller);
-        vm.assume(policyTypeInt == 2 || policyTypeInt == 3);
-        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeInt);
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
         vm.prank(caller);
         policyRegistry.createPolicy(address(0), pt);
     }
 
-    /// @notice Verifies createPolicy reverts for any policyType value outside the enum
-    /// @dev Fuzz confirms only ALLOWLIST / BLOCKLIST are accepted; checks InvalidPolicyType() error
-    function test_createPolicy_revert_invalidPolicyType(address caller, address admin_, uint8 policyTypeInt) public {
+    /// @notice Verifies createPolicy reverts for any policyType value outside the creatable set
+    /// @dev Fuzz confirms only ALLOWLIST / BLOCKLIST are accepted; checks InvalidPolicyType() error.
+    ///      The two reserved sentinel discriminators (ALWAYS_ALLOW / ALWAYS_BLOCK) cast
+    ///      successfully but the registry rejects them at the type guard.
+    function test_createPolicy_revert_invalidPolicyType(address caller, address admin_, uint8 typeIdx) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(policyTypeInt != 2 && policyTypeInt != 3);
-        vm.assume(policyTypeInt < 4); // stay within valid enum cast range
-        IPolicyRegistry.PolicyType invalidType = IPolicyRegistry.PolicyType(policyTypeInt);
+        IPolicyRegistry.PolicyType invalidType = _nonCreatablePolicyType(typeIdx);
         vm.expectRevert(IPolicyRegistry.InvalidPolicyType.selector);
         vm.prank(caller);
         policyRegistry.createPolicy(admin_, invalidType);
@@ -98,15 +97,16 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     /// @dev Sequential creations produce sequential, non-overlapping ids.
     ///      Paired slot assertion: the `nextCounter` slot has advanced
     ///      by exactly the number of creates after both calls.
-    function test_createPolicy_success_advancesNextPolicyId(address caller, address admin_, uint8 typeA, uint8 typeB)
-        public
-    {
+    function test_createPolicy_success_advancesNextPolicyId(
+        address caller,
+        address admin_,
+        uint8 typeIdxA,
+        uint8 typeIdxB
+    ) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(typeA == 2 || typeA == 3);
-        vm.assume(typeB == 2 || typeB == 3);
-        IPolicyRegistry.PolicyType ptA = IPolicyRegistry.PolicyType(typeA);
-        IPolicyRegistry.PolicyType ptB = IPolicyRegistry.PolicyType(typeB);
+        IPolicyRegistry.PolicyType ptA = _creatablePolicyType(typeIdxA);
+        IPolicyRegistry.PolicyType ptB = _creatablePolicyType(typeIdxB);
 
         uint64 predictedA = policyRegistry.nextPolicyId(ptA);
         vm.prank(caller);
@@ -136,11 +136,10 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
 
     /// @notice Verifies createPolicy emits PolicyCreated with the correct args
     /// @dev Event integrity: policyId, creator, policyType match the call
-    function test_createPolicy_success_emitsPolicyCreated(address caller, address admin_, uint8 policyTypeInt) public {
+    function test_createPolicy_success_emitsPolicyCreated(address caller, address admin_, uint8 typeIdx) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(policyTypeInt == 2 || policyTypeInt == 3);
-        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeInt);
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
 
         uint64 expectedId = policyRegistry.nextPolicyId(pt);
         vm.expectEmit(address(policyRegistry));
@@ -151,15 +150,12 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
 
     /// @notice Verifies createPolicy emits PolicyAdminUpdated(previousAdmin = 0) on initial assignment
     /// @dev Initial-admin variant of PolicyAdminUpdated; canonical event test lives in finalizeUpdateAdmin.t.sol
-    function test_createPolicy_success_emitsInitialPolicyAdminUpdated(
-        address caller,
-        address admin_,
-        uint8 policyTypeInt
-    ) public {
+    function test_createPolicy_success_emitsInitialPolicyAdminUpdated(address caller, address admin_, uint8 typeIdx)
+        public
+    {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
-        vm.assume(policyTypeInt == 2 || policyTypeInt == 3);
-        IPolicyRegistry.PolicyType pt = IPolicyRegistry.PolicyType(policyTypeInt);
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
 
         uint64 expectedId = policyRegistry.nextPolicyId(pt);
         vm.expectEmit(address(policyRegistry));
