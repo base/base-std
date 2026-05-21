@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20PauseTest is B20Test {
     /// @notice Verifies pause reverts when caller lacks PAUSE_ROLE
@@ -32,7 +33,11 @@ contract B20PauseTest is B20Test {
     }
 
     /// @notice Verifies pause sets each listed feature in pausedFeatures
-    /// @dev State transition: each feature becomes observable via isPaused after the call
+    /// @dev State transition: each feature becomes observable via isPaused after the call.
+    ///      Paired slot assertion: `pausedVectors` slot has the
+    ///      bit-position corresponding to each PausableFeature enum
+    ///      value set, and no other bits set. Confirms the bitmask
+    ///      layout (`1 << uint8(feature)`) the Rust impl must match.
     function test_pause_success_setsFeatures() public {
         _grantRole(B20Constants.PAUSE_ROLE, pauser);
 
@@ -47,10 +52,19 @@ contract B20PauseTest is B20Test {
         assertTrue(token.isPaused(IB20.PausableFeature.MINT), "MINT must be paused");
         assertFalse(token.isPaused(IB20.PausableFeature.BURN), "BURN must remain unpaused");
         assertFalse(token.isPaused(IB20.PausableFeature.REDEEM), "REDEEM must remain unpaused");
+        uint256 expected = (1 << uint8(IB20.PausableFeature.TRANSFER))
+            | (1 << uint8(IB20.PausableFeature.MINT));
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot())),
+            expected,
+            "pausedVectors slot must hold exactly the TRANSFER and MINT bits"
+        );
     }
 
     /// @notice Verifies pause is additive over multiple calls
-    /// @dev Sequential pauses union into the existing set; prior features remain paused
+    /// @dev Sequential pauses union into the existing set; prior features remain paused.
+    ///      Paired slot assertion: both bits are set in the bitmask
+    ///      after two sequential single-feature pause calls.
     function test_pause_success_additiveAcrossCalls() public {
         _grantRole(B20Constants.PAUSE_ROLE, pauser);
 
@@ -61,10 +75,18 @@ contract B20PauseTest is B20Test {
 
         assertTrue(token.isPaused(IB20.PausableFeature.TRANSFER), "TRANSFER still paused");
         assertTrue(token.isPaused(IB20.PausableFeature.MINT), "MINT paused");
+        uint256 expected = (1 << uint8(IB20.PausableFeature.TRANSFER))
+            | (1 << uint8(IB20.PausableFeature.MINT));
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot())),
+            expected,
+            "pausedVectors slot must hold the union of prior and new pauses"
+        );
     }
 
     /// @notice Verifies pause is idempotent when called with already-paused features
-    /// @dev Duplicate entries do not change state and do not revert
+    /// @dev Duplicate entries do not change state and do not revert.
+    ///      Paired slot assertion: the bit is set exactly once, not toggled.
     function test_pause_success_idempotent() public {
         _grantRole(B20Constants.PAUSE_ROLE, pauser);
 
@@ -75,6 +97,11 @@ contract B20PauseTest is B20Test {
         token.pause(_singleFeature(IB20.PausableFeature.TRANSFER));
 
         assertTrue(token.isPaused(IB20.PausableFeature.TRANSFER), "still paused");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot())),
+            1 << uint8(IB20.PausableFeature.TRANSFER),
+            "pausedVectors slot must hold the TRANSFER bit (set once, idempotent)"
+        );
     }
 
     /// @notice Verifies pause emits Paused(caller, features) with the call's argument

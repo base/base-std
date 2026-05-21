@@ -74,4 +74,99 @@ library MockPolicyRegistryStorage {
     function derivedLocation() internal pure returns (bytes32) {
         return keccak256(abi.encode(uint256(keccak256("base.policy_registry")) - 1)) & ~bytes32(uint256(0xff));
     }
+
+    // ============================================================
+    //                     TOP-LEVEL FIELD SLOTS
+    // ============================================================
+    // Convenience wrappers around `slotOf(OFFSET)` so test callers (and
+    // the Rust impl validator) can read each declared field without
+    // remembering the offset constant.
+
+    function policiesBaseSlot() internal pure returns (bytes32) { return slotOf(POLICIES_OFFSET); }
+    function membersBaseSlot() internal pure returns (bytes32) { return slotOf(MEMBERS_OFFSET); }
+    function pendingAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(PENDING_ADMINS_OFFSET); }
+    function nextCounterSlot() internal pure returns (bytes32) { return slotOf(NEXT_COUNTER_OFFSET); }
+
+    // ============================================================
+    //                     MAPPING MEMBER SLOTS
+    // ============================================================
+    // Mapping value slots derive as keccak256(abi.encode(key, baseSlot))
+    // where `key` is ABI-padded to 32 bytes. uint64 keys are zero-padded
+    // to the left up to 32 bytes by abi.encode. Nested mappings hash the
+    // outer key first to obtain an inner base slot, then hash the inner
+    // key against that.
+
+    /// @notice Slot of `policies[policyId]` (the packed admin+type uint256).
+    function policySlot(uint64 policyId) internal pure returns (bytes32) {
+        return keccak256(abi.encode(policyId, policiesBaseSlot()));
+    }
+
+    /// @notice Slot of `members[policyId][account]` (the bool membership flag).
+    function policyMemberSlot(uint64 policyId, address account) internal pure returns (bytes32) {
+        bytes32 perPolicy = keccak256(abi.encode(policyId, membersBaseSlot()));
+        return keccak256(abi.encode(account, perPolicy));
+    }
+
+    /// @notice Slot of `pendingAdmins[policyId]`.
+    function pendingAdminSlot(uint64 policyId) internal pure returns (bytes32) {
+        return keccak256(abi.encode(policyId, pendingAdminsBaseSlot()));
+    }
+
+    // ============================================================
+    //                     PACKED-SLOT CODECS
+    // ============================================================
+    // `policies[id]` packs an admin address and a PolicyType into a
+    // single uint256:
+    //   [255:168]  unused
+    //   [167:8]    admin address (160 bits, zero after renounceAdmin)
+    //   [7:0]      PolicyType (ALLOWLIST = 2, BLOCKLIST = 3)
+    // Both defined PolicyType values are non-zero, so `policies[id] == 0`
+    // reliably means "never created".
+
+    /// @notice Extracts the policy admin address (bits 8..167) from the packed slot.
+    function policyAdminFromPacked(uint256 packed) internal pure returns (address) {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return address(uint160(packed >> 8));
+    }
+
+    /// @notice Extracts the PolicyType byte (bits 0..7) from the packed slot.
+    function policyTypeFromPacked(uint256 packed) internal pure returns (uint8) {
+        return uint8(packed);
+    }
+
+    /// @notice Composes the packed slot value from its two fields.
+    /// @dev `policyType` is the raw uint8 of the `IPolicyRegistry.PolicyType`
+    ///      enum value the registry stores.
+    function packPolicy(address admin, uint8 policyType) internal pure returns (uint256) {
+        return (uint256(uint160(admin)) << 8) | uint256(policyType);
+    }
+
+    // ============================================================
+    //                     POLICY-ID CODEC
+    // ============================================================
+    // Custom policy IDs encode the policy type in the high byte of the
+    // uint64 and the global counter in the low 56 bits:
+    //   [63:56]  uint8(PolicyType) discriminator
+    //   [55:0]   nextCounter value at creation
+    //
+    // Built-in IDs 0 and 1 (ALWAYS_ALLOW, ALWAYS_BLOCK) are short-
+    // circuited in `MockPolicyRegistry` before storage and don't follow
+    // this encoding; these codecs decode the bit layout literally
+    // regardless.
+
+    /// @notice Extracts the PolicyType discriminator byte (top 8 bits) from a custom policy ID.
+    function policyTypeFromId(uint64 policyId) internal pure returns (uint8) {
+        return uint8(policyId >> 56);
+    }
+
+    /// @notice Extracts the global counter value (low 56 bits) from a custom policy ID.
+    function policyCounterFromId(uint64 policyId) internal pure returns (uint56) {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint56(policyId & ((uint64(1) << 56) - 1));
+    }
+
+    /// @notice Composes a custom policy ID from a PolicyType discriminator and counter value.
+    function packPolicyId(uint8 policyType, uint56 counter) internal pure returns (uint64) {
+        return (uint64(policyType) << 56) | uint64(counter);
+    }
 }

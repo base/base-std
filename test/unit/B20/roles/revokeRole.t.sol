@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20RevokeRoleTest is B20Test {
     /// @notice Verifies revokeRole reverts when caller does not hold the role's admin role
@@ -24,6 +25,8 @@ contract B20RevokeRoleTest is B20Test {
     /// @dev Read-after-write; canonical hasRole readback test lives in hasRole.t.sol.
     ///      Skips revoking DEFAULT_ADMIN_ROLE from the sole bootstrap admin
     ///      (would require renounceLastAdmin instead, covered in that file).
+    ///      Paired slot assertion: the `roles[role][account]` slot
+    ///      reads back as zero after the revoke.
     function test_revokeRole_success_clearsRole(bytes32 role, address account) public {
         vm.assume(!(role == B20Constants.DEFAULT_ADMIN_ROLE && account == admin));
         _grantRole(role, account);
@@ -31,6 +34,11 @@ contract B20RevokeRoleTest is B20Test {
         vm.prank(admin);
         token.revokeRole(role, account);
         assertFalse(token.hasRole(role, account), "role must be cleared after revoke");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(role, account))),
+            uint256(0),
+            "roles[role][account] slot must be cleared after revoke"
+        );
     }
 
     /// @notice Verifies revokeRole is idempotent when the account does not hold the role

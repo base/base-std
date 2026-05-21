@@ -1,0 +1,287 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {IB20} from "src/interfaces/IB20.sol";
+
+import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
+
+/// @notice Self-tests for `MockB20Storage`'s slot-derivation and
+///         packed-slot codec helpers. Each test sets a known value via
+///         the IB20 surface, reads the helper-computed slot via
+///         `vm.load`, and asserts the slot reflects the same value the
+///         surface returns.
+///
+/// @dev These tests are the canonical reference for what slot each
+///      logical field lives at and how packed slots are decoded. The
+///      Rust precompile impl uses the same helper outputs as its
+///      ground truth.
+contract MockB20SlotHelpersTest is B20Test {
+    using MockB20Storage for uint256;
+
+    /// @notice Verifies `balanceSlot(account)` locates the slot the
+    ///         token's accounting writes to in `_mint` / `_transfer`.
+    /// @dev Single-account read-after-write: mint a known amount, then
+    ///      assert `vm.load(token, balanceSlot(account)) == amount`.
+    function test_balanceSlot_success_locatesBalance(address account, uint256 amount) public {
+        _assumeValidActor(account);
+
+        _mint(account, amount);
+
+        assertEq(token.balanceOf(account), amount, "precondition: balanceOf must match");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(account))),
+            amount,
+            "balanceSlot must locate the slot holding balanceOf(account)"
+        );
+    }
+
+    /// @notice Verifies `balanceSlot` produces disjoint slots for distinct accounts.
+    /// @dev Two mints to different accounts must not alias.
+    function test_balanceSlot_success_disjointAcrossAccounts(address a, address b, uint256 amountA, uint256 amountB)
+        public
+    {
+        _assumeValidActor(a);
+        _assumeValidActor(b);
+        vm.assume(a != b);
+        // Bound to avoid SupplyCapExceeded interactions.
+        amountA = bound(amountA, 0, type(uint128).max);
+        amountB = bound(amountB, 0, type(uint128).max);
+
+        _mint(a, amountA);
+        _mint(b, amountB);
+
+        assertEq(uint256(vm.load(address(token), MockB20Storage.balanceSlot(a))), amountA, "a balance slot");
+        assertEq(uint256(vm.load(address(token), MockB20Storage.balanceSlot(b))), amountB, "b balance slot");
+        assertTrue(
+            MockB20Storage.balanceSlot(a) != MockB20Storage.balanceSlot(b),
+            "balanceSlot must differ for distinct accounts"
+        );
+    }
+
+    /// @notice Verifies `allowanceSlot(owner, spender)` locates the slot
+    ///         `approve` writes to.
+    /// @dev Read-after-write: approve a fuzzed amount, then `vm.load`
+    ///      the helper's slot and compare against `allowance`.
+    function test_allowanceSlot_success_locatesAllowance(address owner, address spender, uint256 amount) public {
+        _assumeValidActor(owner);
+        _assumeValidActor(spender);
+
+        vm.prank(owner);
+        token.approve(spender, amount);
+
+        assertEq(token.allowance(owner, spender), amount, "precondition: allowance must match");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            amount,
+            "allowanceSlot must locate the slot holding allowance(owner, spender)"
+        );
+    }
+
+    /// @notice Verifies `allowanceSlot` is directional: swapping owner
+    ///         and spender produces a disjoint slot.
+    /// @dev allowance[owner][spender] != allowance[spender][owner] when
+    ///      owner != spender; the helper must respect that ordering.
+    function test_allowanceSlot_success_directionallySensitive(address owner, address spender) public pure {
+        vm.assume(owner != spender);
+
+        assertTrue(
+            MockB20Storage.allowanceSlot(owner, spender) != MockB20Storage.allowanceSlot(spender, owner),
+            "allowanceSlot(o, s) must differ from allowanceSlot(s, o)"
+        );
+    }
+
+    /// @notice Verifies `roleMembershipSlot(role, account)` locates the
+    ///         bool flag `grantRole` sets.
+    /// @dev After granting, slot value == bytes32(uint256(1)).
+    function test_roleMembershipSlot_success_locatesMembershipBit(bytes32 role, address account) public {
+        // Bootstrap admin grant of DEFAULT_ADMIN_ROLE to `admin` already wrote
+        // the slot; skip that combo to keep this test focused on a NEW grant.
+        vm.assume(!(role == B20Constants.DEFAULT_ADMIN_ROLE && account == admin));
+
+        _grantRole(role, account);
+
+        assertTrue(token.hasRole(role, account), "precondition: role must be held");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(role, account))),
+            uint256(1),
+            "roleMembershipSlot must locate the bool flag set by grantRole"
+        );
+    }
+
+    /// @notice Verifies `roleAdminSlot(role)` locates the slot
+    ///         `setRoleAdmin` writes to.
+    /// @dev Read-after-write: set a non-zero admin role, then `vm.load`
+    ///      and compare against `getRoleAdmin`.
+    function test_roleAdminSlot_success_locatesAdminRole(bytes32 role, bytes32 adminRole) public {
+        // Skip combos where getRoleAdmin is already the target (default 0).
+        vm.assume(adminRole != bytes32(0));
+
+        vm.prank(admin);
+        token.setRoleAdmin(role, adminRole);
+
+        assertEq(token.getRoleAdmin(role), adminRole, "precondition: role admin must match");
+        assertEq(
+            vm.load(address(token), MockB20Storage.roleAdminSlot(role)),
+            adminRole,
+            "roleAdminSlot must locate the slot holding getRoleAdmin(role)"
+        );
+    }
+
+    /// @notice Verifies `nonceSlot(owner)` locates the slot `permit` increments.
+    /// @dev A fresh account has nonce 0; the slot must read 0 too.
+    function test_nonceSlot_success_locatesNonceInitiallyZero(address owner) public {
+        _assumeValidActor(owner);
+
+        assertEq(token.nonces(owner), 0, "precondition: fresh nonce is zero");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.nonceSlot(owner))),
+            uint256(0),
+            "nonceSlot must locate the zero-initialized nonce"
+        );
+    }
+
+    /// @notice Verifies `totalSupplySlot()` returns the slot `_mint` updates.
+    /// @dev Read-after-write: mint to alice, then `vm.load` the helper.
+    function test_totalSupplySlot_success_locatesTotalSupply(uint256 amount) public {
+        amount = bound(amount, 0, type(uint128).max);
+
+        _mint(alice, amount);
+
+        assertEq(token.totalSupply(), amount, "precondition: totalSupply must match");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.totalSupplySlot())),
+            amount,
+            "totalSupplySlot must locate totalSupply"
+        );
+    }
+
+    /// @notice Verifies `pausedVectorsSlot()` returns the slot pause flips bits in.
+    /// @dev After pausing TRANSFER, bit 0 of the vectors slot is set.
+    function test_pausedVectorsSlot_success_locatesPauseBit() public {
+        _pause(IB20.PausableFeature.TRANSFER);
+
+        uint256 vectors = uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot()));
+        assertEq(vectors & 1, 1, "TRANSFER bit (bit 0) must be set after pause");
+    }
+
+    /// @notice Verifies `supplyCapSlot()` returns the slot setSupplyCap writes to.
+    /// @dev Default-token bootstrap sets supplyCap = type(uint256).max; we lower it
+    ///      and re-read both via surface and slot.
+    function test_supplyCapSlot_success_locatesSupplyCap(uint256 cap) public {
+        // Lower the cap to a value that won't violate the
+        // "cannot lower below totalSupply" invariant (totalSupply == 0).
+        cap = bound(cap, 0, type(uint256).max - 1);
+
+        _grantRole(B20Constants.MINT_ROLE, admin);
+        vm.prank(admin);
+        token.setSupplyCap(cap);
+
+        assertEq(token.supplyCap(), cap, "precondition: supplyCap must match");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.supplyCapSlot())),
+            cap,
+            "supplyCapSlot must locate supplyCap"
+        );
+    }
+
+    /// @notice Verifies `transferPolicyIdsSlot()` and the lane decoders
+    ///         locate the TRANSFER_SENDER lane.
+    /// @dev `_setPolicy(TRANSFER_SENDER, ALWAYS_BLOCK_ID)` writes the
+    ///      low 64 bits of the packed slot; the helper reads the same lane.
+    function test_transferPolicyIdsSlot_success_decodesSenderLane() public {
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        uint256 packed = uint256(vm.load(address(token), MockB20Storage.transferPolicyIdsSlot()));
+        assertEq(
+            MockB20Storage.transferSenderPolicyId(packed),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "transferSenderPolicyId lane must reflect the policy write"
+        );
+        assertEq(
+            MockB20Storage.transferReceiverPolicyId(packed),
+            0,
+            "TRANSFER_RECEIVER lane must remain at its default (ALWAYS_ALLOW = 0)"
+        );
+        assertEq(
+            MockB20Storage.transferExecutorPolicyId(packed),
+            0,
+            "TRANSFER_EXECUTOR lane must remain at its default"
+        );
+    }
+
+    /// @notice Verifies `mintPolicyIdsSlot()` locates the MINT_RECEIVER lane.
+    /// @dev Write to MINT_RECEIVER via `updatePolicy`; lane decoder reads back.
+    function test_mintPolicyIdsSlot_success_decodesReceiverLane() public {
+        _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        uint256 packed = uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()));
+        assertEq(
+            MockB20Storage.mintReceiverPolicyId(packed),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "mintReceiverPolicyId lane must reflect the policy write"
+        );
+    }
+
+    /// @notice Verifies `packTransferPolicyIds` is the inverse of the lane decoders.
+    /// @dev Round-trip: pack three uint64s, decode, expect the inputs back.
+    function test_packTransferPolicyIds_success_roundtrips(uint64 senderId, uint64 receiverId, uint64 executorId)
+        public
+        pure
+    {
+        uint256 packed = MockB20Storage.packTransferPolicyIds(senderId, receiverId, executorId);
+        assertEq(MockB20Storage.transferSenderPolicyId(packed), senderId);
+        assertEq(MockB20Storage.transferReceiverPolicyId(packed), receiverId);
+        assertEq(MockB20Storage.transferExecutorPolicyId(packed), executorId);
+    }
+
+    /// @notice Verifies `packMintPolicyIds` is the inverse of `mintReceiverPolicyId`.
+    function test_packMintPolicyIds_success_roundtrips(uint64 receiverId) public pure {
+        assertEq(MockB20Storage.mintReceiverPolicyId(MockB20Storage.packMintPolicyIds(receiverId)), receiverId);
+    }
+
+    /// @notice Verifies the packed adminCount+initialized slot decodes
+    ///         correctly after factory bootstrap.
+    /// @dev Factory bootstrap grants DEFAULT_ADMIN_ROLE (→ adminCount = 1)
+    ///      and flips `initialized` to true. The packed slot must decode
+    ///      to (1, true).
+    function test_adminCountAndInitializedSlot_success_decodesAfterBootstrap() public view {
+        uint256 packed =
+            uint256(vm.load(address(token), MockB20Storage.adminCountAndInitializedSlot()));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must be 1 after bootstrap");
+        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must be true after bootstrap");
+    }
+
+    /// @notice Verifies `packAdminCountAndInitialized` is the inverse of the decoders.
+    /// @dev Round-trip: pack, then unpack, expect the inputs back.
+    function test_packAdminCountAndInitialized_success_roundtrips(uint248 count, bool init) public pure {
+        uint256 packed = MockB20Storage.packAdminCountAndInitialized(count, init);
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), uint256(count), "count round-trip");
+        assertEq(MockB20Storage.initializedFromPacked(packed), init, "init round-trip");
+    }
+
+    /// @notice Verifies `nameSlot()` returns a slot whose value encodes
+    ///         the short-string form of the token's name.
+    /// @dev Short-string encoding (length < 32): the slot holds
+    ///      `bytes || (length * 2)` with the bytes in the high portion
+    ///      and `length * 2` in the low byte. We assert the low byte
+    ///      against `bytes(name).length * 2` for the bootstrap-default name.
+    function test_nameSlot_success_holdsShortStringEncoding() public view {
+        bytes32 raw = vm.load(address(token), MockB20Storage.nameSlot());
+        // Bootstrap-default name from MockTokenFactory: empty string until
+        // setName is called, so encoding is the all-zero slot. We
+        // also check the encoding is well-formed for whatever name is
+        // currently set.
+        bytes memory nameBytes = bytes(token.name());
+        if (nameBytes.length == 0) {
+            assertEq(raw, bytes32(0), "empty name slot must be zero");
+        } else if (nameBytes.length < 32) {
+            // Low byte == length * 2; this is enough to confirm the slot
+            // is the SHORT-STRING field slot (and not the long-string
+            // marker slot, which would have low bit set).
+            assertEq(uint256(raw) & 0xff, nameBytes.length * 2, "low byte must equal length * 2");
+        }
+    }
+}

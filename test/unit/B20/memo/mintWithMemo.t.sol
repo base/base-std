@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20MintWithMemoTest is B20Test {
     /// @notice Verifies mintWithMemo inherits all mint guards
@@ -22,7 +23,8 @@ contract B20MintWithMemoTest is B20Test {
     }
 
     /// @notice Verifies mintWithMemo credits the recipient and updates totalSupply
-    /// @dev Accounting unchanged from mint; the memo does not alter accounting
+    /// @dev Accounting unchanged from mint; the memo does not alter accounting.
+    ///      Paired slot assertions confirm balance and totalSupply slots reflect the mint.
     function test_mintWithMemo_success_creditsAndUpdatesSupply(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
         _grantRole(B20Constants.MINT_ROLE, minter);
@@ -35,6 +37,16 @@ contract B20MintWithMemoTest is B20Test {
 
         assertEq(token.balanceOf(to), balBefore + amount, "recipient credited");
         assertEq(token.totalSupply(), supplyBefore + amount, "supply increased");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(to))),
+            balBefore + amount,
+            "balances[to] slot must reflect the mint credit"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.totalSupplySlot())),
+            supplyBefore + amount,
+            "totalSupply slot must reflect the mint"
+        );
     }
 
     /// @notice Verifies mintWithMemo emits Transfer(address(0), to, amount) then Memo(memo)

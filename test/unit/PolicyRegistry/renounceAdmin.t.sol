@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
     /// @notice Verifies renounceAdmin reverts when called by any non-admin caller
@@ -28,7 +29,10 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies renounceAdmin sets policyAdmin to address(0)
-    /// @dev Admin slot cleared permanently; policy continues to exist
+    /// @dev Admin slot cleared permanently; policy continues to exist.
+    ///      Paired slot assertion: `policies[id]` packed admin lane is
+    ///      zero, and the type lane is unchanged (so `policyExists`
+    ///      still returns true).
     function test_renounceAdmin_success_clearsAdmin(address currentAdmin) public {
         vm.assume(currentAdmin != address(0));
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
@@ -36,10 +40,24 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
         policyRegistry.renounceAdmin(policyId);
         assertEq(policyRegistry.policyAdmin(policyId), address(0));
         assertTrue(policyRegistry.policyExists(policyId));
+
+        uint256 packed =
+            uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
+        assertEq(
+            MockPolicyRegistryStorage.policyAdminFromPacked(packed),
+            address(0),
+            "policies[id] admin lane must be cleared after renounce"
+        );
+        assertEq(
+            MockPolicyRegistryStorage.policyTypeFromPacked(packed),
+            uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
+            "policies[id] type lane must remain ALLOWLIST after renounce"
+        );
     }
 
     /// @notice Verifies renounceAdmin clears any in-flight pending admin
-    /// @dev Side effect: previously-staged pending admin is invalidated
+    /// @dev Side effect: previously-staged pending admin is invalidated.
+    ///      Paired slot assertion: `pendingAdmins[id]` slot is zero.
     function test_renounceAdmin_success_clearsPending(address currentAdmin, address pending) public {
         vm.assume(currentAdmin != address(0));
         vm.assume(pending != address(0));
@@ -49,6 +67,11 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
         vm.prank(currentAdmin);
         policyRegistry.renounceAdmin(policyId);
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
+        assertEq(
+            vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId)),
+            bytes32(0),
+            "pendingAdmins[id] slot must be cleared after renounce"
+        );
     }
 
     /// @notice Verifies renounceAdmin freezes all mutation on the policy

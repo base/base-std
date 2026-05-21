@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20TransferFromWithMemoTest is B20Test {
     /// @notice Verifies transferFromWithMemo inherits all transferFrom guards
@@ -29,7 +30,9 @@ contract B20TransferFromWithMemoTest is B20Test {
     }
 
     /// @notice Verifies transferFromWithMemo performs the same balance and allowance updates as transferFrom
-    /// @dev Accounting and spend-tracking unchanged from transferFrom
+    /// @dev Accounting and spend-tracking unchanged from transferFrom.
+    ///      Paired slot assertions confirm both balance slots and the
+    ///      allowance slot reflect the move and consumption.
     function test_transferFromWithMemo_success_movesBalanceAndDecreasesAllowance(
         address caller,
         address from,
@@ -54,6 +57,21 @@ contract B20TransferFromWithMemoTest is B20Test {
         assertEq(token.balanceOf(from), 0, "from must be debited");
         assertEq(token.balanceOf(to), amount, "to must be credited");
         assertEq(token.allowance(from, caller), 0, "allowance must be consumed");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(from))),
+            0,
+            "balances[from] slot must reflect the debit"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(to))),
+            amount,
+            "balances[to] slot must reflect the credit"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, caller))),
+            0,
+            "allowances[from][caller] slot must reflect the consumption"
+        );
     }
 
     /// @notice Verifies transferFromWithMemo emits Transfer then Memo, in that order

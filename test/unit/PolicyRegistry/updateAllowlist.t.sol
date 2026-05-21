@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     /// @notice Verifies updateAllowlist reverts when called by any non-admin caller
@@ -53,7 +54,9 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies updateAllowlist(allowed = true) adds each account to the membership set
-    /// @dev isAuthorized returns true for each added account afterward
+    /// @dev isAuthorized returns true for each added account afterward.
+    ///      Paired slot assertion: each `members[id][account]` slot
+    ///      reads back as 1.
     function test_updateAllowlist_success_addsAccounts(address currentAdmin, address[] memory accounts) public {
         vm.assume(currentAdmin != address(0));
         uint256 len = bound(accounts.length, 0, 5);
@@ -63,11 +66,23 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         policyRegistry.updateAllowlist(policyId, true, accounts);
         for (uint256 i = 0; i < accounts.length; ++i) {
             assertTrue(policyRegistry.isAuthorized(policyId, accounts[i]));
+            assertEq(
+                uint256(
+                    vm.load(
+                        address(policyRegistry),
+                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
+                    )
+                ),
+                uint256(1),
+                "members[id][account] slot must be set after allowed=true"
+            );
         }
     }
 
     /// @notice Verifies updateAllowlist(allowed = false) removes each account from the membership set
-    /// @dev isAuthorized returns false for each removed account afterward
+    /// @dev isAuthorized returns false for each removed account afterward.
+    ///      Paired slot assertion: each `members[id][account]` slot
+    ///      reads back as 0.
     function test_updateAllowlist_success_removesAccounts(address currentAdmin, address[] memory accounts) public {
         vm.assume(currentAdmin != address(0));
         uint256 len = bound(accounts.length, 0, 5);
@@ -79,6 +94,16 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         policyRegistry.updateAllowlist(policyId, false, accounts);
         for (uint256 i = 0; i < accounts.length; ++i) {
             assertFalse(policyRegistry.isAuthorized(policyId, accounts[i]));
+            assertEq(
+                uint256(
+                    vm.load(
+                        address(policyRegistry),
+                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
+                    )
+                ),
+                uint256(0),
+                "members[id][account] slot must be cleared after allowed=false"
+            );
         }
     }
 

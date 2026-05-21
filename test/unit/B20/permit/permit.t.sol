@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20PermitTest is B20Test {
     /// @notice Verifies permit reverts when the deadline has passed
@@ -83,7 +84,9 @@ contract B20PermitTest is B20Test {
     }
 
     /// @notice Verifies permit sets allowance(owner, spender) to amount
-    /// @dev Same effect as approve via signature; canonical allowance readback test lives in allowance.t.sol
+    /// @dev Same effect as approve via signature; canonical allowance readback test lives in allowance.t.sol.
+    ///      Paired slot assertion: `allowances[owner][spender]` slot
+    ///      reflects the permit value.
     function test_permit_success_setsAllowance(uint256 ownerPrivateKey, address spender, uint256 amount) public {
         ownerPrivateKey = boundPrivateKey(ownerPrivateKey);
         vm.assume(spender != address(0));
@@ -94,6 +97,11 @@ contract B20PermitTest is B20Test {
         token.permit(owner, spender, amount, deadline, v, r, s);
 
         assertEq(token.allowance(owner, spender), amount, "allowance must reflect permit");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            amount,
+            "allowances[owner][spender] slot must reflect the permit"
+        );
     }
 
     /// @notice Verifies a second permit REPLACES the prior allowance, not ADDS to it
@@ -101,6 +109,7 @@ contract B20PermitTest is B20Test {
     ///      `allowance[owner][spender] += value`. A single permit success test can't
     ///      catch the additive bug (0 + value == value), so we permit twice with
     ///      distinct values and assert only the second value remains.
+    ///      Paired slot assertion confirms the slot is overwritten, not summed.
     function test_permit_success_secondPermitReplacesAllowance(uint256 ownerPrivateKey, address spender) public {
         ownerPrivateKey = boundPrivateKey(ownerPrivateKey);
         vm.assume(spender != address(0));
@@ -110,17 +119,35 @@ contract B20PermitTest is B20Test {
         uint256 first = 100;
         uint256 second = 7;
 
-        (uint8 v1, bytes32 r1, bytes32 s1) = _signPermit(ownerPrivateKey, spender, first, deadline);
-        token.permit(owner, spender, first, deadline, v1, r1, s1);
+        // Scope the first permit's (v, r, s) so they release before the
+        // second batch is declared; avoids stack-too-deep on Solidity's
+        // legacy codegen.
+        {
+            (uint8 v1, bytes32 r1, bytes32 s1) = _signPermit(ownerPrivateKey, spender, first, deadline);
+            token.permit(owner, spender, first, deadline, v1, r1, s1);
+        }
         assertEq(token.allowance(owner, spender), first, "first permit sets baseline");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            first,
+            "allowance slot must hold the first permit value"
+        );
 
-        (uint8 v2, bytes32 r2, bytes32 s2) = _signPermit(ownerPrivateKey, spender, second, deadline);
-        token.permit(owner, spender, second, deadline, v2, r2, s2);
+        {
+            (uint8 v2, bytes32 r2, bytes32 s2) = _signPermit(ownerPrivateKey, spender, second, deadline);
+            token.permit(owner, spender, second, deadline, v2, r2, s2);
+        }
         assertEq(token.allowance(owner, spender), second, "second permit must REPLACE, not ADD");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            second,
+            "allowance slot must hold the REPLACED second value, not first+second"
+        );
     }
 
     /// @notice Verifies permit advances nonces(owner) by exactly one
-    /// @dev Replay protection; canonical nonces readback test lives in nonces.t.sol
+    /// @dev Replay protection; canonical nonces readback test lives in nonces.t.sol.
+    ///      Paired slot assertion: `nonces[owner]` slot increments by 1.
     function test_permit_success_advancesNonce(uint256 ownerPrivateKey, address spender, uint256 amount) public {
         ownerPrivateKey = boundPrivateKey(ownerPrivateKey);
         vm.assume(spender != address(0));
@@ -132,6 +159,11 @@ contract B20PermitTest is B20Test {
         token.permit(owner, spender, amount, deadline, v, r, s);
 
         assertEq(token.nonces(owner), before + 1, "nonce must advance by 1");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.nonceSlot(owner))),
+            before + 1,
+            "nonces[owner] slot must reflect the increment"
+        );
     }
 
     /// @notice Verifies permit emits Approval(owner, spender, amount)

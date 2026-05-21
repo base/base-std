@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20MintTest is B20Test {
@@ -78,23 +79,35 @@ contract B20MintTest is B20Test {
     }
 
     /// @notice Verifies mint credits the recipient balance by amount
-    /// @dev Accounting: balanceOf(to) increases by exactly amount
+    /// @dev Accounting: balanceOf(to) increases by exactly amount.
+    ///      Paired slot assertion verifies `balances[to]` slot reflects the credit.
     function test_mint_success_creditsRecipient(address to, uint256 amount) public {
         _assumeValidActor(to);
         uint256 before = token.balanceOf(to);
 
         _mint(to, amount);
         assertEq(token.balanceOf(to), before + amount, "balance must increase by minted amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(to))),
+            before + amount,
+            "balances[to] slot must reflect the mint credit"
+        );
     }
 
     /// @notice Verifies mint increases totalSupply by amount
-    /// @dev Accounting: totalSupply tracks cumulative minted-burned
+    /// @dev Accounting: totalSupply tracks cumulative minted-burned.
+    ///      Paired slot assertion verifies `totalSupply` slot reflects the increase.
     function test_mint_success_increasesTotalSupply(address to, uint256 amount) public {
         _assumeValidActor(to);
         uint256 before = token.totalSupply();
 
         _mint(to, amount);
         assertEq(token.totalSupply(), before + amount, "totalSupply must increase by minted amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.totalSupplySlot())),
+            before + amount,
+            "totalSupply slot must reflect the mint"
+        );
     }
 
     /// @notice Verifies mint emits Transfer(address(0), to, amount)

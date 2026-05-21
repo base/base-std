@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20SetSupplyCapTest is B20Test {
     /// @notice Verifies setSupplyCap reverts when caller lacks DEFAULT_ADMIN_ROLE
@@ -35,15 +36,22 @@ contract B20SetSupplyCapTest is B20Test {
 
     /// @notice Verifies setSupplyCap raises the cap to a value above the current totalSupply
     /// @dev Read-after-write: supplyCap returns newCap. Fresh token has totalSupply == 0,
-    ///      so any cap is valid.
+    ///      so any cap is valid. Paired slot assertion verifies
+    ///      `supplyCap` slot reflects the write.
     function test_setSupplyCap_success_raisesCap(uint256 newCap) public {
         vm.prank(admin);
         token.setSupplyCap(newCap);
         assertEq(token.supplyCap(), newCap, "supplyCap must equal newCap");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.supplyCapSlot())),
+            newCap,
+            "supplyCap slot must reflect the raise"
+        );
     }
 
     /// @notice Verifies setSupplyCap lowers the cap to a value at or above the current totalSupply
-    /// @dev Cap may be lowered as long as totalSupply <= newCap
+    /// @dev Cap may be lowered as long as totalSupply <= newCap.
+    ///      Paired slot assertion verifies `supplyCap` slot reflects the lower.
     function test_setSupplyCap_success_lowersCap(uint256 newCap) public {
         // Mint some supply, then bound newCap >= mintedAmount.
         uint256 mintedAmount = 1000;
@@ -54,6 +62,11 @@ contract B20SetSupplyCapTest is B20Test {
         vm.prank(admin);
         token.setSupplyCap(newCap);
         assertEq(token.supplyCap(), newCap, "supplyCap must equal newCap");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.supplyCapSlot())),
+            newCap,
+            "supplyCap slot must reflect the lower"
+        );
     }
 
     /// @notice Verifies setSupplyCap emits SupplyCapUpdated(updater, oldCap, newCap)

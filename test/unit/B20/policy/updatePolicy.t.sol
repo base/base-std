@@ -5,9 +5,38 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20UpdatePolicyTest is B20Test {
+    /// @notice Reads the policy id stored in the slot lane that
+    ///         corresponds to `policyType`, via raw `vm.load` and the
+    ///         per-lane decoder helpers on `MockB20Storage`.
+    /// @dev    The four base-token policy types are packed across two
+    ///         slots:
+    ///         - `transferPolicyIds` (lane 0: SENDER, 1: RECEIVER, 2: EXECUTOR)
+    ///         - `mintPolicyIds` (lane 0: RECEIVER)
+    ///         This helper routes to the right slot + lane decoder so
+    ///         tests can assert the slot reflects the surface
+    ///         `policyId(policyType)` return.
+    function _readPolicyLane(bytes32 policyType) internal view returns (uint64) {
+        if (policyType == B20Constants.MINT_RECEIVER_POLICY) {
+            return MockB20Storage.mintReceiverPolicyId(
+                uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()))
+            );
+        }
+        uint256 transferPacked = uint256(vm.load(address(token), MockB20Storage.transferPolicyIdsSlot()));
+        if (policyType == B20Constants.TRANSFER_SENDER_POLICY) {
+            return MockB20Storage.transferSenderPolicyId(transferPacked);
+        }
+        if (policyType == B20Constants.TRANSFER_RECEIVER_POLICY) {
+            return MockB20Storage.transferReceiverPolicyId(transferPacked);
+        }
+        // TRANSFER_EXECUTOR — the four supported types are exhaustive
+        // for this helper; callers always pass a known policy type via
+        // `_knownPolicyType` or the named constants.
+        return MockB20Storage.transferExecutorPolicyId(transferPacked);
+    }
     /// @notice Verifies updatePolicy reverts when caller lacks DEFAULT_ADMIN_ROLE
     /// @dev Access control: only the admin may reassign policy slots; checks AccessControlUnauthorizedAccount.
     ///      Auth fires before policy-type / registry checks, so any bytes32 fuzz is fine here.
@@ -54,23 +83,37 @@ contract B20UpdatePolicyTest is B20Test {
     }
 
     /// @notice Verifies updatePolicy succeeds for built-in id 0 (always-allow)
-    /// @dev Built-ins are always valid targets across all supported policy types
+    /// @dev Built-ins are always valid targets across all supported policy types.
+    ///      Paired slot assertion: the packed slot lane corresponding
+    ///      to `policyType` reads back as ALWAYS_ALLOW_ID.
     function test_updatePolicy_success_builtinAllow(uint8 typeIdx) public {
         bytes32 policyType = _knownPolicyType(typeIdx);
         _setPolicy(policyType, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
         assertEq(token.policyId(policyType), PolicyRegistryConstants.ALWAYS_ALLOW_ID, "slot must be ALWAYS_ALLOW_ID");
+        assertEq(
+            _readPolicyLane(policyType),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "packed-slot lane must hold ALWAYS_ALLOW_ID"
+        );
     }
 
     /// @notice Verifies updatePolicy succeeds for built-in id 1 (always-reject)
-    /// @dev Built-ins are always valid targets across all supported policy types
+    /// @dev Built-ins are always valid targets across all supported policy types.
+    ///      Paired slot assertion confirms the packed-slot lane reflects the write.
     function test_updatePolicy_success_builtinReject(uint8 typeIdx) public {
         bytes32 policyType = _knownPolicyType(typeIdx);
         _setPolicy(policyType, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         assertEq(token.policyId(policyType), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "slot must be ALWAYS_BLOCK_ID");
+        assertEq(
+            _readPolicyLane(policyType),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "packed-slot lane must hold ALWAYS_BLOCK_ID"
+        );
     }
 
     /// @notice Verifies updatePolicy writes the new id to the slot
-    /// @dev Read-after-write: policyId(policyType) returns newPolicyId
+    /// @dev Read-after-write: policyId(policyType) returns newPolicyId.
+    ///      Paired slot assertion confirms the packed-slot lane reflects newPolicyId.
     function test_updatePolicy_success_writesSlot(uint8 typeIdx, uint64 newPolicyId) public {
         bytes32 policyType = _knownPolicyType(typeIdx);
         // Bound to a registry-supported id.
@@ -78,6 +121,7 @@ contract B20UpdatePolicyTest is B20Test {
             newPolicyId % 2 == 0 ? PolicyRegistryConstants.ALWAYS_ALLOW_ID : PolicyRegistryConstants.ALWAYS_BLOCK_ID;
         _setPolicy(policyType, newPolicyId);
         assertEq(token.policyId(policyType), newPolicyId, "slot must equal newPolicyId after write");
+        assertEq(_readPolicyLane(policyType), newPolicyId, "packed-slot lane must equal newPolicyId");
     }
 
     /// @notice Verifies updatePolicy on one lane leaves other lanes unchanged
@@ -86,6 +130,8 @@ contract B20UpdatePolicyTest is B20Test {
     ///      would silently zero adjacent lanes. We set every supported policy slot to
     ///      ALWAYS_BLOCK first, then update TRANSFER_SENDER_POLICY to ALWAYS_ALLOW, and verify
     ///      the other three slots are still ALWAYS_BLOCK.
+    ///      Paired slot assertions confirm each lane independently via
+    ///      the per-lane decoders on `MockB20Storage`.
     function test_updatePolicy_success_writeIsolatedToTargetLane() public {
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
@@ -98,6 +144,32 @@ contract B20UpdatePolicyTest is B20Test {
         assertEq(token.policyId(B20Constants.TRANSFER_RECEIVER_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "RECEIVER must be untouched");
         assertEq(token.policyId(B20Constants.TRANSFER_EXECUTOR_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "EXECUTOR must be untouched");
         assertEq(token.policyId(B20Constants.MINT_RECEIVER_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "MINT_RECEIVER_POLICY must be untouched");
+
+        // Paired packed-slot assertions: explicitly read the packed
+        // slot and decode every lane to confirm the write mask only
+        // touched lane 0 of transferPolicyIds.
+        uint256 transferPacked = uint256(vm.load(address(token), MockB20Storage.transferPolicyIdsSlot()));
+        uint256 mintPacked = uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()));
+        assertEq(
+            MockB20Storage.transferSenderPolicyId(transferPacked),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "transfer SENDER lane updated"
+        );
+        assertEq(
+            MockB20Storage.transferReceiverPolicyId(transferPacked),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "transfer RECEIVER lane untouched"
+        );
+        assertEq(
+            MockB20Storage.transferExecutorPolicyId(transferPacked),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "transfer EXECUTOR lane untouched"
+        );
+        assertEq(
+            MockB20Storage.mintReceiverPolicyId(mintPacked),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "mint RECEIVER lane untouched"
+        );
     }
 
     /// @notice Verifies updatePolicy emits PolicyUpdated(policyType, oldId, newId)

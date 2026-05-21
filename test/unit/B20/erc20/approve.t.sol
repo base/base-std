@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20ApproveTest is B20Test {
     /// @notice Verifies approve reverts for the zero spender address
@@ -27,7 +28,9 @@ contract B20ApproveTest is B20Test {
     }
 
     /// @notice Verifies approve does NOT consult any pause or policy state
-    /// @dev approve sets future-spend authorization, not movement; no gating
+    /// @dev approve sets future-spend authorization, not movement; no gating.
+    ///      Paired slot assertion verifies `allowances[owner][spender]`
+    ///      slot reflects the write.
     function test_approve_success_succeedsWhilePaused(address owner, address spender, uint256 amount) public {
         _assumeValidActor(owner);
         vm.assume(spender != address(0));
@@ -40,10 +43,17 @@ contract B20ApproveTest is B20Test {
         vm.prank(owner);
         assertTrue(token.approve(spender, amount), "approve must succeed even while paused");
         assertEq(token.allowance(owner, spender), amount, "allowance must be set");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            amount,
+            "allowances[owner][spender] slot must reflect the approval"
+        );
     }
 
     /// @notice Verifies approve sets allowance(owner, spender) to amount
-    /// @dev Overwrites any prior allowance value (no increment / decrement helpers)
+    /// @dev Overwrites any prior allowance value (no increment / decrement helpers).
+    ///      Paired slot assertion verifies both the baseline write and
+    ///      the overwrite land at `allowances[owner][spender]`.
     function test_approve_success_setsAllowance(address owner, address spender, uint256 amount) public {
         _assumeValidActor(owner);
         vm.assume(spender != address(0));
@@ -52,10 +62,20 @@ contract B20ApproveTest is B20Test {
         vm.prank(owner);
         token.approve(spender, 42);
         assertEq(token.allowance(owner, spender), 42, "baseline allowance");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            42,
+            "baseline allowance slot must hold 42"
+        );
 
         vm.prank(owner);
         token.approve(spender, amount);
         assertEq(token.allowance(owner, spender), amount, "approve must overwrite");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, spender))),
+            amount,
+            "allowance slot must reflect the overwrite"
+        );
     }
 
     /// @notice Verifies approve emits Approval(owner, spender, amount)

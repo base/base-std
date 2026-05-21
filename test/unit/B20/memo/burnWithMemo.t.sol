@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20BurnWithMemoTest is B20Test {
     /// @notice Verifies burnWithMemo inherits all burn guards
@@ -20,7 +21,8 @@ contract B20BurnWithMemoTest is B20Test {
     }
 
     /// @notice Verifies burnWithMemo debits caller and decreases totalSupply
-    /// @dev Accounting unchanged from burn; the memo does not alter accounting
+    /// @dev Accounting unchanged from burn; the memo does not alter accounting.
+    ///      Paired slot assertions confirm balance and totalSupply slots reflect the burn.
     function test_burnWithMemo_success_debitsAndDecreasesSupply(uint256 amount, bytes32 memo) public {
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
@@ -32,6 +34,16 @@ contract B20BurnWithMemoTest is B20Test {
 
         assertEq(token.balanceOf(burner), 0, "burner fully debited");
         assertEq(token.totalSupply(), supplyBefore - amount, "supply decreased");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(burner))),
+            0,
+            "balances[burner] slot must reflect the burn"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.totalSupplySlot())),
+            supplyBefore - amount,
+            "totalSupply slot must reflect the burn"
+        );
     }
 
     /// @notice Verifies burnWithMemo emits Transfer(caller, address(0), amount) then Memo(memo)

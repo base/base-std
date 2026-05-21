@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
     /// @notice Verifies stageUpdateAdmin reverts when called by any non-admin caller
@@ -28,7 +29,9 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies stageUpdateAdmin sets pendingPolicyAdmin to the nominated address
-    /// @dev Pending slot updated; current admin unchanged until finalizeUpdateAdmin
+    /// @dev Pending slot updated; current admin unchanged until finalizeUpdateAdmin.
+    ///      Paired slot assertion: `pendingAdmins[id]` slot decodes to
+    ///      newAdmin (low 160 bits); `policies[id]` admin lane is unchanged.
     function test_stageUpdateAdmin_success_setsPending(address currentAdmin, address newAdmin) public {
         vm.assume(currentAdmin != address(0));
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
@@ -36,10 +39,25 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
         policyRegistry.stageUpdateAdmin(policyId, newAdmin);
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), newAdmin);
         assertEq(policyRegistry.policyAdmin(policyId), currentAdmin);
+        assertEq(
+            address(uint160(uint256(
+                vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))
+            ))),
+            newAdmin,
+            "pendingAdmins[id] slot must hold the staged candidate"
+        );
+        assertEq(
+            MockPolicyRegistryStorage.policyAdminFromPacked(
+                uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)))
+            ),
+            currentAdmin,
+            "policies[id] admin lane must remain currentAdmin while staged"
+        );
     }
 
     /// @notice Verifies a second stageUpdateAdmin overwrites a previously-staged candidate
-    /// @dev Latest call wins; the prior candidate loses ability to finalize
+    /// @dev Latest call wins; the prior candidate loses ability to finalize.
+    ///      Paired slot assertion: `pendingAdmins[id]` slot reflects only the second value.
     function test_stageUpdateAdmin_success_overwritesPrior(address currentAdmin, address first, address second) public {
         vm.assume(currentAdmin != address(0));
         vm.assume(first != second);
@@ -49,10 +67,18 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
         vm.prank(currentAdmin);
         policyRegistry.stageUpdateAdmin(policyId, second);
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), second);
+        assertEq(
+            address(uint160(uint256(
+                vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))
+            ))),
+            second,
+            "pendingAdmins[id] slot must reflect only the second stage"
+        );
     }
 
     /// @notice Verifies stageUpdateAdmin(address(0)) clears a previously-staged candidate
-    /// @dev Explicit cancel path; pendingPolicyAdmin returns address(0) after
+    /// @dev Explicit cancel path; pendingPolicyAdmin returns address(0) after.
+    ///      Paired slot assertion: `pendingAdmins[id]` slot reads back as zero.
     function test_stageUpdateAdmin_success_clearsPending(address currentAdmin, address first) public {
         vm.assume(currentAdmin != address(0));
         vm.assume(first != address(0));
@@ -62,6 +88,11 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
         vm.prank(currentAdmin);
         policyRegistry.stageUpdateAdmin(policyId, address(0));
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
+        assertEq(
+            vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId)),
+            bytes32(0),
+            "pendingAdmins[id] slot must be cleared after staging zero"
+        );
     }
 
     /// @notice Verifies clearing the pending slot (stage address(0)) causes finalizeUpdateAdmin to revert

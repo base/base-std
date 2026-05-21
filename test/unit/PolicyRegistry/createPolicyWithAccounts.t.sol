@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @notice Verifies createPolicyWithAccounts reverts when admin is the zero address
@@ -38,7 +39,9 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies createPolicyWithAccounts seeds an allowlist policy with the provided members
-    /// @dev Post-creation isAuthorized returns true for each seeded account
+    /// @dev Post-creation isAuthorized returns true for each seeded account.
+    ///      Paired slot assertion: each `members[id][account]` slot
+    ///      reads back as 1 (membership flag set).
     function test_createPolicyWithAccounts_success_seedsAllowlist(
         address caller,
         address admin_,
@@ -53,11 +56,26 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
             policyRegistry.createPolicyWithAccounts(admin_, IPolicyRegistry.PolicyType.ALLOWLIST, accounts);
         for (uint256 i = 0; i < accounts.length; ++i) {
             assertTrue(policyRegistry.isAuthorized(policyId, accounts[i]));
+            assertEq(
+                uint256(
+                    vm.load(
+                        address(policyRegistry),
+                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
+                    )
+                ),
+                uint256(1),
+                "members[id][account] slot must be set after allowlist seed"
+            );
         }
     }
 
     /// @notice Verifies createPolicyWithAccounts seeds a blocklist policy with the provided members
-    /// @dev Post-creation isAuthorized returns false for each seeded account
+    /// @dev Post-creation isAuthorized returns false for each seeded account.
+    ///      Paired slot assertion: each `members[id][account]` slot
+    ///      reads back as 1 (the bool means "blocked" for BLOCKLIST
+    ///      policies; the slot value is still 1 in the canonical
+    ///      Solidity bool encoding, even though `isAuthorized` returns
+    ///      false for blocked accounts).
     function test_createPolicyWithAccounts_success_seedsBlocklist(
         address caller,
         address admin_,
@@ -72,6 +90,16 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
             policyRegistry.createPolicyWithAccounts(admin_, IPolicyRegistry.PolicyType.BLOCKLIST, accounts);
         for (uint256 i = 0; i < accounts.length; ++i) {
             assertFalse(policyRegistry.isAuthorized(policyId, accounts[i]));
+            assertEq(
+                uint256(
+                    vm.load(
+                        address(policyRegistry),
+                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
+                    )
+                ),
+                uint256(1),
+                "members[id][account] slot must be set after blocklist seed (1 == blocked)"
+            );
         }
     }
 

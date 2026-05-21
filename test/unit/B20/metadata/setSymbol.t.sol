@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20SetSymbolTest is B20Test {
     /// @notice Verifies setSymbol reverts when caller lacks METADATA_ROLE
@@ -22,12 +23,19 @@ contract B20SetSymbolTest is B20Test {
     }
 
     /// @notice Verifies setSymbol updates symbol() to the new value
-    /// @dev Read-after-write; canonical symbol readback test lives in symbol.t.sol
+    /// @dev Read-after-write; canonical symbol readback test lives in symbol.t.sol.
+    ///      Paired slot assertion: the `symbol` field slot holds the
+    ///      Solidity-encoded string value byte-for-byte.
     function test_setSymbol_success_updatesSymbol(string calldata newSymbol) public {
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
         token.setSymbol(newSymbol);
         assertEq(token.symbol(), newSymbol, "symbol() must return the new value");
+        assertEq(
+            vm.load(address(token), MockB20Storage.symbolSlot()),
+            _expectedStringFieldSlot(newSymbol),
+            "symbol field slot must hold the canonical string encoding"
+        );
     }
 
     /// @notice Verifies setSymbol emits SymbolUpdated(updater, newSymbol)
