@@ -270,11 +270,11 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         _createSecurity(caller, salt, _securityParams(), new bytes[](0));
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        bytes32 identifierUpdatedSig = IB20Security.SecurityIdentifierUpdated.selector;
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics.length == 0) continue;
-            assertNotEq(logs[i].topics[0], identifierUpdatedSig, "no SecurityIdentifierUpdated at creation");
-        }
+        assertEq(
+            _firstLogIndex(logs, IB20Security.SecurityIdentifierUpdated.selector),
+            -1,
+            "no SecurityIdentifierUpdated at creation"
+        );
     }
 
     /// @notice Verifies security createToken executes with admin == address(0)
@@ -422,15 +422,8 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // Find indices of TokenCreated and RoleGranted. Since the storage-direct-write
         // factory emits no RoleGranted at bootstrap, the only RoleGranted in the log
         // is the one from the init call.
-        bytes32 tokenCreatedSig = ITokenFactory.TokenCreated.selector;
-        bytes32 roleGrantedSig = IB20.RoleGranted.selector;
-        int256 tokenCreatedAt = -1;
-        int256 roleGrantedAt = -1;
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics.length == 0) continue;
-            if (logs[i].topics[0] == tokenCreatedSig && tokenCreatedAt < 0) tokenCreatedAt = int256(i);
-            if (logs[i].topics[0] == roleGrantedSig && roleGrantedAt < 0) roleGrantedAt = int256(i);
-        }
+        int256 tokenCreatedAt = _firstLogIndex(logs, ITokenFactory.TokenCreated.selector);
+        int256 roleGrantedAt = _firstLogIndex(logs, IB20.RoleGranted.selector);
         assertGt(tokenCreatedAt, -1, "TokenCreated must be present in the log");
         assertGt(roleGrantedAt, -1, "RoleGranted must be present in the log (from initCall)");
         assertLt(tokenCreatedAt, roleGrantedAt, "TokenCreated must precede initCall-emitted events");

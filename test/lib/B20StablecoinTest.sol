@@ -18,15 +18,19 @@ import {IB20} from "src/interfaces/IB20.sol";
 /// variant-only method (`currency()`) cast inline:
 ///   `IB20Stablecoin(address(token)).currency()`
 contract B20StablecoinTest is B20Test {
-    /// @notice The currency identifier passed at creation (e.g. "USD").
-    /// Tests compare against `IB20Stablecoin(address(token)).currency()`.
-    string internal currencyAtCreation = "USD";
+    /// @notice The currency identifier baked into the bootstrap-default
+    ///         `_stablecoinParams()` and therefore the value
+    ///         `IB20Stablecoin(address(token)).currency()` returns
+    ///         after `_deployToken`. Tests reference this constant
+    ///         instead of hardcoding "USD" so a single edit retargets
+    ///         every assertion.
+    string internal constant CURRENCY_AT_CREATION = "USD";
 
     /// @inheritdoc B20Test
-    /// @dev Override deploys a stablecoin-variant token via the factory
-    ///      mock. The mock returns the deterministic address per the B-20
-    ///      schema but does not yet deploy code there; the next PR plants
-    ///      real token bytecode at that address.
+    /// @dev Override deploys a stablecoin-variant token via the factory mock.
+    ///      The factory etches `MockB20Stablecoin` runtime bytecode at the
+    ///      computed address, seeds `currency` directly via vm.store, grants
+    ///      the initial admin, then closes the bootstrap window.
     function _deployToken() internal virtual override returns (IB20) {
         return IB20(_createStablecoin());
     }

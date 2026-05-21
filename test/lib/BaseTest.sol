@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
+import {Vm} from "forge-std/Vm.sol";
 
 import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol";
 import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
@@ -186,5 +187,34 @@ abstract contract BaseTest is Test {
             return bytes32(uint256(highPortion) | (data.length * 2));
         }
         return bytes32(data.length * 2 + 1);
+    }
+
+    // ============================================================
+    //                       LOG-ORDERING HELPER
+    // ============================================================
+
+    /// @notice Returns the index of the first log in `logs` whose
+    ///         `topics[0]` equals `sig`, or `-1` if no matching log
+    ///         exists (or the matching log is anonymous, i.e. has no
+    ///         topics at all).
+    /// @dev    Sentinel return is `-1` rather than `type(uint256).max`
+    ///         so call sites can write `assertGt(idx, -1, "...")` to
+    ///         assert presence and `assertLt(headerIdx, footerIdx, "...")`
+    ///         to assert ordering, both as plain integer comparisons.
+    ///         Tests that need to pin down emission ORDER (header before
+    ///         footer, Transfer before Memo before Redeemed, etc.) call
+    ///         this once per signature on a `vm.recordLogs()` capture
+    ///         and compare the indices. Tests that just need to assert
+    ///         a specific event was emitted should prefer
+    ///         `vm.expectEmit` with `expectEmit + emit ... + call`.
+    function _firstLogIndex(Vm.Log[] memory logs, bytes32 sig) internal pure returns (int256) {
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length == 0) continue;
+            // `i` is bounded by `logs.length`, which a forge fuzz run cannot push
+            // anywhere near `int256.max`, so the cast cannot truncate.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            if (logs[i].topics[0] == sig) return int256(i);
+        }
+        return -1;
     }
 }

@@ -170,15 +170,8 @@ contract B20SecurityAnnounceTest is B20SecurityTest {
         _announce(operator, new bytes[](0), id, "desc", "uri");
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bytes32 headerSig = IB20Security.Announcement.selector;
-        bytes32 footerSig = IB20Security.EndAnnouncement.selector;
-        int256 headerAt = -1;
-        int256 footerAt = -1;
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics.length == 0) continue;
-            if (logs[i].topics[0] == headerSig && headerAt < 0) headerAt = int256(i);
-            if (logs[i].topics[0] == footerSig && footerAt < 0) footerAt = int256(i);
-        }
+        int256 headerAt = _firstLogIndex(logs, IB20Security.Announcement.selector);
+        int256 footerAt = _firstLogIndex(logs, IB20Security.EndAnnouncement.selector);
         assertGt(headerAt, -1, "Announcement must be present");
         assertGt(footerAt, -1, "EndAnnouncement must be present");
         assertLt(headerAt, footerAt, "Announcement must precede EndAnnouncement");
