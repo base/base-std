@@ -53,13 +53,13 @@ Key properties:
 
 ## Alternatives considered
 
-| Approach | Description | Why not chosen |
+| Option | Pros | Cons |
 | --- | --- | --- |
-| No validation | Accept any non-empty string for `currency` (the original behavior) | Typos (`"usd"`), token symbols (`"USDC"`), and arbitrary strings pollute the value space; no on-chain way for tooling to categorize |
-| Format-only check | Enforce length-3 uppercase ASCII without an allowlist | Admits `"ZZZ"`, crypto tickers, and any well-formed 3-char string indistinguishable from real codes; no semantic gate |
-| Full ISO 4217 active list | Accept every ISO 4217 alphabetic code, including X-prefix metals, supranational synthetics, and funds codes (the TIP-20 broad-scope precedent) | Conflates commodities and accounting units with fiat — commodity-backed tokens belong on `B20Security`; indexing units (CLF, USN, etc.) aren't holdable; loses the regulatory alignment with MiCA EMT / MAS SCS |
-| Narrow ISO 4217 fiat allowlist | Circulating national fiat only, aligned with MiCA EMT / MAS SCS | **Chosen.** Standardized value space; rejects typos and out-of-scope categories at creation; matches the regulatory categorization that downstream tooling will encounter |
-| Off-chain registry | No on-chain validation; consumers look up currency identity in an external registry | No standard value space across tokens; every consumer reinvents the categorization; doesn't catch typos at creation; pushes a fixable problem into runtime |
+| **No validation**<br>Accept any non-empty string for `currency` | • Simplest impl<br>• Zero maintenance<br>• Max issuer flexibility | • Typos (`"usd"`, `"USDC"`) pollute value space<br>• No on-chain categorization<br>• Admits arbitrary strings |
+| **Format-only check**<br>Length 3 + uppercase ASCII, no allowlist | • Cheap<br>• No allowlist to maintain<br>• Catches obvious garbage | • Admits `"ZZZ"`, `"BTC"`, `"ETH"`, etc.<br>• No semantic gate |
+| **Full ISO 4217 active list**<br>Every alphabetic code, incl. X-prefix metals, supranational synthetics, funds codes (TIP-20 broad-scope precedent) | • Matches the official standard literally<br>• Broadest legitimate value space<br>• Familiar to FX-adjacent tooling | • Includes commodities (belong on `B20Security`)<br>• Includes funds codes (CLF, USN — not holdable)<br>• Breaks regulatory alignment with MiCA EMT / MAS SCS |
+| **Narrow ISO 4217 fiat allowlist** *(chosen)*<br>Circulating national fiat only; MiCA EMT / MAS SCS aligned | • Standardized value space<br>• Rejects typos at creation<br>• Regulatory-category alignment<br>• Commodities pushed to `B20Security` | • Requires allowlist maintenance (~1/year)<br>• ISO 4217 updates need lockstep Rust impl change |
+| **Off-chain registry**<br>No on-chain validation; consumers look up currency identity externally | • Zero on-chain cost<br>• Max flexibility for issuers<br>• No allowlist to maintain | • No standard value space across tokens<br>• Every consumer reinvents categorization<br>• Doesn't catch typos at creation |
 
 ## Supported currencies
 
