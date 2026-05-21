@@ -59,7 +59,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @notice Built-in policy ID that always rejects any account.
     /// @dev    Useful as an explicit hard-deny on a slot (e.g. disabling
-    ///         redemption by pointing `REDEEMER_SENDER_POLICY` here).
+    ///         redemption by pointing `REDEEM_SENDER_POLICY` here).
     uint64 public constant ALWAYS_BLOCK_ID = PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
     /// @notice First counter value handed out to custom policies. Floors

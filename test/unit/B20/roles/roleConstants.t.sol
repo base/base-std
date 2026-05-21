@@ -53,8 +53,8 @@ contract B20RoleConstantsTest is B20Test {
     }
 
     /// @notice Verifies METADATA_ROLE returns keccak256("METADATA_ROLE")
-    /// @dev Identifier stability for off-chain consumers. METADATA_ROLE gates `setName`
-    ///      and `setSymbol` (separated from DEFAULT_ADMIN_ROLE per IB20 spec).
+    /// @dev Identifier stability for off-chain consumers. METADATA_ROLE gates `updateName`
+    ///      and `updateSymbol` (separated from DEFAULT_ADMIN_ROLE per IB20 spec).
     function test_METADATA_ROLE_success_matchesExpected() public view {
         assertEq(token.METADATA_ROLE(), keccak256("METADATA_ROLE"), "B20Constants.METADATA_ROLE digest");
         assertEq(token.METADATA_ROLE(), B20Constants.METADATA_ROLE, "must match B20Test's local constant");

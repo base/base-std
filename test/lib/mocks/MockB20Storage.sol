@@ -34,7 +34,7 @@ pragma solidity ^0.8.20;
 ///
 ///         Identity state (`name`, `symbol`) is kept in this struct rather
 ///         than encoded into the address because mutability is required
-///         (`setName` / `setSymbol` on the IB20 surface). `decimals` is
+///         (`updateName` / `updateSymbol` on the IB20 surface). `decimals` is
 ///         variant-fixed (`18` for default, `6` for stablecoin/security)
 ///         and read from code, not storage.
 library MockB20Storage {
@@ -171,6 +171,7 @@ library MockB20Storage {
     // the Rust impl validator) can read each field without remembering
     // the offset constant. Inlined by the compiler; zero runtime cost.
 
+    // forgefmt: disable-start
     function nameSlot() internal pure returns (bytes32) { return slotOf(NAME_OFFSET); }
     function symbolSlot() internal pure returns (bytes32) { return slotOf(SYMBOL_OFFSET); }
     function contractURISlot() internal pure returns (bytes32) { return slotOf(CONTRACT_URI_OFFSET); }
@@ -185,6 +186,8 @@ library MockB20Storage {
     function pausedVectorsSlot() internal pure returns (bytes32) { return slotOf(PAUSED_VECTORS_OFFSET); }
     function supplyCapSlot() internal pure returns (bytes32) { return slotOf(SUPPLY_CAP_OFFSET); }
     function noncesBaseSlot() internal pure returns (bytes32) { return slotOf(NONCES_OFFSET); }
+
+        // forgefmt: disable-end
 
     // ============================================================
     //                     MAPPING MEMBER SLOTS
@@ -316,7 +319,7 @@ library MockB20Storage {
 ///           verbatim; subsequent reads return the stored value as-is.
 ///         - `redeemPolicyIds` is a per-operation packed slot,
 ///           mirroring base's `transferPolicyIds` / `mintPolicyIds`
-///           layout: only `REDEEMER_SENDER_POLICY` is defined today, with
+///           layout: only `REDEEM_SENDER_POLICY` is defined today, with
 ///           three reserved lanes for future redeem-side granularity
 ///           (e.g. `REDEEMER_RECEIVER` if and when off-chain
 ///           settlement counterparties get policy gating).
@@ -394,7 +397,7 @@ library MockB20RedeemStorage {
             $.slot := STORAGE_LOCATION
         }
     }
-    
+
     /// @custom:storage-location erc7201:base.b20.redeem
     struct Layout {
         // ---------- Redemption ----------
@@ -469,5 +472,6 @@ library MockB20StablecoinStorage {
     ///         with `length * 2` in the low byte when `length < 32`;
     ///         otherwise the slot stores `length * 2 + 1` and the data
     ///         starts at `keccak256(slot)`).
+    // forgefmt: disable-next-item
     function currencySlot() internal pure returns (bytes32) { return slotOf(CURRENCY_OFFSET); }
 }

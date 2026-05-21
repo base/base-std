@@ -41,8 +41,7 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
         assertEq(policyRegistry.policyAdmin(policyId), address(0));
         assertTrue(policyRegistry.policyExists(policyId));
 
-        uint256 packed =
-            uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
+        uint256 packed = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
         assertEq(
             MockPolicyRegistryStorage.policyAdminFromPacked(packed),
             address(0),

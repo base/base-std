@@ -60,15 +60,9 @@ contract B20FullLayoutTest is B20Test {
         // TokenFactoryTest._b20Params(). Empty contractURI is the
         // zero-slot encoding; "Test" and "TST" are short-string
         // encoded via _expectedStringFieldSlot.
+        assertEq(vm.load(tokenAddr, MockB20Storage.nameSlot()), _expectedStringFieldSlot(token.name()), "slot 0: name");
         assertEq(
-            vm.load(tokenAddr, MockB20Storage.nameSlot()),
-            _expectedStringFieldSlot(token.name()),
-            "slot 0: name"
-        );
-        assertEq(
-            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
-            _expectedStringFieldSlot(token.symbol()),
-            "slot 1: symbol"
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()), _expectedStringFieldSlot(token.symbol()), "slot 1: symbol"
         );
         assertEq(
             vm.load(tokenAddr, MockB20Storage.contractURISlot()),
@@ -79,9 +73,7 @@ contract B20FullLayoutTest is B20Test {
         // ---------- ERC-20 accounting (slots 3..5) ----------
         // totalSupply = alice + bob balances (from _populate's mints).
         assertEq(
-            uint256(vm.load(tokenAddr, MockB20Storage.totalSupplySlot())),
-            token.totalSupply(),
-            "slot 3: totalSupply"
+            uint256(vm.load(tokenAddr, MockB20Storage.totalSupplySlot())), token.totalSupply(), "slot 3: totalSupply"
         );
         assertEq(
             uint256(vm.load(tokenAddr, MockB20Storage.balanceSlot(alice))),
@@ -161,28 +153,19 @@ contract B20FullLayoutTest is B20Test {
         assertEq(packedMint >> 64, 0, "slot 10 lanes 1..3: reserved must be zero");
 
         // ---------- pausedVectors (slot 11) ----------
-        uint256 expectedPaused =
-            (1 << uint8(IB20.PausableFeature.TRANSFER)) | (1 << uint8(IB20.PausableFeature.MINT));
+        uint256 expectedPaused = (1 << uint8(IB20.PausableFeature.TRANSFER)) | (1 << uint8(IB20.PausableFeature.MINT));
         assertEq(
-            uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot())),
-            expectedPaused,
-            "slot 11: pausedVectors"
+            uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot())), expectedPaused, "slot 11: pausedVectors"
         );
 
         // ---------- supplyCap (slot 12) ----------
-        assertEq(
-            uint256(vm.load(tokenAddr, MockB20Storage.supplyCapSlot())),
-            token.supplyCap(),
-            "slot 12: supplyCap"
-        );
+        assertEq(uint256(vm.load(tokenAddr, MockB20Storage.supplyCapSlot())), token.supplyCap(), "slot 12: supplyCap");
 
         // ---------- nonces (slot 13) ----------
         // Permit in setup increments alice's nonce; verify both the
         // surface and the slot match.
         assertEq(
-            uint256(vm.load(tokenAddr, MockB20Storage.nonceSlot(alice))),
-            token.nonces(alice),
-            "slot 13: nonces[alice]"
+            uint256(vm.load(tokenAddr, MockB20Storage.nonceSlot(alice))), token.nonces(alice), "slot 13: nonces[alice]"
         );
     }
 
@@ -196,12 +179,12 @@ contract B20FullLayoutTest is B20Test {
         // TokenFactoryTest._b20Params()). Set contractURI explicitly so
         // slot 2 has a non-zero value to assert.
         vm.prank(admin);
-        token.setContractURI("https://example.com/contract.json");
+        token.updateContractURI("https://example.com/contract.json");
 
         // ---------- Supply cap (lower from default uint256.max so the
         // slot holds a representative non-extreme value) ----------
         vm.prank(admin);
-        token.setSupplyCap(10_000 ether);
+        token.updateSupplyCap(10_000 ether);
 
         // ---------- Balances + totalSupply ----------
         _mint(alice, 100 ether);

@@ -58,12 +58,9 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         // ---------- policies (slot 0 hashed by id) ----------
         // Allowlist policy: admin = alice, type = ALLOWLIST.
         {
-            uint256 packedA =
-                uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(allowlistId)));
+            uint256 packedA = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(allowlistId)));
             assertEq(
-                MockPolicyRegistryStorage.policyAdminFromPacked(packedA),
-                alice,
-                "policies[allowlistId] admin lane"
+                MockPolicyRegistryStorage.policyAdminFromPacked(packedA), alice, "policies[allowlistId] admin lane"
             );
             assertEq(
                 MockPolicyRegistryStorage.policyTypeFromPacked(packedA),
@@ -73,12 +70,9 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         }
         // Blocklist policy: admin = attacker, type = BLOCKLIST.
         {
-            uint256 packedB =
-                uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(blocklistId)));
+            uint256 packedB = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(blocklistId)));
             assertEq(
-                MockPolicyRegistryStorage.policyAdminFromPacked(packedB),
-                attacker,
-                "policies[blocklistId] admin lane"
+                MockPolicyRegistryStorage.policyAdminFromPacked(packedB), attacker, "policies[blocklistId] admin lane"
             );
             assertEq(
                 MockPolicyRegistryStorage.policyTypeFromPacked(packedB),
@@ -101,9 +95,7 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
 
         // ---------- pendingAdmins (slot 2 hashed by id) ----------
         assertEq(
-            address(uint160(uint256(
-                vm.load(registry, MockPolicyRegistryStorage.pendingAdminSlot(allowlistId))
-            ))),
+            address(uint160(uint256(vm.load(registry, MockPolicyRegistryStorage.pendingAdminSlot(allowlistId))))),
             bob,
             "pendingAdmins[allowlistId] must hold bob"
         );
@@ -119,9 +111,8 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         // and lands counter at 3; the second create advances to 4.
         // Equivalently: nextCounter == (last id & counter mask) + 1.
         uint64 counterMask = (uint64(1) << 56) - 1;
-        uint256 lastCounter = blocklistId > allowlistId
-            ? uint256(blocklistId & counterMask)
-            : uint256(allowlistId & counterMask);
+        uint256 lastCounter =
+            blocklistId > allowlistId ? uint256(blocklistId & counterMask) : uint256(allowlistId & counterMask);
         assertEq(
             uint256(vm.load(registry, MockPolicyRegistryStorage.nextCounterSlot())),
             lastCounter + 1,

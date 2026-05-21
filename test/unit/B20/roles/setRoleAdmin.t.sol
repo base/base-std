@@ -17,7 +17,9 @@ contract B20SetRoleAdminTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
+            )
         );
         token.setRoleAdmin(role, newAdminRole);
     }
@@ -41,7 +43,8 @@ contract B20SetRoleAdminTest is B20Test {
     ///      For an unconfigured non-default role, previousAdminRole is the implied
     ///      DEFAULT_ADMIN_ROLE; for DEFAULT_ADMIN_ROLE itself, previous is bytes32(0).
     function test_setRoleAdmin_success_emitsRoleAdminChanged(bytes32 role, bytes32 newAdminRole) public {
-        bytes32 previousAdminRole = role == B20Constants.DEFAULT_ADMIN_ROLE ? bytes32(0) : B20Constants.DEFAULT_ADMIN_ROLE;
+        bytes32 previousAdminRole =
+            role == B20Constants.DEFAULT_ADMIN_ROLE ? bytes32(0) : B20Constants.DEFAULT_ADMIN_ROLE;
 
         vm.expectEmit(true, false, false, true, address(token));
         emit IB20.RoleAdminChanged(role, previousAdminRole, newAdminRole);

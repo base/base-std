@@ -19,7 +19,9 @@ contract B20RenounceLastAdminTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
+            )
         );
         token.renounceLastAdmin();
     }
@@ -45,12 +47,18 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         Paired slot assertion: the `roles[DEFAULT_ADMIN_ROLE][admin]`
     ///         slot reads back as zero.
     function test_renounceLastAdmin_success_clearsAdminRole() public {
-        assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "precondition: admin holds B20Constants.DEFAULT_ADMIN_ROLE");
+        assertTrue(
+            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin),
+            "precondition: admin holds B20Constants.DEFAULT_ADMIN_ROLE"
+        );
 
         vm.prank(admin);
         token.renounceLastAdmin();
 
-        assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin no longer holds B20Constants.DEFAULT_ADMIN_ROLE");
+        assertFalse(
+            token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin),
+            "admin no longer holds B20Constants.DEFAULT_ADMIN_ROLE"
+        );
         assertEq(
             uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, admin))),
             uint256(0),
@@ -61,13 +69,14 @@ contract B20RenounceLastAdminTest is B20Test {
     /// @notice Verifies admin-gated operations revert after renounceLastAdmin
     /// @dev    Permanent-immutability invariant. updatePolicy is the canonical example;
     ///         the same mechanism (no admin holder → AccessControlUnauthorizedAccount on
-    ///         any DEFAULT_ADMIN_ROLE-gated call) covers setSupplyCap, setContractURI,
-    ///         setName, setSymbol, grantRole / revokeRole / setRoleAdmin for any role.
+    ///         any DEFAULT_ADMIN_ROLE-gated call) covers updateSupplyCap, updateContractURI,
+    ///         updateName, updateSymbol, grantRole / revokeRole / setRoleAdmin for any role.
     ///         No test should be able to reinstate an admin after this transition.
     function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyType, uint64 newPolicyId) public {
         // Use a built-in policy ID so updatePolicy gets past policyExists() and would
         // otherwise succeed; the revert here is from the role check, not policy validation.
-        newPolicyId = newPolicyId % 2 == 0 ? PolicyRegistryConstants.ALWAYS_ALLOW_ID : PolicyRegistryConstants.ALWAYS_BLOCK_ID;
+        newPolicyId =
+            newPolicyId % 2 == 0 ? PolicyRegistryConstants.ALWAYS_ALLOW_ID : PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
         vm.prank(admin);
         token.renounceLastAdmin();
@@ -75,7 +84,9 @@ contract B20RenounceLastAdminTest is B20Test {
         // The original admin is no longer admin and cannot reach the admin-only setter.
         vm.prank(admin);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, B20Constants.DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, admin, B20Constants.DEFAULT_ADMIN_ROLE
+            )
         );
         token.updatePolicy(policyType, newPolicyId);
     }
@@ -92,7 +103,9 @@ contract B20RenounceLastAdminTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
+            )
         );
         token.grantRole(B20Constants.DEFAULT_ADMIN_ROLE, wouldBeNewAdmin);
     }

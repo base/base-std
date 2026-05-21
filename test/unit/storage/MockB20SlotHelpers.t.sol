@@ -167,7 +167,7 @@ contract MockB20SlotHelpersTest is B20Test {
         assertEq(vectors & 1, 1, "TRANSFER bit (bit 0) must be set after pause");
     }
 
-    /// @notice Verifies `supplyCapSlot()` returns the slot setSupplyCap writes to.
+    /// @notice Verifies `supplyCapSlot()` returns the slot updateSupplyCap writes to.
     /// @dev Default-token bootstrap sets supplyCap = type(uint256).max; we lower it
     ///      and re-read both via surface and slot.
     function test_supplyCapSlot_success_locatesSupplyCap(uint256 cap) public {
@@ -177,13 +177,11 @@ contract MockB20SlotHelpersTest is B20Test {
 
         _grantRole(B20Constants.MINT_ROLE, admin);
         vm.prank(admin);
-        token.setSupplyCap(cap);
+        token.updateSupplyCap(cap);
 
         assertEq(token.supplyCap(), cap, "precondition: supplyCap must match");
         assertEq(
-            uint256(vm.load(address(token), MockB20Storage.supplyCapSlot())),
-            cap,
-            "supplyCapSlot must locate supplyCap"
+            uint256(vm.load(address(token), MockB20Storage.supplyCapSlot())), cap, "supplyCapSlot must locate supplyCap"
         );
     }
 
@@ -206,9 +204,7 @@ contract MockB20SlotHelpersTest is B20Test {
             "TRANSFER_RECEIVER lane must remain at its default (ALWAYS_ALLOW = 0)"
         );
         assertEq(
-            MockB20Storage.transferExecutorPolicyId(packed),
-            0,
-            "TRANSFER_EXECUTOR lane must remain at its default"
+            MockB20Storage.transferExecutorPolicyId(packed), 0, "TRANSFER_EXECUTOR lane must remain at its default"
         );
     }
 
@@ -248,8 +244,7 @@ contract MockB20SlotHelpersTest is B20Test {
     ///      and flips `initialized` to true. The packed slot must decode
     ///      to (1, true).
     function test_adminCountAndInitializedSlot_success_decodesAfterBootstrap() public view {
-        uint256 packed =
-            uint256(vm.load(address(token), MockB20Storage.adminCountAndInitializedSlot()));
+        uint256 packed = uint256(vm.load(address(token), MockB20Storage.adminCountAndInitializedSlot()));
         assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must be 1 after bootstrap");
         assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must be true after bootstrap");
     }
@@ -271,7 +266,7 @@ contract MockB20SlotHelpersTest is B20Test {
     function test_nameSlot_success_holdsShortStringEncoding() public view {
         bytes32 raw = vm.load(address(token), MockB20Storage.nameSlot());
         // Bootstrap-default name from MockTokenFactory: empty string until
-        // setName is called, so encoding is the all-zero slot. We
+        // updateName is called, so encoding is the all-zero slot. We
         // also check the encoding is well-formed for whatever name is
         // currently set.
         bytes memory nameBytes = bytes(token.name());

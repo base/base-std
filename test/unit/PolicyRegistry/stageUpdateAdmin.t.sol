@@ -40,9 +40,9 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), newAdmin);
         assertEq(policyRegistry.policyAdmin(policyId), currentAdmin);
         assertEq(
-            address(uint160(uint256(
-                vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))
-            ))),
+            address(
+                uint160(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))))
+            ),
             newAdmin,
             "pendingAdmins[id] slot must hold the staged candidate"
         );
@@ -68,9 +68,9 @@ contract PolicyRegistryStageUpdateAdminTest is PolicyRegistryTest {
         policyRegistry.stageUpdateAdmin(policyId, second);
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), second);
         assertEq(
-            address(uint160(uint256(
-                vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))
-            ))),
+            address(
+                uint160(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId))))
+            ),
             second,
             "pendingAdmins[id] slot must reflect only the second stage"
         );

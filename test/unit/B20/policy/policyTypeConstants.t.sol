@@ -12,28 +12,52 @@ contract B20PolicyTypeConstantsTest is B20Test {
     /// @notice Verifies TRANSFER_SENDER_POLICY returns keccak256("TRANSFER_SENDER_POLICY")
     /// @dev Identifier stability for off-chain consumers
     function test_TRANSFER_SENDER_POLICY_success_matchesExpected() public view {
-        assertEq(token.TRANSFER_SENDER_POLICY(), keccak256("TRANSFER_SENDER_POLICY"), "B20Constants.TRANSFER_SENDER_POLICY digest");
-        assertEq(token.TRANSFER_SENDER_POLICY(), B20Constants.TRANSFER_SENDER_POLICY, "must match B20Test's local constant");
+        assertEq(
+            token.TRANSFER_SENDER_POLICY(),
+            keccak256("TRANSFER_SENDER_POLICY"),
+            "B20Constants.TRANSFER_SENDER_POLICY digest"
+        );
+        assertEq(
+            token.TRANSFER_SENDER_POLICY(), B20Constants.TRANSFER_SENDER_POLICY, "must match B20Test's local constant"
+        );
     }
 
     /// @notice Verifies TRANSFER_RECEIVER_POLICY returns keccak256("TRANSFER_RECEIVER_POLICY")
     /// @dev Identifier stability for off-chain consumers
     function test_TRANSFER_RECEIVER_POLICY_success_matchesExpected() public view {
-        assertEq(token.TRANSFER_RECEIVER_POLICY(), keccak256("TRANSFER_RECEIVER_POLICY"), "B20Constants.TRANSFER_RECEIVER_POLICY digest");
-        assertEq(token.TRANSFER_RECEIVER_POLICY(), B20Constants.TRANSFER_RECEIVER_POLICY, "must match B20Test's local constant");
+        assertEq(
+            token.TRANSFER_RECEIVER_POLICY(),
+            keccak256("TRANSFER_RECEIVER_POLICY"),
+            "B20Constants.TRANSFER_RECEIVER_POLICY digest"
+        );
+        assertEq(
+            token.TRANSFER_RECEIVER_POLICY(),
+            B20Constants.TRANSFER_RECEIVER_POLICY,
+            "must match B20Test's local constant"
+        );
     }
 
     /// @notice Verifies TRANSFER_EXECUTOR_POLICY returns keccak256("TRANSFER_EXECUTOR_POLICY")
     /// @dev Identifier stability for off-chain consumers
     function test_TRANSFER_EXECUTOR_POLICY_success_matchesExpected() public view {
-        assertEq(token.TRANSFER_EXECUTOR_POLICY(), keccak256("TRANSFER_EXECUTOR_POLICY"), "B20Constants.TRANSFER_EXECUTOR_POLICY digest");
-        assertEq(token.TRANSFER_EXECUTOR_POLICY(), B20Constants.TRANSFER_EXECUTOR_POLICY, "must match B20Test's local constant");
+        assertEq(
+            token.TRANSFER_EXECUTOR_POLICY(),
+            keccak256("TRANSFER_EXECUTOR_POLICY"),
+            "B20Constants.TRANSFER_EXECUTOR_POLICY digest"
+        );
+        assertEq(
+            token.TRANSFER_EXECUTOR_POLICY(),
+            B20Constants.TRANSFER_EXECUTOR_POLICY,
+            "must match B20Test's local constant"
+        );
     }
 
     /// @notice Verifies MINT_RECEIVER_POLICY returns keccak256("MINT_RECEIVER_POLICY")
     /// @dev Identifier stability for off-chain consumers
     function test_MINT_RECEIVER_POLICY_success_matchesExpected() public view {
-        assertEq(token.MINT_RECEIVER_POLICY(), keccak256("MINT_RECEIVER_POLICY"), "B20Constants.MINT_RECEIVER_POLICY digest");
+        assertEq(
+            token.MINT_RECEIVER_POLICY(), keccak256("MINT_RECEIVER_POLICY"), "B20Constants.MINT_RECEIVER_POLICY digest"
+        );
         assertEq(token.MINT_RECEIVER_POLICY(), B20Constants.MINT_RECEIVER_POLICY, "must match B20Test's local constant");
     }
 }

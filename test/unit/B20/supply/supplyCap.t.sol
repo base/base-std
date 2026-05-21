@@ -11,11 +11,11 @@ contract B20SupplyCapTest is B20Test {
         assertEq(token.supplyCap(), type(uint256).max, "fresh token must start with unbounded cap");
     }
 
-    /// @notice Verifies supplyCap reflects updates made via setSupplyCap
-    /// @dev Mutable cap readback; canonical setter test lives in setSupplyCap.t.sol
+    /// @notice Verifies supplyCap reflects updates made via updateSupplyCap
+    /// @dev Mutable cap readback; canonical setter test lives in updateSupplyCap.t.sol
     function test_supplyCap_success_reflectsSetSupplyCap(uint256 newCap) public {
         vm.prank(admin);
-        token.setSupplyCap(newCap);
-        assertEq(token.supplyCap(), newCap, "supplyCap must reflect setSupplyCap");
+        token.updateSupplyCap(newCap);
+        assertEq(token.supplyCap(), newCap, "supplyCap must reflect updateSupplyCap");
     }
 }

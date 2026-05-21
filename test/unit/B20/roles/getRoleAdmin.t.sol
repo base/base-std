@@ -11,7 +11,11 @@ contract B20GetRoleAdminTest is B20Test {
     ///      that special case is covered implicitly by the setRoleAdmin-emits test.
     function test_getRoleAdmin_success_defaultsToAdminRole(bytes32 role) public view {
         vm.assume(role != B20Constants.DEFAULT_ADMIN_ROLE);
-        assertEq(token.getRoleAdmin(role), B20Constants.DEFAULT_ADMIN_ROLE, "default admin must be B20Constants.DEFAULT_ADMIN_ROLE");
+        assertEq(
+            token.getRoleAdmin(role),
+            B20Constants.DEFAULT_ADMIN_ROLE,
+            "default admin must be B20Constants.DEFAULT_ADMIN_ROLE"
+        );
     }
 
     /// @notice Verifies getRoleAdmin returns the new admin role after setRoleAdmin

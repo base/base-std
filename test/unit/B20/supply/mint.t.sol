@@ -50,7 +50,7 @@ contract B20MintTest is B20Test {
         amount = bound(amount, cap + 1, type(uint256).max - cap);
 
         vm.prank(admin);
-        token.setSupplyCap(cap);
+        token.updateSupplyCap(cap);
 
         _grantRole(B20Constants.MINT_ROLE, minter);
         vm.prank(minter);

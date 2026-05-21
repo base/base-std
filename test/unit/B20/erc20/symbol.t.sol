@@ -12,13 +12,13 @@ contract B20SymbolTest is B20Test {
         assertEq(token.symbol(), "TST", "symbol must match creation value");
     }
 
-    /// @notice Verifies symbol reflects updates made via setSymbol
-    /// @dev Mutable-metadata readback; canonical setter test lives in setSymbol.t.sol.
-    ///      setSymbol requires METADATA_ROLE, which is held by no one by default.
+    /// @notice Verifies symbol reflects updates made via updateSymbol
+    /// @dev Mutable-metadata readback; canonical setter test lives in updateSymbol.t.sol.
+    ///      updateSymbol requires METADATA_ROLE, which is held by no one by default.
     function test_symbol_success_reflectsSetSymbol(string calldata newSymbol) public {
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        token.setSymbol(newSymbol);
-        assertEq(token.symbol(), newSymbol, "symbol must reflect setSymbol");
+        token.updateSymbol(newSymbol);
+        assertEq(token.symbol(), newSymbol, "symbol must reflect updateSymbol");
     }
 }
