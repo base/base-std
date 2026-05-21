@@ -377,6 +377,35 @@ library MockB20SecurityStorage {
     function derivedLocation() internal pure returns (bytes32) {
         return keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff));
     }
+
+    // ============================================================
+    //                     TOP-LEVEL FIELD SLOTS
+    // ============================================================
+
+    function sharesToTokensRatioSlot() internal pure returns (bytes32) { return slotOf(SHARES_TO_TOKENS_RATIO_OFFSET); }
+    function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
+    function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }
+
+    // ============================================================
+    //                     MAPPING MEMBER SLOTS
+    // ============================================================
+    // Solidity derives a string-keyed mapping value's slot as
+    //   keccak256(abi.encodePacked(key, baseSlot))
+    // where the string's raw bytes (unpadded) are concatenated with the
+    // 32-byte base slot. The Rust impl reproduces this scheme
+    // byte-for-byte.
+
+    /// @notice Slot of `usedAnnouncementIds[id]`.
+    function usedAnnouncementIdSlot(string memory id) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(id, usedAnnouncementIdsBaseSlot()));
+    }
+
+    /// @notice Slot of `identifiers[identifierType]` (the value, which
+    ///         is itself a string and follows Solidity's short/long
+    ///         encoding convention).
+    function identifierSlot(string memory identifierType) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(identifierType, identifiersBaseSlot()));
+    }
 }
 
 library MockB20RedeemStorage {
@@ -420,6 +449,13 @@ library MockB20RedeemStorage {
     function derivedLocation() internal pure returns (bytes32) {
         return keccak256(abi.encode(uint256(keccak256("base.b20.redeem")) - 1)) & ~bytes32(uint256(0xff));
     }
+
+    // ============================================================
+    //                     TOP-LEVEL FIELD SLOTS
+    // ============================================================
+
+    function minimumRedeemableSlot() internal pure returns (bytes32) { return slotOf(MINIMUM_REDEEMABLE_OFFSET); }
+    function redeemPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(REDEEM_POLICY_IDS_OFFSET); }
 }
 
 /// @title MockB20StablecoinStorage

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
@@ -83,6 +84,17 @@ contract MockB20Security is MockB20, IB20Security {
     ///         `sharesOf` divide by this after multiplying by the
     ///         stored ratio.
     uint256 public constant WAD_PRECISION = 1e18;
+
+    // ============================================================
+    //                           DECIMALS
+    // ============================================================
+
+    /// @notice Security-variant decimals are fixed at 6. Overrides the
+    ///         base `MockB20.decimals()` (which returns 18 for the
+    ///         default variant) per the `IB20Security` convention.
+    function decimals() external pure override(MockB20, IB20) returns (uint8) {
+        return 6;
+    }
 
     // ============================================================
     //                          MODIFIERS

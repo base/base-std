@@ -18,6 +18,32 @@ contract TokenFactoryTest is BaseTest {
     // -- Precompile handle --
     ITokenFactory internal factory = StdPrecompiles.TOKEN_FACTORY;
 
+    // ============================================================
+    //                  SECURITY-VARIANT FIXTURES
+    // ============================================================
+    // Shared across every test that constructs `B20SecurityCreateParams`
+    // (the factory-side `createToken` tests and the variant-side
+    // `B20Security/*` tests). Lives on `TokenFactoryTest` because it's
+    // the deepest common base of both. Production code (the factory
+    // mock and the Rust precompile) hardcodes the `"ISIN"` key the
+    // same way; that's intentional and not test-fixture data.
+
+    /// @notice Identifier-type key for the ISIN entry. The factory
+    ///         writes this key as part of `createToken`'s SECURITY
+    ///         seeding; subsequent reads via `securityIdentifier(...)`
+    ///         match against the same key.
+    string internal constant IDENTIFIER_ISIN = "ISIN";
+
+    /// @notice Placeholder ISIN used as the default in `_securityParams()`.
+    ///         All-zero so it's visually distinct from a real-world
+    ///         ISIN in test output.
+    string internal constant DEFAULT_ISIN = "US0000000000";
+
+    /// @notice Apple Inc.'s real ISIN. Used as the alternate-value
+    ///         fixture in tests that need to prove the seeded value
+    ///         actually traverses the factory's write path.
+    string internal constant APPLE_ISIN = "US0378331005";
+
     // -- Param builders --
 
     /// @notice Build a `B20CreateParams` with explicit fields.
@@ -69,9 +95,9 @@ contract TokenFactoryTest is BaseTest {
         });
     }
 
-    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin, sample ISIN).
+    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin, `DEFAULT_ISIN`).
     function _securityParams() internal view returns (ITokenFactory.B20SecurityCreateParams memory) {
-        return _securityParams("Security Test", "SEC", admin, "US0000000000", 0);
+        return _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
     }
 
     // -- Action wrappers --

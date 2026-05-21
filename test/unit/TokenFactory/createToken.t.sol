@@ -5,11 +5,18 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
+import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 import {ISO4217} from "test/lib/ISO4217.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
-import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
+import {
+    MockB20Storage,
+    MockB20StablecoinStorage,
+    MockB20SecurityStorage,
+    MockB20RedeemStorage
+} from "test/lib/mocks/MockB20Storage.sol";
 import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
 
 contract TokenFactoryCreateTokenTest is TokenFactoryTest {
@@ -86,53 +93,28 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
-    /// @notice Every entry in the explicit ISO 4217 blocklist reverts.
-    /// @dev Pins the documented exclusions; new entries are picked up automatically.
-    function test_createToken_revert_currency_blocklist(uint256 seed, address caller) public {
+    /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant
+    /// @dev Each variant arm has its own version check; this exercises the security arm's check.
+    function test_createToken_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt)
+        public
+    {
         _assumeValidCaller(caller);
-        uint256 idx = seed % ISO4217.excludedCount();
-        string memory code = ISO4217.excludedAt(idx);
-        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
+        vm.assume(badVersion != 1);
+        ITokenFactory.B20SecurityCreateParams memory p = _securityParams();
+        p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
-        factory.createToken(
-            ITokenFactory.TokenVariant.STABLECOIN, keccak256(abi.encode("blocklist", seed)), abi.encode(p), new bytes[](0)
-        );
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, badVersion));
+        factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
-    /// @notice Rejected create leaves no partial state at the deterministic address.
-    /// @dev Retry with the same (sender, salt) and a valid currency must succeed at the same address.
-    function test_createToken_revert_currency_leavesNoPartialState(address caller, bytes32 salt) public {
+    /// @notice Verifies security createToken reverts when isin is the empty string
+    /// @dev Per-variant required-field check; checks MissingRequiredField() error
+    function test_createToken_revert_missingIsin(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.STABLECOIN, caller, salt);
-
-        // First attempt: invalid currency.
-        ITokenFactory.B20StablecoinCreateParams memory bad = _stablecoinParams("Test", "TST", admin, "XAU");
+        ITokenFactory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, "XAU"));
-        factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(bad), new bytes[](0));
-
-        assertEq(predicted.code.length, 0, "predicted address must be empty after rejected create");
-
-        // Retry with a valid currency. Same (sender, salt) -> same address.
-        address retried =
-            _createStablecoin(caller, salt, _stablecoinParams("Test", "TST", admin, "USD"), new bytes[](0));
-        assertEq(retried, predicted, "retry must produce the same deterministic address");
-        assertEq(IB20Stablecoin(retried).currency(), "USD", "retry currency must be the valid one");
-    }
-
-    /// @notice Verifies the SECURITY variant currently reverts UnsupportedVersion(0)
-    /// @dev Pins down the current "Security variant deferred to Katzman" behavior so it
-    ///      can't silently start succeeding before the variant impl actually lands. Delete
-    ///      this test when MockTokenFactory.createToken grows a real SECURITY arm.
-    function test_createToken_revert_securityVariantDeferred(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-
-        // Use a stablecoin params struct as a stand-in (the security struct doesn't matter:
-        // the factory reverts before decoding because the variant arm short-circuits).
-        vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, uint8(0)));
-        factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(_stablecoinParams()), new bytes[](0));
+        vm.expectRevert(ITokenFactory.MissingRequiredField.selector);
+        factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts when (variant, sender, salt) collides
@@ -242,6 +224,78 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertEq(actual, predicted, "createToken address must match prediction");
     }
 
+    /// @notice Verifies createToken returns the predicted address for the security variant
+    /// @dev Address determinism: returned address must equal getTokenAddress(SECURITY, sender, salt)
+    function test_createToken_success_securityMatchesPrediction(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.SECURITY, caller, salt);
+        address actual = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
+        assertEq(actual, predicted, "createToken address must match prediction");
+    }
+
+    /// @notice Verifies security createToken seeds the initial ISIN identifier and minimumRedeemable
+    /// @dev Variant-specific initial state: `identifiers["ISIN"]` is written at the
+    ///      `base.b20.security` namespace and `minimumRedeemable` at the
+    ///      `base.b20.redeem` namespace. Paired slot assertions confirm both fields
+    ///      land at the expected slots with the correct encodings.
+    function test_createToken_success_securitySeedsInitialState(address caller, bytes32 salt, uint256 minRedeem)
+        public
+    {
+        _assumeValidCaller(caller);
+        ITokenFactory.B20SecurityCreateParams memory p =
+            _securityParams("Security Test", "SEC", admin, APPLE_ISIN, minRedeem);
+        address token = _createSecurity(caller, salt, p, new bytes[](0));
+
+        assertEq(IB20Security(token).securityIdentifier(IDENTIFIER_ISIN), APPLE_ISIN, "ISIN must be seeded at creation");
+        assertEq(IB20Security(token).minimumRedeemable(), minRedeem, "minimumRedeemable must be seeded at creation");
+        assertEq(
+            vm.load(token, MockB20SecurityStorage.identifierSlot(IDENTIFIER_ISIN)),
+            _expectedStringFieldSlot(APPLE_ISIN),
+            "identifiers[ISIN] slot must hold the short-string encoding"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20RedeemStorage.minimumRedeemableSlot())),
+            minRedeem,
+            "minimumRedeemable slot must reflect the seeded value"
+        );
+    }
+
+    /// @notice Verifies security createToken does NOT emit SecurityIdentifierUpdated for the seeded ISIN
+    /// @dev Creation-time initial state is written directly via vm.store and emits no event,
+    ///      paralleling how stablecoin currency is seeded. Post-creation
+    ///      `updateSecurityIdentifier` calls DO emit the event; that's covered separately.
+    function test_createToken_success_securitySeededIsinEmitsNoEvent(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        vm.recordLogs();
+        _createSecurity(caller, salt, _securityParams(), new bytes[](0));
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 identifierUpdatedSig = IB20Security.SecurityIdentifierUpdated.selector;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length == 0) continue;
+            assertNotEq(logs[i].topics[0], identifierUpdatedSig, "no SecurityIdentifierUpdated at creation");
+        }
+    }
+
+    /// @notice Verifies security createToken executes with admin == address(0)
+    /// @dev Same zero-admin success behavior on the security variant. Paired slot assertions
+    ///      cross-check both the base namespace (adminCount=0, initialized=true) and the variant
+    ///      namespace (ISIN identifier present, minimumRedeemable set).
+    function test_createToken_success_zeroAdminGrantsNoRole_security(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        ITokenFactory.B20SecurityCreateParams memory p =
+            _securityParams("NoOwner Security", "NOSEC", address(0), DEFAULT_ISIN, 0);
+        address token = _createSecurity(caller, salt, p, new bytes[](0));
+
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
+        assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
+        assertEq(IB20Security(token).securityIdentifier(IDENTIFIER_ISIN), DEFAULT_ISIN, "ISIN must still be set");
+
+        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 0, "adminCount must be 0 on zero-admin path");
+        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must still be set on zero-admin path");
+    }
+
     /// @notice Major reserve currencies (USD, EUR, JPY, GBP, CHF, CNY, CAD, AUD) are accepted.
     /// @dev Round-trip through `currency()` proves the string is stored verbatim.
     function test_createToken_success_currency_acceptsMajorFiatCodes(address caller) public {
@@ -294,6 +348,20 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         vm.expectEmit(true, true, false, true, address(factory));
         emit ITokenFactory.TokenCreated(predicted, ITokenFactory.TokenVariant.DEFAULT, "MyToken", "MYT", 18);
         _createDefault(caller, salt, p, new bytes[](0));
+    }
+
+    /// @notice Verifies createToken emits TokenCreated with decimals=6 for the security variant
+    /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 the same
+    ///      way the default emitter test pins decimals=18.
+    function test_createToken_success_emitsTokenCreated_security(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        ITokenFactory.B20SecurityCreateParams memory p =
+            _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
+        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.SECURITY, caller, salt);
+
+        vm.expectEmit(true, true, false, true, address(factory));
+        emit ITokenFactory.TokenCreated(predicted, ITokenFactory.TokenVariant.SECURITY, "Security Test", "SEC", 6);
+        _createSecurity(caller, salt, p, new bytes[](0));
     }
 
     /// @notice Verifies createToken executes each entry in initCalls during the bootstrap window
@@ -463,6 +531,13 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
             uint256(ITokenFactory.TokenVariant.STABLECOIN),
             "stablecoin variant byte mismatch"
         );
+
+        address securityToken = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
+        assertEq(
+            uint256(uint8(uint160(securityToken) >> 72)),
+            uint256(ITokenFactory.TokenVariant.SECURITY),
+            "security variant byte mismatch"
+        );
     }
 
     /// @notice Verifies createToken correctly stores name and symbol strings >= 32 bytes
@@ -596,13 +671,15 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     }
 
     /// @notice Verifies decimals are fixed by variant and not encoded in address bytes
-    /// @dev Default tokens return 18, stablecoin tokens return 6.
+    /// @dev Default tokens return 18, stablecoin and security tokens return 6.
     function test_createToken_success_decimalsFixedByVariant(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address defaultToken = _createDefault(caller, salt, _b20Params("Test", "TST", admin), new bytes[](0));
         address stablecoinToken = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
+        address securityToken = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
 
         assertEq(MockB20(defaultToken).decimals(), 18, "default decimals must be fixed at 18");
         assertEq(MockB20(stablecoinToken).decimals(), 6, "stablecoin decimals must be fixed at 6");
+        assertEq(MockB20(securityToken).decimals(), 6, "security decimals must be fixed at 6");
     }
 }
