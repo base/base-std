@@ -6,6 +6,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
+import {ISO4217} from "test/lib/ISO4217.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
@@ -57,14 +58,55 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
-    /// @notice Verifies stablecoin createToken reverts when currency is the empty string
-    /// @dev Per-variant required-field check; checks MissingRequiredField() error
-    function test_createToken_revert_missingCurrency(address caller, bytes32 salt) public {
+    // STABLECOIN currency validation — see docs/b20/stablecoin/currency-validation.md.
+
+    /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
+    /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
+    ///      via `vm.assume(!isValidFiatCode)`.
+    function test_createToken_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
+        public
+    {
         _assumeValidCaller(caller);
-        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("USD Test", "USDT", admin, "");
+        vm.assume(!ISO4217.isValidFiatCode(code));
+        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
-        vm.expectRevert(ITokenFactory.MissingRequiredField.selector);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+    }
+
+    /// @notice Every entry in the explicit ISO 4217 blocklist reverts.
+    /// @dev Pins the documented exclusions; new entries are picked up automatically.
+    function test_createToken_revert_currency_blocklist(uint256 seed, address caller) public {
+        _assumeValidCaller(caller);
+        uint256 idx = seed % ISO4217.excludedCount();
+        string memory code = ISO4217.excludedAt(idx);
+        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
+        factory.createToken(
+            ITokenFactory.TokenVariant.STABLECOIN, keccak256(abi.encode("blocklist", seed)), abi.encode(p), new bytes[](0)
+        );
+    }
+
+    /// @notice Rejected create leaves no partial state at the deterministic address.
+    /// @dev Retry with the same (sender, salt) and a valid currency must succeed at the same address.
+    function test_createToken_revert_currency_leavesNoPartialState(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.STABLECOIN, caller, salt);
+
+        // First attempt: invalid currency.
+        ITokenFactory.B20StablecoinCreateParams memory bad = _stablecoinParams("Test", "TST", admin, "XAU");
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, "XAU"));
+        factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(bad), new bytes[](0));
+
+        assertEq(predicted.code.length, 0, "predicted address must be empty after rejected create");
+
+        // Retry with a valid currency. Same (sender, salt) -> same address.
+        address retried =
+            _createStablecoin(caller, salt, _stablecoinParams("Test", "TST", admin, "USD"), new bytes[](0));
+        assertEq(retried, predicted, "retry must produce the same deterministic address");
+        assertEq(IB20Stablecoin(retried).currency(), "USD", "retry currency must be the valid one");
     }
 
     /// @notice Verifies the SECURITY variant currently reverts UnsupportedVersion(0)
@@ -190,6 +232,46 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.STABLECOIN, caller, salt);
         address actual = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
+    }
+
+    /// @notice Major reserve currencies (USD, EUR, JPY, GBP, CHF, CNY, CAD, AUD) are accepted.
+    /// @dev Round-trip through `currency()` proves the string is stored verbatim.
+    function test_createToken_success_currency_acceptsMajorFiatCodes(address caller) public {
+        _assumeValidCaller(caller);
+        string[8] memory majors = ["USD", "EUR", "JPY", "GBP", "CHF", "CNY", "CAD", "AUD"];
+        for (uint256 i = 0; i < majors.length; i++) {
+            address token = _createStablecoin(
+                caller,
+                keccak256(abi.encode("major-fiat", i)),
+                _stablecoinParams("Test", "TST", admin, majors[i]),
+                new bytes[](0)
+            );
+            assertEq(
+                IB20Stablecoin(token).currency(),
+                majors[i],
+                "currency() must round-trip the accepted code byte-for-byte"
+            );
+        }
+    }
+
+    /// @notice Multi-country X-prefix fiat (XOF, XAF, XCD, XPF) is accepted.
+    /// @dev Pins the deliberate carve-out: X-prefix is not a categorical exclusion.
+    function test_createToken_success_currency_acceptsMultiCountryXPrefix(address caller) public {
+        _assumeValidCaller(caller);
+        string[4] memory xFiat = ["XOF", "XAF", "XCD", "XPF"];
+        for (uint256 i = 0; i < xFiat.length; i++) {
+            address token = _createStablecoin(
+                caller,
+                keccak256(abi.encode("xprefix-fiat", i)),
+                _stablecoinParams("Test", "TST", admin, xFiat[i]),
+                new bytes[](0)
+            );
+            assertEq(
+                IB20Stablecoin(token).currency(),
+                xFiat[i],
+                "multi-country X-prefix fiat code must round-trip"
+            );
+        }
     }
 
     /// @notice Verifies createToken emits TokenCreated with the correct identity fields

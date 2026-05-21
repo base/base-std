@@ -112,12 +112,15 @@ interface ITokenFactory {
     /// @param name          ERC-20 token name.
     /// @param symbol        ERC-20 token symbol.
     /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param currency      Immutable currency identifier (e.g. "USD",
-    ///                      "EUR", "XAU"). Required: empty string
-    ///                      reverts. See `IB20Stablecoin.currency` for
-    ///                      the convention.
-    /// @dev    Decimals are fixed at `6` (the SPL stablecoin convention).
-    ///         There is no decimals field on this struct.
+    /// @param currency      Immutable ISO 4217 fiat code this stablecoin
+    ///                      tracks (e.g. `"USD"`, `"EUR"`). Validated
+    ///                      against the allowlist in `ISO4217.sol`;
+    ///                      anything off the list reverts with
+    ///                      `InvalidCurrency(code)`. See
+    ///                      `docs/b20/stablecoin/currency-validation.md`.
+    /// @dev    Decimals are fixed at `6`. There is no decimals field
+    ///         and no setter for `currency` — both are fixed for the
+    ///         token's lifetime at creation.
     struct B20StablecoinCreateParams {
         uint8 version;
         string name;
@@ -169,8 +172,19 @@ interface ITokenFactory {
     error UnsupportedVersion(uint8 version);
 
     /// @notice A required string argument was the empty string (e.g.
-    ///         stablecoin `currency`, security `isin`).
+    ///         security `isin`). The stablecoin `currency` field is
+    ///         validated more tightly and reverts with
+    ///         `InvalidCurrency` instead — including for the empty
+    ///         string — so callers get a single, diagnostic-carrying
+    ///         error for every currency rejection rather than two
+    ///         disjoint failure modes for the same field.
     error MissingRequiredField();
+
+    /// @notice The stablecoin `currency` field was not on the ISO 4217
+    ///         fiat allowlist. Carries the offending string verbatim
+    ///         for diagnostics.
+    /// @dev    See `docs/b20/stablecoin/currency-validation.md` for the allowlist.
+    error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the
     ///         underlying revert reason where the call returns one;
