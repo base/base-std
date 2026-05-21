@@ -534,7 +534,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         address securityToken = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
         assertEq(
-            uint256(factory.getTokenVariant(securityToken)),
+            uint256(uint8(uint160(securityToken) >> 72)),
             uint256(ITokenFactory.TokenVariant.SECURITY),
             "security variant byte mismatch"
         );

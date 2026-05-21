@@ -96,8 +96,8 @@ contract B20SecurityRedeemWithMemoTest is B20SecurityTest {
         amount = bound(amount, 1, type(uint128).max);
         _mint(alice, amount);
 
-        vm.expectEmit(false, false, false, true, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(true, true, false, true, address(token));
+        emit IB20.Memo(alice, memo);
         vm.prank(alice);
         security().redeemWithMemo(amount, memo);
     }

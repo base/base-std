@@ -67,11 +67,11 @@ contract B20SecurityAnnounceTest is B20SecurityTest {
     /// @dev Atomicity: an inner-call revert unwinds the whole transaction so no
     ///      Announcement event is ever observable without its matching EndAnnouncement.
     ///      `InternalCallFailed(call)` carries the offending blob. We trigger it by
-    ///      passing a setName call which requires METADATA_ROLE that the operator lacks —
+    ///      passing an updateName call which requires METADATA_ROLE that the operator lacks —
     ///      the inner revert wraps as InternalCallFailed at the outer layer.
     function test_announce_revert_innerCallFailed() public {
         _grantOperator();
-        bytes memory failingCall = abi.encodeWithSelector(IB20.setName.selector, "rebrand");
+        bytes memory failingCall = abi.encodeWithSelector(IB20.updateName.selector, "rebrand");
 
         vm.prank(operator);
         vm.expectRevert(abi.encodeWithSelector(IB20Security.InternalCallFailed.selector, failingCall));
@@ -84,7 +84,7 @@ contract B20SecurityAnnounceTest is B20SecurityTest {
     ///      inner-call loop. A subsequent announce with the same id must succeed.
     function test_announce_revert_atomicityRestoresIdState() public {
         _grantOperator();
-        bytes memory failingCall = abi.encodeWithSelector(IB20.setName.selector, "rebrand");
+        bytes memory failingCall = abi.encodeWithSelector(IB20.updateName.selector, "rebrand");
 
         vm.prank(operator);
         try security().announce(_singletonBytes(failingCall), "atomic-id", "desc", "uri") {

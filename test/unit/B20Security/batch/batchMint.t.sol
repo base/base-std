@@ -90,7 +90,7 @@ contract B20SecurityBatchMintTest is B20SecurityTest {
         vm.assume(recipientA != recipientB);
 
         vm.prank(admin);
-        token.setSupplyCap(100);
+        token.updateSupplyCap(100);
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         address[] memory recipients = new address[](2);
