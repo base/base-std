@@ -11,9 +11,11 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPo
 contract B20MintTest is B20Test {
     /// @notice Verifies mint reverts when caller lacks MINT_ROLE
     /// @dev Access control: only role-holders can mint; checks AccessControlUnauthorizedAccount.
-    ///      Note _mint's check order: InvalidReceiver(0) fires BEFORE the role check, so
-    ///      we filter to != 0 to exercise the role-check path specifically. The
-    ///      InvalidReceiver path is covered by test_mint_revert_zeroRecipient.
+    ///      The `onlyRole(MINT_ROLE)` modifier on `_mint` runs before any in-body input
+    ///      validation, so the role-check path fires regardless of `to`. The
+    ///      InvalidReceiver path is covered by test_mint_revert_zeroRecipient. The
+    ///      `to != 0` filter is kept for clarity (it documents which path each
+    ///      test exercises) but is no longer load-bearing.
     function test_mint_revert_unauthorized(address caller, address to, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
@@ -64,7 +66,11 @@ contract B20MintTest is B20Test {
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(minter);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector, B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.mint(to, amount);
     }
 

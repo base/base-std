@@ -85,6 +85,25 @@ contract MockB20Security is MockB20, IB20Security {
     uint256 public constant WAD_PRECISION = 1e18;
 
     // ============================================================
+    //                          MODIFIERS
+    // ============================================================
+
+    /// @dev Like the base `onlyRole` but without the factory bootstrap
+    ///      bypass: the role check is unconditional, even for the
+    ///      factory in the init window. Reserved for variant paths
+    ///      that deliberately reject the bypass — currently just
+    ///      `batchBurn`, the corporate-actions clawback that has no
+    ///      init-time use case (see this contract's natspec). Lives
+    ///      here, not on the base, because no base function needs the
+    ///      stricter gate.
+    modifier onlyRoleStrict(bytes32 role) {
+        if (!hasRole(role, msg.sender)) {
+            revert AccessControlUnauthorizedAccount(msg.sender, role);
+        }
+        _;
+    }
+
+    // ============================================================
     //                        ANNOUNCEMENTS
     // ============================================================
 
@@ -93,9 +112,7 @@ contract MockB20Security is MockB20, IB20Security {
         string calldata id,
         string calldata description,
         string calldata uri
-    ) external {
-        _requireRole(SECURITY_OPERATOR_ROLE);
-
+    ) external onlyRole(SECURITY_OPERATOR_ROLE) {
         MockB20SecurityStorage.Layout storage $ = MockB20SecurityStorage.layout();
         if ($.usedAnnouncementIds[id]) revert AnnouncementIdAlreadyUsed(id);
         // Mark consumed BEFORE the emit and BEFORE any inner calls so
@@ -135,8 +152,7 @@ contract MockB20Security is MockB20, IB20Security {
         return (MockB20Storage.layout().balances[account] * _sharesToTokensRatio()) / WAD_PRECISION;
     }
 
-    function updateShareRatio(uint256 newSharesToTokensRatio) external {
-        _requireRole(SECURITY_OPERATOR_ROLE);
+    function updateShareRatio(uint256 newSharesToTokensRatio) external onlyRole(SECURITY_OPERATOR_ROLE) {
         MockB20SecurityStorage.layout().sharesToTokensRatio = newSharesToTokensRatio;
         emit ShareRatioUpdated(newSharesToTokensRatio);
     }
@@ -156,12 +172,19 @@ contract MockB20Security is MockB20, IB20Security {
         }
     }
 
-    function batchBurn(address[] calldata accounts, uint256[] calldata amounts) external {
-        if (accounts.length != amounts.length) revert LengthMismatch(accounts.length, amounts.length);
-        if (accounts.length == 0) revert EmptyBatch();
-        if (!hasRole(BURN_FROM_ROLE, msg.sender)) {
-            revert AccessControlUnauthorizedAccount(msg.sender, BURN_FROM_ROLE);
+    /// @dev `onlyRoleStrict` (not `onlyRole`): the factory bootstrap
+    ///      bypass is deliberately NOT honored here, per the contract
+    ///      natspec — clawback against existing balances has no init-time
+    ///      use case, so granting the factory a bypass would only widen
+    ///      the attack surface.
+    function batchBurn(address[] calldata accounts, uint256[] calldata amounts)
+        external
+        onlyRoleStrict(BURN_FROM_ROLE)
+    {
+        if (accounts.length != amounts.length) {
+            revert LengthMismatch(accounts.length, amounts.length);
         }
+        if (accounts.length == 0) revert EmptyBatch();
         if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
         for (uint256 i = 0; i < accounts.length; i++) {
             _burnRaw(accounts[i], amounts[i]);
@@ -184,8 +207,7 @@ contract MockB20Security is MockB20, IB20Security {
         emit Redeemed(msg.sender, amount, ratio);
     }
 
-    function updateMinimumRedeemable(uint256 newMinimumRedeemable) external {
-        _requireAdmin();
+    function updateMinimumRedeemable(uint256 newMinimumRedeemable) external onlyRole(DEFAULT_ADMIN_ROLE) {
         MockB20RedeemStorage.layout().minimumRedeemable = newMinimumRedeemable;
         emit MinimumRedeemableUpdated(newMinimumRedeemable);
     }
@@ -202,8 +224,10 @@ contract MockB20Security is MockB20, IB20Security {
         return MockB20SecurityStorage.layout().identifiers[identifierType];
     }
 
-    function updateSecurityIdentifier(string calldata identifierType, string calldata value) external {
-        _requireRole(SECURITY_OPERATOR_ROLE);
+    function updateSecurityIdentifier(string calldata identifierType, string calldata value)
+        external
+        onlyRole(SECURITY_OPERATOR_ROLE)
+    {
         if (bytes(identifierType).length == 0) revert InvalidIdentifierType();
         MockB20SecurityStorage.layout().identifiers[identifierType] = value;
         emit SecurityIdentifierUpdated(identifierType, value);

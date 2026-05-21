@@ -6,7 +6,6 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
-import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @notice Canonical B-20 role and policy-type identifier constants.
 ///         Declared as a library (not on the contract) so tests and
@@ -107,6 +106,30 @@ contract MockB20 is IB20 {
     bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
 
     // ============================================================
+    //                          MODIFIERS
+    // ============================================================
+
+    /// @dev Gates a function on `msg.sender` holding `role`. Reverts
+    ///      `AccessControlUnauthorizedAccount` if not. The factory
+    ///      bootstrap window (`_isPrivileged()`) bypasses the check;
+    ///      see the contract-level natspec for the bypass invariant.
+    ///      Bodies of role-gated functions assume the check has run.
+    modifier onlyRole(bytes32 role) {
+        _requireRole(role);
+        _;
+    }
+
+    /// @dev Gates a function on `msg.sender` holding the admin role
+    ///      that governs `role` (per `getRoleAdmin`). Same factory
+    ///      bypass as `onlyRole`. Used by `grantRole` / `revokeRole`
+    ///      / `setRoleAdmin`, where the gate is over the meta-role,
+    ///      not the role itself.
+    modifier onlyRoleAdmin(bytes32 role) {
+        if (!_isPrivileged()) _requireRoleAdmin(role);
+        _;
+    }
+
+    // ============================================================
     //                          ERC-20: VIEWS
     // ============================================================
 
@@ -194,14 +217,12 @@ contract MockB20 is IB20 {
     //                         METADATA UPDATES
     // ============================================================
 
-    function setName(string calldata newName) external {
-        _requireRole(METADATA_ROLE);
+    function setName(string calldata newName) external onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().name = newName;
         emit NameUpdated(msg.sender, newName);
     }
 
-    function setSymbol(string calldata newSymbol) external {
-        _requireRole(METADATA_ROLE);
+    function setSymbol(string calldata newSymbol) external onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().symbol = newSymbol;
         emit SymbolUpdated(msg.sender, newSymbol);
     }
@@ -228,11 +249,8 @@ contract MockB20 is IB20 {
         emit Memo(memo);
     }
 
-    function burnBlocked(address from, uint256 amount) external {
+    function burnBlocked(address from, uint256 amount) external onlyRole(BURN_BLOCKED_ROLE) {
         if (!_isPrivileged()) {
-            if (!hasRole(BURN_BLOCKED_ROLE, msg.sender)) {
-                revert AccessControlUnauthorizedAccount(msg.sender, BURN_BLOCKED_ROLE);
-            }
             if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
             // The point of burnBlocked is to seize from policy-blocked
             // accounts. Read the transfer-sender policy ID out of the
@@ -261,13 +279,11 @@ contract MockB20 is IB20 {
         return adminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE ? DEFAULT_ADMIN_ROLE : adminRole;
     }
 
-    function grantRole(bytes32 role, address account) external {
-        if (!_isPrivileged()) _requireRoleAdmin(role);
+    function grantRole(bytes32 role, address account) external onlyRoleAdmin(role) {
         _grantRole(role, account);
     }
 
-    function revokeRole(bytes32 role, address account) external {
-        if (!_isPrivileged()) _requireRoleAdmin(role);
+    function revokeRole(bytes32 role, address account) external onlyRoleAdmin(role) {
         _revokeRole(role, account);
     }
 
@@ -298,8 +314,7 @@ contract MockB20 is IB20 {
         emit LastAdminRenounced(msg.sender);
     }
 
-    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external {
-        if (!_isPrivileged()) _requireRoleAdmin(role);
+    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRoleAdmin(role) {
         bytes32 previousAdminRole = MockB20Storage.layout().roleAdmins[role];
         // Default admin if not explicitly set; expose it in the event.
         if (previousAdminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE) {
@@ -334,12 +349,7 @@ contract MockB20 is IB20 {
         return _isPaused(feature);
     }
 
-    function pause(PausableFeature[] calldata features) external {
-        if (!_isPrivileged()) {
-            if (!hasRole(PAUSE_ROLE, msg.sender)) {
-                revert AccessControlUnauthorizedAccount(msg.sender, PAUSE_ROLE);
-            }
-        }
+    function pause(PausableFeature[] calldata features) external onlyRole(PAUSE_ROLE) {
         if (features.length == 0) revert EmptyFeatureSet();
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         for (uint256 i = 0; i < features.length; i++) {
@@ -348,12 +358,7 @@ contract MockB20 is IB20 {
         emit Paused(msg.sender, features);
     }
 
-    function unpause(PausableFeature[] calldata features) external {
-        if (!_isPrivileged()) {
-            if (!hasRole(UNPAUSE_ROLE, msg.sender)) {
-                revert AccessControlUnauthorizedAccount(msg.sender, UNPAUSE_ROLE);
-            }
-        }
+    function unpause(PausableFeature[] calldata features) external onlyRole(UNPAUSE_ROLE) {
         if (features.length == 0) revert EmptyFeatureSet();
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         for (uint256 i = 0; i < features.length; i++) {
@@ -370,8 +375,7 @@ contract MockB20 is IB20 {
         return _readPolicyId(policyType);
     }
 
-    function updatePolicy(bytes32 policyType, uint64 newPolicyId) external {
-        _requireAdmin();
+    function updatePolicy(bytes32 policyType, uint64 newPolicyId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         // Read the old ID first: this both supplies the value for the
         // event and validates that `policyType` is supported (reverts
         // UnsupportedPolicyType cheaply, before the cross-contract
@@ -435,8 +439,7 @@ contract MockB20 is IB20 {
         return MockB20Storage.layout().supplyCap;
     }
 
-    function setSupplyCap(uint256 newSupplyCap) external {
-        _requireAdmin();
+    function setSupplyCap(uint256 newSupplyCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 currentSupply = MockB20Storage.layout().totalSupply;
         if (newSupplyCap < currentSupply) revert InvalidSupplyCap(currentSupply, newSupplyCap);
         uint256 oldSupplyCap = MockB20Storage.layout().supplyCap;
@@ -521,8 +524,7 @@ contract MockB20 is IB20 {
         return MockB20Storage.layout().contractURI;
     }
 
-    function setContractURI(string calldata newURI) external {
-        _requireAdmin();
+    function setContractURI(string calldata newURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
         MockB20Storage.layout().contractURI = newURI;
         emit ContractURIUpdated();
     }
@@ -539,13 +541,8 @@ contract MockB20 is IB20 {
         return msg.sender == FACTORY && !MockB20Storage.layout().initialized;
     }
 
-    function _requireAdmin() internal view {
-        if (_isPrivileged()) return;
-        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
-            revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);
-        }
-    }
-
+    /// @dev Body for the `onlyRole` modifier. Honors the factory bootstrap
+    ///      bypass; otherwise reverts `AccessControlUnauthorizedAccount`.
     function _requireRole(bytes32 role) internal view {
         if (_isPrivileged()) return;
         if (!hasRole(role, msg.sender)) {
@@ -553,6 +550,12 @@ contract MockB20 is IB20 {
         }
     }
 
+    /// @dev Body for the `onlyRoleAdmin` modifier (the privileged bypass
+    ///      lives in the modifier, not here, so this helper is reusable
+    ///      from any context that has already cleared the bypass).
+    ///      Resolves the admin-of-`role` per `getRoleAdmin` semantics:
+    ///      an unset entry collapses to `DEFAULT_ADMIN_ROLE` unless `role`
+    ///      itself is `DEFAULT_ADMIN_ROLE`.
     function _requireRoleAdmin(bytes32 role) internal view {
         bytes32 adminRole = MockB20Storage.layout().roleAdmins[role];
         if (adminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE) adminRole = DEFAULT_ADMIN_ROLE;
@@ -621,11 +624,10 @@ contract MockB20 is IB20 {
         emit Transfer(from, to, amount);
     }
 
-    function _mint(address to, uint256 amount) internal {
+    function _mint(address to, uint256 amount) internal onlyRole(MINT_ROLE) {
         if (to == address(0)) revert InvalidReceiver(to);
 
         if (!_isPrivileged()) {
-            if (!hasRole(MINT_ROLE, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE);
             if (_isPaused(PausableFeature.MINT)) revert ContractPaused(PausableFeature.MINT);
             uint64 mintReceiverPolicyId = uint64(MockB20Storage.layout().mintPolicyIds);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
@@ -643,9 +645,8 @@ contract MockB20 is IB20 {
         emit Transfer(address(0), to, amount);
     }
 
-    function _burnSelf(address from, uint256 amount) internal {
+    function _burnSelf(address from, uint256 amount) internal onlyRole(BURN_ROLE) {
         if (!_isPrivileged()) {
-            if (!hasRole(BURN_ROLE, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, BURN_ROLE);
             if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
         }
         _burnRaw(from, amount);
