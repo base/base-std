@@ -213,8 +213,16 @@ library ISO4217 {
     /// @dev    O(1) per call: first-byte dispatch routes to a single
     ///         letter bucket of at most 15 entries (S is the largest;
     ///         most are <10). Worst case ≈ 16 word-equality
-    ///         comparisons, vs ≈ 155 for a flat chain. Letters with
-    ///         no allowlist entries fall through to `return false`.
+    ///         comparisons, vs ≈ 155 for a flat chain.
+    ///
+    ///         Within each bucket, entries are ordered by approximate
+    ///         FX-volume / economic-size / population so common codes
+    ///         short-circuit early — e.g. USD is the first comparison
+    ///         in the U bucket, EUR in E, JPY in J, CHF/CNY/CAD lead C.
+    ///         Mean comparison count for real-world traffic is closer
+    ///         to ~2 (first-byte + first match) than to the worst case.
+    ///         Letters with no allowlist entries fall through to
+    ///         `return false`.
     function isValidFiatCode(string memory code) internal pure returns (bool) {
         bytes memory b = bytes(code);
         if (b.length != 3) return false;
@@ -227,60 +235,82 @@ library ISO4217 {
         }
         bytes1 first = bytes1(c);
 
-        if (first == "A") {
-            return c == AED || c == AFN || c == ALL || c == AMD || c == ANG || c == AOA || c == ARS
-                || c == AUD || c == AWG || c == AZN;
-        }
-        if (first == "B") {
-            return c == BAM || c == BBD || c == BDT || c == BGN || c == BHD || c == BIF || c == BMD
-                || c == BND || c == BOB || c == BRL || c == BSD || c == BTN || c == BWP || c == BYN
-                || c == BZD;
-        }
-        if (first == "C") {
-            return c == CAD || c == CDF || c == CHF || c == CNY || c == COP || c == CRC || c == CUP
-                || c == CVE || c == CZK;
-        }
-        if (first == "D") return c == DJF || c == DKK || c == DOP || c == DZD;
-        if (first == "E") return c == EGP || c == ERN || c == ETB || c == EUR;
-        if (first == "F") return c == FJD || c == FKP;
+        // U: USD dominates global stablecoin volume — first match.
+        if (first == "U") return c == USD || c == UAH || c == UGX || c == UYU || c == UZS;
+        // E: EUR is top-2 in FX turnover.
+        if (first == "E") return c == EUR || c == EGP || c == ETB || c == ERN;
+        // J: JPY is G10.
+        if (first == "J") return c == JPY || c == JMD || c == JOD;
+        // G: GBP is G10.
         if (first == "G") {
-            return c == GBP || c == GEL || c == GHS || c == GIP || c == GMD || c == GNF || c == GTQ
+            return c == GBP || c == GHS || c == GEL || c == GTQ || c == GIP || c == GMD || c == GNF
                 || c == GYD;
         }
-        if (first == "H") return c == HKD || c == HNL || c == HTG || c == HUF;
-        if (first == "I") return c == IDR || c == ILS || c == INR || c == IQD || c == IRR || c == ISK;
-        if (first == "J") return c == JMD || c == JOD || c == JPY;
-        if (first == "K") {
-            return c == KES || c == KGS || c == KHR || c == KMF || c == KPW || c == KRW || c == KWD
-                || c == KYD || c == KZT;
+        // C: three G10/major currencies (CHF, CNY, CAD) lead, then CZK.
+        if (first == "C") {
+            return c == CHF || c == CNY || c == CAD || c == CZK || c == COP || c == CRC || c == CUP
+                || c == CVE || c == CDF;
         }
-        if (first == "L") return c == LAK || c == LBP || c == LKR || c == LRD || c == LSL || c == LYD;
-        if (first == "M") {
-            return c == MAD || c == MDL || c == MGA || c == MKD || c == MMK || c == MNT || c == MOP
-                || c == MRU || c == MUR || c == MVR || c == MWK || c == MXN || c == MYR || c == MZN;
+        // A: AUD is G10; AED is a high-volume oil-linked unit.
+        if (first == "A") {
+            return c == AUD || c == AED || c == ARS || c == AMD || c == ANG || c == AOA || c == AFN
+                || c == ALL || c == AWG || c == AZN;
         }
-        if (first == "N") return c == NAD || c == NGN || c == NIO || c == NOK || c == NPR || c == NZD;
-        if (first == "O") return c == OMR;
-        if (first == "P") {
-            return c == PAB || c == PEN || c == PGK || c == PHP || c == PKR || c == PLN || c == PYG;
-        }
-        if (first == "Q") return c == QAR;
-        if (first == "R") return c == RON || c == RSD || c == RUB || c == RWF;
+        // N: NOK and NZD are both G10; NGN is the largest African economy.
+        if (first == "N") return c == NOK || c == NZD || c == NGN || c == NPR || c == NIO || c == NAD;
+        // S: SEK (G10), SGD (MAS-anchored), SAR (oil), then long tail.
         if (first == "S") {
-            return c == SAR || c == SBD || c == SCR || c == SDG || c == SEK || c == SGD || c == SHP
+            return c == SEK || c == SGD || c == SAR || c == SHP || c == SCR || c == SBD || c == SDG
                 || c == SLE || c == SOS || c == SRD || c == SSP || c == STN || c == SVC || c == SYP
                 || c == SZL;
         }
-        if (first == "T") {
-            return c == THB || c == TJS || c == TMT || c == TND || c == TOP || c == TRY || c == TTD
-                || c == TWD || c == TZS;
+        // I: INR / IDR / ILS dominate the bucket.
+        if (first == "I") return c == INR || c == IDR || c == ILS || c == ISK || c == IQD || c == IRR;
+        // M: MXN (top-15 FX), MYR, MAD.
+        if (first == "M") {
+            return c == MXN || c == MYR || c == MAD || c == MNT || c == MMK || c == MUR || c == MOP
+                || c == MVR || c == MWK || c == MGA || c == MDL || c == MZN || c == MKD || c == MRU;
         }
-        if (first == "U") return c == UAH || c == UGX || c == USD || c == UYU || c == UZS;
-        if (first == "V") return c == VED || c == VES || c == VND || c == VUV;
-        if (first == "W") return c == WST;
-        if (first == "X") return c == XAF || c == XCD || c == XOF || c == XPF;
-        if (first == "Y") return c == YER;
+        // T: TRY (notable for stablecoin demand under inflation), THB, TWD.
+        if (first == "T") {
+            return c == TRY || c == THB || c == TWD || c == TZS || c == TND || c == TOP || c == TTD
+                || c == TJS || c == TMT;
+        }
+        // P: PLN (top-20 FX), PHP, PKR.
+        if (first == "P") {
+            return c == PLN || c == PHP || c == PKR || c == PEN || c == PGK || c == PYG || c == PAB;
+        }
+        // K: KRW dominates the bucket.
+        if (first == "K") {
+            return c == KRW || c == KZT || c == KES || c == KWD || c == KGS || c == KHR || c == KMF
+                || c == KPW || c == KYD;
+        }
+        // B: BRL is the major; rest are long-tail.
+        if (first == "B") {
+            return c == BRL || c == BHD || c == BDT || c == BGN || c == BAM || c == BBD || c == BIF
+                || c == BMD || c == BND || c == BOB || c == BSD || c == BTN || c == BWP || c == BYN
+                || c == BZD;
+        }
+        // H: HKD is a major financial-center currency.
+        if (first == "H") return c == HKD || c == HUF || c == HNL || c == HTG;
+        // R: RUB is top-20 FX (though sanctioned).
+        if (first == "R") return c == RUB || c == RON || c == RSD || c == RWF;
+        // D: DKK is top-25 FX.
+        if (first == "D") return c == DKK || c == DOP || c == DZD || c == DJF;
+        // X: multi-country circulating fiat; XOF covers the largest population.
+        if (first == "X") return c == XOF || c == XAF || c == XCD || c == XPF;
+        // Z: ZAR is top-25 FX.
         if (first == "Z") return c == ZAR || c == ZMW || c == ZWG;
+        // V: VND is the largest by economy/population in the bucket.
+        if (first == "V") return c == VND || c == VES || c == VED || c == VUV;
+        // L: LKR / LBP are roughly the most active.
+        if (first == "L") return c == LKR || c == LBP || c == LAK || c == LRD || c == LSL || c == LYD;
+        // Letters with one entry (O/Q/W/Y) and tiny multi-entry buckets (F).
+        if (first == "F") return c == FJD || c == FKP;
+        if (first == "O") return c == OMR;
+        if (first == "Q") return c == QAR;
+        if (first == "W") return c == WST;
+        if (first == "Y") return c == YER;
 
         return false;
     }
