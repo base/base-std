@@ -109,13 +109,7 @@ contract MockTokenFactory is ITokenFactory {
         } else if (variant == TokenVariant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version);
-            // The stablecoin variant restricts `currency` to the active
-            // ISO 4217 fiat allowlist. This subsumes the prior
-            // empty-string check: empty, wrong-length, wrong-case,
-            // unknown-three-letter, X-prefix, and out-of-scope ticker
-            // inputs all surface as InvalidCurrency rather than two
-            // disjoint errors. See IB20Stablecoin.currency for the
-            // rationale and `ISO4217.isValidFiatCode` for the allowlist.
+            // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
             if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
             name_ = p.name;
             symbol_ = p.symbol;
