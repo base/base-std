@@ -6,6 +6,7 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Security
 /// @author Coinbase
@@ -185,12 +186,12 @@ contract MockB20Security is MockB20, IB20Security {
 
     function updateMinimumRedeemable(uint256 newMinimumRedeemable) external {
         _requireAdmin();
-        MockB20SecurityStorage.layout().minimumRedeemable = newMinimumRedeemable;
+        MockB20RedeemStorage.layout().minimumRedeemable = newMinimumRedeemable;
         emit MinimumRedeemableUpdated(newMinimumRedeemable);
     }
 
     function minimumRedeemable() external view returns (uint256) {
-        return MockB20SecurityStorage.layout().minimumRedeemable;
+        return MockB20RedeemStorage.layout().minimumRedeemable;
     }
 
     // ============================================================
@@ -218,14 +219,14 @@ contract MockB20Security is MockB20, IB20Security {
     ///      revert is the terminal case.
     function _readPolicyId(bytes32 policyType) internal view virtual override returns (uint64) {
         if (policyType == REDEEMER_SENDER) {
-            return uint64(MockB20SecurityStorage.layout().redeemPolicyIds);
+            return uint64(MockB20RedeemStorage.layout().redeemPolicyIds);
         }
         return super._readPolicyId(policyType);
     }
 
     function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal virtual override {
         if (policyType == REDEEMER_SENDER) {
-            MockB20SecurityStorage.Layout storage $ = MockB20SecurityStorage.layout();
+            MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
             uint256 mask = uint256(type(uint64).max);
             $.redeemPolicyIds = ($.redeemPolicyIds & ~mask) | uint256(newPolicyId);
             return;
@@ -252,13 +253,14 @@ contract MockB20Security is MockB20, IB20Security {
     ///      during bootstrap, so the bypass is omitted by design.
     function _redeemBurn(uint256 amount) internal returns (uint256 ratio) {
         if (_isPaused(PausableFeature.REDEEM)) revert ContractPaused(PausableFeature.REDEEM);
-        uint64 redeemerSenderPolicyId = uint64(MockB20SecurityStorage.layout().redeemPolicyIds);
+        MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
+        uint64 redeemerSenderPolicyId = uint64($.redeemPolicyIds);
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(redeemerSenderPolicyId, msg.sender)) {
             revert PolicyForbids(REDEEMER_SENDER, redeemerSenderPolicyId);
         }
         ratio = _sharesToTokensRatio();
         uint256 shares = (amount * ratio) / WAD_PRECISION;
-        uint256 minimum = MockB20SecurityStorage.layout().minimumRedeemable;
+        uint256 minimum = $.minimumRedeemable;
         // Always reject zero-share redemptions, even if the configured
         // minimum is 0 — burning token dust that resolves to no shares
         // is never the holder's intent.

@@ -173,7 +173,7 @@ interface IB20Security is IB20 {
     /// @notice Emitted by `updateSecurityIdentifier` when an identifier
     ///         entry is set, updated, or removed. An empty `value`
     ///         indicates removal.
-    event IdentifierUpdated(string identifierType, string value);
+    event SecurityIdentifierUpdated(string identifierType, string value);
 
     /// @notice Emitted by `announce` when a holder-impacting disclosure
     ///         is posted. Indexers join this with subsequent
@@ -481,7 +481,7 @@ interface IB20Security is IB20 {
     ///         `value` sets or overwrites it.
     ///
     /// @dev    Requires `SECURITY_OPERATOR_ROLE`. Emits
-    ///         `IdentifierUpdated`. Reverts with `InvalidIdentifierType`
+    ///         `SecurityIdentifierUpdated`. Reverts with `InvalidIdentifierType`
     ///         if `identifierType` is the empty string. Standard
     ///         usage is to invoke this through `announce(...)`'s
     ///         `internalCalls`, which brackets the identifier change
