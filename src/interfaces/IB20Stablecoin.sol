@@ -49,20 +49,10 @@ import {IB20} from "./IB20.sol";
 ///           reserves vs. on-chain collateral vs. T-bills) is
 ///           irrelevant to `currency()`; what matters is what the
 ///           token tracks. If it tracks USD, declare `"USD"`.
-///         - **Basket-pegged tokens** (historically Libra/Diem) and
-///           **algorithmic non-pegged stable assets** (Ampleforth,
-///           historically Terra UST) have no current B-20 home — a
-///           future basket / ART variant or use of the Default
-///           variant would be the path for those, not a relaxation
-///           of this one.
 ///
-///         The naming friction is real: PAXG calls itself a
-///         "stablecoin" and would not be admitted here. We accept
-///         that friction because it preserves a clean, regulator-
-///         aligned semantic for the variant — `IB20Stablecoin` means
-///         "fiat-tracking stablecoin" specifically, and downstream
-///         tooling can rely on `currency()` returning an ISO 4217
-///         fiat code from any token of this variant.
+///         This variant prioritizes the majority fiat-pegged use
+///         case at the cost of excluding edge cases that other B-20
+///         variants are better suited to serve.
 interface IB20Stablecoin is IB20 {
     /*//////////////////////////////////////////////////////////////
                           CURRENCY IDENTIFIER
