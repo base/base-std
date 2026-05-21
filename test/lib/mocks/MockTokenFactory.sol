@@ -7,7 +7,13 @@ import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
-import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
+import {
+    MockB20Storage,
+    MockB20StablecoinStorage,
+    MockB20SecurityStorage,
+    MockB20RedeemStorage
+} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockTokenFactory
 /// @notice Reference implementation of the `ITokenFactory` precompile
@@ -96,6 +102,8 @@ contract MockTokenFactory is ITokenFactory {
         address admin;
         uint8 decimals;
         string memory currency_;
+        string memory isin_;
+        uint256 minimumRedeemable_;
 
         if (variant == TokenVariant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
@@ -114,11 +122,15 @@ contract MockTokenFactory is ITokenFactory {
             decimals = 6;
             currency_ = p.currency;
         } else if (variant == TokenVariant.SECURITY) {
-            // IB20Security interface is in flux; the reference impl is
-            // deferred until it stabilizes. The factory should not
-            // silently succeed for an unsupported variant; revert with
-            // an unambiguous version-style signal.
-            revert UnsupportedVersion(0);
+            B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
+            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (bytes(p.isin).length == 0) revert MissingRequiredField();
+            name_ = p.name;
+            symbol_ = p.symbol;
+            admin = p.initialAdmin;
+            decimals = 6;
+            isin_ = p.isin;
+            minimumRedeemable_ = p.minimumRedeemable;
         } else {
             revert InvalidVariant();
         }
@@ -130,9 +142,11 @@ contract MockTokenFactory is ITokenFactory {
         // -- 4. Etch the variant-appropriate runtime bytecode --
         if (variant == TokenVariant.DEFAULT) {
             vm.etch(token, type(MockB20).runtimeCode);
-        } else {
-            // STABLECOIN; SECURITY already reverted above.
+        } else if (variant == TokenVariant.STABLECOIN) {
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
+        } else {
+            // SECURITY (NONE / unknown variants already reverted above).
+            vm.etch(token, type(MockB20Security).runtimeCode);
         }
 
         // -- 5. Write initial identity / supply-cap state via vm.store.
@@ -142,6 +156,8 @@ contract MockTokenFactory is ITokenFactory {
         _writeBaseStorage(token, name_, symbol_);
         if (variant == TokenVariant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
+        } else if (variant == TokenVariant.SECURITY) {
+            _writeSecurityStorage(token, isin_, minimumRedeemable_);
         }
 
         // -- 6. Emit TokenCreated. Identity-only signal; admin role
@@ -274,6 +290,19 @@ contract MockTokenFactory is ITokenFactory {
             MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),
             currency_
         );
+    }
+
+    /// @dev Writes the security variant's initial `identifiers["ISIN"]`
+    ///      entry at the `base.b20.security` namespace and the initial
+    ///      `minimumRedeemable` at the `base.b20.redeem` namespace.
+    ///      Mirrors stablecoin's `currency` pattern: variant-specific
+    ///      initial state is written directly without an event,
+    ///      paralleling how base identity (name, symbol, supply cap) is
+    ///      seeded. Post-creation identifier mutations go through
+    ///      `updateSecurityIdentifier` and emit `SecurityIdentifierUpdated`.
+    function _writeSecurityStorage(address token, string memory isin_, uint256 minimumRedeemable_) internal {
+        _writeString(token, MockB20SecurityStorage.identifierSlot("ISIN"), isin_);
+        _writeUint(token, MockB20RedeemStorage.minimumRedeemableSlot(), minimumRedeemable_);
     }
 
     // ============================================================
