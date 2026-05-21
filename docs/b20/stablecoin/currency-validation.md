@@ -51,6 +51,16 @@ Key properties:
 | The allowlist is self-declared, not a trust signal — an issuer can declare `currency = "USD"` without backing reserves | The factory enforces format and membership only. Any protocol consuming `currency()` for an authorization or routing decision MUST layer its own issuer/contract allowlist on top. The standardized identifier is what those consumer-side allowlists organize around, not a substitute for them. |
 | Adding or removing an ISO 4217 code requires a contract change | Real but rare — ISO 4217 registrations happen on the order of once per year. Both the Solidity reference and any Rust precompile implementation must be updated in lockstep when changes do occur. |
 
+## Alternatives considered
+
+| Approach | Description | Why not chosen |
+| --- | --- | --- |
+| No validation | Accept any non-empty string for `currency` (the original behavior) | Typos (`"usd"`), token symbols (`"USDC"`), and arbitrary strings pollute the value space; no on-chain way for tooling to categorize |
+| Format-only check | Enforce length-3 uppercase ASCII without an allowlist | Admits `"ZZZ"`, crypto tickers, and any well-formed 3-char string indistinguishable from real codes; no semantic gate |
+| Full ISO 4217 active list | Accept every ISO 4217 alphabetic code, including X-prefix metals, supranational synthetics, and funds codes (the TIP-20 broad-scope precedent) | Conflates commodities and accounting units with fiat — commodity-backed tokens belong on `B20Security`; indexing units (CLF, USN, etc.) aren't holdable; loses the regulatory alignment with MiCA EMT / MAS SCS |
+| Narrow ISO 4217 fiat allowlist | Circulating national fiat only, aligned with MiCA EMT / MAS SCS | **Chosen.** Standardized value space; rejects typos and out-of-scope categories at creation; matches the regulatory categorization that downstream tooling will encounter |
+| Off-chain registry | No on-chain validation; consumers look up currency identity in an external registry | No standard value space across tokens; every consumer reinvents the categorization; doesn't catch typos at creation; pushes a fixable problem into runtime |
+
 ## Supported currencies
 
 All 155 codes on the allowlist, alphabetical by code.
