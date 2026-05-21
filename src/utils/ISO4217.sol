@@ -17,113 +17,259 @@ library ISO4217 {
     /// @notice Thrown by `excludedAt` when `idx` exceeds `excludedCount`.
     error IndexOutOfBounds(uint256 idx);
 
+    // ============================================================
+    //   Allowlist (ISO 4217 active circulating-fiat alphabetic codes)
+    // ============================================================
+    // Declared as `bytes3` constants so the lookup is a direct
+    // 32-byte equality (no keccak per comparison) and the canonical
+    // list is visible as data at the top of the file. Organized
+    // alphabetically for diff / audit against the ISO 4217 register.
+
+    bytes3 private constant AED = "AED";
+    bytes3 private constant AFN = "AFN";
+    bytes3 private constant ALL = "ALL";
+    bytes3 private constant AMD = "AMD";
+    bytes3 private constant ANG = "ANG";
+    bytes3 private constant AOA = "AOA";
+    bytes3 private constant ARS = "ARS";
+    bytes3 private constant AUD = "AUD";
+    bytes3 private constant AWG = "AWG";
+    bytes3 private constant AZN = "AZN";
+
+    bytes3 private constant BAM = "BAM";
+    bytes3 private constant BBD = "BBD";
+    bytes3 private constant BDT = "BDT";
+    bytes3 private constant BGN = "BGN";
+    bytes3 private constant BHD = "BHD";
+    bytes3 private constant BIF = "BIF";
+    bytes3 private constant BMD = "BMD";
+    bytes3 private constant BND = "BND";
+    bytes3 private constant BOB = "BOB";
+    bytes3 private constant BRL = "BRL";
+    bytes3 private constant BSD = "BSD";
+    bytes3 private constant BTN = "BTN";
+    bytes3 private constant BWP = "BWP";
+    bytes3 private constant BYN = "BYN";
+    bytes3 private constant BZD = "BZD";
+
+    bytes3 private constant CAD = "CAD";
+    bytes3 private constant CDF = "CDF";
+    bytes3 private constant CHF = "CHF";
+    bytes3 private constant CNY = "CNY";
+    bytes3 private constant COP = "COP";
+    bytes3 private constant CRC = "CRC";
+    bytes3 private constant CUP = "CUP";
+    bytes3 private constant CVE = "CVE";
+    bytes3 private constant CZK = "CZK";
+
+    bytes3 private constant DJF = "DJF";
+    bytes3 private constant DKK = "DKK";
+    bytes3 private constant DOP = "DOP";
+    bytes3 private constant DZD = "DZD";
+
+    bytes3 private constant EGP = "EGP";
+    bytes3 private constant ERN = "ERN";
+    bytes3 private constant ETB = "ETB";
+    bytes3 private constant EUR = "EUR";
+
+    bytes3 private constant FJD = "FJD";
+    bytes3 private constant FKP = "FKP";
+
+    bytes3 private constant GBP = "GBP";
+    bytes3 private constant GEL = "GEL";
+    bytes3 private constant GHS = "GHS";
+    bytes3 private constant GIP = "GIP";
+    bytes3 private constant GMD = "GMD";
+    bytes3 private constant GNF = "GNF";
+    bytes3 private constant GTQ = "GTQ";
+    bytes3 private constant GYD = "GYD";
+
+    bytes3 private constant HKD = "HKD";
+    bytes3 private constant HNL = "HNL";
+    bytes3 private constant HTG = "HTG";
+    bytes3 private constant HUF = "HUF";
+
+    bytes3 private constant IDR = "IDR";
+    bytes3 private constant ILS = "ILS";
+    bytes3 private constant INR = "INR";
+    bytes3 private constant IQD = "IQD";
+    bytes3 private constant IRR = "IRR";
+    bytes3 private constant ISK = "ISK";
+
+    bytes3 private constant JMD = "JMD";
+    bytes3 private constant JOD = "JOD";
+    bytes3 private constant JPY = "JPY";
+
+    bytes3 private constant KES = "KES";
+    bytes3 private constant KGS = "KGS";
+    bytes3 private constant KHR = "KHR";
+    bytes3 private constant KMF = "KMF";
+    bytes3 private constant KPW = "KPW";
+    bytes3 private constant KRW = "KRW";
+    bytes3 private constant KWD = "KWD";
+    bytes3 private constant KYD = "KYD";
+    bytes3 private constant KZT = "KZT";
+
+    bytes3 private constant LAK = "LAK";
+    bytes3 private constant LBP = "LBP";
+    bytes3 private constant LKR = "LKR";
+    bytes3 private constant LRD = "LRD";
+    bytes3 private constant LSL = "LSL";
+    bytes3 private constant LYD = "LYD";
+
+    bytes3 private constant MAD = "MAD";
+    bytes3 private constant MDL = "MDL";
+    bytes3 private constant MGA = "MGA";
+    bytes3 private constant MKD = "MKD";
+    bytes3 private constant MMK = "MMK";
+    bytes3 private constant MNT = "MNT";
+    bytes3 private constant MOP = "MOP";
+    bytes3 private constant MRU = "MRU";
+    bytes3 private constant MUR = "MUR";
+    bytes3 private constant MVR = "MVR";
+    bytes3 private constant MWK = "MWK";
+    bytes3 private constant MXN = "MXN";
+    bytes3 private constant MYR = "MYR";
+    bytes3 private constant MZN = "MZN";
+
+    bytes3 private constant NAD = "NAD";
+    bytes3 private constant NGN = "NGN";
+    bytes3 private constant NIO = "NIO";
+    bytes3 private constant NOK = "NOK";
+    bytes3 private constant NPR = "NPR";
+    bytes3 private constant NZD = "NZD";
+
+    bytes3 private constant OMR = "OMR";
+
+    bytes3 private constant PAB = "PAB";
+    bytes3 private constant PEN = "PEN";
+    bytes3 private constant PGK = "PGK";
+    bytes3 private constant PHP = "PHP";
+    bytes3 private constant PKR = "PKR";
+    bytes3 private constant PLN = "PLN";
+    bytes3 private constant PYG = "PYG";
+
+    bytes3 private constant QAR = "QAR";
+
+    bytes3 private constant RON = "RON";
+    bytes3 private constant RSD = "RSD";
+    bytes3 private constant RUB = "RUB";
+    bytes3 private constant RWF = "RWF";
+
+    bytes3 private constant SAR = "SAR";
+    bytes3 private constant SBD = "SBD";
+    bytes3 private constant SCR = "SCR";
+    bytes3 private constant SDG = "SDG";
+    bytes3 private constant SEK = "SEK";
+    bytes3 private constant SGD = "SGD";
+    bytes3 private constant SHP = "SHP";
+    bytes3 private constant SLE = "SLE";
+    bytes3 private constant SOS = "SOS";
+    bytes3 private constant SRD = "SRD";
+    bytes3 private constant SSP = "SSP";
+    bytes3 private constant STN = "STN";
+    bytes3 private constant SVC = "SVC";
+    bytes3 private constant SYP = "SYP";
+    bytes3 private constant SZL = "SZL";
+
+    bytes3 private constant THB = "THB";
+    bytes3 private constant TJS = "TJS";
+    bytes3 private constant TMT = "TMT";
+    bytes3 private constant TND = "TND";
+    bytes3 private constant TOP = "TOP";
+    bytes3 private constant TRY = "TRY";
+    bytes3 private constant TTD = "TTD";
+    bytes3 private constant TWD = "TWD";
+    bytes3 private constant TZS = "TZS";
+
+    bytes3 private constant UAH = "UAH";
+    bytes3 private constant UGX = "UGX";
+    bytes3 private constant USD = "USD";
+    bytes3 private constant UYU = "UYU";
+    bytes3 private constant UZS = "UZS";
+
+    bytes3 private constant VED = "VED";
+    bytes3 private constant VES = "VES";
+    bytes3 private constant VND = "VND";
+    bytes3 private constant VUV = "VUV";
+
+    bytes3 private constant WST = "WST";
+
+    // Multi-country circulating fiat (BCEAO, BEAC, ECCB, IEOM).
+    bytes3 private constant XAF = "XAF";
+    bytes3 private constant XCD = "XCD";
+    bytes3 private constant XOF = "XOF";
+    bytes3 private constant XPF = "XPF";
+
+    bytes3 private constant YER = "YER";
+
+    bytes3 private constant ZAR = "ZAR";
+    bytes3 private constant ZMW = "ZMW";
+    bytes3 private constant ZWG = "ZWG";
+
     /// @notice Returns true iff `code` is on the active ISO 4217
     ///         circulating-fiat allowlist (exactly three ASCII bytes,
     ///         uppercase, on the curated set).
     function isValidFiatCode(string memory code) internal pure returns (bool) {
         bytes memory b = bytes(code);
         if (b.length != 3) return false;
-        bytes32 h = keccak256(b);
+        bytes3 c;
+        // Left-justified 3-byte load; trailing 29 bytes are zero per
+        // Solidity's memory-zeroing guarantee between allocations.
+        // forge-lint: disable-next-line(asm-keccak256)
+        assembly {
+            c := mload(add(b, 32))
+        }
 
-        // A: Arabian-region, Caucasus, Latin-America, Pacific
         if (
-            h == keccak256("AED") || h == keccak256("AFN") || h == keccak256("ALL") || h == keccak256("AMD")
-                || h == keccak256("ANG") || h == keccak256("AOA") || h == keccak256("ARS") || h == keccak256("AUD")
-                || h == keccak256("AWG") || h == keccak256("AZN")
+            c == AED || c == AFN || c == ALL || c == AMD || c == ANG || c == AOA || c == ARS || c == AUD
+                || c == AWG || c == AZN
         ) return true;
-        // B
         if (
-            h == keccak256("BAM") || h == keccak256("BBD") || h == keccak256("BDT") || h == keccak256("BGN")
-                || h == keccak256("BHD") || h == keccak256("BIF") || h == keccak256("BMD") || h == keccak256("BND")
-                || h == keccak256("BOB") || h == keccak256("BRL") || h == keccak256("BSD") || h == keccak256("BTN")
-                || h == keccak256("BWP") || h == keccak256("BYN") || h == keccak256("BZD")
+            c == BAM || c == BBD || c == BDT || c == BGN || c == BHD || c == BIF || c == BMD || c == BND
+                || c == BOB || c == BRL || c == BSD || c == BTN || c == BWP || c == BYN || c == BZD
         ) return true;
-        // C
         if (
-            h == keccak256("CAD") || h == keccak256("CDF") || h == keccak256("CHF") || h == keccak256("CNY")
-                || h == keccak256("COP") || h == keccak256("CRC") || h == keccak256("CUP") || h == keccak256("CVE")
-                || h == keccak256("CZK")
+            c == CAD || c == CDF || c == CHF || c == CNY || c == COP || c == CRC || c == CUP || c == CVE
+                || c == CZK
         ) return true;
-        // D, E
+        if (c == DJF || c == DKK || c == DOP || c == DZD) return true;
+        if (c == EGP || c == ERN || c == ETB || c == EUR) return true;
+        if (c == FJD || c == FKP) return true;
         if (
-            h == keccak256("DJF") || h == keccak256("DKK") || h == keccak256("DOP") || h == keccak256("DZD")
-                || h == keccak256("EGP") || h == keccak256("ERN") || h == keccak256("ETB") || h == keccak256("EUR")
+            c == GBP || c == GEL || c == GHS || c == GIP || c == GMD || c == GNF || c == GTQ || c == GYD
         ) return true;
-        // F, G
+        if (c == HKD || c == HNL || c == HTG || c == HUF) return true;
+        if (c == IDR || c == ILS || c == INR || c == IQD || c == IRR || c == ISK) return true;
+        if (c == JMD || c == JOD || c == JPY) return true;
         if (
-            h == keccak256("FJD") || h == keccak256("FKP") || h == keccak256("GBP") || h == keccak256("GEL")
-                || h == keccak256("GHS") || h == keccak256("GIP") || h == keccak256("GMD") || h == keccak256("GNF")
-                || h == keccak256("GTQ") || h == keccak256("GYD")
+            c == KES || c == KGS || c == KHR || c == KMF || c == KPW || c == KRW || c == KWD || c == KYD
+                || c == KZT
         ) return true;
-        // H, I
+        if (c == LAK || c == LBP || c == LKR || c == LRD || c == LSL || c == LYD) return true;
         if (
-            h == keccak256("HKD") || h == keccak256("HNL") || h == keccak256("HTG") || h == keccak256("HUF")
-                || h == keccak256("IDR") || h == keccak256("ILS") || h == keccak256("INR") || h == keccak256("IQD")
-                || h == keccak256("IRR") || h == keccak256("ISK")
+            c == MAD || c == MDL || c == MGA || c == MKD || c == MMK || c == MNT || c == MOP || c == MRU
+                || c == MUR || c == MVR || c == MWK || c == MXN || c == MYR || c == MZN
         ) return true;
-        // J, K
+        if (c == NAD || c == NGN || c == NIO || c == NOK || c == NPR || c == NZD) return true;
+        if (c == OMR) return true;
+        if (c == PAB || c == PEN || c == PGK || c == PHP || c == PKR || c == PLN || c == PYG) return true;
+        if (c == QAR) return true;
+        if (c == RON || c == RSD || c == RUB || c == RWF) return true;
         if (
-            h == keccak256("JMD") || h == keccak256("JOD") || h == keccak256("JPY") || h == keccak256("KES")
-                || h == keccak256("KGS") || h == keccak256("KHR") || h == keccak256("KMF") || h == keccak256("KPW")
-                || h == keccak256("KRW") || h == keccak256("KWD") || h == keccak256("KYD") || h == keccak256("KZT")
+            c == SAR || c == SBD || c == SCR || c == SDG || c == SEK || c == SGD || c == SHP || c == SLE
+                || c == SOS || c == SRD || c == SSP || c == STN || c == SVC || c == SYP || c == SZL
         ) return true;
-        // L
         if (
-            h == keccak256("LAK") || h == keccak256("LBP") || h == keccak256("LKR") || h == keccak256("LRD")
-                || h == keccak256("LSL") || h == keccak256("LYD")
+            c == THB || c == TJS || c == TMT || c == TND || c == TOP || c == TRY || c == TTD || c == TWD
+                || c == TZS
         ) return true;
-        // M
-        if (
-            h == keccak256("MAD") || h == keccak256("MDL") || h == keccak256("MGA") || h == keccak256("MKD")
-                || h == keccak256("MMK") || h == keccak256("MNT") || h == keccak256("MOP") || h == keccak256("MRU")
-                || h == keccak256("MUR") || h == keccak256("MVR") || h == keccak256("MWK") || h == keccak256("MXN")
-                || h == keccak256("MYR") || h == keccak256("MZN")
-        ) return true;
-        // N, O
-        if (
-            h == keccak256("NAD") || h == keccak256("NGN") || h == keccak256("NIO") || h == keccak256("NOK")
-                || h == keccak256("NPR") || h == keccak256("NZD") || h == keccak256("OMR")
-        ) return true;
-        // P, Q
-        if (
-            h == keccak256("PAB") || h == keccak256("PEN") || h == keccak256("PGK") || h == keccak256("PHP")
-                || h == keccak256("PKR") || h == keccak256("PLN") || h == keccak256("PYG") || h == keccak256("QAR")
-        ) return true;
-        // R
-        if (h == keccak256("RON") || h == keccak256("RSD") || h == keccak256("RUB") || h == keccak256("RWF")) {
-            return true;
-        }
-        // S
-        if (
-            h == keccak256("SAR") || h == keccak256("SBD") || h == keccak256("SCR") || h == keccak256("SDG")
-                || h == keccak256("SEK") || h == keccak256("SGD") || h == keccak256("SHP") || h == keccak256("SLE")
-                || h == keccak256("SOS") || h == keccak256("SRD") || h == keccak256("SSP") || h == keccak256("STN")
-                || h == keccak256("SVC") || h == keccak256("SYP") || h == keccak256("SZL")
-        ) return true;
-        // T
-        if (
-            h == keccak256("THB") || h == keccak256("TJS") || h == keccak256("TMT") || h == keccak256("TND")
-                || h == keccak256("TOP") || h == keccak256("TRY") || h == keccak256("TTD") || h == keccak256("TWD")
-                || h == keccak256("TZS")
-        ) return true;
-        // U
-        if (
-            h == keccak256("UAH") || h == keccak256("UGX") || h == keccak256("USD") || h == keccak256("UYU")
-                || h == keccak256("UZS")
-        ) return true;
-        // V, W
-        if (
-            h == keccak256("VED") || h == keccak256("VES") || h == keccak256("VND") || h == keccak256("VUV")
-                || h == keccak256("WST")
-        ) return true;
-        // X (multi-country circulating fiat: BCEAO, BEAC, ECCB, IEOM)
-        if (
-            h == keccak256("XAF") || h == keccak256("XCD") || h == keccak256("XOF") || h == keccak256("XPF")
-        ) return true;
-        // Y, Z
-        if (h == keccak256("YER") || h == keccak256("ZAR") || h == keccak256("ZMW") || h == keccak256("ZWG")) {
-            return true;
-        }
+        if (c == UAH || c == UGX || c == USD || c == UYU || c == UZS) return true;
+        if (c == VED || c == VES || c == VND || c == VUV) return true;
+        if (c == WST) return true;
+        if (c == XAF || c == XCD || c == XOF || c == XPF) return true;
+        if (c == YER) return true;
+        if (c == ZAR || c == ZMW || c == ZWG) return true;
 
         return false;
     }
