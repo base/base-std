@@ -39,7 +39,7 @@ import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 ///         would change `msg.sender` to the contract address and
 ///         break the inner role checks.
 ///
-///         **Policy override.** `REDEEMER_SENDER` lives in this
+///         **Policy override.** `REDEEMER_SENDER_POLICY` lives in this
 ///         variant's own `redeemPolicyIds` packed slot, mirroring the
 ///         per-operation packed-slot layout the base uses for
 ///         `transferPolicyIds` / `mintPolicyIds`. `_readPolicyId` and
@@ -76,7 +76,7 @@ contract MockB20Security is MockB20, IB20Security {
     bytes32 public constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
     bytes32 public constant BURN_FROM_ROLE = keccak256("BURN_FROM_ROLE");
 
-    bytes32 public constant REDEEMER_SENDER = keccak256("REDEEMER_SENDER");
+    bytes32 public constant REDEEMER_SENDER_POLICY = keccak256("REDEEMER_SENDER_POLICY");
 
     /// @notice Fixed-point precision for the share ratio. `1e18` (one
     ///         WAD) is the standard DeFi convention; `toShares` and
@@ -149,7 +149,7 @@ contract MockB20Security is MockB20, IB20Security {
         if (recipients.length != amounts.length) revert LengthMismatch(recipients.length, amounts.length);
         if (recipients.length == 0) revert EmptyBatch();
         // Per-element call into _mint: role / pause checks repeat (idempotent),
-        // but MINT_RECEIVER policy and supply-cap accumulation are correctly
+        // but MINT_RECEIVER_POLICY policy and supply-cap accumulation are correctly
         // applied per recipient. Cleaner than re-deriving the per-element body.
         for (uint256 i = 0; i < recipients.length; i++) {
             _mint(recipients[i], amounts[i]);
@@ -213,19 +213,19 @@ contract MockB20Security is MockB20, IB20Security {
     //                       POLICY OVERRIDES
     // ============================================================
 
-    /// @dev Variant-first policy resolution: REDEEMER_SENDER lives in
+    /// @dev Variant-first policy resolution: REDEEMER_SENDER_POLICY lives in
     ///      this variant's own packed slot; everything else falls
     ///      through to the base. The base's UnsupportedPolicyType
     ///      revert is the terminal case.
     function _readPolicyId(bytes32 policyType) internal view virtual override returns (uint64) {
-        if (policyType == REDEEMER_SENDER) {
+        if (policyType == REDEEMER_SENDER_POLICY) {
             return uint64(MockB20RedeemStorage.layout().redeemPolicyIds);
         }
         return super._readPolicyId(policyType);
     }
 
     function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal virtual override {
-        if (policyType == REDEEMER_SENDER) {
+        if (policyType == REDEEMER_SENDER_POLICY) {
             MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
             uint256 mask = uint256(type(uint64).max);
             $.redeemPolicyIds = ($.redeemPolicyIds & ~mask) | uint256(newPolicyId);
@@ -256,7 +256,7 @@ contract MockB20Security is MockB20, IB20Security {
         MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
         uint64 redeemerSenderPolicyId = uint64($.redeemPolicyIds);
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(redeemerSenderPolicyId, msg.sender)) {
-            revert PolicyForbids(REDEEMER_SENDER, redeemerSenderPolicyId);
+            revert PolicyForbids(REDEEMER_SENDER_POLICY, redeemerSenderPolicyId);
         }
         ratio = _sharesToTokensRatio();
         uint256 shares = (amount * ratio) / WAD_PRECISION;

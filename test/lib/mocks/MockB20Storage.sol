@@ -187,7 +187,7 @@ library MockB20Storage {
 ///           verbatim; subsequent reads return the stored value as-is.
 ///         - `redeemPolicyIds` is a per-operation packed slot,
 ///           mirroring base's `transferPolicyIds` / `mintPolicyIds`
-///           layout: only `REDEEMER_SENDER` is defined today, with
+///           layout: only `REDEEMER_SENDER_POLICY` is defined today, with
 ///           three reserved lanes for future redeem-side granularity
 ///           (e.g. `REDEEMER_RECEIVER` if and when off-chain
 ///           settlement counterparties get policy gating).
