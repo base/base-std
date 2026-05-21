@@ -13,6 +13,36 @@ optimizer_runs = 200
 [profile.default.fuzz]
 runs = 256
 
+# Named RPC endpoints. Referenced via `forge test --fork-url <name>`.
+# See README "Fork testing" section for the invocation that runs the
+# full unit-test suite against the live Rust precompiles.
+[rpc_endpoints]
+vibenet = "https://rpc.vibes.base.org/"
+
+# Fork-testing profile. Reduces fuzz runs since each iteration may
+# trigger RPC round-trips against the live precompiles, and the test
+# author cares more about "does the layout / behavior match" than
+# fuzz coverage at this stage.
+#
+# Usage (requires the base-anvil fork of forge with --base support):
+#   LIVE_PRECOMPILES=true FOUNDRY_PROFILE=fork \
+#     /path/to/base-anvil/target/debug/forge test \
+#     --fork-url http://localhost:8546
+#
+# `base = true` enables Base precompile dispatch (TokenFactory, B-20
+# tokens, PolicyRegistry, ActivationRegistry) inside forge's EVM. The
+# `LIVE_PRECOMPILES` env var tells `BaseTest.setUp` NOT to etch the
+# mocks at the precompile addresses, so calls dispatch to the native
+# Rust impls instead. Both flags are required: dispatch alone isn't
+# enough if the mock bytecode is etched on top (the etched code
+# executes first), and skipping the etch alone isn't enough if forge's
+# REVM doesn't know about the precompiles (it just returns empty data).
+[profile.fork.fuzz]
+runs = 10
+
+[profile.fork]
+base = true
+
 [fmt]
 line_length = 120
 tab_width = 4

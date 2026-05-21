@@ -15,7 +15,7 @@ library StdPrecompiles {
     ///      so `isB20(TOKEN_FACTORY_ADDRESS)` returns false unambiguously. The
     ///      trailing `0x0F` byte echoes the prefix for visual symmetry.
     address internal constant TOKEN_FACTORY_ADDRESS = 0xb20F00000000000000000000000000000000000f;
-    address internal constant POLICY_REGISTRY_ADDRESS = 0xb000000000000000000000000000000000000001;
+    address internal constant POLICY_REGISTRY_ADDRESS = 0xb030000000000000000000000000000000000000;
     address internal constant ACTIVATION_REGISTRY_ADDRESS = 0x84530000000000000000000000000000000000ff;
 
     ITokenFactory internal constant TOKEN_FACTORY = ITokenFactory(TOKEN_FACTORY_ADDRESS);
