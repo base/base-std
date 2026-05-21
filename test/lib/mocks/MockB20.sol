@@ -6,7 +6,6 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
-import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @notice Canonical B-20 role and policy-type identifier constants.
 ///         Declared as a library (not on the contract) so tests and
