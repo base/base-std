@@ -122,8 +122,8 @@ interface IB20Security is IB20 {
 
     /// @notice The policy slot consulted against `msg.sender` on
     ///         `redeem` and `redeemWithMemo`. Identifier is
-    ///         `keccak256("REDEEMER_SENDER")`.
-    function REDEEMER_SENDER() external view returns (bytes32);
+    ///         `keccak256("REDEEMER_SENDER_POLICY")`.
+    function REDEEMER_SENDER_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                               ANNOUNCEMENTS
@@ -188,7 +188,7 @@ interface IB20Security is IB20 {
     ///         allocations, secondary issuances, etc.) that need to
     ///         land many recipients in one transaction.
     ///
-    /// @dev    Requires `MINT_ROLE`. Subject to the `MINT_RECEIVER`
+    /// @dev    Requires `MINT_ROLE`. Subject to the `MINT_RECEIVER_POLICY`
     ///         policy per recipient and to the `MINT` pause vector.
     ///         Reverts on length mismatch or empty arrays. Operators
     ///         should pair this with a separate `announce(...)` call
@@ -209,7 +209,7 @@ interface IB20Security is IB20 {
     ///
     /// @dev    Requires `BURN_ROLE`. Each `accounts[i]` MUST
     ///         currently be unauthorized under the active
-    ///         `TRANSFER_SENDER` policy; otherwise reverts with
+    ///         `TRANSFER_SENDER_POLICY` policy; otherwise reverts with
     ///         `AccountNotBlocked(accounts[i])`. Subject to the `BURN`
     ///         pause vector. Reverts on length mismatch or empty
     ///         arrays. Emits `Transfer(accounts[i], address(0),
@@ -219,7 +219,7 @@ interface IB20Security is IB20 {
     ///         enforce the pairing on-chain.
     ///
     /// @param  accounts Accounts whose balances will be debited. Each
-    ///                  MUST be unauthorized under `TRANSFER_SENDER`.
+    ///                  MUST be unauthorized under `TRANSFER_SENDER_POLICY`.
     /// @param  amounts  Per-account amounts, parallel to `accounts`.
     function batchBurn(address[] calldata accounts, uint256[] calldata amounts) external;
 
@@ -230,7 +230,7 @@ interface IB20Security is IB20 {
     /// @notice Burns `amount` tokens from the caller, recording intent
     ///         to settle off-chain.
     ///
-    /// @dev    Subject to the `REDEEMER_SENDER` policy and to the
+    /// @dev    Subject to the `REDEEMER_SENDER_POLICY` policy and to the
     ///         `REDEEM` pause vector. Reverts when the corresponding
     ///         share amount (`amount * sharesToTokensRatio /
     ///         WAD_PRECISION`) is below `minimumRedeemable`. Emits

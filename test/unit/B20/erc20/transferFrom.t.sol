@@ -30,7 +30,7 @@ contract B20TransferFromTest is B20Test {
         token.transferFrom(from, to, amount);
     }
 
-    /// @notice Verifies transferFrom reverts when caller is not authorized under TRANSFER_EXECUTOR
+    /// @notice Verifies transferFrom reverts when caller is not authorized under TRANSFER_EXECUTOR_POLICY
     /// @dev Executor-side policy guard fires after allowance consumption and before _transfer.
     function test_transferFrom_revert_executorPolicyForbids(address caller, address from, address to, uint256 amount)
         public
@@ -43,14 +43,14 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(from);
         token.approve(caller, amount);
-        _setPolicy(B20Constants.TRANSFER_EXECUTOR, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_EXECUTOR, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transferFrom(from, to, amount);
     }
 
-    /// @notice Verifies transferFrom reverts when from is not authorized under TRANSFER_SENDER
+    /// @notice Verifies transferFrom reverts when from is not authorized under TRANSFER_SENDER_POLICY
     /// @dev Sender-side policy guard fires inside _transfer.
     function test_transferFrom_revert_senderPolicyForbids(address caller, address from, address to, uint256 amount)
         public
@@ -63,14 +63,14 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(from);
         token.approve(caller, amount);
-        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transferFrom(from, to, amount);
     }
 
-    /// @notice Verifies transferFrom reverts when to is not authorized under TRANSFER_RECEIVER
+    /// @notice Verifies transferFrom reverts when to is not authorized under TRANSFER_RECEIVER_POLICY
     /// @dev Receiver-side policy guard fires inside _transfer.
     function test_transferFrom_revert_receiverPolicyForbids(address caller, address from, address to, uint256 amount)
         public
@@ -83,10 +83,10 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(from);
         token.approve(caller, amount);
-        _setPolicy(B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transferFrom(from, to, amount);
     }
 

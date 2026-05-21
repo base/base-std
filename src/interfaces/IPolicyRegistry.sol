@@ -36,7 +36,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///                  absence of a configured policy means no restriction.
 ///         - `1` — always-block. `isAuthorized(1, any)` returns false.
 ///                  Useful as an explicit hard-deny on a policy slot
-///                  (e.g. disabling redemption by pointing `REDEEMER_SENDER`
+///                  (e.g. disabling redemption by pointing `REDEEMER_SENDER_POLICY`
 ///                  at this ID), or as a kill switch independent of
 ///                  token-level pause.
 ///

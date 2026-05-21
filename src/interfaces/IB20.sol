@@ -45,13 +45,13 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         to a dedicated storage slot on the token. The policy-type
 ///         identifier is the `keccak256` hash of its name. Four standard
 ///         types are exposed as constants on this base surface:
-///         - `TRANSFER_SENDER`   — checked against `from` on every transfer
-///         - `TRANSFER_RECEIVER` — checked against `to`   on every transfer
-///         - `TRANSFER_EXECUTOR` — checked against `msg.sender` on `transferFrom`
+///         - `TRANSFER_SENDER_POLICY`   — checked against `from` on every transfer
+///         - `TRANSFER_RECEIVER_POLICY` — checked against `to`   on every transfer
+///         - `TRANSFER_EXECUTOR_POLICY` — checked against `msg.sender` on `transferFrom`
 ///                                  (when distinct from `from`)
-///         - `MINT_RECEIVER`     — checked against `to`   on every mint
+///         - `MINT_RECEIVER_POLICY`     — checked against `to`   on every mint
 ///         Variants extend this set by adding their own dedicated slots
-///         (e.g. `IB20Security` adds `REDEEMER_SENDER` for its `redeem`
+///         (e.g. `IB20Security` adds `REDEEMER_SENDER_POLICY` for its `redeem`
 ///         path, stored in the variant's own namespaced storage). There
 ///         is no generic catch-all mapping: every `policyType` either
 ///         resolves to a real slot or doesn't exist at all. Both reads
@@ -71,8 +71,8 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 ///         Asymmetric per-role configuration is expressed by pointing
 ///         different slots at different policies — for example, a
-///         sanctions BLOCKLIST on `TRANSFER_SENDER` and an unrestricted
-///         always-allow on `TRANSFER_RECEIVER`. The registry stays flat;
+///         sanctions BLOCKLIST on `TRANSFER_SENDER_POLICY` and an unrestricted
+///         always-allow on `TRANSFER_RECEIVER_POLICY`. The registry stays flat;
 ///         all composition happens at the token layer. `approve` is NOT
 ///         gated by any policy (only the act of MOVING balance is gated).
 ///
@@ -173,7 +173,7 @@ interface IB20 {
     error SupplyCapExceeded(uint256 cap, uint256 attempted);
 
     /// @notice A policy slot denied the operation. `policyType` identifies
-    ///         which slot (e.g. `TRANSFER_SENDER`, `MINT_RECEIVER`) and
+    ///         which slot (e.g. `TRANSFER_SENDER_POLICY`, `MINT_RECEIVER_POLICY`) and
     ///         `policyId` is the ID currently set in that slot.
     error PolicyForbids(bytes32 policyType, uint64 policyId);
 
@@ -192,7 +192,7 @@ interface IB20 {
     error UnsupportedPolicyType(bytes32 policyType);
 
     /// @notice `burnBlocked` was called against a `from` address that is
-    ///         currently authorized under the active `TRANSFER_SENDER`
+    ///         currently authorized under the active `TRANSFER_SENDER_POLICY`
     ///         policy. `burnBlocked` exists specifically to seize supply
     ///         from policy-blocked addresses; calling it against a
     ///         non-blocked address is rejected by design.
@@ -309,7 +309,7 @@ interface IB20 {
 
     /// @notice Emitted by `updatePolicy` when a token's policy slot is
     ///         changed. `policyType` is one of the standard policy-type
-    ///         identifiers (e.g. `TRANSFER_SENDER()`); `oldPolicyId` and
+    ///         identifiers (e.g. `TRANSFER_SENDER_POLICY()`); `oldPolicyId` and
     ///         `newPolicyId` are the prior and current registry IDs for
     ///         that slot. Initial slot assignment at creation is also
     ///         emitted via `PolicyUpdated` with `oldPolicyId == 0`.
@@ -363,7 +363,7 @@ interface IB20 {
     /// @notice Required to call `burnBlocked`. Held separately from
     ///         `BURN_ROLE` so the authority to destroy a third party's
     ///         balance (gated on that party being unauthorized under the
-    ///         active `TRANSFER_SENDER` policy) can be granted only to a
+    ///         active `TRANSFER_SENDER_POLICY` policy) can be granted only to a
     ///         compliance role, not to general burn operators.
     function BURN_BLOCKED_ROLE() external view returns (bytes32);
 
@@ -392,22 +392,22 @@ interface IB20 {
 
     /// @notice The policy slot consulted against `from` on every transfer
     ///         (including the `from` side of `transferFrom`). Identifier
-    ///         is `keccak256("TRANSFER_SENDER")`.
-    function TRANSFER_SENDER() external view returns (bytes32);
+    ///         is `keccak256("TRANSFER_SENDER_POLICY")`.
+    function TRANSFER_SENDER_POLICY() external view returns (bytes32);
 
     /// @notice The policy slot consulted against `to` on every transfer.
-    ///         Identifier is `keccak256("TRANSFER_RECEIVER")`.
-    function TRANSFER_RECEIVER() external view returns (bytes32);
+    ///         Identifier is `keccak256("TRANSFER_RECEIVER_POLICY")`.
+    function TRANSFER_RECEIVER_POLICY() external view returns (bytes32);
 
     /// @notice The policy slot consulted against `msg.sender` on
     ///         `transferFrom` (the spender, when distinct from `from`).
     ///         Not consulted on `transfer` (where `msg.sender == from`).
-    ///         Identifier is `keccak256("TRANSFER_EXECUTOR")`.
-    function TRANSFER_EXECUTOR() external view returns (bytes32);
+    ///         Identifier is `keccak256("TRANSFER_EXECUTOR_POLICY")`.
+    function TRANSFER_EXECUTOR_POLICY() external view returns (bytes32);
 
     /// @notice The policy slot consulted against `to` on every mint.
-    ///         Identifier is `keccak256("MINT_RECEIVER")`.
-    function MINT_RECEIVER() external view returns (bytes32);
+    ///         Identifier is `keccak256("MINT_RECEIVER_POLICY")`.
+    function MINT_RECEIVER_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                                   ERC-20
@@ -435,14 +435,14 @@ interface IB20 {
 
     /// @notice Transfers `amount` from `msg.sender` to `to`. Reverts with:
     ///         - `ContractPaused(TRANSFER)` if `TRANSFER` is paused.
-    ///         - `PolicyForbids(TRANSFER_SENDER,   policyId)` if `msg.sender`
-    ///           is not authorized under the active `TRANSFER_SENDER` policy.
-    ///         - `PolicyForbids(TRANSFER_RECEIVER, policyId)` if `to` is not
-    ///           authorized under the active `TRANSFER_RECEIVER` policy.
+    ///         - `PolicyForbids(TRANSFER_SENDER_POLICY,   policyId)` if `msg.sender`
+    ///           is not authorized under the active `TRANSFER_SENDER_POLICY` policy.
+    ///         - `PolicyForbids(TRANSFER_RECEIVER_POLICY, policyId)` if `to` is not
+    ///           authorized under the active `TRANSFER_RECEIVER_POLICY` policy.
     ///         - `InsufficientBalance(msg.sender, balance, amount)` if the
     ///           caller does not have enough balance.
     ///         - `InvalidReceiver(to)` if `to == address(0)`.
-    /// @dev    Does NOT consult the `TRANSFER_EXECUTOR` policy: on direct
+    /// @dev    Does NOT consult the `TRANSFER_EXECUTOR_POLICY` policy: on direct
     ///         `transfer` the executor IS the sender, and the sender
     ///         check already covers that address. When the token is
     ///         configured as a gas asset, fee debits go through this
@@ -454,9 +454,9 @@ interface IB20 {
     ///         - `InsufficientAllowance(msg.sender, allowance, amount)`
     ///           if the caller does not have enough allowance from `from`.
     ///         - `InvalidSender(from)` if `from == address(0)`.
-    ///         - `PolicyForbids(TRANSFER_EXECUTOR, policyId)` if
+    ///         - `PolicyForbids(TRANSFER_EXECUTOR_POLICY, policyId)` if
     ///           `msg.sender != from` and `msg.sender` is not authorized
-    ///           under the active `TRANSFER_EXECUTOR` policy.
+    ///           under the active `TRANSFER_EXECUTOR_POLICY` policy.
     /// @dev    The sender-side check is performed against `from` (the
     ///         party whose balance moves), the receiver check against
     ///         `to`, and the executor check against `msg.sender` only
@@ -517,8 +517,8 @@ interface IB20 {
     ///         1. `totalSupply + amount <= supplyCap` (else
     ///            `SupplyCapExceeded`).
     ///         2. `MINT` is not paused (else `ContractPaused(MINT)`).
-    ///         3. `to` is authorized under the active `MINT_RECEIVER`
-    ///            policy (else `PolicyForbids(MINT_RECEIVER, policyId)`).
+    ///         3. `to` is authorized under the active `MINT_RECEIVER_POLICY`
+    ///            policy (else `PolicyForbids(MINT_RECEIVER_POLICY, policyId)`).
     /// @dev    Per-minter rate limiting is NOT enshrined at any level
     ///         (Default or variant). Minter quotas live in EVM
     ///         periphery contracts: a controller / wrapper that holds
@@ -552,7 +552,7 @@ interface IB20 {
     ///         `BURN_BLOCKED_ROLE`. Subject to:
     ///         1. `BURN` is not paused (else `ContractPaused(BURN)`).
     ///         2. `from` is NOT authorized under the active
-    ///            `TRANSFER_SENDER` policy (else `AccountNotBlocked(from)`).
+    ///            `TRANSFER_SENDER_POLICY` policy (else `AccountNotBlocked(from)`).
     ///            `burnBlocked` exists for seizure of policy-blocked
     ///            balance; calling it against an authorized address is
     ///            rejected by design.
@@ -679,10 +679,10 @@ interface IB20 {
     /// @notice The current policy ID configured for `policyType`. Returns
     ///         `0` (always-allow built-in) for any policy slot that has
     ///         never been assigned. Standard policy types are exposed as
-    ///         the role-identifier constants `TRANSFER_SENDER()`,
-    ///         `TRANSFER_RECEIVER()`, `TRANSFER_EXECUTOR()`, and
-    ///         `MINT_RECEIVER()`. Variants add their own constants for
-    ///         variant-specific operations (e.g. `REDEEMER_SENDER()` on
+    ///         the role-identifier constants `TRANSFER_SENDER_POLICY()`,
+    ///         `TRANSFER_RECEIVER_POLICY()`, `TRANSFER_EXECUTOR_POLICY()`, and
+    ///         `MINT_RECEIVER_POLICY()`. Variants add their own constants for
+    ///         variant-specific operations (e.g. `REDEEMER_SENDER_POLICY()` on
     ///         `IB20Security`). User-defined policy types are also
     ///         supported and may be used by periphery contracts that
     ///         layer additional gating on top.

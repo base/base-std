@@ -55,15 +55,15 @@ contract B20MintTest is B20Test {
         token.mint(to, amount);
     }
 
-    /// @notice Verifies mint reverts when recipient fails the MINT_RECEIVER policy
-    /// @dev Policy guard for issuance; checks PolicyForbids(MINT_RECEIVER, policyId)
+    /// @notice Verifies mint reverts when recipient fails the MINT_RECEIVER_POLICY policy
+    /// @dev Policy guard for issuance; checks PolicyForbids(MINT_RECEIVER_POLICY, policyId)
     function test_mint_revert_receiverPolicyForbids(address to, uint256 amount) public {
         _assumeValidActor(to);
         _grantRole(B20Constants.MINT_ROLE, minter);
-        _setPolicy(B20Constants.MINT_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(minter);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.MINT_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.mint(to, amount);
     }
 
