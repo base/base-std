@@ -164,7 +164,7 @@ interface IB20Security is IB20 {
 
     /// @notice Emitted by `updateMinimumRedeemable` when the redemption
     ///         floor is changed.
-    event MinimumRedeemableUpdated(uint256 newMinimumRedeemable);
+    event MinimumRedeemableUpdated(address indexed caller, uint256 newMinimumRedeemable);
 
     /// @notice Emitted by `updateShareRatio` when the share-to-tokens
     ///         ratio is changed.
@@ -236,8 +236,8 @@ interface IB20Security is IB20 {
 
     /// @notice The policy slot consulted against `msg.sender` on
     ///         `redeem` and `redeemWithMemo`. Identifier is
-    ///         `keccak256("REDEEMER_SENDER_POLICY")`.
-    function REDEEMER_SENDER_POLICY() external view returns (bytes32);
+    ///         `keccak256("REDEEM_SENDER_POLICY")`.
+    function REDEEM_SENDER_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                               ANNOUNCEMENTS
@@ -433,7 +433,7 @@ interface IB20Security is IB20 {
     /// @notice Burns `amount` tokens from the caller, recording intent
     ///         to settle off-chain.
     ///
-    /// @dev    Subject to the `REDEEMER_SENDER_POLICY` policy and to the
+    /// @dev    Subject to the `REDEEM_SENDER_POLICY` policy and to the
     ///         `REDEEM` pause vector. Reverts with
     ///         `BelowMinimumRedeemable(shares, minimumRedeemable)` if
     ///         the corresponding share amount (`amount *
