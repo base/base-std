@@ -39,7 +39,7 @@ import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 ///         would change `msg.sender` to the contract address and
 ///         break the inner role checks.
 ///
-///         **Policy override.** `REDEEMER_SENDER_POLICY` lives in this
+///         **Policy override.** `REDEEM_SENDER_POLICY` lives in this
 ///         variant's own `redeemPolicyIds` packed slot, mirroring the
 ///         per-operation packed-slot layout the base uses for
 ///         `transferPolicyIds` / `mintPolicyIds`. `_readPolicyId` and
@@ -76,7 +76,7 @@ contract MockB20Security is MockB20, IB20Security {
     bytes32 public constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
     bytes32 public constant BURN_FROM_ROLE = keccak256("BURN_FROM_ROLE");
 
-    bytes32 public constant REDEEMER_SENDER_POLICY = keccak256("REDEEMER_SENDER_POLICY");
+    bytes32 public constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
 
     /// @notice Fixed-point precision for the share ratio. `1e18` (one
     ///         WAD) is the standard DeFi convention; `toShares` and
@@ -209,7 +209,7 @@ contract MockB20Security is MockB20, IB20Security {
 
     function updateMinimumRedeemable(uint256 newMinimumRedeemable) external onlyRole(DEFAULT_ADMIN_ROLE) {
         MockB20RedeemStorage.layout().minimumRedeemable = newMinimumRedeemable;
-        emit MinimumRedeemableUpdated(newMinimumRedeemable);
+        emit MinimumRedeemableUpdated(msg.sender, newMinimumRedeemable);
     }
 
     function minimumRedeemable() external view returns (uint256) {
@@ -237,19 +237,19 @@ contract MockB20Security is MockB20, IB20Security {
     //                       POLICY OVERRIDES
     // ============================================================
 
-    /// @dev Variant-first policy resolution: REDEEMER_SENDER_POLICY lives in
+    /// @dev Variant-first policy resolution: REDEEM_SENDER_POLICY lives in
     ///      this variant's own packed slot; everything else falls
     ///      through to the base. The base's UnsupportedPolicyType
     ///      revert is the terminal case.
     function _readPolicyId(bytes32 policyType) internal view virtual override returns (uint64) {
-        if (policyType == REDEEMER_SENDER_POLICY) {
+        if (policyType == REDEEM_SENDER_POLICY) {
             return uint64(MockB20RedeemStorage.layout().redeemPolicyIds);
         }
         return super._readPolicyId(policyType);
     }
 
     function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal virtual override {
-        if (policyType == REDEEMER_SENDER_POLICY) {
+        if (policyType == REDEEM_SENDER_POLICY) {
             MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
             uint256 mask = uint256(type(uint64).max);
             $.redeemPolicyIds = ($.redeemPolicyIds & ~mask) | uint256(newPolicyId);
@@ -278,9 +278,9 @@ contract MockB20Security is MockB20, IB20Security {
     function _redeemBurn(uint256 amount) internal returns (uint256 ratio) {
         if (_isPaused(PausableFeature.REDEEM)) revert ContractPaused(PausableFeature.REDEEM);
         MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
-        uint64 redeemerSenderPolicyId = uint64($.redeemPolicyIds);
-        if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(redeemerSenderPolicyId, msg.sender)) {
-            revert PolicyForbids(REDEEMER_SENDER_POLICY, redeemerSenderPolicyId);
+        uint64 REDEEMSenderPolicyId = uint64($.redeemPolicyIds);
+        if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {
+            revert PolicyForbids(REDEEM_SENDER_POLICY, REDEEMSenderPolicyId);
         }
         ratio = _sharesToTokensRatio();
         uint256 shares = (amount * ratio) / WAD_PRECISION;
