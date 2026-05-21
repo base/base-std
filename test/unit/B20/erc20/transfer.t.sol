@@ -20,27 +20,27 @@ contract B20TransferTest is B20Test {
         token.transfer(to, amount);
     }
 
-    /// @notice Verifies transfer reverts when sender is not authorized under TRANSFER_SENDER
-    /// @dev Policy guard for the from-side; checks PolicyForbids(TRANSFER_SENDER, policyId) error
+    /// @notice Verifies transfer reverts when sender is not authorized under TRANSFER_SENDER_POLICY
+    /// @dev Policy guard for the from-side; checks PolicyForbids(TRANSFER_SENDER_POLICY, policyId) error
     function test_transfer_revert_senderPolicyForbids(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
-        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(from);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transfer(to, amount);
     }
 
-    /// @notice Verifies transfer reverts when recipient is not authorized under TRANSFER_RECEIVER
-    /// @dev Policy guard for the to-side; checks PolicyForbids(TRANSFER_RECEIVER, policyId) error
+    /// @notice Verifies transfer reverts when recipient is not authorized under TRANSFER_RECEIVER_POLICY
+    /// @dev Policy guard for the to-side; checks PolicyForbids(TRANSFER_RECEIVER_POLICY, policyId) error
     function test_transfer_revert_receiverPolicyForbids(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
-        _setPolicy(B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(from);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
         token.transfer(to, amount);
     }
 

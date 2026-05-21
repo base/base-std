@@ -76,7 +76,7 @@ library MockB20Storage {
         //   word3 (bytes 24..31, bits 192..255): reserved
         // Note: bit ranges are shown low..high to avoid [end:start] ambiguity.
         uint256 transferPolicyIds;
-        // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER` is
+        // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER_POLICY` is
         // defined today; the remaining three uint64 slots are reserved
         // for future granular mint-side policy types (e.g.
         // MINT_AUTHORIZER) so adding one doesn't force a second SLOAD.

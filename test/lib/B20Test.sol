@@ -25,8 +25,8 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 contract B20Test is TokenFactoryTest {
     // Role identifiers (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
     // BURN_BLOCKED_ROLE, PAUSE_ROLE, UNPAUSE_ROLE, METADATA_ROLE) and
-    // policy-type identifiers (TRANSFER_SENDER, TRANSFER_RECEIVER,
-    // TRANSFER_EXECUTOR, MINT_RECEIVER) are NOT redeclared here.
+    // policy-type identifiers (TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY,
+    // TRANSFER_EXECUTOR_POLICY, MINT_RECEIVER_POLICY) are NOT redeclared here.
     // Tests reference them directly from MockB20 as `MINT_ROLE`
     // etc. — single source of truth, no drift risk.
     //
@@ -133,13 +133,13 @@ contract B20Test is TokenFactoryTest {
     ///         unsupported `bytes32` revert `UnsupportedPolicyType`.
     /// @dev    Variant tests can wrap this with their own indexer that
     ///         extends the codomain (e.g. a Security test that also
-    ///         covers `REDEEMER_SENDER`).
+    ///         covers `REDEEMER_SENDER_POLICY`).
     function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
         uint8 i = idx % 4;
-        if (i == 0) return B20Constants.TRANSFER_SENDER;
-        if (i == 1) return B20Constants.TRANSFER_RECEIVER;
-        if (i == 2) return B20Constants.TRANSFER_EXECUTOR;
-        return B20Constants.MINT_RECEIVER;
+        if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;
+        if (i == 1) return B20Constants.TRANSFER_RECEIVER_POLICY;
+        if (i == 2) return B20Constants.TRANSFER_EXECUTOR_POLICY;
+        return B20Constants.MINT_RECEIVER_POLICY;
     }
 
     /// @notice True iff `policyType` is one of the four base-token
@@ -147,10 +147,10 @@ contract B20Test is TokenFactoryTest {
     ///         `bytes32` and need to filter to the supported / unsupported
     ///         partition.
     function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
-        return policyType == B20Constants.TRANSFER_SENDER
-            || policyType == B20Constants.TRANSFER_RECEIVER
-            || policyType == B20Constants.TRANSFER_EXECUTOR
-            || policyType == B20Constants.MINT_RECEIVER;
+        return policyType == B20Constants.TRANSFER_SENDER_POLICY
+            || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
+            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY
+            || policyType == B20Constants.MINT_RECEIVER_POLICY;
     }
 
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`

@@ -28,10 +28,10 @@ library B20Constants {
     bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
     bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");
 
-    bytes32 internal constant TRANSFER_SENDER = keccak256("TRANSFER_SENDER");
-    bytes32 internal constant TRANSFER_RECEIVER = keccak256("TRANSFER_RECEIVER");
-    bytes32 internal constant TRANSFER_EXECUTOR = keccak256("TRANSFER_EXECUTOR");
-    bytes32 internal constant MINT_RECEIVER = keccak256("MINT_RECEIVER");
+    bytes32 internal constant TRANSFER_SENDER_POLICY = keccak256("TRANSFER_SENDER_POLICY");
+    bytes32 internal constant TRANSFER_RECEIVER_POLICY = keccak256("TRANSFER_RECEIVER_POLICY");
+    bytes32 internal constant TRANSFER_EXECUTOR_POLICY = keccak256("TRANSFER_EXECUTOR_POLICY");
+    bytes32 internal constant MINT_RECEIVER_POLICY = keccak256("MINT_RECEIVER_POLICY");
 }
 
 /// @title MockB20
@@ -101,10 +101,10 @@ contract MockB20 is IB20 {
     bytes32 public constant METADATA_ROLE = B20Constants.METADATA_ROLE;
 
     /// @notice Policy-type identifiers. Same `keccak256` convention as roles.
-    bytes32 public constant TRANSFER_SENDER = B20Constants.TRANSFER_SENDER;
-    bytes32 public constant TRANSFER_RECEIVER = B20Constants.TRANSFER_RECEIVER;
-    bytes32 public constant TRANSFER_EXECUTOR = B20Constants.TRANSFER_EXECUTOR;
-    bytes32 public constant MINT_RECEIVER = B20Constants.MINT_RECEIVER;
+    bytes32 public constant TRANSFER_SENDER_POLICY = B20Constants.TRANSFER_SENDER_POLICY;
+    bytes32 public constant TRANSFER_RECEIVER_POLICY = B20Constants.TRANSFER_RECEIVER_POLICY;
+    bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
+    bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
 
     // ============================================================
     //                          ERC-20: VIEWS
@@ -152,7 +152,7 @@ contract MockB20 is IB20 {
             // slot for sender + receiver.
             uint64 executorPolicyId = uint64(MockB20Storage.layout().transferPolicyIds >> 128);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR, executorPolicyId);
+                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
             }
         }
         _transfer(from, to, amount);
@@ -182,7 +182,7 @@ contract MockB20 is IB20 {
             _consumeAllowance(from, msg.sender, amount);
             uint64 executorPolicyId = uint64(MockB20Storage.layout().transferPolicyIds >> 128);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR, executorPolicyId);
+                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
             }
         }
         _transfer(from, to, amount);
@@ -397,10 +397,10 @@ contract MockB20 is IB20 {
     ///      falling through to `super`.
     function _readPolicyId(bytes32 policyType) internal view virtual returns (uint64) {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
-        if (policyType == TRANSFER_SENDER) return uint64($.transferPolicyIds);
-        if (policyType == TRANSFER_RECEIVER) return uint64($.transferPolicyIds >> 64);
-        if (policyType == TRANSFER_EXECUTOR) return uint64($.transferPolicyIds >> 128);
-        if (policyType == MINT_RECEIVER) return uint64($.mintPolicyIds);
+        if (policyType == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds);
+        if (policyType == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 64);
+        if (policyType == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds >> 128);
+        if (policyType == MINT_RECEIVER_POLICY) return uint64($.mintPolicyIds);
         revert UnsupportedPolicyType(policyType);
     }
 
@@ -414,13 +414,13 @@ contract MockB20 is IB20 {
     function _writePolicyId(bytes32 policyType, uint64 newPolicyId) internal virtual {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 mask = uint256(type(uint64).max);
-        if (policyType == TRANSFER_SENDER) {
+        if (policyType == TRANSFER_SENDER_POLICY) {
             $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);
-        } else if (policyType == TRANSFER_RECEIVER) {
+        } else if (policyType == TRANSFER_RECEIVER_POLICY) {
             $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);
-        } else if (policyType == TRANSFER_EXECUTOR) {
+        } else if (policyType == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);
-        } else if (policyType == MINT_RECEIVER) {
+        } else if (policyType == MINT_RECEIVER_POLICY) {
             $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);
         } else {
             revert UnsupportedPolicyType(policyType);
@@ -604,10 +604,10 @@ contract MockB20 is IB20 {
             uint64 senderPolicyId = uint64(packed);
             uint64 receiverPolicyId = uint64(packed >> 64);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
-                revert PolicyForbids(TRANSFER_SENDER, senderPolicyId);
+                revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicyId);
             }
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(receiverPolicyId, to)) {
-                revert PolicyForbids(TRANSFER_RECEIVER, receiverPolicyId);
+                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicyId);
             }
         }
 
@@ -629,7 +629,7 @@ contract MockB20 is IB20 {
             if (_isPaused(PausableFeature.MINT)) revert ContractPaused(PausableFeature.MINT);
             uint64 mintReceiverPolicyId = uint64(MockB20Storage.layout().mintPolicyIds);
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
-                revert PolicyForbids(MINT_RECEIVER, mintReceiverPolicyId);
+                revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);
             }
         }
 

@@ -101,23 +101,23 @@ MUTATIONS: list[Mutation] = [
     # === MockB20: skip policy check on sender (matches new inline pattern) ===
     Mutation(
         MOCK_B20,
-        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {\n                revert PolicyForbids(TRANSFER_SENDER, senderPolicyId);\n            }",
-        "            // sender policy check elided\n            if (false) revert PolicyForbids(TRANSFER_SENDER, senderPolicyId);",
-        "_transfer: drop TRANSFER_SENDER policy check entirely",
+        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {\n                revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicyId);\n            }",
+        "            // sender policy check elided\n            if (false) revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicyId);",
+        "_transfer: drop TRANSFER_SENDER_POLICY policy check entirely",
     ),
     # === MockB20: skip policy check on receiver (matches new inline pattern) ===
     Mutation(
         MOCK_B20,
-        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(receiverPolicyId, to)) {\n                revert PolicyForbids(TRANSFER_RECEIVER, receiverPolicyId);\n            }",
-        "            // receiver policy check elided\n            if (false) revert PolicyForbids(TRANSFER_RECEIVER, receiverPolicyId);",
-        "_transfer: drop TRANSFER_RECEIVER policy check entirely",
+        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(receiverPolicyId, to)) {\n                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicyId);\n            }",
+        "            // receiver policy check elided\n            if (false) revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicyId);",
+        "_transfer: drop TRANSFER_RECEIVER_POLICY policy check entirely",
     ),
-    # === MockB20: skip MINT_RECEIVER policy check (matches new inline pattern) ===
+    # === MockB20: skip MINT_RECEIVER_POLICY policy check (matches new inline pattern) ===
     Mutation(
         MOCK_B20,
-        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {\n                revert PolicyForbids(MINT_RECEIVER, mintReceiverPolicyId);\n            }",
-        "            // mint receiver policy check elided\n            if (false) revert PolicyForbids(MINT_RECEIVER, mintReceiverPolicyId);",
-        "_mint: drop MINT_RECEIVER policy check entirely",
+        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {\n                revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);\n            }",
+        "            // mint receiver policy check elided\n            if (false) revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);",
+        "_mint: drop MINT_RECEIVER_POLICY policy check entirely",
     ),
     # === MockB20: lastAdmin guard off-by-one (post-#40 inline conjunction) ===
     Mutation(
@@ -299,21 +299,21 @@ MUTATIONS: list[Mutation] = [
     # === Policy lane wiring (transferPolicyIds reads) ===
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_SENDER) return uint64($.transferPolicyIds);",
-        "if (policyType == TRANSFER_SENDER) return uint64($.transferPolicyIds >> 64);",
-        "_readPolicyId: TRANSFER_SENDER reads RECEIVER lane (wrong shift)",
+        "if (policyType == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds);",
+        "if (policyType == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds >> 64);",
+        "_readPolicyId: TRANSFER_SENDER_POLICY reads RECEIVER lane (wrong shift)",
     ),
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_RECEIVER) return uint64($.transferPolicyIds >> 64);",
-        "if (policyType == TRANSFER_RECEIVER) return uint64($.transferPolicyIds >> 128);",
-        "_readPolicyId: TRANSFER_RECEIVER reads EXECUTOR lane (wrong shift)",
+        "if (policyType == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 64);",
+        "if (policyType == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 128);",
+        "_readPolicyId: TRANSFER_RECEIVER_POLICY reads EXECUTOR lane (wrong shift)",
     ),
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_EXECUTOR) return uint64($.transferPolicyIds >> 128);",
-        "if (policyType == TRANSFER_EXECUTOR) return uint64($.transferPolicyIds);",
-        "_readPolicyId: TRANSFER_EXECUTOR reads SENDER lane (wrong shift)",
+        "if (policyType == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds >> 128);",
+        "if (policyType == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds);",
+        "_readPolicyId: TRANSFER_EXECUTOR_POLICY reads SENDER lane (wrong shift)",
     ),
     # === Permit cross-cutting ===
     Mutation(
@@ -440,21 +440,21 @@ MUTATIONS: list[Mutation] = [
     # === _writePolicyId lane writes (MockB20, mirror of the read mutations) ===
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_SENDER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
-        "if (policyType == TRANSFER_SENDER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
-        "_writePolicyId: TRANSFER_SENDER writes to RECEIVER lane (lane swap)",
+        "if (policyType == TRANSFER_SENDER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
+        "if (policyType == TRANSFER_SENDER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
+        "_writePolicyId: TRANSFER_SENDER_POLICY writes to RECEIVER lane (lane swap)",
     ),
     Mutation(
         MOCK_B20,
-        "} else if (policyType == TRANSFER_RECEIVER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
-        "} else if (policyType == TRANSFER_RECEIVER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);",
-        "_writePolicyId: TRANSFER_RECEIVER writes to EXECUTOR lane",
+        "} else if (policyType == TRANSFER_RECEIVER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
+        "} else if (policyType == TRANSFER_RECEIVER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);",
+        "_writePolicyId: TRANSFER_RECEIVER_POLICY writes to EXECUTOR lane",
     ),
     Mutation(
         MOCK_B20,
-        "} else if (policyType == MINT_RECEIVER) {\n            $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);",
-        "} else if (policyType == MINT_RECEIVER) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
-        "_writePolicyId: MINT_RECEIVER writes to transferPolicyIds slot (wrong storage var)",
+        "} else if (policyType == MINT_RECEIVER_POLICY) {\n            $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);",
+        "} else if (policyType == MINT_RECEIVER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
+        "_writePolicyId: MINT_RECEIVER_POLICY writes to transferPolicyIds slot (wrong storage var)",
     ),
     Mutation(
         MOCK_B20,

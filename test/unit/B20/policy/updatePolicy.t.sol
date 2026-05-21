@@ -84,20 +84,20 @@ contract B20UpdatePolicyTest is B20Test {
     /// @dev Policy slots are packed into shared storage slots (one for transfer-side,
     ///      one for mint-side). A buggy write mask that doesn't isolate the target lane
     ///      would silently zero adjacent lanes. We set every supported policy slot to
-    ///      ALWAYS_BLOCK first, then update TRANSFER_SENDER to ALWAYS_ALLOW, and verify
+    ///      ALWAYS_BLOCK first, then update TRANSFER_SENDER_POLICY to ALWAYS_ALLOW, and verify
     ///      the other three slots are still ALWAYS_BLOCK.
     function test_updatePolicy_success_writeIsolatedToTargetLane() public {
-        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        _setPolicy(B20Constants.TRANSFER_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        _setPolicy(B20Constants.TRANSFER_EXECUTOR, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        _setPolicy(B20Constants.MINT_RECEIVER, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
-        _setPolicy(B20Constants.TRANSFER_SENDER, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
-        assertEq(token.policyId(B20Constants.TRANSFER_SENDER), PolicyRegistryConstants.ALWAYS_ALLOW_ID, "SENDER updated");
-        assertEq(token.policyId(B20Constants.TRANSFER_RECEIVER), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "RECEIVER must be untouched");
-        assertEq(token.policyId(B20Constants.TRANSFER_EXECUTOR), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "EXECUTOR must be untouched");
-        assertEq(token.policyId(B20Constants.MINT_RECEIVER), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "MINT_RECEIVER must be untouched");
+        assertEq(token.policyId(B20Constants.TRANSFER_SENDER_POLICY), PolicyRegistryConstants.ALWAYS_ALLOW_ID, "SENDER updated");
+        assertEq(token.policyId(B20Constants.TRANSFER_RECEIVER_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "RECEIVER must be untouched");
+        assertEq(token.policyId(B20Constants.TRANSFER_EXECUTOR_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "EXECUTOR must be untouched");
+        assertEq(token.policyId(B20Constants.MINT_RECEIVER_POLICY), PolicyRegistryConstants.ALWAYS_BLOCK_ID, "MINT_RECEIVER_POLICY must be untouched");
     }
 
     /// @notice Verifies updatePolicy emits PolicyUpdated(policyType, oldId, newId)
