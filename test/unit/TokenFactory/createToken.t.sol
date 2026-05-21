@@ -6,6 +6,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
+import {ISO4217} from "src/utils/ISO4217.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
@@ -57,14 +58,93 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
-    /// @notice Verifies stablecoin createToken reverts when currency is the empty string
-    /// @dev Per-variant required-field check; checks MissingRequiredField() error
-    function test_createToken_revert_missingCurrency(address caller, bytes32 salt) public {
+    // ============================================================
+    //   STABLECOIN-variant currency validation (ISO 4217 fiat allowlist)
+    // ============================================================
+    // The STABLECOIN arm enforces `currency` against the ISO 4217
+    // active-fiat allowlist exposed by `ISO4217.isValidFiatCode`. The
+    // claim is universal: any input on the allowlist is accepted, any
+    // input off it reverts with `InvalidCurrency(code)`. The two fuzz
+    // tests below pin down both halves of that universal directly; the
+    // remaining named tests document the two non-obvious membership
+    // decisions (multi-country X-prefix codes accepted, the
+    // explicitly-blocked ISO 4217 codes rejected) that a reader would
+    // not infer from the fuzz tests alone.
+
+    /// @notice Verifies any string not on the allowlist reverts with InvalidCurrency
+    ///         carrying the offending value verbatim
+    /// @dev Universal rejection claim: this single fuzz test subsumes
+    ///      every point-input variation a hand-written test could
+    ///      probe — empty string, wrong length, wrong case, unknown
+    ///      three-letter combinations, non-ASCII bytes, crypto
+    ///      tickers, governance symbols, and every excluded ISO 4217
+    ///      entry. Fuzz iterations that happen to hit a valid code
+    ///      are filtered via `vm.assume`; the hit rate is negligible
+    ///      (allowlist size << 2^24 length-3 inputs alone). The
+    ///      revert-data assertion proves the diagnostic contract too:
+    ///      the rejected string round-trips verbatim into the error.
+    function test_fuzz_createToken_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
+        public
+    {
         _assumeValidCaller(caller);
-        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("USD Test", "USDT", admin, "");
+        vm.assume(!ISO4217.isValidFiatCode(code));
+        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
-        vm.expectRevert(ITokenFactory.MissingRequiredField.selector);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+    }
+
+    /// @notice Verifies every code in the explicitly-documented ISO 4217
+    ///         blocklist reverts
+    /// @dev Documentation-pinning fuzz: the blocklist (`ISO4217.excludedAt`)
+    ///      enumerates every ISO 4217 entry that was considered for
+    ///      inclusion and rejected, with per-entry rationale in the
+    ///      library. Driving the fuzz seed against
+    ///      `seed % excludedCount()` covers every entry uniformly and
+    ///      automatically picks up new entries as the blocklist grows.
+    ///      The universal-rejection fuzz above would catch each entry
+    ///      too, but this test makes the "we deliberately considered
+    ///      and rejected these specific codes" claim executable rather
+    ///      than implicit.
+    function test_fuzz_createToken_revert_currency_blocklist(uint256 seed, address caller) public {
+        _assumeValidCaller(caller);
+        uint256 idx = seed % ISO4217.excludedCount();
+        string memory code = ISO4217.excludedAt(idx);
+        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
+        factory.createToken(
+            ITokenFactory.TokenVariant.STABLECOIN, keccak256(abi.encode("blocklist", seed)), abi.encode(p), new bytes[](0)
+        );
+    }
+
+    /// @notice Verifies an invalid currency at creation leaves no partial state
+    ///         at the deterministic address
+    /// @dev Atomicity claim: a rejected create must not commit bytecode,
+    ///      identity storage, the currency slot, or the admin grant.
+    ///      A subsequent create at the same (variant, sender, salt)
+    ///      with a valid currency must succeed at the same address.
+    ///      This guarantees a misnamed retry is not blocked by ghost
+    ///      state from the failed attempt. Distinct claim from the
+    ///      universal-rejection fuzz, which only inspects the revert
+    ///      shape and not the post-revert chain state.
+    function test_createToken_revert_currency_leavesNoPartialState(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.STABLECOIN, caller, salt);
+
+        // First attempt: invalid currency.
+        ITokenFactory.B20StablecoinCreateParams memory bad = _stablecoinParams("Test", "TST", admin, "XAU");
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, "XAU"));
+        factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(bad), new bytes[](0));
+
+        assertEq(predicted.code.length, 0, "predicted address must be empty after rejected create");
+
+        // Retry with a valid currency. Same (sender, salt) -> same address.
+        address retried =
+            _createStablecoin(caller, salt, _stablecoinParams("Test", "TST", admin, "USD"), new bytes[](0));
+        assertEq(retried, predicted, "retry must produce the same deterministic address");
+        assertEq(IB20Stablecoin(retried).currency(), "USD", "retry currency must be the valid one");
     }
 
     /// @notice Verifies the SECURITY variant currently reverts UnsupportedVersion(0)
@@ -190,6 +270,69 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.STABLECOIN, caller, salt);
         address actual = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
+    }
+
+    /// @notice Verifies a representative set of active ISO 4217 fiat codes
+    ///         are accepted by the stablecoin variant
+    /// @dev Spot-check on the major reserve currencies (USD, EUR, JPY,
+    ///      GBP, CHF, CNY, CAD, AUD) — the codes most likely to be in
+    ///      use; if any of them stops parsing as valid the impact is
+    ///      immediate and broad. Each create reads back `currency()`
+    ///      to confirm the string round-trips through storage
+    ///      byte-for-byte; a successful create with a corrupted
+    ///      readback would still violate the field's contract. The
+    ///      universal-rejection fuzz in the REVERTS section is the
+    ///      complementary half of the same claim — together they
+    ///      cover "any allowlist code accepted, anything else rejected."
+    function test_createToken_success_currency_acceptsMajorFiatCodes(address caller) public {
+        _assumeValidCaller(caller);
+        string[8] memory majors = ["USD", "EUR", "JPY", "GBP", "CHF", "CNY", "CAD", "AUD"];
+        for (uint256 i = 0; i < majors.length; i++) {
+            address token = _createStablecoin(
+                caller,
+                keccak256(abi.encode("major-fiat", i)),
+                _stablecoinParams("Test", "TST", admin, majors[i]),
+                new bytes[](0)
+            );
+            assertEq(
+                IB20Stablecoin(token).currency(),
+                majors[i],
+                "currency() must round-trip the accepted code byte-for-byte"
+            );
+        }
+    }
+
+    /// @notice Verifies the four multi-country X-prefix fiat currencies
+    ///         (XOF, XAF, XCD, XPF) are accepted
+    /// @dev Documentation-pinning test for the non-obvious design
+    ///      choice that the X-prefix is NOT a categorical exclusion
+    ///      rule. ISO 4217 reserves the X-prefix for codes where no
+    ///      single ISO 3166 country code applies — which covers both
+    ///      "not a currency" (metals, sentinels) AND "currency shared
+    ///      across multiple countries by a supranational central
+    ///      bank." The four codes here belong to the latter category
+    ///      (CFA Franc BCEAO, CFA Franc BEAC, East Caribbean Dollar,
+    ///      CFP Franc — real currencies used by tens of millions of
+    ///      people) and are deliberately on the allowlist. A reader
+    ///      who saw the blocklist's X-prefix entries and inferred
+    ///      "all X-prefix codes are blocked" would be wrong; this
+    ///      test makes the carve-out executable.
+    function test_createToken_success_currency_acceptsMultiCountryXPrefix(address caller) public {
+        _assumeValidCaller(caller);
+        string[4] memory xFiat = ["XOF", "XAF", "XCD", "XPF"];
+        for (uint256 i = 0; i < xFiat.length; i++) {
+            address token = _createStablecoin(
+                caller,
+                keccak256(abi.encode("xprefix-fiat", i)),
+                _stablecoinParams("Test", "TST", admin, xFiat[i]),
+                new bytes[](0)
+            );
+            assertEq(
+                IB20Stablecoin(token).currency(),
+                xFiat[i],
+                "multi-country X-prefix fiat code must round-trip"
+            );
+        }
     }
 
     /// @notice Verifies createToken emits TokenCreated with the correct identity fields

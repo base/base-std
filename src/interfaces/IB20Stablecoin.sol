@@ -4,26 +4,61 @@ pragma solidity >=0.8.20 <0.9.0;
 import {IB20} from "./IB20.sol";
 
 /// @title IB20Stablecoin
-/// @notice A B-20 token variant for value-pegged tokens (USD, EUR, XAU, etc.).
-///         Inherits the full `IB20` surface and adds a single
-///         immutable `currency()` identifier for routing, categorization,
-///         and wallet display.
+/// @notice A B-20 token variant for tokens designed to track the value
+///         of a national fiat currency. Inherits the full `IB20`
+///         surface and adds a single immutable `currency()` identifier
+///         used by downstream tooling (indexers, wallets, and any
+///         protocol that wants to group tokens by the asset they peg
+///         to) to categorize the token.
 ///
 interface IB20Stablecoin is IB20 {
     /*//////////////////////////////////////////////////////////////
                           CURRENCY IDENTIFIER
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The reference asset this stablecoin is designed to track.
-    ///         Set at creation by the factory; immutable thereafter.
-    /// @dev    Two stablecoins tracking the same asset return the same
-    ///         identifier. Conventions:
-    ///         - ISO-4217 codes for fiat / commodity references: "USD",
-    ///           "EUR", "JPY", "XAU" (gold), "XAG" (silver).
-    ///         - Symbol for non-ISO references: "BTC", "ETH" (for tokens
-    ///           tracking the price of those assets).
-    ///         - The token's own symbol if it tracks no external reference
-    ///           (governance, utility tokens that nonetheless want the
-    ///           stablecoin variant for the operational surface).
+    /// @notice The national fiat currency this stablecoin is designed
+    ///         to track, expressed as an active ISO 4217 alphabetic
+    ///         code (e.g. `"USD"`, `"EUR"`, `"JPY"`). Set at creation
+    ///         by the factory; immutable thereafter. Two stablecoins
+    ///         tracking the same currency return byte-identical values.
+    ///
+    /// @dev    **Value space.** The factory validates this field
+    ///         against a hardcoded allowlist of active ISO 4217 codes
+    ///         registered as national means of payment. Any value
+    ///         outside that allowlist reverts at creation with
+    ///         `ITokenFactory.InvalidCurrency(code)`; see
+    ///         `ISO4217.isValidFiatCode` for the canonical list.
+    ///         Specifically excluded:
+    ///         - **ISO 4217 X-prefix codes** (XAU/XAG/XPT/XPD precious
+    ///           metals, XBA-XBD bond market units, XDR IMF special
+    ///           drawing rights, XSU sucre, XUA ADB unit of account,
+    ///           XTS test code, XXX no-currency sentinel). These are
+    ///           reserved by ISO 4217 for non-currency uses. Tokens
+    ///           backed by precious metals or other commodities are
+    ///           securities-shaped instruments and belong on the
+    ///           `IB20Security` variant.
+    ///         - **Crypto tickers** (BTC, ETH, etc.) and any other
+    ///           free-form symbol — out of scope for this variant.
+    ///
+    ///         **Trust model.** This field is the issuer's *self-
+    ///         declared* peg. The factory enforces format and
+    ///         membership in the ISO 4217 fiat allowlist; it does NOT
+    ///         verify the token is actually backed by, or actually
+    ///         tracking, the named currency. Any protocol that consumes
+    ///         `currency()` to make an authorization or categorization
+    ///         decision MUST still apply its own allowlist or trust
+    ///         resolution on top — typically an issuer / contract
+    ///         allowlist maintained by the consumer. What this field
+    ///         provides is a standardized, immutable, machine-readable
+    ///         identifier that consumer-side allowlists can be
+    ///         organized around (e.g. "must be on my issuer allowlist
+    ///         AND `currency() == \"USD\"`"), not the allowlist itself.
+    ///
+    ///         **Immutability.** No setter exists. The identifier is
+    ///         fixed at construction by the factory and cannot be
+    ///         changed afterward; mutability would let an admitted
+    ///         token silently switch what it claims to represent and
+    ///         break any consumer that built admission logic on top of
+    ///         the field.
     function currency() external view returns (string memory);
 }

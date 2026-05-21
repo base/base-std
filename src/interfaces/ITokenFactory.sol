@@ -112,12 +112,28 @@ interface ITokenFactory {
     /// @param name          ERC-20 token name.
     /// @param symbol        ERC-20 token symbol.
     /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param currency      Immutable currency identifier (e.g. "USD",
-    ///                      "EUR", "XAU"). Required: empty string
-    ///                      reverts. See `IB20Stablecoin.currency` for
-    ///                      the convention.
+    /// @param currency      Immutable identifier for the national fiat
+    ///                      currency this stablecoin is designed to
+    ///                      track. MUST be an active ISO 4217
+    ///                      alphabetic code for a sovereign or
+    ///                      supranational means of payment (e.g. `"USD"`,
+    ///                      `"EUR"`, `"JPY"`, `"GBP"`). Any input
+    ///                      outside this allowlist — empty string,
+    ///                      wrong case, wrong length, unknown
+    ///                      three-letter combinations, ISO 4217
+    ///                      X-prefix codes (XAU, XAG, XDR, XTS, XXX),
+    ///                      or crypto tickers (BTC, ETH) — reverts
+    ///                      with `InvalidCurrency(code)`. See
+    ///                      `IB20Stablecoin.currency` for the semantics
+    ///                      and the rationale behind the restriction;
+    ///                      the canonical allowlist is in
+    ///                      `ISO4217.isValidFiatCode`.
     /// @dev    Decimals are fixed at `6` (the SPL stablecoin convention).
-    ///         There is no decimals field on this struct.
+    ///         There is no decimals field on this struct. The currency
+    ///         allowlist is enforced at creation and is immutable for
+    ///         the lifetime of the token — there is no setter on the
+    ///         deployed contract, so this is the only place the
+    ///         identifier can ever be chosen.
     struct B20StablecoinCreateParams {
         uint8 version;
         string name;
@@ -169,8 +185,27 @@ interface ITokenFactory {
     error UnsupportedVersion(uint8 version);
 
     /// @notice A required string argument was the empty string (e.g.
-    ///         stablecoin `currency`, security `isin`).
+    ///         security `isin`). The stablecoin `currency` field is
+    ///         validated more tightly and reverts with
+    ///         `InvalidCurrency` instead — including for the empty
+    ///         string — so callers get a single, diagnostic-carrying
+    ///         error for every currency rejection rather than two
+    ///         disjoint failure modes for the same field.
     error MissingRequiredField();
+
+    /// @notice The stablecoin `currency` field did not match an active
+    ///         ISO 4217 national-fiat alphabetic code. Carries the
+    ///         offending string verbatim for diagnostics.
+    ///
+    /// @dev    Triggered for every form of invalid currency: empty
+    ///         string, wrong length, wrong case (`"usd"`), unknown
+    ///         three-letter combinations (`"ZZZ"`), X-prefix codes
+    ///         (XAU, XAG, XDR, XXX, XTS — reserved by ISO 4217 for
+    ///         non-national-currency uses), and out-of-scope tickers
+    ///         (BTC, ETH, etc.). See `B20StablecoinCreateParams.currency`
+    ///         for the rationale and value-space definition; the
+    ///         reference allowlist lives in `ISO4217.isValidFiatCode`.
+    error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the
     ///         underlying revert reason where the call returns one;
