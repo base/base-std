@@ -17,7 +17,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         seven named roles (`DEFAULT_ADMIN_ROLE`, `MINT_ROLE`, `BURN_ROLE`,
 ///         `BURN_BLOCKED_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`, `METADATA_ROLE`)
 ///         plus arbitrary user-defined roles. `grantRole`, `revokeRole`, `renounceRole`, and
-///         `updateRoleAdmin` work uniformly across all roles, with one
+///         `setRoleAdmin` work uniformly across all roles, with one
 ///         protocol-level constraint: the LAST holder of
 ///         `DEFAULT_ADMIN_ROLE` cannot renounce via `renounceRole` (this
 ///         guards against accidentally bricking the token's admin
@@ -107,7 +107,7 @@ interface IB20 {
     ///         role-based access checks: function-level role gates
     ///         (`MINT_ROLE`, `BURN_ROLE`, etc.), `grantRole` /
     ///         `revokeRole` when the caller does not hold the admin role
-    ///         for the target role, and `updateRoleAdmin` when the caller
+    ///         for the target role, and `setRoleAdmin` when the caller
     ///         does not hold the current admin role for the target role.
     /// @dev    Matches OZ AccessControl's `AccessControlUnauthorizedAccount`
     ///         error exactly.
@@ -284,12 +284,13 @@ interface IB20 {
     event RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender);
 
     /// @notice Emitted when the admin role for `role` is changed via
-    ///         `updateRoleAdmin`. Named with the `*Changed` suffix
-    ///         (rather than the `*Updated` convention used elsewhere on
-    ///         this interface) to preserve exact signature compatibility
-    ///         with OZ AccessControl's `RoleAdminChanged` event, so
-    ///         indexers built on top of OZ continue to decode it
-    ///         without a separate handler.
+    ///         `setRoleAdmin`. Both the function and event adopt OZ
+    ///         AccessControl naming (`setRoleAdmin` + `RoleAdminChanged`)
+    ///         rather than this interface's `update*` / `*Updated`
+    ///         convention, so OZ-aware tooling (Etherscan, Safe,
+    ///         indexers, audit checklists) continues to recognize both
+    ///         the role-admin mutator and its log without a separate
+    ///         handler.
     /// @dev    Matches OZ AccessControl's `RoleAdminChanged` event exactly.
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
 
@@ -297,7 +298,7 @@ interface IB20 {
     ///         standard `RoleRevoked(DEFAULT_ADMIN_ROLE, previousAdmin,
     ///         previousAdmin)` event. Signals the irreversible
     ///         transition of the token to a permanently adminless
-    ///         state: no `grantRole`, `revokeRole`, `updateRoleAdmin`,
+    ///         state: no `grantRole`, `revokeRole`, `setRoleAdmin`,
     ///         `updatePolicy`, `updateSupplyCap`, or `updateContractURI` call
     ///         can ever succeed again. Existing role holders
     ///         (`MINT_ROLE`, `BURN_ROLE`, `METADATA_ROLE`, etc.) retain
@@ -348,7 +349,7 @@ interface IB20 {
     /// @notice The default top-level admin role, equal to `bytes32(0)` per
     ///         the OpenZeppelin AccessControl convention. The admin
     ///         manages all other roles via `grantRole`, `revokeRole`, and
-    ///         `updateRoleAdmin`. The admin can also `updatePolicy`,
+    ///         `setRoleAdmin`. The admin can also `updatePolicy`,
     ///         `updateSupplyCap`, and `updateContractURI`. Name and symbol
     ///         updates are gated by `METADATA_ROLE`, not by this role.
     /// @dev    There is NO two-step delay-protected transfer for this
@@ -588,7 +589,7 @@ interface IB20 {
 
     /// @notice Returns the role required to grant or revoke `role`.
     ///         Defaults to `DEFAULT_ADMIN_ROLE` if not explicitly set via
-    ///         `updateRoleAdmin`.
+    ///         `setRoleAdmin`.
     function getRoleAdmin(bytes32 role) external view returns (bytes32);
 
     /// @notice Grants `role` to `account`. Caller MUST hold the admin
@@ -625,7 +626,7 @@ interface IB20 {
     ///         require an admin caller and there is none. All
     ///         admin-gated operations (`updatePolicy`, `updateSupplyCap`,
     ///         `updateContractURI`, and any `grantRole` / `revokeRole` /
-    ///         `updateRoleAdmin` for other roles) become permanently
+    ///         `setRoleAdmin` for other roles) become permanently
     ///         uncallable. Operations gated by other roles
     ///         (`updateName` / `updateSymbol` via `METADATA_ROLE`, `mint` via
     ///         `MINT_ROLE`, etc.) remain callable by their existing
@@ -650,7 +651,7 @@ interface IB20 {
     /// @notice Sets the admin role for `role`. Caller MUST hold the
     ///         current admin role for `role`. Useful for delegating role
     ///         management to a different role hierarchy.
-    function updateRoleAdmin(bytes32 role, bytes32 newAdminRole) external;
+    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external;
 
     /*//////////////////////////////////////////////////////////////
                                   PAUSE

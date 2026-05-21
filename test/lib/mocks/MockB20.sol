@@ -97,7 +97,7 @@ contract MockB20 is IB20 {
     /// @dev Gates a function on `msg.sender` holding the admin role
     ///      that governs `role` (per `getRoleAdmin`). Same factory
     ///      bypass as `onlyRole`. Used by `grantRole` / `revokeRole`
-    ///      / `updateRoleAdmin`, where the gate is over the meta-role,
+    ///      / `setRoleAdmin`, where the gate is over the meta-role,
     ///      not the role itself.
     modifier onlyRoleAdmin(bytes32 role) {
         if (!_isPrivileged()) _requireRoleAdmin(role);
@@ -250,7 +250,7 @@ contract MockB20 is IB20 {
 
     function getRoleAdmin(bytes32 role) external view returns (bytes32) {
         bytes32 adminRole = MockB20Storage.layout().roleAdmins[role];
-        // Default admin if not explicitly overridden via updateRoleAdmin.
+        // Default admin if not explicitly overridden via setRoleAdmin.
         return adminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE ? DEFAULT_ADMIN_ROLE : adminRole;
     }
 
@@ -289,7 +289,7 @@ contract MockB20 is IB20 {
         emit LastAdminRenounced(msg.sender);
     }
 
-    function updateRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRoleAdmin(role) {
+    function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRoleAdmin(role) {
         bytes32 previousAdminRole = MockB20Storage.layout().roleAdmins[role];
         // Default admin if not explicitly set; expose it in the event.
         if (previousAdminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE) {

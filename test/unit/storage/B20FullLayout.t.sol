@@ -199,7 +199,7 @@ contract B20FullLayoutTest is B20Test {
         _grantRole(B20Constants.BURN_ROLE, burner);
         // Re-parent MINT_ROLE so the roleAdmins[MINT_ROLE] slot is non-default.
         vm.prank(admin);
-        token.updateRoleAdmin(B20Constants.MINT_ROLE, B20Constants.PAUSE_ROLE);
+        token.setRoleAdmin(B20Constants.MINT_ROLE, B20Constants.PAUSE_ROLE);
 
         // ---------- Policy lanes ----------
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);

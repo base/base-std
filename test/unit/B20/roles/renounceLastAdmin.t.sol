@@ -70,7 +70,7 @@ contract B20RenounceLastAdminTest is B20Test {
     /// @dev    Permanent-immutability invariant. updatePolicy is the canonical example;
     ///         the same mechanism (no admin holder → AccessControlUnauthorizedAccount on
     ///         any DEFAULT_ADMIN_ROLE-gated call) covers updateSupplyCap, updateContractURI,
-    ///         updateName, updateSymbol, grantRole / revokeRole / updateRoleAdmin for any role.
+    ///         updateName, updateSymbol, grantRole / revokeRole / setRoleAdmin for any role.
     ///         No test should be able to reinstate an admin after this transition.
     function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyType, uint64 newPolicyId) public {
         // Use a built-in policy ID so updatePolicy gets past policyExists() and would

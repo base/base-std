@@ -112,7 +112,7 @@ contract MockB20SlotHelpersTest is B20Test {
     }
 
     /// @notice Verifies `roleAdminSlot(role)` locates the slot
-    ///         `updateRoleAdmin` writes to.
+    ///         `setRoleAdmin` writes to.
     /// @dev Read-after-write: set a non-zero admin role, then `vm.load`
     ///      and compare against `getRoleAdmin`.
     function test_roleAdminSlot_success_locatesAdminRole(bytes32 role, bytes32 adminRole) public {
@@ -120,7 +120,7 @@ contract MockB20SlotHelpersTest is B20Test {
         vm.assume(adminRole != bytes32(0));
 
         vm.prank(admin);
-        token.updateRoleAdmin(role, adminRole);
+        token.setRoleAdmin(role, adminRole);
 
         assertEq(token.getRoleAdmin(role), adminRole, "precondition: role admin must match");
         assertEq(
