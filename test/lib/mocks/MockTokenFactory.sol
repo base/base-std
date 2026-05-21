@@ -5,7 +5,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 
-import {ISO4217} from "src/utils/ISO4217.sol";
+import {ISO4217} from "test/lib/ISO4217.sol";
 
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
