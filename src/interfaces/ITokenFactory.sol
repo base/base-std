@@ -117,7 +117,7 @@ interface ITokenFactory {
     ///                      against the allowlist in `ISO4217.sol`;
     ///                      anything off the list reverts with
     ///                      `InvalidCurrency(code)`. See
-    ///                      `docs/iso4217-filter.md`.
+    ///                      `docs/b20/stablecoin/currency-validation.md`.
     /// @dev    Decimals are fixed at `6`. There is no decimals field
     ///         and no setter for `currency` — both are fixed for the
     ///         token's lifetime at creation.
@@ -183,7 +183,7 @@ interface ITokenFactory {
     /// @notice The stablecoin `currency` field was not on the ISO 4217
     ///         fiat allowlist. Carries the offending string verbatim
     ///         for diagnostics.
-    /// @dev    See `docs/iso4217-filter.md` for the allowlist.
+    /// @dev    See `docs/b20/stablecoin/currency-validation.md` for the allowlist.
     error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the

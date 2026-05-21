@@ -9,7 +9,7 @@ pragma solidity ^0.8.20;
 ///         - `excludedCount` / `excludedAt` — enumerable record of ISO
 ///           4217 codes that are on the standard but deliberately
 ///           excluded, with per-entry rationale inline in `excludedAt`.
-/// @dev    See `docs/iso4217-filter.md` for scope, exclusion categories,
+/// @dev    See `docs/b20/stablecoin/currency-validation.md` for scope, exclusion categories,
 ///         and the regulatory framing behind the narrow fiat scope.
 ///         Any future Rust precompile implementation must mirror both
 ///         lists exactly.
@@ -17,10 +17,9 @@ library ISO4217 {
     /// @notice Thrown by `excludedAt` when `idx` exceeds `excludedCount`.
     error IndexOutOfBounds(uint256 idx);
 
-    /// @notice Returns true iff `code` is exactly three ASCII bytes
-    ///         long and matches an active ISO 4217 circulating-fiat
-    ///         alphabetic code. See the library-level natspec for the
-    ///         scope and the rationale behind every exclusion.
+    /// @notice Returns true iff `code` is on the active ISO 4217
+    ///         circulating-fiat allowlist (exactly three ASCII bytes,
+    ///         uppercase, on the curated set).
     function isValidFiatCode(string memory code) internal pure returns (bool) {
         bytes memory b = bytes(code);
         if (b.length != 3) return false;
@@ -117,9 +116,7 @@ library ISO4217 {
             h == keccak256("VED") || h == keccak256("VES") || h == keccak256("VND") || h == keccak256("VUV")
                 || h == keccak256("WST")
         ) return true;
-        // X (multi-country circulating fiat — see library natspec for
-        // why these four codes are deliberately accepted despite the
-        // X-prefix being commonly associated with non-currency entries)
+        // X (multi-country circulating fiat: BCEAO, BEAC, ECCB, IEOM)
         if (
             h == keccak256("XAF") || h == keccak256("XCD") || h == keccak256("XOF") || h == keccak256("XPF")
         ) return true;
