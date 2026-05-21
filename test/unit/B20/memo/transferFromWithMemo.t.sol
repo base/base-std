@@ -94,8 +94,8 @@ contract B20TransferFromWithMemoTest is B20Test {
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(from, to, amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(true, true, false, false, address(token));
+        emit IB20.Memo(caller, memo);
         vm.prank(caller);
         token.transferFromWithMemo(from, to, amount, memo);
     }

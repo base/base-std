@@ -5,8 +5,7 @@ import {B20Test} from "test/lib/B20Test.sol";
 
 contract B20DomainSeparatorTest is B20Test {
     // EIP-712 domain type hash for the (chainId, verifyingContract)-only shape.
-    bytes32 internal constant DOMAIN_TYPEHASH =
-        keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
+    bytes32 internal constant DOMAIN_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
 
     /// @notice Verifies DOMAIN_SEPARATOR matches the EIP-712 hash of the eip712Domain fields
     /// @dev Cross-check: separator must equal keccak256(abi.encode(typeHash, chainId, verifyingContract))

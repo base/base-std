@@ -45,8 +45,7 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         assertEq(uint8(policyRegistry.policyType(policyId)), uint8(IPolicyRegistry.PolicyType.ALLOWLIST));
         assertEq(policyRegistry.policyAdmin(policyId), admin_);
 
-        uint256 packed =
-            uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
+        uint256 packed = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
         assertEq(
             MockPolicyRegistryStorage.policyAdminFromPacked(packed),
             admin_,
@@ -77,8 +76,7 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         assertEq(uint8(policyRegistry.policyType(policyId)), uint8(IPolicyRegistry.PolicyType.BLOCKLIST));
         assertEq(policyRegistry.policyAdmin(policyId), admin_);
 
-        uint256 packed =
-            uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
+        uint256 packed = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
         assertEq(
             MockPolicyRegistryStorage.policyAdminFromPacked(packed),
             admin_,
@@ -130,12 +128,9 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         // sentinels 0 and 1) is paid, so nextCounter == (idA & mask) + 1.
         // After the second create it advances by one more, matching
         // (idB & mask) + 1.
-        uint256 counterAfter =
-            uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot()));
+        uint256 counterAfter = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot()));
         assertEq(
-            counterAfter,
-            uint256(idB & counterMask) + 1,
-            "nextCounter slot must equal the second policy's counter + 1"
+            counterAfter, uint256(idB & counterMask) + 1, "nextCounter slot must equal the second policy's counter + 1"
         );
     }
 

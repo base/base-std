@@ -11,12 +11,9 @@ contract B20TransferWithMemoTest is B20Test {
     /// @dev Reuse-of-guards invariant; concrete guard tests live in transfer.t.sol.
     ///      We use TRANSFER pause as the representative guard — if the same _transfer path runs,
     ///      pause must fire identically.
-    function test_transferWithMemo_revert_inheritsTransferGuards(
-        address from,
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_transferWithMemo_revert_inheritsTransferGuards(address from, address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidActor(from);
         _assumeValidActor(to);
         _pause(IB20.PausableFeature.TRANSFER);
@@ -29,9 +26,7 @@ contract B20TransferWithMemoTest is B20Test {
     /// @notice Verifies transferWithMemo performs the same balance movement as transfer
     /// @dev Same accounting effect as transfer; the memo does not alter accounting.
     ///      Paired slot assertions confirm both balance slots reflect the move.
-    function test_transferWithMemo_success_movesBalance(address from, address to, uint256 amount, bytes32 memo)
-        public
-    {
+    function test_transferWithMemo_success_movesBalance(address from, address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
@@ -56,12 +51,9 @@ contract B20TransferWithMemoTest is B20Test {
 
     /// @notice Verifies transferWithMemo emits Transfer then Memo, in that order
     /// @dev Memo is the second log; canonical Memo emission test for the transfer path
-    function test_transferWithMemo_success_emitsTransferThenMemo(
-        address from,
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_transferWithMemo_success_emitsTransferThenMemo(address from, address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidActor(from);
         _assumeValidActor(to);
 
@@ -69,17 +61,15 @@ contract B20TransferWithMemoTest is B20Test {
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(from, to, amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(true, true, false, false, address(token));
+        emit IB20.Memo(from, memo);
         vm.prank(from);
         token.transferWithMemo(to, amount, memo);
     }
 
     /// @notice Verifies transferWithMemo returns true on success
     /// @dev Matches transfer's return-value contract
-    function test_transferWithMemo_success_returnsTrue(address from, address to, uint256 amount, bytes32 memo)
-        public
-    {
+    function test_transferWithMemo_success_returnsTrue(address from, address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
 

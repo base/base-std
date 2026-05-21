@@ -5,6 +5,8 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 
+import {ISO4217} from "test/lib/ISO4217.sol";
+
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
@@ -115,7 +117,8 @@ contract MockTokenFactory is ITokenFactory {
         } else if (variant == TokenVariant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version);
-            if (bytes(p.currency).length == 0) revert MissingRequiredField();
+            // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
+            if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
@@ -213,11 +216,7 @@ contract MockTokenFactory is ITokenFactory {
     bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
 
     /// @inheritdoc ITokenFactory
-    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt)
-        external
-        pure
-        returns (address)
-    {
+    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt) external pure returns (address) {
         return _computeAddress(variant, sender, salt);
     }
 
@@ -227,12 +226,15 @@ contract MockTokenFactory is ITokenFactory {
     }
 
     /// @inheritdoc ITokenFactory
-    function getTokenVariant(address token) external pure returns (TokenVariant) {
-        if (!_isB20Prefix(token)) return TokenVariant.NONE;
-        // forge-lint: disable-next-line(unsafe-typecast)
-        uint8 variantByte = uint8(uint160(token) >> 72); // byte [10]
-        if (variantByte > uint8(TokenVariant.SECURITY)) return TokenVariant.NONE;
-        return TokenVariant(variantByte);
+    function isInitialized(address token) external view returns (bool) {
+        if (!_isB20Prefix(token)) return false;
+        // Same packed-bool slot the factory flips at the end of
+        // createToken (MockB20Storage.INITIALIZED_OFFSET +
+        // INITIALIZED_BYTE_OFFSET).
+        bytes32 slot = MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET);
+        uint256 word = uint256(vm.load(token, slot));
+        uint256 shift = uint256(MockB20Storage.INITIALIZED_BYTE_OFFSET) * 8;
+        return ((word >> shift) & 0xff) != 0;
     }
 
     // ============================================================
@@ -245,11 +247,7 @@ contract MockTokenFactory is ITokenFactory {
     ///        bytes [1:10]  = 0x00 (9 zero bytes)
     ///        byte [10]     = variant
     ///        bytes [11:20] = keccak256(sender, salt)[0:9]
-    function _computeAddress(TokenVariant variant, address sender, bytes32 salt)
-        internal
-        pure
-        returns (address)
-    {
+    function _computeAddress(TokenVariant variant, address sender, bytes32 salt) internal pure returns (address) {
         bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));
         uint160 addr = (uint160(0xB2) << 152) | (uint160(uint8(variant)) << 72) | uint160(uint72(tail));
         return address(addr);
@@ -285,11 +283,7 @@ contract MockTokenFactory is ITokenFactory {
     /// @dev Writes the stablecoin variant's `currency` field at its
     ///      disjoint ERC-7201 namespace (`base.b20.stablecoin`).
     function _writeStablecoinStorage(address token, string memory currency_) internal {
-        _writeString(
-            token,
-            MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),
-            currency_
-        );
+        _writeString(token, MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET), currency_);
     }
 
     /// @dev Writes the security variant's initial `identifiers["ISIN"]`

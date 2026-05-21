@@ -30,10 +30,7 @@ contract TokenFactoryIsB20Test is TokenFactoryTest {
     /// @dev Recognition is purely prefix-based; the trailing bytes are unconstrained.
     ///      This is intentional: isB20 is a pure prefix check, so synthetic addresses
     ///      that share the prefix but were never created by the factory also pass.
-    function test_isB20_success_trueForAnyB20PrefixAddress(uint8 variantByte, bytes9 tail)
-        public
-        view
-    {
+    function test_isB20_success_trueForAnyB20PrefixAddress(uint8 variantByte, bytes9 tail) public view {
         uint160 addr = (uint160(0xB2) << 152) | (uint160(variantByte) << 72) | uint160(uint72(tail));
         assertTrue(factory.isB20(address(addr)), "B-20-prefixed address must be recognized");
     }

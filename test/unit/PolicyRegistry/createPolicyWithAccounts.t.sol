@@ -58,10 +58,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
             assertTrue(policyRegistry.isAuthorized(policyId, accounts[i]));
             assertEq(
                 uint256(
-                    vm.load(
-                        address(policyRegistry),
-                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
-                    )
+                    vm.load(address(policyRegistry), MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i]))
                 ),
                 uint256(1),
                 "members[id][account] slot must be set after allowlist seed"
@@ -92,10 +89,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
             assertFalse(policyRegistry.isAuthorized(policyId, accounts[i]));
             assertEq(
                 uint256(
-                    vm.load(
-                        address(policyRegistry),
-                        MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i])
-                    )
+                    vm.load(address(policyRegistry), MockPolicyRegistryStorage.policyMemberSlot(policyId, accounts[i]))
                 ),
                 uint256(1),
                 "members[id][account] slot must be set after blocklist seed (1 == blocked)"

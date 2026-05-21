@@ -18,7 +18,9 @@ contract B20GrantRoleTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
+            )
         );
         token.grantRole(role, account);
     }

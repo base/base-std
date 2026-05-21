@@ -133,7 +133,7 @@ contract B20Test is TokenFactoryTest {
     ///         unsupported `bytes32` revert `UnsupportedPolicyType`.
     /// @dev    Variant tests can wrap this with their own indexer that
     ///         extends the codomain (e.g. a Security test that also
-    ///         covers `REDEEMER_SENDER_POLICY`).
+    ///         covers `REDEEM_SENDER_POLICY`).
     function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
         uint8 i = idx % 4;
         if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;
@@ -147,10 +147,8 @@ contract B20Test is TokenFactoryTest {
     ///         `bytes32` and need to filter to the supported / unsupported
     ///         partition.
     function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
-        return policyType == B20Constants.TRANSFER_SENDER_POLICY
-            || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
-            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY
-            || policyType == B20Constants.MINT_RECEIVER_POLICY;
+        return policyType == B20Constants.TRANSFER_SENDER_POLICY || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
+            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.MINT_RECEIVER_POLICY;
     }
 
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`
@@ -185,16 +183,13 @@ contract B20Test is TokenFactoryTest {
     ///         well-formed for the digest the contract recomputes (which is
     ///         keyed on `claimedOwner`), so ecrecover deterministically returns
     ///         `vm.addr(privateKey)` rather than garbage.
-    function _signPermitAs(
-        uint256 privateKey,
-        address claimedOwner,
-        address spender,
-        uint256 value,
-        uint256 deadline
-    ) internal view returns (uint8 v, bytes32 r, bytes32 s) {
+    function _signPermitAs(uint256 privateKey, address claimedOwner, address spender, uint256 value, uint256 deadline)
+        internal
+        view
+        returns (uint8 v, bytes32 r, bytes32 s)
+    {
         uint256 nonce = token.nonces(claimedOwner);
-        bytes32 structHash =
-            keccak256(abi.encode(PERMIT_TYPEHASH, claimedOwner, spender, value, nonce, deadline));
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, claimedOwner, spender, value, nonce, deadline));
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", token.DOMAIN_SEPARATOR(), structHash));
         (v, r, s) = vm.sign(privateKey, digest);
     }

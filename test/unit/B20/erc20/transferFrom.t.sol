@@ -47,7 +47,13 @@ contract B20TransferFromTest is B20Test {
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.transferFrom(from, to, amount);
     }
 
@@ -67,7 +73,13 @@ contract B20TransferFromTest is B20Test {
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_SENDER_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.transferFrom(from, to, amount);
     }
 
@@ -87,7 +99,13 @@ contract B20TransferFromTest is B20Test {
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_RECEIVER_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.transferFrom(from, to, amount);
     }
 
@@ -189,9 +207,7 @@ contract B20TransferFromTest is B20Test {
         token.transferFrom(from, to, spendAmount);
 
         assertEq(
-            token.allowance(from, caller),
-            allowanceAmount - spendAmount,
-            "allowance must decrease by spent amount"
+            token.allowance(from, caller), allowanceAmount - spendAmount, "allowance must decrease by spent amount"
         );
         assertEq(
             uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, caller))),
@@ -233,9 +249,7 @@ contract B20TransferFromTest is B20Test {
 
     /// @notice Verifies transferFrom emits Transfer(from, to, amount)
     /// @dev Event integrity for the transferFrom path; canonical Transfer test lives in transfer.t.sol
-    function test_transferFrom_success_emitsTransfer(address caller, address from, address to, uint256 amount)
-        public
-    {
+    function test_transferFrom_success_emitsTransfer(address caller, address from, address to, uint256 amount) public {
         _assumeValidActor(caller);
         _assumeValidActor(from);
         _assumeValidActor(to);

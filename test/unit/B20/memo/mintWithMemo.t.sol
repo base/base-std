@@ -57,8 +57,8 @@ contract B20MintWithMemoTest is B20Test {
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(address(0), to, amount);
-        vm.expectEmit(true, false, false, false, address(token));
-        emit IB20.Memo(memo);
+        vm.expectEmit(true, true, false, false, address(token));
+        emit IB20.Memo(minter, memo);
         vm.prank(minter);
         token.mintWithMemo(to, amount, memo);
     }

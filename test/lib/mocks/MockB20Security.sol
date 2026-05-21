@@ -215,7 +215,7 @@ contract MockB20Security is MockB20, IB20Security {
     function redeemWithMemo(uint256 amount, bytes32 memo) external {
         uint256 ratio = _redeemBurn(amount);
         // Order matters: Transfer (in _redeemBurn), then Memo, then Redeemed.
-        emit Memo(memo);
+        emit Memo(msg.sender, memo);
         emit Redeemed(msg.sender, amount, ratio);
     }
 

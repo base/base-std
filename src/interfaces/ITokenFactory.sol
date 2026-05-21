@@ -65,11 +65,12 @@ interface ITokenFactory {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Variant of a B-20 token. Encoded in address byte `[10]`,
-    ///         so `getTokenVariant` is a pure address-prefix read with no
-    ///         storage lookup. `NONE` indicates the address is not a
-    ///         B-20 token created by this factory.
+    ///         so the variant of a B-20 address is a pure address-prefix
+    ///         read with no storage lookup. Whether an address is a
+    ///         factory-created B-20 in the first place is answered by
+    ///         `isB20` (a prefix check on bytes `[0:10]`); the variant
+    ///         byte itself does not need an "absent" sentinel.
     enum TokenVariant {
-        NONE,
         DEFAULT,
         STABLECOIN,
         SECURITY
@@ -112,12 +113,15 @@ interface ITokenFactory {
     /// @param name          ERC-20 token name.
     /// @param symbol        ERC-20 token symbol.
     /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param currency      Immutable currency identifier (e.g. "USD",
-    ///                      "EUR", "XAU"). Required: empty string
-    ///                      reverts. See `IB20Stablecoin.currency` for
-    ///                      the convention.
-    /// @dev    Decimals are fixed at `6` (the SPL stablecoin convention).
-    ///         There is no decimals field on this struct.
+    /// @param currency      Immutable ISO 4217 fiat code this stablecoin
+    ///                      tracks (e.g. `"USD"`, `"EUR"`). Validated
+    ///                      against the allowlist in `ISO4217.sol`;
+    ///                      anything off the list reverts with
+    ///                      `InvalidCurrency(code)`. See
+    ///                      `docs/b20/stablecoin/currency-validation.md`.
+    /// @dev    Decimals are fixed at `6`. There is no decimals field
+    ///         and no setter for `currency` — both are fixed for the
+    ///         token's lifetime at creation.
     struct B20StablecoinCreateParams {
         uint8 version;
         string name;
@@ -142,6 +146,16 @@ interface ITokenFactory {
     ///         parameter: all issuance flows through `create`
     ///         (rate-limited compliant path) or `adminMint` (cold-path
     ///         batch with announcement coupling) after deployment.
+    ///
+    ///         For the Security variant, the `REDEEM_SENDER_POLICY`
+    ///         slot defaults to the always-block built-in (policy ID
+    ///         `1`) rather than always-allow, so redemption is closed by
+    ///         default and an admin must opt-in by pointing the slot at
+    ///         an allowlist (or another policy) before any holder can
+    ///         call `redeem`. To open redemption at creation, override
+    ///         the slot atomically by including an
+    ///         `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` entry
+    ///         in `initCalls`.
     struct B20SecurityCreateParams {
         uint8 version;
         string name;
@@ -160,8 +174,10 @@ interface ITokenFactory {
     ///         Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
-    /// @notice `variant` is not a recognized `TokenVariant` (or is
-    ///         `NONE`, which is invalid for creation).
+    /// @notice `variant` is not a recognized `TokenVariant`. Reached
+    ///         only when the factory is invoked with a raw variant byte
+    ///         outside the enum range (typed `createToken` callers are
+    ///         rejected by ABI decoding before this check fires).
     error InvalidVariant();
 
     /// @notice The leading `version` byte in `params` does not match
@@ -169,8 +185,19 @@ interface ITokenFactory {
     error UnsupportedVersion(uint8 version);
 
     /// @notice A required string argument was the empty string (e.g.
-    ///         stablecoin `currency`, security `isin`).
+    ///         security `isin`). The stablecoin `currency` field is
+    ///         validated more tightly and reverts with
+    ///         `InvalidCurrency` instead — including for the empty
+    ///         string — so callers get a single, diagnostic-carrying
+    ///         error for every currency rejection rather than two
+    ///         disjoint failure modes for the same field.
     error MissingRequiredField();
+
+    /// @notice The stablecoin `currency` field was not on the ISO 4217
+    ///         fiat allowlist. Carries the offending string verbatim
+    ///         for diagnostics.
+    /// @dev    See `docs/b20/stablecoin/currency-validation.md` for the allowlist.
+    error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the
     ///         underlying revert reason where the call returns one;
@@ -255,17 +282,20 @@ interface ITokenFactory {
     ///         depends only on these inputs; the remaining `params`
     ///         fields (including decimals, which are fixed by variant)
     ///         do not affect the address.
-    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt)
-        external
-        view
-        returns (address);
+    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt) external view returns (address);
 
     /// @notice Whether `token` was created by this factory. Recovered
     ///         from the address prefix (bytes `[0:10]`); no storage read.
     function isB20(address token) external view returns (bool);
 
-    /// @notice Returns the variant of `token`. Returns `NONE` if `token`
-    ///         is not a factory-created B-20. Recovered from address
-    ///         byte `[10]`; no storage read.
-    function getTokenVariant(address token) external view returns (TokenVariant);
+    /// @notice Whether the token at `token` has been initialized by this
+    ///         factory (i.e. `createToken` ran to completion at that
+    ///         address). Returns `false` for B-20-prefixed addresses
+    ///         whose deterministic slot has not yet been claimed by a
+    ///         `createToken` call, and for any address that is not a
+    ///         B-20 at all. The bootstrap window (the `initCalls` loop
+    ///         inside `createToken`) is fully privileged but not yet
+    ///         initialized; this flag flips exactly once, at the moment
+    ///         `createToken` returns.
+    function isInitialized(address token) external view returns (bool);
 }
