@@ -171,61 +171,23 @@ library MockB20Storage {
     // the Rust impl validator) can read each field without remembering
     // the offset constant. Inlined by the compiler; zero runtime cost.
 
-    function nameSlot() internal pure returns (bytes32) {
-        return slotOf(NAME_OFFSET);
-    }
+    // forgefmt: disable-start
+    function nameSlot() internal pure returns (bytes32) { return slotOf(NAME_OFFSET); }
+    function symbolSlot() internal pure returns (bytes32) { return slotOf(SYMBOL_OFFSET); }
+    function contractURISlot() internal pure returns (bytes32) { return slotOf(CONTRACT_URI_OFFSET); }
+    function totalSupplySlot() internal pure returns (bytes32) { return slotOf(TOTAL_SUPPLY_OFFSET); }
+    function balancesBaseSlot() internal pure returns (bytes32) { return slotOf(BALANCES_OFFSET); }
+    function allowancesBaseSlot() internal pure returns (bytes32) { return slotOf(ALLOWANCES_OFFSET); }
+    function rolesBaseSlot() internal pure returns (bytes32) { return slotOf(ROLES_OFFSET); }
+    function roleAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(ROLE_ADMINS_OFFSET); }
+    function adminCountAndInitializedSlot() internal pure returns (bytes32) { return slotOf(ADMIN_COUNT_OFFSET); }
+    function transferPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(TRANSFER_POLICY_IDS_OFFSET); }
+    function mintPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(MINT_POLICY_IDS_OFFSET); }
+    function pausedVectorsSlot() internal pure returns (bytes32) { return slotOf(PAUSED_VECTORS_OFFSET); }
+    function supplyCapSlot() internal pure returns (bytes32) { return slotOf(SUPPLY_CAP_OFFSET); }
+    function noncesBaseSlot() internal pure returns (bytes32) { return slotOf(NONCES_OFFSET); }
 
-    function symbolSlot() internal pure returns (bytes32) {
-        return slotOf(SYMBOL_OFFSET);
-    }
-
-    function contractURISlot() internal pure returns (bytes32) {
-        return slotOf(CONTRACT_URI_OFFSET);
-    }
-
-    function totalSupplySlot() internal pure returns (bytes32) {
-        return slotOf(TOTAL_SUPPLY_OFFSET);
-    }
-
-    function balancesBaseSlot() internal pure returns (bytes32) {
-        return slotOf(BALANCES_OFFSET);
-    }
-
-    function allowancesBaseSlot() internal pure returns (bytes32) {
-        return slotOf(ALLOWANCES_OFFSET);
-    }
-
-    function rolesBaseSlot() internal pure returns (bytes32) {
-        return slotOf(ROLES_OFFSET);
-    }
-
-    function roleAdminsBaseSlot() internal pure returns (bytes32) {
-        return slotOf(ROLE_ADMINS_OFFSET);
-    }
-
-    function adminCountAndInitializedSlot() internal pure returns (bytes32) {
-        return slotOf(ADMIN_COUNT_OFFSET);
-    }
-
-    function transferPolicyIdsSlot() internal pure returns (bytes32) {
-        return slotOf(TRANSFER_POLICY_IDS_OFFSET);
-    }
-
-    function mintPolicyIdsSlot() internal pure returns (bytes32) {
-        return slotOf(MINT_POLICY_IDS_OFFSET);
-    }
-
-    function pausedVectorsSlot() internal pure returns (bytes32) {
-        return slotOf(PAUSED_VECTORS_OFFSET);
-    }
-
-    function supplyCapSlot() internal pure returns (bytes32) {
-        return slotOf(SUPPLY_CAP_OFFSET);
-    }
-
-    function noncesBaseSlot() internal pure returns (bytes32) {
-        return slotOf(NONCES_OFFSET);
-    }
+        // forgefmt: disable-end
 
     // ============================================================
     //                     MAPPING MEMBER SLOTS
