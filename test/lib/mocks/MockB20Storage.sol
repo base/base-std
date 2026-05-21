@@ -163,6 +163,135 @@ library MockB20Storage {
     function derivedLocation() internal pure returns (bytes32) {
         return keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff));
     }
+
+    // ============================================================
+    //                     TOP-LEVEL FIELD SLOTS
+    // ============================================================
+    // Convenience wrappers around `slotOf(OFFSET)` so test callers (and
+    // the Rust impl validator) can read each field without remembering
+    // the offset constant. Inlined by the compiler; zero runtime cost.
+
+    function nameSlot() internal pure returns (bytes32) { return slotOf(NAME_OFFSET); }
+    function symbolSlot() internal pure returns (bytes32) { return slotOf(SYMBOL_OFFSET); }
+    function contractURISlot() internal pure returns (bytes32) { return slotOf(CONTRACT_URI_OFFSET); }
+    function totalSupplySlot() internal pure returns (bytes32) { return slotOf(TOTAL_SUPPLY_OFFSET); }
+    function balancesBaseSlot() internal pure returns (bytes32) { return slotOf(BALANCES_OFFSET); }
+    function allowancesBaseSlot() internal pure returns (bytes32) { return slotOf(ALLOWANCES_OFFSET); }
+    function rolesBaseSlot() internal pure returns (bytes32) { return slotOf(ROLES_OFFSET); }
+    function roleAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(ROLE_ADMINS_OFFSET); }
+    function adminCountAndInitializedSlot() internal pure returns (bytes32) { return slotOf(ADMIN_COUNT_OFFSET); }
+    function transferPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(TRANSFER_POLICY_IDS_OFFSET); }
+    function mintPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(MINT_POLICY_IDS_OFFSET); }
+    function pausedVectorsSlot() internal pure returns (bytes32) { return slotOf(PAUSED_VECTORS_OFFSET); }
+    function supplyCapSlot() internal pure returns (bytes32) { return slotOf(SUPPLY_CAP_OFFSET); }
+    function noncesBaseSlot() internal pure returns (bytes32) { return slotOf(NONCES_OFFSET); }
+
+    // ============================================================
+    //                     MAPPING MEMBER SLOTS
+    // ============================================================
+    // Solidity derives a mapping value's slot as
+    //   keccak256(abi.encode(key, baseSlot))
+    // where `key` is ABI-padded to 32 bytes and `baseSlot` is the slot
+    // where the mapping itself is declared (the field slot, returned by
+    // the `*BaseSlot()` helpers above). Nested mappings hash the outer
+    // key first to obtain an inner base slot, then hash the inner key
+    // against that. The Rust impl reproduces this scheme byte-for-byte.
+
+    /// @notice Slot of `balances[account]`.
+    function balanceSlot(address account) internal pure returns (bytes32) {
+        return keccak256(abi.encode(account, balancesBaseSlot()));
+    }
+
+    /// @notice Slot of `allowances[owner][spender]`.
+    function allowanceSlot(address owner, address spender) internal pure returns (bytes32) {
+        bytes32 ownerSlot = keccak256(abi.encode(owner, allowancesBaseSlot()));
+        return keccak256(abi.encode(spender, ownerSlot));
+    }
+
+    /// @notice Slot of `roles[role][account]` (the bool membership flag).
+    function roleMembershipSlot(bytes32 role, address account) internal pure returns (bytes32) {
+        bytes32 roleSlot = keccak256(abi.encode(role, rolesBaseSlot()));
+        return keccak256(abi.encode(account, roleSlot));
+    }
+
+    /// @notice Slot of `roleAdmins[role]`.
+    function roleAdminSlot(bytes32 role) internal pure returns (bytes32) {
+        return keccak256(abi.encode(role, roleAdminsBaseSlot()));
+    }
+
+    /// @notice Slot of `nonces[owner]`.
+    function nonceSlot(address owner) internal pure returns (bytes32) {
+        return keccak256(abi.encode(owner, noncesBaseSlot()));
+    }
+
+    // ============================================================
+    //                     PACKED-SLOT CODECS
+    // ============================================================
+    // Two slots in `Layout` pack multiple logical values:
+    //   - Slot at ADMIN_COUNT_OFFSET (8): uint248 adminCount in the low
+    //     31 bytes, bool initialized in the high byte (byte 31).
+    //   - Slots at TRANSFER_POLICY_IDS_OFFSET (9) and
+    //     MINT_POLICY_IDS_OFFSET (10): four uint64 lanes packed
+    //     low-to-high (lane 0 in bits  0..63, lane 1 in bits 64..127,
+    //     lane 2 in bits 128..191, lane 3 in bits 192..255).
+    //
+    // These pure codecs let test callers extract / compose lane values
+    // without re-deriving the shifts at every callsite.
+
+    /// @notice Extracts `adminCount` (low 248 bits) from the packed slot.
+    /// @dev Mirrors the read side of MockB20's `_isPrivileged` /
+    ///      `_adminCount` accessors.
+    function adminCountFromPacked(uint256 packed) internal pure returns (uint248) {
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint248(packed & ((uint256(1) << 248) - 1));
+    }
+
+    /// @notice Extracts `initialized` (high byte) from the packed slot.
+    function initializedFromPacked(uint256 packed) internal pure returns (bool) {
+        return (packed >> 248) != 0;
+    }
+
+    /// @notice Composes the packed slot value from its two fields.
+    function packAdminCountAndInitialized(uint248 adminCount_, bool initialized_) internal pure returns (uint256) {
+        uint256 base = uint256(adminCount_);
+        return initialized_ ? (base | (uint256(1) << 248)) : base;
+    }
+
+    /// @notice Extracts the TRANSFER_SENDER policy id (lane 0) from the packed slot.
+    function transferSenderPolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed);
+    }
+
+    /// @notice Extracts the TRANSFER_RECEIVER policy id (lane 1) from the packed slot.
+    function transferReceiverPolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed >> 64);
+    }
+
+    /// @notice Extracts the TRANSFER_EXECUTOR policy id (lane 2) from the packed slot.
+    function transferExecutorPolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed >> 128);
+    }
+
+    /// @notice Composes the transfer-side packed slot from its three lanes.
+    /// @dev Lane 3 (bits 192..255) is reserved and pinned to zero.
+    function packTransferPolicyIds(uint64 senderId, uint64 receiverId, uint64 executorId)
+        internal
+        pure
+        returns (uint256)
+    {
+        return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128);
+    }
+
+    /// @notice Extracts the MINT_RECEIVER policy id (lane 0) from the packed slot.
+    function mintReceiverPolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed);
+    }
+
+    /// @notice Composes the mint-side packed slot from its single defined lane.
+    /// @dev Lanes 1..3 are reserved and pinned to zero.
+    function packMintPolicyIds(uint64 receiverId) internal pure returns (uint256) {
+        return uint256(receiverId);
+    }
 }
 
 /// @title MockB20SecurityStorage
@@ -330,4 +459,15 @@ library MockB20StablecoinStorage {
     function derivedLocation() internal pure returns (bytes32) {
         return keccak256(abi.encode(uint256(keccak256("base.b20.stablecoin")) - 1)) & ~bytes32(uint256(0xff));
     }
+
+    // ============================================================
+    //                     TOP-LEVEL FIELD SLOTS
+    // ============================================================
+
+    /// @notice Slot of `currency` (a `string` whose encoding follows
+    ///         Solidity's short/long convention: bytes packed in-slot
+    ///         with `length * 2` in the low byte when `length < 32`;
+    ///         otherwise the slot stores `length * 2 + 1` and the data
+    ///         starts at `keccak256(slot)`).
+    function currencySlot() internal pure returns (bytes32) { return slotOf(CURRENCY_OFFSET); }
 }

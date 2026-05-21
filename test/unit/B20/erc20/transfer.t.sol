@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20TransferTest is B20Test {
@@ -81,7 +82,10 @@ contract B20TransferTest is B20Test {
     }
 
     /// @notice Verifies transfer debits the sender balance by amount
-    /// @dev Accounting half: balanceOf(from) decreases by exactly amount
+    /// @dev Accounting half: balanceOf(from) decreases by exactly amount.
+    ///      Paired slot assertion: `balances[from]` slot reflects the
+    ///      debit so the Rust precompile impl can be cross-validated
+    ///      against the same storage layout.
     function test_transfer_success_debitsSender(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
@@ -93,10 +97,16 @@ contract B20TransferTest is B20Test {
         vm.prank(from);
         token.transfer(to, amount);
         assertEq(token.balanceOf(from), before - amount, "from must be debited by amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(from))),
+            before - amount,
+            "balances[from] slot must reflect the debit"
+        );
     }
 
     /// @notice Verifies transfer credits the receiver balance by amount
-    /// @dev Accounting half: balanceOf(to) increases by exactly amount
+    /// @dev Accounting half: balanceOf(to) increases by exactly amount.
+    ///      Paired slot assertion: `balances[to]` slot reflects the credit.
     function test_transfer_success_creditsReceiver(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
@@ -108,6 +118,11 @@ contract B20TransferTest is B20Test {
         vm.prank(from);
         token.transfer(to, amount);
         assertEq(token.balanceOf(to), before + amount, "to must be credited by amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(to))),
+            before + amount,
+            "balances[to] slot must reflect the credit"
+        );
     }
 
     /// @notice Verifies transfer emits Transfer(from, to, amount)

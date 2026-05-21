@@ -142,4 +142,38 @@ abstract contract BaseTest is Test {
         uint8 typeByte = maxValidType + 1 + uint8(seed % invalidRange);
         return (uint64(typeByte) << 56) | uint64(seed & ((1 << 56) - 1));
     }
+
+    // ============================================================
+    //                  STRING SLOT ENCODING HELPER
+    // ============================================================
+
+    /// @notice Returns the bytes32 value Solidity stores in a `string`
+    ///         field's slot for `value`, per the short/long encoding
+    ///         convention.
+    /// @dev    Used by slot-augmented tests that write strings
+    ///         (`name` / `symbol` / `contractURI` / `currency`) to
+    ///         verify the field slot reflects the written value
+    ///         byte-for-byte. This is the storage contract the Rust
+    ///         precompile impl must match exactly.
+    ///
+    ///         Encoding (mirrors `MockTokenFactory._writeString`):
+    ///         - Empty string: slot is zero.
+    ///         - Length < 32: high portion holds the bytes (left-justified
+    ///           in the slot); low byte is `length * 2` (low bit clear).
+    ///         - Length >= 32: slot holds `length * 2 + 1` (low bit set);
+    ///           data lives at `keccak256(slot)` onwards. This helper
+    ///           returns the FIELD slot value only; long-string body
+    ///           assertions are done separately at the data offset.
+    function _expectedStringFieldSlot(string memory value) internal pure returns (bytes32) {
+        bytes memory data = bytes(value);
+        if (data.length == 0) return bytes32(0);
+        if (data.length < 32) {
+            bytes32 highPortion;
+            assembly {
+                highPortion := mload(add(data, 32))
+            }
+            return bytes32(uint256(highPortion) | (data.length * 2));
+        }
+        return bytes32(data.length * 2 + 1);
+    }
 }

@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20SetNameTest is B20Test {
     /// @notice Verifies setName reverts when caller lacks METADATA_ROLE
@@ -25,12 +26,22 @@ contract B20SetNameTest is B20Test {
     }
 
     /// @notice Verifies setName updates name() to the new value
-    /// @dev Read-after-write; canonical name readback test lives in name.t.sol
+    /// @dev Read-after-write; canonical name readback test lives in name.t.sol.
+    ///      Paired slot assertion: the `name` field slot holds the
+    ///      Solidity-encoded short/long string value byte-for-byte. For
+    ///      long strings this checks only the field slot (which holds
+    ///      `length * 2 + 1`); the body chunks at `keccak256(slot)+i`
+    ///      are exercised by the FullLayout spec.
     function test_setName_success_updatesName(string calldata newName) public {
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
         token.setName(newName);
         assertEq(token.name(), newName, "name() must return the new value");
+        assertEq(
+            vm.load(address(token), MockB20Storage.nameSlot()),
+            _expectedStringFieldSlot(newName),
+            "name field slot must hold the canonical string encoding"
+        );
     }
 
     /// @notice Verifies setName emits NameUpdated(updater, newName)

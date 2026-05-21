@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20BurnBlockedTest is B20Test {
@@ -64,7 +65,8 @@ contract B20BurnBlockedTest is B20Test {
     }
 
     /// @notice Verifies burnBlocked debits the target balance by amount
-    /// @dev Accounting: balanceOf(from) decreases by exactly amount
+    /// @dev Accounting: balanceOf(from) decreases by exactly amount.
+    ///      Paired slot assertion verifies `balances[from]` slot reflects the seizure.
     function test_burnBlocked_success_debitsTarget(address from, uint256 amount) public {
         _assumeValidActor(from);
         // Mint while no policy is set so the mint isn't blocked.
@@ -76,10 +78,16 @@ contract B20BurnBlockedTest is B20Test {
         vm.prank(burnBlocker);
         token.burnBlocked(from, amount);
         assertEq(token.balanceOf(from), 0, "target balance must be zero after seizure");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(from))),
+            0,
+            "balances[from] slot must reflect the seizure"
+        );
     }
 
     /// @notice Verifies burnBlocked decreases totalSupply by amount
-    /// @dev Accounting: totalSupply tracks cumulative minted-burned
+    /// @dev Accounting: totalSupply tracks cumulative minted-burned.
+    ///      Paired slot assertion verifies `totalSupply` slot reflects the decrease.
     function test_burnBlocked_success_decreasesTotalSupply(address from, uint256 amount) public {
         _assumeValidActor(from);
         _mint(from, amount);
@@ -90,6 +98,11 @@ contract B20BurnBlockedTest is B20Test {
         vm.prank(burnBlocker);
         token.burnBlocked(from, amount);
         assertEq(token.totalSupply(), before - amount, "totalSupply must decrease by seized amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.totalSupplySlot())),
+            before - amount,
+            "totalSupply slot must reflect the seizure"
+        );
     }
 
     /// @notice Verifies burnBlocked emits Transfer(from, address(0), amount) and BurnedBlocked(caller, from, amount)

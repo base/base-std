@@ -8,6 +8,7 @@ import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
 
 contract TokenFactoryCreateTokenTest is TokenFactoryTest {
@@ -225,6 +226,23 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
             MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(factory)),
             "factory must not hold admin role"
         );
+        // Paired slot assertions confirm the init-call's storage write
+        // landed at the canonical role-membership slot AND the bootstrap
+        // window closed (initialized bit set, adminCount incremented to 1
+        // for the bootstrap admin grant).
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.roleMembershipSlot(B20Constants.MINT_ROLE, bob))),
+            uint256(1),
+            "roles[MINT_ROLE][bob] slot must be set by init-call grantRole"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, address(factory)))),
+            uint256(0),
+            "factory must NOT appear in roles[ADMIN] slot"
+        );
+        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must be 1 after bootstrap grant");
+        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized bit must be set after bootstrap closes");
     }
 
     /// @notice Verifies TokenCreated fires before any state-change events from initCalls
@@ -265,6 +283,17 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         _assumeValidCaller(caller);
         address token = _createDefault(caller, salt, _b20Params(), new bytes[](0));
 
+        // Paired slot assertion: the bootstrap window's gate is the
+        // `initialized` byte in the packed slot. Confirming it's set
+        // proves the factory's privileged path is closed at the storage
+        // level (the surface-level role revert below is the consequence).
+        assertTrue(
+            MockB20Storage.initializedFromPacked(
+                uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()))
+            ),
+            "initialized bit must be set after createToken returns"
+        );
+
         // Pranking the factory address into a direct mint should now revert with the standard
         // role check, because the bootstrap window is closed.
         vm.prank(address(factory));
@@ -287,10 +316,20 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin actor must not hold admin");
+
+        // Paired slot assertion: packed adminCount lane is 0 (no
+        // bootstrap grant happened) but the initialized bit is still
+        // set (the factory closed the bootstrap window after returning).
+        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 0, "adminCount must be 0 on zero-admin path");
+        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must still be set on zero-admin path");
     }
 
     /// @notice Verifies stablecoin createToken executes with admin == address(0)
     /// @dev Same zero-admin success behavior on the stablecoin variant.
+    ///      Paired slot assertions cross-check both the base namespace
+    ///      (adminCount=0, initialized=true) and the variant namespace
+    ///      (currency slot holds the short-string encoding of "USD").
     function test_createToken_success_zeroAdminGrantsNoRole_stablecoin(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("NoOwner USD", "NOUSD", address(0), "USD");
@@ -300,6 +339,15 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
         // The stablecoin still got its variant data: currency is set.
         assertEq(IB20Stablecoin(token).currency(), "USD", "stablecoin currency must still be set");
+
+        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 0, "adminCount must be 0 on zero-admin path");
+        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must still be set on zero-admin path");
+        assertEq(
+            vm.load(token, MockB20StablecoinStorage.currencySlot()),
+            _expectedStringFieldSlot("USD"),
+            "stablecoin currency slot must hold the short-string encoding of \"USD\""
+        );
     }
 
     /// @notice Verifies the variant byte at address position [10] matches the created variant
@@ -340,6 +388,19 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         assertEq(MockB20(tokenAddr).name(), longName, "long name must round-trip via storage");
         assertEq(MockB20(tokenAddr).symbol(), longSymbol, "long symbol must round-trip via storage");
+        // Paired slot assertion: the field slot holds the long-string
+        // marker `length * 2 + 1`. Data chunks live at `keccak256(slot)+i`
+        // and are exercised implicitly by the surface round-trip above.
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.nameSlot()),
+            _expectedStringFieldSlot(longName),
+            "name field slot must hold the long-string marker"
+        );
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
+            _expectedStringFieldSlot(longSymbol),
+            "symbol field slot must hold the long-string marker"
+        );
     }
 
     /// @notice Verifies _writeString pivots into long-string encoding at exactly 32 bytes
@@ -347,6 +408,8 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      high bytes, 2*length in low byte). length >= 32 -> long (marker slot stores
     ///      2*length+1, data starts at keccak256(slot)). A buggy `<= 32` boundary would
     ///      try to pack 32 bytes into a 31-byte short-string slot, silently losing data.
+    ///      Paired slot assertions confirm both 32-byte and 33-byte slots hold
+    ///      the long-string marker (low bit set).
     function test_createToken_success_writesStringsAtEncodingBoundary(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         string memory name32 = "abcdefghijklmnopqrstuvwxyzABCDEF";
@@ -359,6 +422,16 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         assertEq(MockB20(tokenAddr).name(), name32, "32-byte name must round-trip (long path)");
         assertEq(MockB20(tokenAddr).symbol(), symbol33, "33-byte symbol must round-trip (chunk-count boundary)");
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.nameSlot()),
+            _expectedStringFieldSlot(name32),
+            "32-byte name field slot must hold the long-string marker (32*2+1 = 65)"
+        );
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
+            _expectedStringFieldSlot(symbol33),
+            "33-byte symbol field slot must hold the long-string marker (33*2+1 = 67)"
+        );
     }
 
     /// @notice Pins down that _computeAddress uses abi.encode (not abi.encodePacked)
@@ -389,6 +462,14 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
+        // Paired slot assertion: the empty-string encoding zeroes the
+        // entire field slot. A regression of the OOB-read bug would
+        // leave non-zero garbage in the low bits and we'd catch it here.
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.nameSlot()),
+            bytes32(0),
+            "empty name field slot must be all-zero"
+        );
     }
 
     /// @notice Verifies an empty `symbol` round-trips as the empty string (regression test for L-04)
@@ -402,6 +483,11 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
+            bytes32(0),
+            "empty symbol field slot must be all-zero"
+        );
     }
 
     /// @notice Verifies both empty name and empty symbol round-trip correctly (regression test for L-04)
@@ -414,6 +500,16 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
         assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
         assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.nameSlot()),
+            bytes32(0),
+            "empty name field slot must be all-zero"
+        );
+        assertEq(
+            vm.load(tokenAddr, MockB20Storage.symbolSlot()),
+            bytes32(0),
+            "empty symbol field slot must be all-zero"
+        );
     }
 
     /// @notice Verifies decimals are fixed by variant and not encoded in address bytes

@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20BurnTest is B20Test {
     /// @notice Verifies burn reverts when caller lacks BURN_ROLE
@@ -44,7 +45,8 @@ contract B20BurnTest is B20Test {
     }
 
     /// @notice Verifies burn debits the caller's balance by amount
-    /// @dev Accounting: balanceOf(caller) decreases by exactly amount
+    /// @dev Accounting: balanceOf(caller) decreases by exactly amount.
+    ///      Paired slot assertion verifies `balances[burner]` slot reflects the debit.
     function test_burn_success_debitsCaller(uint256 amount) public {
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
@@ -52,10 +54,16 @@ contract B20BurnTest is B20Test {
         vm.prank(burner);
         token.burn(amount);
         assertEq(token.balanceOf(burner), 0, "burner balance must be zero after full burn");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(burner))),
+            0,
+            "balances[burner] slot must reflect the burn"
+        );
     }
 
     /// @notice Verifies burn decreases totalSupply by amount
-    /// @dev Accounting: totalSupply tracks cumulative minted-burned
+    /// @dev Accounting: totalSupply tracks cumulative minted-burned.
+    ///      Paired slot assertion verifies `totalSupply` slot reflects the decrease.
     function test_burn_success_decreasesTotalSupply(uint256 amount) public {
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
@@ -64,6 +72,11 @@ contract B20BurnTest is B20Test {
         vm.prank(burner);
         token.burn(amount);
         assertEq(token.totalSupply(), before - amount, "totalSupply must decrease by burned amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.totalSupplySlot())),
+            before - amount,
+            "totalSupply slot must reflect the burn"
+        );
     }
 
     /// @notice Verifies burn emits Transfer(caller, address(0), amount)

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryFinalizeUpdateAdminTest is PolicyRegistryTest {
     /// @notice Verifies finalizeUpdateAdmin reverts when no admin transfer is in flight
@@ -41,7 +42,9 @@ contract PolicyRegistryFinalizeUpdateAdminTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies finalizeUpdateAdmin promotes the pending admin to current admin
-    /// @dev policyAdmin returns the previously-staged address after this call
+    /// @dev policyAdmin returns the previously-staged address after this call.
+    ///      Paired slot assertion: `policies[id]` packed admin lane
+    ///      decodes to newAdmin (replacing currentAdmin).
     function test_finalizeUpdateAdmin_success_promotesPending(address currentAdmin, address newAdmin) public {
         vm.assume(currentAdmin != address(0));
         vm.assume(newAdmin != address(0));
@@ -51,10 +54,18 @@ contract PolicyRegistryFinalizeUpdateAdminTest is PolicyRegistryTest {
         vm.prank(newAdmin);
         policyRegistry.finalizeUpdateAdmin(policyId);
         assertEq(policyRegistry.policyAdmin(policyId), newAdmin);
+        assertEq(
+            MockPolicyRegistryStorage.policyAdminFromPacked(
+                uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)))
+            ),
+            newAdmin,
+            "policies[id] admin lane must be promoted to newAdmin"
+        );
     }
 
     /// @notice Verifies finalizeUpdateAdmin clears the pending slot
-    /// @dev pendingPolicyAdmin returns address(0) after the transfer completes
+    /// @dev pendingPolicyAdmin returns address(0) after the transfer completes.
+    ///      Paired slot assertion: `pendingAdmins[id]` slot reads zero.
     function test_finalizeUpdateAdmin_success_clearsPending(address currentAdmin, address newAdmin) public {
         vm.assume(currentAdmin != address(0));
         vm.assume(newAdmin != address(0));
@@ -64,6 +75,11 @@ contract PolicyRegistryFinalizeUpdateAdminTest is PolicyRegistryTest {
         vm.prank(newAdmin);
         policyRegistry.finalizeUpdateAdmin(policyId);
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
+        assertEq(
+            vm.load(address(policyRegistry), MockPolicyRegistryStorage.pendingAdminSlot(policyId)),
+            bytes32(0),
+            "pendingAdmins[id] slot must be cleared after finalize"
+        );
     }
 
     /// @notice Verifies finalizeUpdateAdmin emits PolicyAdminUpdated with previousAdmin and newAdmin

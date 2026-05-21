@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20TransferFromTest is B20Test {
@@ -128,7 +129,9 @@ contract B20TransferFromTest is B20Test {
     }
 
     /// @notice Verifies transferFrom debits from balance and credits to balance
-    /// @dev Accounting invariant for the transferFrom path
+    /// @dev Accounting invariant for the transferFrom path.
+    ///      Paired slot assertions verify both `balances[from]` and
+    ///      `balances[to]` slots reflect the move.
     function test_transferFrom_success_movesBalance(address caller, address from, address to, uint256 amount) public {
         _assumeValidActor(caller);
         _assumeValidActor(from);
@@ -145,10 +148,22 @@ contract B20TransferFromTest is B20Test {
 
         assertEq(token.balanceOf(from), 0, "from must be fully debited");
         assertEq(token.balanceOf(to), amount, "to must be fully credited");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(from))),
+            0,
+            "balances[from] slot must reflect the full debit"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(to))),
+            amount,
+            "balances[to] slot must reflect the full credit"
+        );
     }
 
     /// @notice Verifies transferFrom decreases caller allowance by exactly amount
-    /// @dev Spend-tracking; non-infinite allowances decrement by the transferred amount
+    /// @dev Spend-tracking; non-infinite allowances decrement by the transferred amount.
+    ///      Paired slot assertion: `allowances[from][caller]` slot
+    ///      reflects the consumed amount.
     function test_transferFrom_success_decreasesAllowance(
         address caller,
         address from,
@@ -178,10 +193,16 @@ contract B20TransferFromTest is B20Test {
             allowanceAmount - spendAmount,
             "allowance must decrease by spent amount"
         );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, caller))),
+            allowanceAmount - spendAmount,
+            "allowances[from][caller] slot must reflect the consumed amount"
+        );
     }
 
     /// @notice Verifies transferFrom leaves an infinite allowance unchanged
     /// @dev Convention: type(uint256).max allowance is treated as unlimited and not decremented.
+    ///      Paired slot assertion confirms the slot still holds uint256.max.
     function test_transferFrom_success_infiniteAllowanceUnchanged(
         address caller,
         address from,
@@ -203,6 +224,11 @@ contract B20TransferFromTest is B20Test {
         token.transferFrom(from, to, amount);
 
         assertEq(token.allowance(from, caller), type(uint256).max, "infinite allowance must be preserved");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, caller))),
+            type(uint256).max,
+            "allowances[from][caller] slot must still hold the infinite sentinel"
+        );
     }
 
     /// @notice Verifies transferFrom emits Transfer(from, to, amount)

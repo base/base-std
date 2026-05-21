@@ -42,6 +42,8 @@ contract B20RenounceLastAdminTest is B20Test {
 
     /// @notice Verifies renounceLastAdmin clears DEFAULT_ADMIN_ROLE from the caller
     /// @dev    Read-after-write: hasRole(DEFAULT_ADMIN_ROLE, msg.sender) is false post-call.
+    ///         Paired slot assertion: the `roles[DEFAULT_ADMIN_ROLE][admin]`
+    ///         slot reads back as zero.
     function test_renounceLastAdmin_success_clearsAdminRole() public {
         assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "precondition: admin holds B20Constants.DEFAULT_ADMIN_ROLE");
 
@@ -49,6 +51,11 @@ contract B20RenounceLastAdminTest is B20Test {
         token.renounceLastAdmin();
 
         assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "admin no longer holds B20Constants.DEFAULT_ADMIN_ROLE");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, admin))),
+            uint256(0),
+            "roles[ADMIN][admin] slot must be cleared"
+        );
     }
 
     /// @notice Verifies admin-gated operations revert after renounceLastAdmin
@@ -91,19 +98,35 @@ contract B20RenounceLastAdminTest is B20Test {
     }
 
     /// @notice Verifies renounceLastAdmin drives the internal adminCount tracker to zero
-    /// @dev    adminCount is internal state with no public getter, so we read the slot
-    ///         directly via vm.load. A buggy impl that cleared the role but left
-    ///         adminCount > 0 would be otherwise undetectable from the public surface
-    ///         (since with no admins, no path that reads adminCount is reachable).
-    ///         Directly inspecting storage closes the loop on the rusty-storage contract.
+    /// @dev    adminCount is internal state with no public getter; it shares
+    ///         a slot with the `initialized` bool (uint248 in the low 31
+    ///         bytes, bool in byte 31). We read the slot directly via
+    ///         `vm.load` and decode each field via the codecs on
+    ///         `MockB20Storage` so the test exercises the canonical
+    ///         packed-slot layout the Rust impl must match.
+    ///
+    ///         A buggy impl that cleared the role but left adminCount > 0
+    ///         would be otherwise undetectable from the public surface
+    ///         (since with no admins, no path that reads adminCount is
+    ///         reachable). Directly inspecting storage closes the loop on
+    ///         the storage-layout contract. Equally important: a buggy
+    ///         renounce that mis-masks the slot would clobber `initialized`
+    ///         and re-open the factory bootstrap window — also caught here.
     function test_renounceLastAdmin_success_adminCountDrivenToZero() public {
-        bytes32 adminCountSlot = MockB20Storage.slotOf(MockB20Storage.ADMIN_COUNT_OFFSET);
-        assertEq(uint256(vm.load(address(token), adminCountSlot)), 1, "precondition: count is 1");
+        bytes32 packedSlot = MockB20Storage.adminCountAndInitializedSlot();
+        uint256 before = uint256(vm.load(address(token), packedSlot));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(before)), 1, "precondition: adminCount is 1");
+        assertTrue(MockB20Storage.initializedFromPacked(before), "precondition: initialized is true");
 
         vm.prank(admin);
         token.renounceLastAdmin();
 
-        assertEq(uint256(vm.load(address(token), adminCountSlot)), 0, "adminCount must be 0 post-renounce");
+        uint256 packedAfter = uint256(vm.load(address(token), packedSlot));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packedAfter)), 0, "adminCount must be 0 post-renounce");
+        assertTrue(
+            MockB20Storage.initializedFromPacked(packedAfter),
+            "initialized bit must remain set (renounce only clears adminCount)"
+        );
     }
 
     /// @notice Verifies renounceLastAdmin emits LastAdminRenounced(previousAdmin)

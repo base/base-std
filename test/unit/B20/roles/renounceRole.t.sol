@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20RenounceRoleTest is B20Test {
     /// @notice Verifies renounceRole reverts when callerConfirmation does not equal msg.sender
@@ -62,7 +63,8 @@ contract B20RenounceRoleTest is B20Test {
     }
 
     /// @notice Verifies renounceRole sets hasRole(role, caller) to false
-    /// @dev Read-after-write for self-revocation
+    /// @dev Read-after-write for self-revocation.
+    ///      Paired slot assertion: `roles[role][caller]` slot is zero.
     function test_renounceRole_success_clearsCallerRole(address caller, bytes32 role) public {
         _assumeValidCaller(caller);
         // Skip DEFAULT_ADMIN_ROLE here: that path has its own last-admin guard tested above
@@ -75,10 +77,19 @@ contract B20RenounceRoleTest is B20Test {
         vm.prank(caller);
         token.renounceRole(role, caller);
         assertFalse(token.hasRole(role, caller), "role must be cleared after self-renounce");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(role, caller))),
+            uint256(0),
+            "roles[role][caller] slot must be cleared after self-renounce"
+        );
     }
 
     /// @notice Verifies renounceRole succeeds for DEFAULT_ADMIN_ROLE when at least one other admin exists
-    /// @dev LastAdminCannotRenounce only fires when the renouncer would leave the role empty
+    /// @dev LastAdminCannotRenounce only fires when the renouncer would leave the role empty.
+    ///      Paired slot assertions verify both `roles[ADMIN][admin]`
+    ///      (cleared) and `roles[ADMIN][otherAdmin]` (still set), plus
+    ///      the packed `adminCount` decrements from 2 to 1 while
+    ///      `initialized` stays true (sharing slot 8).
     function test_renounceRole_success_adminWithOthers(address otherAdmin) public {
         _assumeValidActor(otherAdmin);
         vm.assume(otherAdmin != admin);
@@ -90,6 +101,21 @@ contract B20RenounceRoleTest is B20Test {
 
         assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "original admin no longer admin");
         assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin), "other admin still admin");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, admin))),
+            uint256(0),
+            "roles[ADMIN][admin] slot must be cleared"
+        );
+        assertEq(
+            uint256(
+                vm.load(address(token), MockB20Storage.roleMembershipSlot(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin))
+            ),
+            uint256(1),
+            "roles[ADMIN][otherAdmin] slot must still be set"
+        );
+        uint256 packed = uint256(vm.load(address(token), MockB20Storage.adminCountAndInitializedSlot()));
+        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must drop to 1");
+        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized bit must stay set");
     }
 
     /// @notice Verifies the internal adminCount tracker stays consistent with role state

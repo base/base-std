@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20GrantRoleTest is B20Test {
     /// @notice Verifies grantRole reverts when caller does not hold the role's admin role
@@ -23,10 +24,17 @@ contract B20GrantRoleTest is B20Test {
     }
 
     /// @notice Verifies grantRole sets hasRole(role, account) to true
-    /// @dev Read-after-write; canonical hasRole readback test lives in hasRole.t.sol
+    /// @dev Read-after-write; canonical hasRole readback test lives in hasRole.t.sol.
+    ///      Paired slot assertion: the `roles[role][account]` bool slot
+    ///      holds `bytes32(uint256(1))` after the grant.
     function test_grantRole_success_setsRole(bytes32 role, address account) public {
         _grantRole(role, account);
         assertTrue(token.hasRole(role, account), "must hold role after grant");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.roleMembershipSlot(role, account))),
+            uint256(1),
+            "roles[role][account] slot must hold the membership flag"
+        );
     }
 
     /// @notice Verifies grantRole is idempotent when the account already holds the role

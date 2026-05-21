@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20UnpauseTest is B20Test {
     /// @notice Verifies unpause reverts when caller lacks UNPAUSE_ROLE
@@ -31,7 +32,9 @@ contract B20UnpauseTest is B20Test {
     }
 
     /// @notice Verifies unpause clears each listed feature from pausedFeatures
-    /// @dev State transition: each feature is removed; non-listed features remain unchanged
+    /// @dev State transition: each feature is removed; non-listed features remain unchanged.
+    ///      Paired slot assertion: `pausedVectors` slot holds only the
+    ///      MINT bit after the TRANSFER bit is cleared.
     function test_unpause_success_clearsListedFeatures() public {
         _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
 
@@ -45,10 +48,16 @@ contract B20UnpauseTest is B20Test {
 
         assertFalse(token.isPaused(IB20.PausableFeature.TRANSFER), "TRANSFER must be unpaused");
         assertTrue(token.isPaused(IB20.PausableFeature.MINT), "MINT must remain paused");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot())),
+            1 << uint8(IB20.PausableFeature.MINT),
+            "pausedVectors slot must hold only the MINT bit after TRANSFER unpause"
+        );
     }
 
     /// @notice Verifies unpause is idempotent when called with not-currently-paused features
-    /// @dev No state change and no revert for features that are already inactive
+    /// @dev No state change and no revert for features that are already inactive.
+    ///      Paired slot assertion: `pausedVectors` slot remains zero.
     function test_unpause_success_idempotentForUnpaused() public {
         _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
 
@@ -57,6 +66,11 @@ contract B20UnpauseTest is B20Test {
         token.unpause(_singleFeature(IB20.PausableFeature.BURN));
 
         assertFalse(token.isPaused(IB20.PausableFeature.BURN), "BURN remains unpaused");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot())),
+            0,
+            "pausedVectors slot must remain zero when unpausing a not-paused feature"
+        );
     }
 
     /// @notice Verifies unpause emits Unpaused(caller, features) with the call's argument

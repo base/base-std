@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20TransferWithMemoTest is B20Test {
     /// @notice Verifies transferWithMemo applies the same pause / policy / balance checks as transfer
@@ -26,7 +27,8 @@ contract B20TransferWithMemoTest is B20Test {
     }
 
     /// @notice Verifies transferWithMemo performs the same balance movement as transfer
-    /// @dev Same accounting effect as transfer; the memo does not alter accounting
+    /// @dev Same accounting effect as transfer; the memo does not alter accounting.
+    ///      Paired slot assertions confirm both balance slots reflect the move.
     function test_transferWithMemo_success_movesBalance(address from, address to, uint256 amount, bytes32 memo)
         public
     {
@@ -40,6 +42,16 @@ contract B20TransferWithMemoTest is B20Test {
 
         assertEq(token.balanceOf(from), 0, "from must be fully debited");
         assertEq(token.balanceOf(to), amount, "to must be fully credited");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(from))),
+            0,
+            "balances[from] slot must reflect the debit"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.balanceSlot(to))),
+            amount,
+            "balances[to] slot must reflect the credit"
+        );
     }
 
     /// @notice Verifies transferWithMemo emits Transfer then Memo, in that order

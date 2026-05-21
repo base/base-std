@@ -5,6 +5,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20SetRoleAdminTest is B20Test {
     /// @notice Verifies setRoleAdmin reverts when caller does not hold the role's current admin role
@@ -22,11 +23,17 @@ contract B20SetRoleAdminTest is B20Test {
     }
 
     /// @notice Verifies setRoleAdmin updates getRoleAdmin(role) to the new admin role
-    /// @dev Read-after-write; canonical getRoleAdmin readback test lives in getRoleAdmin.t.sol
+    /// @dev Read-after-write; canonical getRoleAdmin readback test lives in getRoleAdmin.t.sol.
+    ///      Paired slot assertion: `roleAdmins[role]` slot reflects newAdminRole.
     function test_setRoleAdmin_success_updatesAdmin(bytes32 role, bytes32 newAdminRole) public {
         vm.prank(admin);
         token.setRoleAdmin(role, newAdminRole);
         assertEq(token.getRoleAdmin(role), newAdminRole, "getRoleAdmin must reflect setRoleAdmin");
+        assertEq(
+            vm.load(address(token), MockB20Storage.roleAdminSlot(role)),
+            newAdminRole,
+            "roleAdmins[role] slot must reflect setRoleAdmin"
+        );
     }
 
     /// @notice Verifies setRoleAdmin emits RoleAdminChanged(role, previousAdminRole, newAdminRole)
