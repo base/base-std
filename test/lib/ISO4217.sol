@@ -29,7 +29,6 @@ library ISO4217 {
     bytes3 private constant AFN = "AFN";
     bytes3 private constant ALL = "ALL";
     bytes3 private constant AMD = "AMD";
-    bytes3 private constant ANG = "ANG";
     bytes3 private constant AOA = "AOA";
     bytes3 private constant ARS = "ARS";
     bytes3 private constant AUD = "AUD";
@@ -39,7 +38,6 @@ library ISO4217 {
     bytes3 private constant BAM = "BAM";
     bytes3 private constant BBD = "BBD";
     bytes3 private constant BDT = "BDT";
-    bytes3 private constant BGN = "BGN";
     bytes3 private constant BHD = "BHD";
     bytes3 private constant BIF = "BIF";
     bytes3 private constant BMD = "BMD";
@@ -55,6 +53,7 @@ library ISO4217 {
     bytes3 private constant CAD = "CAD";
     bytes3 private constant CDF = "CDF";
     bytes3 private constant CHF = "CHF";
+    bytes3 private constant CLP = "CLP";
     bytes3 private constant CNY = "CNY";
     bytes3 private constant COP = "COP";
     bytes3 private constant CRC = "CRC";
@@ -195,9 +194,10 @@ library ISO4217 {
 
     bytes3 private constant WST = "WST";
 
-    // Multi-country circulating fiat (BCEAO, BEAC, ECCB, IEOM).
+    // Multi-country circulating fiat (BCEAO, BEAC, ECCB, IEOM, CBCS).
     bytes3 private constant XAF = "XAF";
     bytes3 private constant XCD = "XCD";
+    bytes3 private constant XCG = "XCG";
     bytes3 private constant XOF = "XOF";
     bytes3 private constant XPF = "XPF";
 
@@ -248,13 +248,13 @@ library ISO4217 {
         }
         // C: three G10/major currencies (CHF, CNY, CAD) lead, then CZK.
         if (first == "C") {
-            return c == CHF || c == CNY || c == CAD || c == CZK || c == COP || c == CRC || c == CUP
-                || c == CVE || c == CDF;
+            return c == CHF || c == CNY || c == CAD || c == CZK || c == COP || c == CLP || c == CRC
+                || c == CUP || c == CVE || c == CDF;
         }
         // A: AUD is G10; AED is a high-volume oil-linked unit.
         if (first == "A") {
-            return c == AUD || c == AED || c == ARS || c == AMD || c == ANG || c == AOA || c == AFN
-                || c == ALL || c == AWG || c == AZN;
+            return c == AUD || c == AED || c == ARS || c == AMD || c == AOA || c == AFN || c == ALL
+                || c == AWG || c == AZN;
         }
         // N: NOK and NZD are both G10; NGN is the largest African economy.
         if (first == "N") return c == NOK || c == NZD || c == NGN || c == NPR || c == NIO || c == NAD;
@@ -287,9 +287,8 @@ library ISO4217 {
         }
         // B: BRL is the major; rest are long-tail.
         if (first == "B") {
-            return c == BRL || c == BHD || c == BDT || c == BGN || c == BAM || c == BBD || c == BIF
-                || c == BMD || c == BND || c == BOB || c == BSD || c == BTN || c == BWP || c == BYN
-                || c == BZD;
+            return c == BRL || c == BHD || c == BDT || c == BAM || c == BBD || c == BIF || c == BMD
+                || c == BND || c == BOB || c == BSD || c == BTN || c == BWP || c == BYN || c == BZD;
         }
         // H: HKD is a major financial-center currency.
         if (first == "H") return c == HKD || c == HUF || c == HNL || c == HTG;
@@ -298,7 +297,7 @@ library ISO4217 {
         // D: DKK is top-25 FX.
         if (first == "D") return c == DKK || c == DOP || c == DZD || c == DJF;
         // X: multi-country circulating fiat; XOF covers the largest population.
-        if (first == "X") return c == XOF || c == XAF || c == XCD || c == XPF;
+        if (first == "X") return c == XOF || c == XAF || c == XCD || c == XCG || c == XPF;
         // Z: ZAR is top-25 FX.
         if (first == "Z") return c == ZAR || c == ZMW || c == ZWG;
         // V: VND is the largest by economy/population in the bucket.
@@ -318,8 +317,8 @@ library ISO4217 {
     /// @notice Number of ISO 4217 codes deliberately excluded from
     ///         `isValidFiatCode`. Pair with `excludedAt` to enumerate.
     ///         Excludes only currently-active ISO 4217 entries; deprecated
-    ///         codes (CUC, HRK, VEF, ZWL, etc.) are caught by absence
-    ///         from the allowlist instead.
+    ///         codes (ANG, BGN, CUC, HRK, VEF, ZWL, etc.) are caught by
+    ///         absence from the allowlist instead.
     function excludedCount() internal pure returns (uint256) {
         return 22;
     }

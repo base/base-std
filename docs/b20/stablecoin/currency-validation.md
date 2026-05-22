@@ -29,7 +29,7 @@ Key properties:
 | Category | Status | Description | Codes |
 | --- | --- | --- | --- |
 | G10 + SGD | Included | Most-traded reserve currencies; MAS-anchored set | USD, EUR, JPY, GBP, AUD, NZD, CAD, CHF, NOK, SEK, SGD |
-| Multi-country X-prefix fiat | Included | Real circulating fiat issued by supranational central banks (BCEAO, BEAC, ECCB, IEOM) | XOF, XAF, XCD, XPF |
+| Multi-country X-prefix fiat | Included | Real circulating fiat issued by supranational / multi-jurisdiction central banks (BCEAO, BEAC, ECCB, IEOM, CBCS) | XOF, XAF, XCD, XCG, XPF |
 | Precious metals | Excluded | Commodities, not means of payment — commodity-backed tokens belong on `B20Security` | XAU, XAG, XPT, XPD |
 | European composite units | Excluded | Defunct supranational accounting units retained for historical reconciliation | XBA, XBB, XBC, XBD |
 | Other supranational synthetics | Excluded | Reserve assets and regional units of account, not circulating currencies | XDR, XSU, XUA |
@@ -70,7 +70,6 @@ All 155 codes on the allowlist, alphabetical by code.
 | AFN | Afghan Afghani | Afghanistan |
 | ALL | Albanian Lek | Albania |
 | AMD | Armenian Dram | Armenia |
-| ANG | Netherlands Antillean Guilder | Curaçao, Sint Maarten |
 | AOA | Angolan Kwanza | Angola |
 | ARS | Argentine Peso | Argentina |
 | AUD | Australian Dollar | Australia |
@@ -79,7 +78,6 @@ All 155 codes on the allowlist, alphabetical by code.
 | BAM | Bosnia and Herzegovina Convertible Mark | Bosnia and Herzegovina |
 | BBD | Barbadian Dollar | Barbados |
 | BDT | Bangladeshi Taka | Bangladesh |
-| BGN | Bulgarian Lev | Bulgaria |
 | BHD | Bahraini Dinar | Bahrain |
 | BIF | Burundian Franc | Burundi |
 | BMD | Bermudian Dollar | Bermuda |
@@ -94,6 +92,7 @@ All 155 codes on the allowlist, alphabetical by code.
 | CAD | Canadian Dollar | Canada |
 | CDF | Congolese Franc | DR Congo |
 | CHF | Swiss Franc | Switzerland, Liechtenstein |
+| CLP | Chilean Peso | Chile |
 | CNY | Chinese Yuan Renminbi | China |
 | COP | Colombian Peso | Colombia |
 | CRC | Costa Rican Colón | Costa Rica |
@@ -215,9 +214,26 @@ All 155 codes on the allowlist, alphabetical by code.
 | WST | Samoan Tālā | Samoa |
 | XAF | Central African CFA Franc | BEAC members (Cameroon, CAR, Chad, Congo, Equatorial Guinea, Gabon) |
 | XCD | East Caribbean Dollar | ECCB members (Anguilla, Antigua, Dominica, Grenada, Montserrat, Saint Kitts and Nevis, Saint Lucia, Saint Vincent and the Grenadines) |
+| XCG | Caribbean Guilder | CBCS members (Curaçao, Sint Maarten) — replaced ANG on 2025-03-31 |
 | XOF | West African CFA Franc | BCEAO members (Benin, Burkina Faso, Côte d'Ivoire, Guinea-Bissau, Mali, Niger, Senegal, Togo) |
 | XPF | CFP Franc | French Pacific (French Polynesia, New Caledonia, Wallis and Futuna) |
 | YER | Yemeni Rial | Yemen |
 | ZAR | South African Rand | South Africa (and CMA: Eswatini, Lesotho, Namibia) |
 | ZMW | Zambian Kwacha | Zambia |
 | ZWG | Zimbabwe Gold | Zimbabwe |
+
+## Appendix
+
+### References
+
+ISO 4217 is maintained by SIX as the designated Maintenance Agency. The allowlist and exclusion set in this document MUST be reconciled against the canonical List One whenever an amendment lands.
+
+- [SIX — data standards landing page](https://www.six-group.com/en/products-services/financial-information/data-standards.html)
+- [List One — current active currencies (XLS)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xls)
+- [List One — current active currencies (XML)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)
+- [Amendments index (all historical amendments)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/lists/overview-amendments.xlsx)
+
+#### Recent amendments reflected in this allowlist
+
+- **Amendment 180** — BGN withdrawn effective 2026-01-01; Bulgaria joined the eurozone at the fixed rate EUR 1 = BGN 1.95583. [PDF](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/dl-currency-iso-amendment-180.pdf)
+- **ANG → XCG** — ANG (Netherlands Antillean Guilder) withdrawn 2025-03-31 and replaced by XCG (Caribbean Guilder) under the Centrale Bank van Curaçao en Sint Maarten (CBCS).
