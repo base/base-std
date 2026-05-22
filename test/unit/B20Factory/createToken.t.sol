@@ -16,6 +16,7 @@ import {
     MockB20AssetStorage,
     MockB20RedeemStorage
 } from "test/lib/mocks/MockB20Storage.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryCreateB20Test is B20FactoryTest {
@@ -281,6 +282,26 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             _firstLogIndex(logs, IB20Asset.ExtraMetadataUpdated.selector),
             -1,
             "no ExtraMetadataUpdated at creation"
+        );
+    }
+
+    /// @notice Verifies REDEEM_SENDER_POLICY is ALWAYS_BLOCK_ID on a freshly created asset token.
+    /// @dev Redemption must be closed by default so issuers must explicitly opt-in. The factory
+    ///      writes ALWAYS_BLOCK_ID into the redeemPolicyIds slot at creation time. The storage slot
+    ///      and the ABI surface (policyId()) must both reflect this.
+    function test_createToken_success_securityDefaultsRedemptionToClosed(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
+
+        assertEq(
+            IB20Asset(token).policyId(MockB20Asset(token).REDEEM_SENDER_POLICY()),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "REDEEM_SENDER_POLICY must be ALWAYS_BLOCK_ID at creation"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20RedeemStorage.redeemPolicyIdsSlot())),
+            uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID),
+            "redeemPolicyIds slot must hold ALWAYS_BLOCK_ID"
         );
     }
 

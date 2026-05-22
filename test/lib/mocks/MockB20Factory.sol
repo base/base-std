@@ -14,6 +14,7 @@ import {
     MockB20AssetStorage,
     MockB20RedeemStorage
 } from "test/lib/mocks/MockB20Storage.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 /// @title MockB20Factory
 /// @notice Reference implementation of the `IB20Factory` precompile
@@ -285,16 +286,20 @@ contract MockB20Factory is IB20Factory {
     }
 
     /// @dev Writes the asset variant's initial `identifiers["ISIN"]`
-    ///      entry at the `base.b20.asset` namespace and the initial
-    ///      `minimumRedeemable` at the `base.b20.redeem` namespace.
-    ///      Mirrors stablecoin's `currency` pattern: variant-specific
-    ///      initial state is written directly without an event,
-    ///      paralleling how base identity (name, symbol, supply cap) is
-    ///      seeded. Post-creation identifier mutations go through
-    ///      `updateExtraMetadata` and emit `ExtraMetadataUpdated`.
+    ///      entry at the `base.b20.asset` namespace, the initial
+    ///      `minimumRedeemable` at the `base.b20.redeem` namespace, and
+    ///      sets `REDEEM_SENDER_POLICY` to `ALWAYS_BLOCK_ID` so that
+    ///      redemption is closed by default. Issuers must explicitly open
+    ///      it via `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` in
+    ///      `initCalls` or post-creation.
     function _writeSecurityStorage(address token, string memory isin_, uint256 minimumRedeemable_) internal {
         _writeString(token, MockB20AssetStorage.identifierSlot("ISIN"), isin_);
         _writeUint(token, MockB20RedeemStorage.minimumRedeemableSlot(), minimumRedeemable_);
+        _writeUint(
+            token,
+            MockB20RedeemStorage.redeemPolicyIdsSlot(),
+            uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID)
+        );
     }
 
     // ============================================================
