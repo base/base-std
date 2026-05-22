@@ -57,12 +57,44 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///         redemption by pointing `REDEEM_SENDER_POLICY` here).
     uint64 public constant ALWAYS_BLOCK_ID = PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
-    /// @notice First counter value handed out to custom policies. Skips
-    ///         counters `0` (ALWAYS_ALLOW) and `1` (ALWAYS_BLOCK).
-    uint56 internal constant INITIAL_CUSTOM_COUNTER = 2;
+    /// @notice Number of built-in policies written by `writeBuiltins`.
+    ///         The global counter is left at this value after init so the
+    ///         first custom policy lands at counter `BUILTIN_POLICY_COUNT`.
+    /// @dev    Exposed publicly so tests and the Rust impl validator can
+    ///         reference the canonical floor without copying the literal.
+    uint56 public constant BUILTIN_POLICY_COUNT = 2;
 
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
     uint64 internal constant POLICY_ID_TYPE_SHIFT = 56;
+
+    // ============================================================
+    //                       INITIALIZATION
+    // ============================================================
+
+    /// @notice Writes the two built-in policies into the `policies` mapping.
+    ///
+    ///         Consumes counters `0` and `1`, leaving `nextCounter` at
+    ///         `BUILTIN_POLICY_COUNT` so custom policies start there. Both
+    ///         built-ins are written with a renounced (zero) admin so any
+    ///         attempt to mutate them via `require_admin`-gated paths fails
+    ///         with `Unauthorized`.
+    ///
+    ///         Idempotent: a re-entry with `nextCounter >= BUILTIN_POLICY_COUNT`
+    ///         is a no-op, so `_create` can call this on every entry without
+    ///         duplicating storage writes.
+    ///
+    /// @dev    Mirrors `PolicyRegistryStorage::write_builtins` in the Rust
+    ///         precompile. Public so `_create` can call it lazily AND so
+    ///         tests can assert the post-init slot layout without going
+    ///         through `createPolicy`.
+    function writeBuiltins() public {
+        MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
+        if ($.nextCounter >= BUILTIN_POLICY_COUNT) return;
+        uint256 packed = _encode(address(0));
+        $.policies[ALWAYS_ALLOW_ID] = packed;
+        $.policies[ALWAYS_BLOCK_ID] = packed;
+        $.nextCounter = BUILTIN_POLICY_COUNT;
+    }
 
     // ============================================================
     //                       POLICY CREATION
@@ -172,16 +204,18 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function policyAdmin(uint64 policyId) external view returns (address) {
-        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         if (!_isWellFormed(policyId)) return address(0);
-        // Returns address(0) for both "never created" and "renounced".
+        // No fast path for built-in IDs needed: `writeBuiltins` writes them
+        // with a zero admin, so the normal storage read returns address(0)
+        // for them just like for renounced policies and uncreated IDs.
         return _decodeAdmin(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
     /// @inheritdoc IPolicyRegistry
     function pendingPolicyAdmin(uint64 policyId) external view returns (address) {
-        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         if (!_isWellFormed(policyId)) return address(0);
+        // Built-in IDs never have a pending admin staged, so the default
+        // zero return from the storage read is correct without a fast path.
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
     }
 
@@ -192,9 +226,11 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function _create(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
         if (admin == address(0)) revert ZeroAddress();
         // Out-of-range `policyType` rejected by ABI decoding before this body runs.
+        // Lazy-init the built-in policies on the first create. `writeBuiltins`
+        // is idempotent, so calls after init are a cheap conditional return.
+        writeBuiltins();
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         uint56 counter = $.nextCounter;
-        if (counter < INITIAL_CUSTOM_COUNTER) counter = INITIAL_CUSTOM_COUNTER;
         // No overflow guard: at one policy per 2-second block, exhausting the
         // 56-bit counter space (~7.2e16 values) takes ~4.6 billion years.
         unchecked {
