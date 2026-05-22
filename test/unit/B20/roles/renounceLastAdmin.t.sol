@@ -74,7 +74,7 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         updateSymbol are gated by METADATA_ROLE, not DEFAULT_ADMIN_ROLE, so existing
     ///         METADATA_ROLE holders can keep calling them after renunciation.)
     ///         No test should be able to reinstate an admin after this transition.
-    function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyType, uint64 newPolicyId) public {
+    function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyScope, uint64 newPolicyId) public {
         // Use a built-in policy ID so updatePolicy gets past policyExists() and would
         // otherwise succeed; the revert here is from the role check, not policy validation.
         newPolicyId =
@@ -90,7 +90,7 @@ contract B20RenounceLastAdminTest is B20Test {
                 IB20.AccessControlUnauthorizedAccount.selector, admin, B20Constants.DEFAULT_ADMIN_ROLE
             )
         );
-        token.updatePolicy(policyType, newPolicyId);
+        token.updatePolicy(policyScope, newPolicyId);
     }
 
     /// @notice Verifies grantRole(DEFAULT_ADMIN_ROLE, ...) cannot succeed post-renunciation

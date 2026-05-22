@@ -41,7 +41,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         detail; the public surface speaks only in `PausableFeature`
 ///         values.
 ///
-///         **Policy model.** Each supported `bytes32 policyType` resolves
+///         **Policy model.** Each supported `bytes32 policyScope` resolves
 ///         to a dedicated storage slot on the token. The policy-type
 ///         identifier is the `keccak256` hash of its name. Four standard
 ///         types are exposed as constants on this base surface:
@@ -53,11 +53,11 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         Variants extend this set by adding their own dedicated slots
 ///         (e.g. `IB20Security` adds `REDEEM_SENDER_POLICY` for its `redeem`
 ///         path, stored in the variant's own namespaced storage). There
-///         is no generic catch-all mapping: every `policyType` either
+///         is no generic catch-all mapping: every `policyScope` either
 ///         resolves to a real slot or doesn't exist at all. Both reads
-///         (`policyId`) and writes (`updatePolicy`) for a `policyType`
+///         (`policyId`) and writes (`updatePolicy`) for a `policyScope`
 ///         not supported by the token (or its variant) revert
-///         `UnsupportedPolicyType` — an unsupported `policyType` is
+///         `UnsupportedPolicyType` — an unsupported `policyScope` is
 ///         nonsense the token can't parse, so the registry never gets
 ///         consulted with it. (Reads stay strict, not silent-zero,
 ///         because a typo'd query returning `0` would masquerade as
@@ -184,24 +184,24 @@ interface IB20 {
     /// @notice The mint would push `totalSupply` past the configured cap.
     error SupplyCapExceeded(uint256 cap, uint256 attempted);
 
-    /// @notice A policy slot denied the operation. `policyType` identifies
+    /// @notice A policy slot denied the operation. `policyScope` identifies
     ///         which slot (e.g. `TRANSFER_SENDER_POLICY`, `MINT_RECEIVER_POLICY`) and
     ///         `policyId` is the ID currently set in that slot.
-    error PolicyForbids(bytes32 policyType, uint64 policyId);
+    error PolicyForbids(bytes32 policyScope, uint64 policyId);
 
     /// @notice The provided policy ID does not exist in the policy
     ///         registry.
     error PolicyNotFound(uint64 policyId);
 
     /// @notice `policyId` or `updatePolicy` was called with a
-    ///         `policyType` that this token (and its variant, if any)
+    ///         `policyScope` that this token (and its variant, if any)
     ///         does not recognize. Each token implementation defines a
     ///         fixed set of supported policy types; both reads and
     ///         writes for anything outside that set revert here so a
     ///         typo'd query can never be silently interpreted as
     ///         "no restriction", and an admin can never assign a policy
     ///         to a slot that doesn't exist.
-    error UnsupportedPolicyType(bytes32 policyType);
+    error UnsupportedPolicyType(bytes32 policyScope);
 
     /// @notice `burnBlocked` was called against a `from` address that is
     ///         currently authorized under the active `TRANSFER_SENDER_POLICY`
@@ -330,12 +330,12 @@ interface IB20 {
     event Unpaused(address indexed updater, PausableFeature[] features);
 
     /// @notice Emitted by `updatePolicy` when a token's policy slot is
-    ///         changed. `policyType` is one of the standard policy-type
+    ///         changed. `policyScope` is one of the standard policy-type
     ///         identifiers (e.g. `TRANSFER_SENDER_POLICY()`); `oldPolicyId` and
     ///         `newPolicyId` are the prior and current registry IDs for
     ///         that slot. Initial slot assignment at creation is also
     ///         emitted via `PolicyUpdated` with `oldPolicyId == 0`.
-    event PolicyUpdated(bytes32 indexed policyType, uint64 oldPolicyId, uint64 newPolicyId);
+    event PolicyUpdated(bytes32 indexed policyScope, uint64 oldPolicyId, uint64 newPolicyId);
 
     /// @notice Emitted by `updateSupplyCap`. Includes the prior cap for
     ///         indexer convenience.
@@ -721,10 +721,10 @@ interface IB20 {
                                  POLICY
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The current policy ID configured for `policyType`. Returns
+    /// @notice The current policy ID configured for `policyScope`. Returns
     ///         `0` (always-allow built-in) for any policy slot that has
     ///         never been assigned. Reverts `UnsupportedPolicyType` for
-    ///         a `policyType` not supported by this token (or its
+    ///         a `policyScope` not supported by this token (or its
     ///         variant). Standard policy types are exposed as the
     ///         role-identifier constants `TRANSFER_SENDER_POLICY()`,
     ///         `TRANSFER_RECEIVER_POLICY()`, `TRANSFER_EXECUTOR_POLICY()`,
@@ -737,15 +737,15 @@ interface IB20 {
     ///         hard-deny a slot (e.g. disabling redemption on a
     ///         non-redeemable token), point it at the ALWAYS_BLOCK
     ///         sentinel.
-    function policyId(bytes32 policyType) external view returns (uint64);
+    function policyId(bytes32 policyScope) external view returns (uint64);
 
-    /// @notice Updates the policy ID assigned to `policyType`. Requires
+    /// @notice Updates the policy ID assigned to `policyScope`. Requires
     ///         `DEFAULT_ADMIN_ROLE`. The target policy MUST exist in the
     ///         registry (or be one of the built-in IDs `0` or
     ///         `type(uint64).max`); otherwise reverts with
     ///         `PolicyNotFound`. Takes effect immediately for the next
     ///         operation that consults this slot. Emits `PolicyUpdated`.
-    function updatePolicy(bytes32 policyType, uint64 newPolicyId) external;
+    function updatePolicy(bytes32 policyScope, uint64 newPolicyId) external;
 
     /*//////////////////////////////////////////////////////////////
                               SUPPLY CAP

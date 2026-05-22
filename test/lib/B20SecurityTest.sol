@@ -116,9 +116,9 @@ contract B20SecurityTest is B20Test {
     ///      prank applies to `updatePolicy`, not to the view call that
     ///      resolves the constant.
     function _setRedeemPolicy(uint64 policyId) internal {
-        bytes32 policyType = security().REDEEM_SENDER_POLICY();
+        bytes32 policyScope = security().REDEEM_SENDER_POLICY();
         vm.prank(admin);
-        token.updatePolicy(policyType, policyId);
+        token.updatePolicy(policyScope, policyId);
     }
 
     // ============================================================
@@ -186,8 +186,8 @@ contract B20SecurityTest is B20Test {
 
     /// @notice Extends `_isKnownPolicyType` with the variant's own
     ///         redeem-side type.
-    function _isKnownSecurityPolicyType(bytes32 policyType) internal view returns (bool) {
-        return _isKnownPolicyType(policyType) || policyType == security().REDEEM_SENDER_POLICY();
+    function _isKnownSecurityPolicyType(bytes32 policyScope) internal view returns (bool) {
+        return _isKnownPolicyType(policyScope) || policyScope == security().REDEEM_SENDER_POLICY();
     }
 
     // ============================================================
