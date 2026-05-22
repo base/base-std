@@ -59,11 +59,12 @@ Clone two repos as siblings (base/base is fetched automatically by cargo):
 If your layout differs, set `ANVIL_BIN` and `FORGE_BIN` env vars to
 override the script's defaults.
 
-Install Rust + the fast linker:
+Install Rust + the fast linker, plus stock foundry (for `cast`):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
 brew install lld  # macOS; Linux uses mold per base-anvil's .cargo/config.toml
+curl -L https://foundry.paradigm.xyz | bash && foundryup  # stock foundry, for `cast` (used by run-fork-tests.sh)
 ```
 
 Build the patched forge + anvil (~30 min first build, incremental after).
