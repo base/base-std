@@ -29,10 +29,7 @@ library ISO4217 {
     bytes3 private constant AFN = "AFN";
     bytes3 private constant ALL = "ALL";
     bytes3 private constant AMD = "AMD";
-    // ANG: ISO-withdrawn 2025-03-31 (replaced by XCG). Retained for
-    // backwards compatibility while ANG-denominated balances remain in
-    // circulation.
-    bytes3 private constant ANG = "ANG";
+    bytes3 private constant ANG = "ANG"; // ISO-withdrawn 2025-03-31 (replaced by XCG); kept for backwards compatibility
     bytes3 private constant AOA = "AOA";
     bytes3 private constant ARS = "ARS";
     bytes3 private constant AUD = "AUD";
@@ -42,10 +39,7 @@ library ISO4217 {
     bytes3 private constant BAM = "BAM";
     bytes3 private constant BBD = "BBD";
     bytes3 private constant BDT = "BDT";
-    // BGN: ISO-withdrawn 2026-01-01 per Amendment 180 (Bulgaria adopted
-    // EUR). Retained for backwards compatibility while BGN-denominated
-    // balances remain in circulation.
-    bytes3 private constant BGN = "BGN";
+    bytes3 private constant BGN = "BGN"; // ISO-withdrawn 2026-01-01 (Amendment 180, Bulgaria → EUR); kept for backwards compatibility
     bytes3 private constant BHD = "BHD";
     bytes3 private constant BIF = "BIF";
     bytes3 private constant BMD = "BMD";
