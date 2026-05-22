@@ -182,7 +182,7 @@ interface IB20Factory {
 
     /// @notice The leading `version` byte in `params` does not match
     ///         any known encoding for the requested variant.
-    error UnsupportedVersion(uint8 version);
+    error UnsupportedVersion(uint8 version, B20Variant variant);
 
     /// @notice A required string argument was the empty string (e.g.
     ///         security `isin`). The stablecoin `currency` field is
@@ -219,10 +219,10 @@ interface IB20Factory {
     ///         context during the same transaction — NOT as a field on
     ///         this event. Role state is always observable via the
     ///         `RoleGranted` / `RoleRevoked` event stream from the token;
-    ///         `TokenCreated` is the token-identity signal only. The
+    ///         `B20Created` is the token-identity signal only. The
     ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
     ///         skips the grant and emits no `RoleGranted` at bootstrap.
-    event TokenCreated(address indexed token, B20Variant indexed variant, string name, string symbol, uint8 decimals);
+    event B20Created(address indexed token, B20Variant indexed variant, string name, string symbol, uint8 decimals);
 
     /*//////////////////////////////////////////////////////////////
                                  CREATE
@@ -254,7 +254,7 @@ interface IB20Factory {
     ///         contract URI, etc. Any init-call revert reverts the
     ///         entire creation.
     ///
-    ///         Emits `TokenCreated` once the token's identity is sealed
+    ///         Emits `B20Created` once the token's identity is sealed
     ///         and before any `initCalls` are dispatched, so init-call
     ///         effects appear strictly after the creation event in the
     ///         log order.

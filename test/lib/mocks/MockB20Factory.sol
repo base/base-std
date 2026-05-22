@@ -41,7 +41,7 @@ import {
 ///            directly** via `vm.store` at the slot offsets declared in
 ///            `MockB20Storage`. The token has NO factory-only
 ///            entrypoints; its surface is exactly `IB20`.
-///         6. Emit `TokenCreated` (now WITHOUT an `admin` field —
+///         6. Emit `B20Created` (now WITHOUT an `admin` field —
 ///            see step 7).
 ///         7. Grant the initial admin role via a single low-level
 ///            `token.grantRole(DEFAULT_ADMIN_ROLE, admin)` call during
@@ -51,7 +51,7 @@ import {
 ///            `grantRole` call, and it emits the standard
 ///            `RoleGranted(DEFAULT_ADMIN_ROLE, admin, factory)` from
 ///            the token's own context. There is no separate "bootstrap
-///            admin write" or "TokenCreated.admin" field; the canonical
+///            admin write" or "B20Created.admin" field; the canonical
 ///            event for role changes is always `RoleGranted` regardless
 ///            of when it fires. Skipped when `admin == address(0)`
 ///            (the "demonstrate no owner" path).
@@ -109,14 +109,14 @@ contract MockB20Factory is IB20Factory {
 
         if (variant == B20Variant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 18;
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
             // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
             if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
             name_ = p.name;
@@ -126,7 +126,7 @@ contract MockB20Factory is IB20Factory {
             currency_ = p.currency;
         } else if (variant == B20Variant.SECURITY) {
             B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
             if (bytes(p.isin).length == 0) revert MissingRequiredField();
             name_ = p.name;
             symbol_ = p.symbol;
@@ -163,10 +163,10 @@ contract MockB20Factory is IB20Factory {
             _writeSecurityStorage(token, isin_, minimumRedeemable_);
         }
 
-        // -- 6. Emit TokenCreated. Identity-only signal; admin role
+        // -- 6. Emit B20Created. Identity-only signal; admin role
         //       assignment is announced via the standard RoleGranted
         //       event from step 7.
-        emit TokenCreated(token, variant, name_, symbol_, decimals);
+        emit B20Created(token, variant, name_, symbol_, decimals);
 
         // -- 7. Grant the initial admin role via the canonical path.
         //       msg.sender at the token is address(this) == factory,

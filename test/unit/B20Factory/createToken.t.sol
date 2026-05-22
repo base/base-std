@@ -58,7 +58,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20CreateParams memory p = _b20Params();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.DEFAULT));
         factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(p), new bytes[](0));
     }
 
@@ -73,7 +73,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.STABLECOIN));
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
@@ -103,7 +103,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20SecurityCreateParams memory p = _securityParams();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.SECURITY));
         factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
@@ -343,31 +343,31 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         }
     }
 
-    /// @notice Verifies createToken emits TokenCreated with the correct identity fields
+    /// @notice Verifies createToken emits B20Created with the correct identity fields
     /// @dev Event integrity: token, variant, name, symbol, decimals must match derived variant defaults.
     ///      Admin role assignment is announced via RoleGranted, not as a field on this event;
     ///      see test_createB20_success_emitsRoleGrantedForInitialAdmin for that.
-    function test_createB20_success_emitsTokenCreated(address caller, bytes32 salt) public {
+    function test_createB20_success_emitsB20Created(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20CreateParams memory p = _b20Params("MyToken", "MYT", admin);
         address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit IB20Factory.TokenCreated(predicted, IB20Factory.B20Variant.DEFAULT, "MyToken", "MYT", 18);
+        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.DEFAULT, "MyToken", "MYT", 18);
         _createDefault(caller, salt, p, new bytes[](0));
     }
 
-    /// @notice Verifies createToken emits TokenCreated with decimals=6 for the security variant
+    /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 the same
     ///      way the default emitter test pins decimals=18.
-    function test_createB20_success_emitsTokenCreated_security(address caller, bytes32 salt) public {
+    function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p =
             _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
         address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit IB20Factory.TokenCreated(predicted, IB20Factory.B20Variant.SECURITY, "Security Test", "SEC", 6);
+        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.SECURITY, "Security Test", "SEC", 6);
         _createSecurity(caller, salt, p, new bytes[](0));
     }
 
@@ -419,11 +419,11 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         );
     }
 
-    /// @notice Verifies TokenCreated fires before any state-change events from initCalls
-    /// @dev Log ordering invariant per IB20Factory natspec: "Emits TokenCreated once the token's identity
+    /// @notice Verifies B20Created fires before any state-change events from initCalls
+    /// @dev Log ordering invariant per IB20Factory natspec: "Emits B20Created once the token's identity
     ///      is sealed and BEFORE any initCalls are dispatched, so init-call effects appear strictly after
     ///      the creation event in the log order." Sanity check using vm.recordLogs.
-    function test_createB20_success_emitsTokenCreatedBeforeInitCallEvents(address caller, bytes32 salt) public {
+    function test_createB20_success_emitsB20CreatedBeforeInitCallEvents(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         // Use an init call that emits a single, distinctive event we can find: grantRole emits RoleGranted.
         bytes[] memory initCalls = new bytes[](1);
@@ -433,14 +433,14 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         _createDefault(caller, salt, _b20Params(), initCalls);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        // Find indices of TokenCreated and RoleGranted. Since the storage-direct-write
+        // Find indices of B20Created and RoleGranted. Since the storage-direct-write
         // factory emits no RoleGranted at bootstrap, the only RoleGranted in the log
         // is the one from the init call.
-        int256 tokenCreatedAt = _firstLogIndex(logs, IB20Factory.TokenCreated.selector);
+        int256 tokenCreatedAt = _firstLogIndex(logs, IB20Factory.B20Created.selector);
         int256 roleGrantedAt = _firstLogIndex(logs, IB20.RoleGranted.selector);
-        assertGt(tokenCreatedAt, -1, "TokenCreated must be present in the log");
+        assertGt(tokenCreatedAt, -1, "B20Created must be present in the log");
         assertGt(roleGrantedAt, -1, "RoleGranted must be present in the log (from initCall)");
-        assertLt(tokenCreatedAt, roleGrantedAt, "TokenCreated must precede initCall-emitted events");
+        assertLt(tokenCreatedAt, roleGrantedAt, "B20Created must precede initCall-emitted events");
     }
 
     /// @notice Verifies the factory has no persistent privilege after createToken returns
