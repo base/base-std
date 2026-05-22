@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Vm} from "forge-std/Vm.sol";
+
 import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
@@ -46,5 +48,26 @@ contract B20UpdateSymbolTest is B20Test {
         emit IB20.SymbolUpdated(admin, newSymbol);
         vm.prank(admin);
         token.updateSymbol(newSymbol);
+    }
+
+    /// @notice Verifies updateSymbol does NOT emit EIP712DomainChanged and does NOT change DOMAIN_SEPARATOR
+    /// @dev Symbol is intentionally NOT part of the EIP-712 domain (only `name` is). This is the
+    ///      paired negative for updateName's domain-invalidation test: a symbol rename must not
+    ///      perturb outstanding permit signatures or trigger an off-chain domain re-fetch.
+    function test_updateSymbol_success_doesNotAffectEIP712Domain(string calldata newSymbol) public {
+        bytes32 before = token.DOMAIN_SEPARATOR();
+        _grantRole(B20Constants.METADATA_ROLE, admin);
+
+        vm.recordLogs();
+        vm.prank(admin);
+        token.updateSymbol(newSymbol);
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; ++i) {
+            assertTrue(
+                logs[i].topics[0] != IB20.EIP712DomainChanged.selector, "updateSymbol must not emit EIP712DomainChanged"
+            );
+        }
+        assertEq(token.DOMAIN_SEPARATOR(), before, "DOMAIN_SEPARATOR must not change on symbol update");
     }
 }
