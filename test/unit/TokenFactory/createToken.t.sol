@@ -79,7 +79,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     // STABLECOIN currency validation — see docs/b20/stablecoin/currency-validation.md.
 
-    /// @notice Any non-allowlist string reverts with `InvalidCurrency()`.
+    /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
     ///      via `vm.assume(!isValidFiatCode)`.
     function test_createToken_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
@@ -89,7 +89,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         vm.assume(!ISO4217.isValidFiatCode(code));
         ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
-        vm.expectRevert(ITokenFactory.InvalidCurrency.selector);
+        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
         factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 

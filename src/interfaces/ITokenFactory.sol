@@ -117,7 +117,7 @@ interface ITokenFactory {
     ///                      tracks (e.g. `"USD"`, `"EUR"`). Validated
     ///                      against the allowlist in `ISO4217.sol`;
     ///                      anything off the list reverts with
-    ///                      `InvalidCurrency()`. See
+    ///                      `InvalidCurrency(code)`. See
     ///                      `docs/b20/stablecoin/currency-validation.md`.
     /// @dev    Decimals are fixed at `6`. There is no decimals field
     ///         and no setter for `currency` — both are fixed for the
@@ -188,16 +188,16 @@ interface ITokenFactory {
     ///         security `isin`). The stablecoin `currency` field is
     ///         validated more tightly and reverts with
     ///         `InvalidCurrency` instead — including for the empty
-    ///         string — so callers get a single error selector for
-    ///         every currency rejection rather than two disjoint
-    ///         failure modes for the same field.
+    ///         string — so callers get a single, diagnostic-carrying
+    ///         error for every currency rejection rather than two
+    ///         disjoint failure modes for the same field.
     error MissingRequiredField();
 
     /// @notice The stablecoin `currency` field was not on the ISO 4217
-    ///         fiat allowlist (covers empty, wrong length / case,
-    ///         excluded X-prefix codes, crypto tickers, etc.).
+    ///         fiat allowlist. Carries the offending string verbatim
+    ///         for diagnostics.
     /// @dev    See `docs/b20/stablecoin/currency-validation.md` for the allowlist.
-    error InvalidCurrency();
+    error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the
     ///         underlying revert reason where the call returns one;
