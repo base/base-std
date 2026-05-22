@@ -203,7 +203,7 @@ contract MockB20 is IB20 {
     //                         METADATA UPDATES
     // ============================================================
 
-    function updateName(string calldata newName) external onlyRole(METADATA_ROLE) {
+    function updateName(string calldata newName) public virtual onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().name = newName;
         emit NameUpdated(msg.sender, newName);
     }
@@ -449,7 +449,7 @@ contract MockB20 is IB20 {
     bytes32 internal constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
-    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+    function DOMAIN_SEPARATOR() public view virtual returns (bytes32) {
         return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, block.chainid, address(this)));
     }
 
@@ -483,6 +483,7 @@ contract MockB20 is IB20 {
     function eip712Domain()
         external
         view
+        virtual
         returns (
             bytes1 fields,
             string memory name_,
