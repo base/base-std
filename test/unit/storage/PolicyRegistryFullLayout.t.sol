@@ -16,19 +16,12 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         reproduce byte-for-byte.
 contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
     /// @notice Cross-cuts every field of MockPolicyRegistryStorage.Layout
-    ///         in a single populated snapshot.
-    /// @dev    Setup creates one ALLOWLIST and one BLOCKLIST policy
-    ///         (each with admin and members), stages a pending admin
-    ///         transfer on the allowlist policy, and exercises the
-    ///         nextCounter slot through both creates. Then every slot
-    ///         is loaded via vm.load and compared to the
-    ///         independently-computed expected value.
-    ///
-    ///         Field coverage in slot order:
-    ///         - 0: policies (packed admin+type for both ids)
-    ///         - 1: members (allowlist member, blocklist member)
-    ///         - 2: pendingAdmins (staged on allowlist policy)
-    ///         - 3: nextCounter (advanced by 2 creates after lazy floor)
+    ///         in one populated snapshot.
+    /// @dev    Field coverage in slot order:
+    ///         - 0: policies (admin + exists; type recovered from the ID)
+    ///         - 1: members
+    ///         - 2: pendingAdmins
+    ///         - 3: nextCounter
     function test_policyRegistryLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         // Create one of each policy type with distinct admins; bob will
@@ -56,28 +49,36 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         address registry = address(policyRegistry);
 
         // ---------- policies (slot 0 hashed by id) ----------
-        // Allowlist policy: admin = alice, type = ALLOWLIST.
+        // Allowlist policy: admin = alice; type carried by the ID's top byte.
         {
             uint256 packedA = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(allowlistId)));
             assertEq(
                 MockPolicyRegistryStorage.policyAdminFromPacked(packedA), alice, "policies[allowlistId] admin lane"
             );
+            assertTrue(
+                MockPolicyRegistryStorage.policyExistsFromPacked(packedA),
+                "policies[allowlistId] exists bit must be set"
+            );
             assertEq(
-                MockPolicyRegistryStorage.policyTypeFromPacked(packedA),
+                MockPolicyRegistryStorage.policyTypeFromId(allowlistId),
                 uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
-                "policies[allowlistId] type lane"
+                "allowlistId top byte must encode ALLOWLIST"
             );
         }
-        // Blocklist policy: admin = attacker, type = BLOCKLIST.
+        // Blocklist policy: admin = attacker; type carried by the ID's top byte.
         {
             uint256 packedB = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(blocklistId)));
             assertEq(
                 MockPolicyRegistryStorage.policyAdminFromPacked(packedB), attacker, "policies[blocklistId] admin lane"
             );
+            assertTrue(
+                MockPolicyRegistryStorage.policyExistsFromPacked(packedB),
+                "policies[blocklistId] exists bit must be set"
+            );
             assertEq(
-                MockPolicyRegistryStorage.policyTypeFromPacked(packedB),
+                MockPolicyRegistryStorage.policyTypeFromId(blocklistId),
                 uint8(IPolicyRegistry.PolicyType.BLOCKLIST),
-                "policies[blocklistId] type lane"
+                "blocklistId top byte must encode BLOCKLIST"
             );
         }
 
@@ -107,16 +108,17 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         );
 
         // ---------- nextCounter (slot 3) ----------
-        // The first create pays the lazy floor (skip sentinels 0 and 1)
-        // and lands counter at 3; the second create advances to 4.
-        // Equivalently: nextCounter == (last id & counter mask) + 1.
+        // First create pays the floor (skip 0/1) → counter 2; second → 3;
+        // nextCounter ends at 4 (lastCounter + 1). Compare counters
+        // directly since the full IDs differ in their type byte.
         uint64 counterMask = (uint64(1) << 56) - 1;
-        uint256 lastCounter =
-            blocklistId > allowlistId ? uint256(blocklistId & counterMask) : uint256(allowlistId & counterMask);
+        uint256 allowCounter = uint256(allowlistId & counterMask);
+        uint256 blockCounter = uint256(blocklistId & counterMask);
+        uint256 lastCounter = blockCounter > allowCounter ? blockCounter : allowCounter;
         assertEq(
             uint256(vm.load(registry, MockPolicyRegistryStorage.nextCounterSlot())),
             lastCounter + 1,
-            "nextCounter slot must equal the higher counter ID + 1"
+            "nextCounter slot must equal the higher counter + 1"
         );
     }
 }

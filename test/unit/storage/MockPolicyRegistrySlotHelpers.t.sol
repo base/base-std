@@ -14,10 +14,9 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         `vm.load`, and asserts the slot encodes the same value the
 ///         surface returns.
 contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
-    /// @notice Verifies `policySlot(id)` locates the packed
-    ///         (admin, policyType) word `createPolicy` writes.
-    /// @dev    Decode admin via `policyAdminFromPacked`; decode type
-    ///         via `policyTypeFromPacked`. Both must match the inputs.
+    /// @notice Verifies `policySlot(id)` locates the packed (admin, exists)
+    ///         word `createPolicy` writes. PolicyType is recovered from the
+    ///         policy ID, not from storage.
     function test_policySlot_success_locatesPackedPolicy(address policyAdmin) public {
         vm.assume(policyAdmin != address(0));
 
@@ -30,18 +29,15 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
             policyAdmin,
             "policyAdminFromPacked must extract the admin written by createPolicy"
         );
-        assertEq(
-            MockPolicyRegistryStorage.policyTypeFromPacked(packed),
-            uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
-            "policyTypeFromPacked must extract ALLOWLIST"
+        assertTrue(
+            MockPolicyRegistryStorage.policyExistsFromPacked(packed),
+            "policyExistsFromPacked must report true after createPolicy"
         );
     }
 
-    /// @notice Verifies `policySlot(id)` is uncreated-sentinel-zero for
-    ///         a fresh (never-created) custom ID.
-    /// @dev    `policies[id] == 0` is the registry's "never created"
-    ///         sentinel — both PolicyType values are non-zero, so a zero
-    ///         packed word reliably means uncreated.
+    /// @notice Verifies `policySlot(id)` is zero for a never-created id.
+    /// @dev    `policies[id] == 0` is the "never created" sentinel; created
+    ///         policies keep the exists bit set even after `renounceAdmin`.
     function test_policySlot_success_zeroForUncreatedId(uint64 seed) public view {
         uint64 uncreated = _wellFormedUncreatedPolicyId(seed);
         assertEq(
@@ -114,13 +110,8 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
 
     /// @notice Verifies `nextCounterSlot()` advances by exactly 1 per
     ///         createPolicy in the steady state.
-    /// @dev    The very first createPolicy from a fresh registry bumps
-    ///         the counter from 0 to 3 (the registry floors to 2 to
-    ///         reserve sentinel IDs 0 and 1, allocates counter 2, then
-    ///         increments to 3). We pre-create one policy to exit the
-    ///         lazy-floor regime, then measure the delta of a subsequent
-    ///         create. After the floor is paid, the slot bumps by 1 per
-    ///         create, which is the invariant the Rust impl must match.
+    /// @dev    A first create pays the floor (skip 0/1) and lands counter at 3.
+    ///         Pre-create to exit the floor regime, then measure the delta.
     function test_nextCounterSlot_success_advancesByOneOnCreate(address policyAdmin) public {
         vm.assume(policyAdmin != address(0));
 
@@ -134,12 +125,11 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
         assertEq(after_, before + 1, "subsequent createPolicy must bump nextCounter by exactly 1");
     }
 
-    /// @notice Verifies `packPolicy` is the inverse of the admin+type decoders.
-    /// @dev    Round-trip: pack, decode, expect inputs back.
-    function test_packPolicy_success_roundtrips(address policyAdmin, uint8 policyType) public pure {
-        uint256 packed = MockPolicyRegistryStorage.packPolicy(policyAdmin, policyType);
+    /// @notice Verifies `packPolicy` round-trips admin and sets the exists bit.
+    function test_packPolicy_success_roundtrips(address policyAdmin) public pure {
+        uint256 packed = MockPolicyRegistryStorage.packPolicy(policyAdmin);
         assertEq(MockPolicyRegistryStorage.policyAdminFromPacked(packed), policyAdmin, "admin round-trip");
-        assertEq(MockPolicyRegistryStorage.policyTypeFromPacked(packed), policyType, "type round-trip");
+        assertTrue(MockPolicyRegistryStorage.policyExistsFromPacked(packed), "exists bit must be set by packPolicy");
     }
 
     /// @notice Verifies `packPolicyId` is the inverse of the

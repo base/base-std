@@ -17,31 +17,14 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         policyRegistry.createPolicy(address(0), pt);
     }
 
-    /// @notice Verifies createPolicy reverts for any policyType value outside the creatable set
-    /// @dev Fuzz confirms only ALLOWLIST / BLOCKLIST are accepted; checks InvalidPolicyType() error.
-    ///      The two reserved sentinel discriminators (ALWAYS_ALLOW / ALWAYS_BLOCK) cast
-    ///      successfully but the registry rejects them at the type guard.
-    function test_createPolicy_revert_invalidPolicyType(address caller, address admin_, uint8 typeIdx) public {
-        _assumeValidCaller(caller);
-        vm.assume(admin_ != address(0));
-        IPolicyRegistry.PolicyType invalidType = _nonCreatablePolicyType(typeIdx);
-        vm.expectRevert(IPolicyRegistry.InvalidPolicyType.selector);
-        vm.prank(caller);
-        policyRegistry.createPolicy(admin_, invalidType);
-    }
-
     /// @notice Verifies createPolicy assigns a fresh allowlist policy id
-    /// @dev Type, admin, and existence all readable post-creation.
-    ///      Paired slot assertions: the `policies[id]` packed slot
-    ///      decodes to the same admin and type the surface returns;
-    ///      the policy ID itself encodes ALLOWLIST in its top byte.
+    /// @dev Paired slot: admin lane matches, exists bit set, ID top byte = ALLOWLIST.
     function test_createPolicy_success_allowlist(address caller, address admin_) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         vm.prank(caller);
         uint64 policyId = policyRegistry.createPolicy(admin_, IPolicyRegistry.PolicyType.ALLOWLIST);
         assertTrue(policyRegistry.policyExists(policyId));
-        assertEq(uint8(policyRegistry.policyType(policyId)), uint8(IPolicyRegistry.PolicyType.ALLOWLIST));
         assertEq(policyRegistry.policyAdmin(policyId), admin_);
 
         uint256 packed = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
@@ -50,11 +33,7 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
             admin_,
             "policies[id] slot admin must reflect createPolicy admin"
         );
-        assertEq(
-            MockPolicyRegistryStorage.policyTypeFromPacked(packed),
-            uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
-            "policies[id] slot type must be ALLOWLIST"
-        );
+        assertTrue(MockPolicyRegistryStorage.policyExistsFromPacked(packed), "policies[id] slot exists bit must be set");
         assertEq(
             MockPolicyRegistryStorage.policyTypeFromId(policyId),
             uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
@@ -63,16 +42,13 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies createPolicy assigns a fresh blocklist policy id
-    /// @dev Type, admin, and existence all readable post-creation.
-    ///      Paired slot assertions confirm the packed policy slot and
-    ///      ID-byte encoding.
+    /// @dev Paired slot: admin lane matches, exists bit set, ID top byte = BLOCKLIST.
     function test_createPolicy_success_blocklist(address caller, address admin_) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         vm.prank(caller);
         uint64 policyId = policyRegistry.createPolicy(admin_, IPolicyRegistry.PolicyType.BLOCKLIST);
         assertTrue(policyRegistry.policyExists(policyId));
-        assertEq(uint8(policyRegistry.policyType(policyId)), uint8(IPolicyRegistry.PolicyType.BLOCKLIST));
         assertEq(policyRegistry.policyAdmin(policyId), admin_);
 
         uint256 packed = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.policySlot(policyId)));
@@ -81,11 +57,7 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
             admin_,
             "policies[id] slot admin must reflect createPolicy admin"
         );
-        assertEq(
-            MockPolicyRegistryStorage.policyTypeFromPacked(packed),
-            uint8(IPolicyRegistry.PolicyType.BLOCKLIST),
-            "policies[id] slot type must be BLOCKLIST"
-        );
+        assertTrue(MockPolicyRegistryStorage.policyExistsFromPacked(packed), "policies[id] slot exists bit must be set");
         assertEq(
             MockPolicyRegistryStorage.policyTypeFromId(policyId),
             uint8(IPolicyRegistry.PolicyType.BLOCKLIST),
@@ -93,10 +65,8 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         );
     }
 
-    /// @notice Verifies the returned policy id advances nextPolicyId monotonically
-    /// @dev Sequential creations produce sequential, non-overlapping ids.
-    ///      Paired slot assertion: the `nextCounter` slot has advanced
-    ///      by exactly the number of creates after both calls.
+    /// @notice Verifies sequential creates advance the global counter by exactly 1.
+    /// @dev    Paired slot: `nextCounter` lands at `(idB & mask) + 1` after both creates.
     function test_createPolicy_success_advancesNextPolicyId(
         address caller,
         address admin_,
@@ -108,26 +78,20 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         IPolicyRegistry.PolicyType ptA = _creatablePolicyType(typeIdxA);
         IPolicyRegistry.PolicyType ptB = _creatablePolicyType(typeIdxB);
 
-        uint64 predictedA = policyRegistry.nextPolicyId(ptA);
+        uint64 predictedA = _predictNextPolicyId(ptA);
         vm.prank(caller);
         uint64 idA = policyRegistry.createPolicy(admin_, ptA);
         assertEq(idA, predictedA);
 
-        uint64 predictedB = policyRegistry.nextPolicyId(ptB);
+        uint64 predictedB = _predictNextPolicyId(ptB);
         vm.prank(caller);
         uint64 idB = policyRegistry.createPolicy(admin_, ptB);
         assertEq(idB, predictedB);
 
         assertTrue(idA != idB);
-        // Low 56 bits advance by exactly 1 between any two consecutive creates.
         uint64 counterMask = (uint64(1) << 56) - 1;
         assertEq((idA & counterMask) + 1, idB & counterMask);
 
-        // Paired slot assertion: nextCounter has advanced by 2 from its
-        // post-floor value. After the first create the floor (skip
-        // sentinels 0 and 1) is paid, so nextCounter == (idA & mask) + 1.
-        // After the second create it advances by one more, matching
-        // (idB & mask) + 1.
         uint256 counterAfter = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot()));
         assertEq(
             counterAfter, uint256(idB & counterMask) + 1, "nextCounter slot must equal the second policy's counter + 1"
@@ -135,13 +99,12 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies createPolicy emits PolicyCreated with the correct args
-    /// @dev Event integrity: policyId, creator, policyType match the call
     function test_createPolicy_success_emitsPolicyCreated(address caller, address admin_, uint8 typeIdx) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
 
-        uint64 expectedId = policyRegistry.nextPolicyId(pt);
+        uint64 expectedId = _predictNextPolicyId(pt);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.PolicyCreated(expectedId, caller, pt);
         vm.prank(caller);
@@ -149,7 +112,6 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies createPolicy emits PolicyAdminUpdated(previousAdmin = 0) on initial assignment
-    /// @dev Initial-admin variant of PolicyAdminUpdated; canonical event test lives in finalizeUpdateAdmin.t.sol
     function test_createPolicy_success_emitsInitialPolicyAdminUpdated(address caller, address admin_, uint8 typeIdx)
         public
     {
@@ -157,7 +119,7 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
 
-        uint64 expectedId = policyRegistry.nextPolicyId(pt);
+        uint64 expectedId = _predictNextPolicyId(pt);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.PolicyAdminUpdated(expectedId, address(0), admin_);
         vm.prank(caller);

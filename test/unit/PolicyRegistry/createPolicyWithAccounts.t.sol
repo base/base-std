@@ -17,23 +17,6 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         policyRegistry.createPolicyWithAccounts(address(0), IPolicyRegistry.PolicyType.ALLOWLIST, accounts);
     }
 
-    /// @notice Verifies createPolicyWithAccounts reverts for any policyType outside the creatable set
-    /// @dev Fuzz confirms only ALLOWLIST / BLOCKLIST are accepted; checks InvalidPolicyType() error.
-    function test_createPolicyWithAccounts_revert_invalidPolicyType(
-        address caller,
-        address admin_,
-        uint8 typeIdx,
-        address[] memory accounts
-    ) public {
-        _assumeValidCaller(caller);
-        vm.assume(admin_ != address(0));
-        accounts = _boundAccounts(accounts);
-        IPolicyRegistry.PolicyType invalidType = _nonCreatablePolicyType(typeIdx);
-        vm.expectRevert(IPolicyRegistry.InvalidPolicyType.selector);
-        vm.prank(caller);
-        policyRegistry.createPolicyWithAccounts(admin_, invalidType, accounts);
-    }
-
     /// @notice Verifies createPolicyWithAccounts seeds an allowlist policy with the provided members
     /// @dev Post-creation isAuthorized returns true for each seeded account.
     ///      Paired slot assertion: each `members[id][account]` slot
@@ -101,7 +84,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         accounts = _boundAccounts(accounts);
-        uint64 expectedId = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 expectedId = _predictNextPolicyId(IPolicyRegistry.PolicyType.ALLOWLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.AllowlistUpdated(expectedId, caller, true, accounts);
         vm.prank(caller);
@@ -118,7 +101,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         accounts = _boundAccounts(accounts);
-        uint64 expectedId = policyRegistry.nextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST);
+        uint64 expectedId = _predictNextPolicyId(IPolicyRegistry.PolicyType.BLOCKLIST);
         vm.expectEmit(address(policyRegistry));
         emit IPolicyRegistry.BlocklistUpdated(expectedId, caller, true, accounts);
         vm.prank(caller);

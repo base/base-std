@@ -27,58 +27,26 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         namespace. Anyone may create a policy; the creator nominates
 ///         the policy admin (typically themselves or a multisig).
 ///
-///         **Built-in policy IDs** (always present, never need to be
-///         created):
-///         - `0` — always-allow. `isAuthorized(0, any)` returns true.
-///                  Semantic: "there is no policy on this slot." This is
-///                  the default state of every unassigned policy slot on
-///                  a newly created token, matching the principle that
-///                  absence of a configured policy means no restriction.
-///         - `1` — always-block. `isAuthorized(1, any)` returns false.
-///                  Useful as an explicit hard-deny on a policy slot
-///                  (e.g. disabling redemption by pointing `REDEEM_SENDER_POLICY`
-///                  at this ID), or as a kill switch independent of
-///                  token-level pause.
+///         **Built-in policy IDs** (always present):
+///         - `0` — ALWAYS_ALLOW. Also the default state of every
+///                 unassigned policy slot. Reads naturally as an empty
+///                 BLOCKLIST (no one blocked → allow all).
+///         - `(uint64(ALLOWLIST) << 56) | 1` — ALWAYS_BLOCK. Reads
+///                 naturally as an empty ALLOWLIST (no one allowed →
+///                 block all). Useful as an explicit hard-deny on a slot.
 ///
-///         **Policy ID encoding.** Custom policy IDs encode the policy's
-///         type directly into the top byte of the ID, so `policyType(id)`
-///         resolves via pure bit extraction with no SLOAD. Since every
-///         B-20 transfer / mint / redeem consults the registry, removing
-///         a per-call storage read from the type lookup is a material
-///         protocol-wide saving.
-///
-///         Encoding layout for custom IDs:
+///         **Policy ID encoding.** The top byte is the `PolicyType`
+///         discriminator; the low 56 bits are a global counter. Type is
+///         recoverable from the ID via pure bit extraction — no SLOAD
+///         per call on the B-20 hot path.
 ///         ```
-///         [63:56]  uint8 type discriminator = uint8(PolicyType)
-///         [55:0]   uint56 global counter (max ~7.2e16)
+///         [63:56]  uint8(PolicyType) discriminator
+///         [55:0]   counter (built-ins use 0/1; custom IDs start at 2)
 ///         ```
-///         Discriminators currently in use:
-///         - `0x00` — ALWAYS_ALLOW (reserved; no custom policies carry this discriminator)
-///         - `0x01` — ALWAYS_BLOCK (reserved; no custom policies carry this discriminator)
-///         - `0x02` — ALLOWLIST
-///         - `0x03` — BLOCKLIST
-///         - `0x04` .. `0xFF` — reserved for future PolicyType enum values
-///
-///         The two built-in IDs (`0` and `1`) are special-cased BEFORE
-///         the encoding is consulted: implementations short-circuit on
-///         those exact ID values. The ALWAYS_ALLOW and ALWAYS_BLOCK
-///         discriminators (`0x00`, `0x01`) are reserved solely for the
-///         built-ins; no custom policies are ever assigned IDs with those
-///         top bytes, so there is no ambiguity at evaluation time.
-///
-///         This encoding gives `isAuthorized(policyId, account)` a
-///         best-case hot path of 1 SLOAD (the member set), compared to 2
-///         SLOADs if the type required a separate storage lookup. The
-///         built-in IDs cost 0 SLOADs (short-circuited).
-///
-///         Separately from `policyId` encoding, implementations store mutable
-///         per-policy state (notably admin) in policy-record storage keyed by
-///         `policyId`; admin is not encoded into the ID itself.
-///
-///         Custom policy IDs are assigned from a single global monotonic
-///         counter starting at `2` (reserving `0` and `1` for the
-///         built-ins); see `nextPolicyId(PolicyType)` to predict the
-///         next ID for a given type.
+///         Custom policy IDs are assigned from a single global counter
+///         starting at `2` (reserving `0`/`1` for the built-in
+///         sentinels). Admin is stored in policy-record storage keyed
+///         by `policyId`, NOT in the ID.
 ///
 ///         **Future extensions** (not in v1 scope, intended path):
 ///         - Union / intersect policies: compose two same-typed policies
@@ -92,16 +60,15 @@ interface IPolicyRegistry {
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Policy type discriminator.
-    /// @param ALWAYS_ALLOW Built-in always-allow type; corresponds to policy ID `0`.
-    /// @param ALWAYS_BLOCK Built-in always-block type; corresponds to policy ID `1`.
-    /// @param ALLOWLIST    An account is authorized only if it is in the policy's set.
-    /// @param BLOCKLIST    An account is authorized unless it is in the policy's set.
+    /// @notice Policy type discriminator. Order is chosen so each
+    ///         built-in sentinel ID reads as a degenerate form of its
+    ///         list type: `0` = empty BLOCKLIST = ALWAYS_ALLOW;
+    ///         `(ALLOWLIST << 56) | 1` = empty ALLOWLIST = ALWAYS_BLOCK.
+    /// @param BLOCKLIST  Authorized unless in the policy's set.
+    /// @param ALLOWLIST  Authorized only if in the policy's set.
     enum PolicyType {
-        ALWAYS_ALLOW,
-        ALWAYS_BLOCK,
-        ALLOWLIST,
-        BLOCKLIST
+        BLOCKLIST,
+        ALLOWLIST
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -113,24 +80,14 @@ interface IPolicyRegistry {
     ///         is required by `finalizeUpdateAdmin`).
     error Unauthorized();
 
-    /// @notice The referenced policy ID does not exist (and is not built-in).
+    /// @notice The referenced policy ID does not exist (and is not
+    ///         built-in). Reverted by mutating entry points; view
+    ///         queries return the "absent" value instead.
     error PolicyNotFound();
-
-    /// @notice The provided `uint64 policyId` is malformed: its top byte
-    ///         (the `PolicyType` discriminator) is outside the
-    ///         `PolicyType` enum range (i.e. greater than
-    ///         `uint8(type(PolicyType).max)`). Reverted by every entry
-    ///         point that accepts a `policyId`, distinct from
-    ///         `PolicyNotFound` (which fires for well-formed IDs that
-    ///         simply haven't been created).
-    error MalformedPolicyId(uint64 policyId);
 
     /// @notice The operation is incompatible with the policy's type. For
     ///         example, calling `updateAllowlist` on a BLOCKLIST policy.
     error IncompatiblePolicyType();
-
-    /// @notice The provided policy type value is not in the `PolicyType` enum.
-    error InvalidPolicyType();
 
     /// @notice A required address argument was the zero address.
     error ZeroAddress();
@@ -177,12 +134,12 @@ interface IPolicyRegistry {
 
     /// @notice Creates a new policy with no initial members.
     /// @dev    Permissionless. Reverts with `ZeroAddress` if `admin` is
-    ///         `address(0)`, and with `InvalidPolicyType` if `policyType`
-    ///         is not a valid `PolicyType` enum value.
+    ///         `address(0)`. Out-of-range `policyType` values are
+    ///         rejected by ABI decoding before this function body runs.
     /// @param admin       The address authorized to modify membership on
     ///                    this policy and to transfer or renounce
     ///                    administration.
-    /// @param policyType  ALLOWLIST or BLOCKLIST.
+    /// @param policyType  BLOCKLIST or ALLOWLIST.
     /// @return newPolicyId The newly assigned policy ID.
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId);
 
@@ -258,43 +215,34 @@ interface IPolicyRegistry {
     ///         - For BLOCKLIST: returns true iff `account` is NOT on the
     ///           policy's member set.
     ///         - For built-in ID `0` (always-allow): always returns true.
-    ///         - For built-in ID `1` (always-block): always returns false.
-    /// @dev    Reverts with `PolicyNotFound` if `policyId` is neither a
-    ///         built-in nor a previously-created policy.
+    ///         - For the built-in ALWAYS_BLOCK ID
+    ///           (`(uint64(ALLOWLIST) << 56) | 1`): always returns false.
+    ///         - For malformed IDs (top byte outside the `PolicyType`
+    ///           enum range): returns false. The function never reverts.
+    /// @dev    **Precondition: `policyId` must exist.** No existence-check
+    ///         SLOAD on the hot path; non-existent IDs collapse to empty-
+    ///         member-set semantics (ALLOWLIST → false, BLOCKLIST → true).
+    ///         Callers that store policy IDs (notably `IB20.updatePolicy`)
+    ///         MUST validate `policyExists` at write time.
     function isAuthorized(uint64 policyId, address account) external view returns (bool);
 
     /*//////////////////////////////////////////////////////////////
                             POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The full policy ID that would be assigned by the next
-    ///         `createPolicy(admin, policyType)` call. Encodes `policyType`
-    ///         into the top byte combined with the current global counter
-    ///         in the low 56 bits. The counter starts at `2` and increments
-    ///         by one per policy created, regardless of type.
-    function nextPolicyId(PolicyType policyType) external view returns (uint64);
-
-    /// @notice Whether `policyId` exists. Returns true for built-in IDs
-    ///         `0` and `1`, and for any custom policy ID previously
-    ///         assigned by `createPolicy` or `createPolicyWithAccounts`.
+    /// @notice Whether `policyId` exists. True for the two built-in
+    ///         sentinel IDs and for any custom ID previously assigned.
+    ///         False for unknown and malformed IDs. Never reverts.
     function policyExists(uint64 policyId) external view returns (bool);
 
-    /// @notice The type of `policyId`. Returns `PolicyType.ALWAYS_ALLOW`
-    ///         for built-in ID `0`, `PolicyType.ALWAYS_BLOCK` for built-in
-    ///         ID `1`, or the stored type for custom IDs. Reverts with
-    ///         `PolicyNotFound` for unknown IDs.
-    function policyType(uint64 policyId) external view returns (PolicyType);
-
-    /// @notice The current admin of `policyId`. Returns `address(0)` for
-    ///         built-in policies (which have no admin) and for policies
-    ///         whose admin has been renounced via `renounceAdmin`.
-    ///         Reverts with `PolicyNotFound` for unknown IDs.
+    /// @notice Current admin of `policyId`. Returns `address(0)` for
+    ///         built-in sentinels, renounced policies, unknown IDs, and
+    ///         malformed IDs. Never reverts.
     function policyAdmin(uint64 policyId) external view returns (address);
 
-    /// @notice The currently-staged pending admin for `policyId`, set by
-    ///         the most recent `stageUpdateAdmin` and cleared on
-    ///         `finalizeUpdateAdmin` or `renounceAdmin`. Returns
-    ///         `address(0)` when no transfer is in flight. Always
-    ///         `address(0)` for built-in policies.
+    /// @notice Currently-staged pending admin for `policyId`. Returns
+    ///         `address(0)` when no transfer is in flight, and for
+    ///         built-in sentinels, unknown IDs, and malformed IDs.
+    ///         Never reverts.
     function pendingPolicyAdmin(uint64 policyId) external view returns (address);
 }

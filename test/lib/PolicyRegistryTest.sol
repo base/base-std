@@ -5,6 +5,7 @@ import {BaseTest} from "test/lib/BaseTest.sol";
 
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @notice Base test contract for `IPolicyRegistry` unit tests.
 ///
@@ -41,30 +42,22 @@ contract PolicyRegistryTest is BaseTest {
     // ============================================================
     //                    POLICY-TYPE FUZZ HELPERS
     // ============================================================
-    // The `PolicyType` enum has four values; only the last two
-    // (ALLOWLIST = 2, BLOCKLIST = 3) are valid arguments to
-    // `createPolicy` / `createPolicyWithAccounts`. Tests that fuzz the
-    // enum byte partition into three regions: creatable, non-creatable
-    // but well-formed (the two reserved sentinels), and out-of-range.
-    // The helpers below name those regions so call sites read
-    // semantically instead of carrying the literal byte values.
+    // The `PolicyType` enum has two values (BLOCKLIST = 0, ALLOWLIST = 1),
+    // both creatable. The helper picks one from a fuzz seed.
 
-    /// @notice Maps a fuzz seed to one of the two creatable policy
-    ///         types (ALLOWLIST or BLOCKLIST). Use in success tests and
-    ///         in revert tests where the policy creates successfully
-    ///         but reverts on a separate guard (e.g. zero admin).
+    /// @notice Maps a fuzz seed to ALLOWLIST or BLOCKLIST.
     function _creatablePolicyType(uint8 idx) internal pure returns (IPolicyRegistry.PolicyType) {
         return idx % 2 == 0 ? IPolicyRegistry.PolicyType.ALLOWLIST : IPolicyRegistry.PolicyType.BLOCKLIST;
     }
 
-    /// @notice Maps a fuzz seed to one of the two reserved
-    ///         non-creatable enum values (ALWAYS_ALLOW or
-    ///         ALWAYS_BLOCK). Use in tests asserting `InvalidPolicyType`
-    ///         on `createPolicy` / `createPolicyWithAccounts`: those
-    ///         enum values cast successfully but the registry rejects
-    ///         them at the type guard.
-    function _nonCreatablePolicyType(uint8 idx) internal pure returns (IPolicyRegistry.PolicyType) {
-        return idx % 2 == 0 ? IPolicyRegistry.PolicyType.ALWAYS_ALLOW : IPolicyRegistry.PolicyType.ALWAYS_BLOCK;
+    /// @notice Predict the ID the next `createPolicy(_, policyType)` would assign.
+    /// @dev    Reads `nextCounter` directly via `vm.load` and applies the same
+    ///         floor / encoding as `MockPolicyRegistry._create`.
+    function _predictNextPolicyId(IPolicyRegistry.PolicyType policyType) internal view returns (uint64) {
+        uint56 counter =
+            uint56(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot())));
+        if (counter < 2) counter = 2;
+        return (uint64(uint8(policyType)) << 56) | uint64(counter);
     }
 
     // ============================================================

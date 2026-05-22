@@ -129,7 +129,7 @@ contract B20Test is TokenFactoryTest {
 
     /// @notice Maps a fuzzed `uint8` to one of the four base-token policy
     ///         types. Tests that exercise `policyId` / `updatePolicy`
-    ///         must fuzz over the supported set; writes to an
+    ///         must fuzz over the supported set; reads and writes to an
     ///         unsupported `bytes32` revert `UnsupportedPolicyType`.
     /// @dev    Variant tests can wrap this with their own indexer that
     ///         extends the codomain (e.g. a Security test that also

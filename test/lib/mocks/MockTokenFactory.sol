@@ -226,7 +226,7 @@ contract MockTokenFactory is ITokenFactory {
     }
 
     /// @inheritdoc ITokenFactory
-    function isInitialized(address token) external view returns (bool) {
+    function isB20Initialized(address token) external view returns (bool) {
         if (!_isB20Prefix(token)) return false;
         // Same packed-bool slot the factory flips at the end of
         // createToken (MockB20Storage.INITIALIZED_OFFSET +

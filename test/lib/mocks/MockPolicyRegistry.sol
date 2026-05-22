@@ -15,10 +15,12 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         is the single source of truth.
 library PolicyRegistryConstants {
     /// @notice Built-in policy ID that always authorizes any account.
+    /// @dev    Encodes as a BLOCKLIST at counter 0 (empty blocklist → allow all).
     uint64 internal constant ALWAYS_ALLOW_ID = 0;
 
     /// @notice Built-in policy ID that always rejects any account.
-    uint64 internal constant ALWAYS_BLOCK_ID = 1;
+    /// @dev    Encodes as an ALLOWLIST at counter 1 (empty allowlist → block all).
+    uint64 internal constant ALWAYS_BLOCK_ID = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | 1;
 }
 
 /// @title MockPolicyRegistry
@@ -26,28 +28,21 @@ library PolicyRegistryConstants {
 ///         Etched at the canonical policy-registry address via `vm.etch`
 ///         from `BaseTest.setUp`.
 ///
-/// @dev    Written as Solidity-as-if-Rust: unambiguous spec-correspondence
-///         with the production Rust precompile is the goal, not gas
-///         optimisation or Solidity idiom adherence.
+/// @dev    Solidity-as-if-Rust: spec-correspondence with the production
+///         Rust precompile, not gas-optimal Solidity. All mutable state
+///         lives in `MockPolicyRegistryStorage.layout()` at a single
+///         ERC-7201-namespaced root; see that library for the layout.
 ///
-///         All mutable state lives in `MockPolicyRegistryStorage.layout()` at
-///         a single ERC-7201-namespaced root. The struct field order IS the
-///         slot layout the Rust impl mirrors. See `MockPolicyRegistryStorage`
-///         for the full layout documentation and per-field slot offsets.
+///         Policy ID encoding: top byte = `uint8(PolicyType)`; low 56
+///         bits = counter. Type is recoverable from the ID alone (no
+///         SLOAD), so the packed storage slot stores only admin + an
+///         exists flag, not the type.
 ///
-///         This implementation uses two independent encodings:
-///         1) `policyId` (uint64) packs type + counter only.
-///         2) `policies[policyId]` (uint256) packs policyType + mutable admin.
-///
-///         **Policy ID encoding (`policyId`):**
-///           [63:56]  uint8(PolicyType) discriminator
-///           [55:0]   nextCounter value at creation time
-///         `_create` rejects ALWAYS_ALLOW and ALWAYS_BLOCK types, so no
-///         custom ID ever carries discriminator 0x00 or 0x01.
-///
-///         **Built-in IDs** (short-circuited before any storage read):
-///           0 — ALWAYS_ALLOW: isAuthorized always returns true.
-///           1 — ALWAYS_BLOCK: isAuthorized always returns false.
+///         Built-in IDs (short-circuited in `isAuthorized` before any
+///         SLOAD): `ALWAYS_ALLOW_ID` (empty BLOCKLIST → allow all) and
+///         `ALWAYS_BLOCK_ID` (empty ALLOWLIST → block all). The values
+///         are chosen so the encoding reads as the natural degenerate
+///         form of each list type.
 contract MockPolicyRegistry is IPolicyRegistry {
     // ============================================================
     //                         CONSTANTS
@@ -62,17 +57,12 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///         redemption by pointing `REDEEM_SENDER_POLICY` here).
     uint64 public constant ALWAYS_BLOCK_ID = PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
-    /// @notice First counter value handed out to custom policies. Floors
-    ///         `nextCounter` so the low 56 bits of the first custom ID can
-    ///         never collide with the built-in IDs 0 / 1.
+    /// @notice First counter value handed out to custom policies. Skips
+    ///         counters `0` (ALWAYS_ALLOW) and `1` (ALWAYS_BLOCK).
     uint56 internal constant INITIAL_CUSTOM_COUNTER = 2;
 
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
     uint64 internal constant POLICY_ID_TYPE_SHIFT = 56;
-
-    // Packed policy slot encoding (`policies[policyId]`):
-    // admin address occupies bits [167:8]; PolicyType occupies bits [7:0].
-    uint256 internal constant PACKED_ADMIN_SHIFT = 8;
 
     // ============================================================
     //                       POLICY CREATION
@@ -113,7 +103,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         if (pending == address(0)) revert NoPendingAdmin();
         if (pending != msg.sender) revert Unauthorized();
         address previousAdmin = _decodeAdmin(packed);
-        $.policies[policyId] = _encode({policyType: _decodeType(packed), admin: msg.sender});
+        $.policies[policyId] = _encode(msg.sender);
         delete $.pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, previousAdmin, msg.sender);
     }
@@ -124,7 +114,11 @@ contract MockPolicyRegistry is IPolicyRegistry {
         uint256 packed = $.policies[policyId];
         if (packed == 0) revert PolicyNotFound();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        $.policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});
+        // Admin lane cleared, exists flag (bit 160) survives so the
+        // policy stays observable via `policyExists` and the existence
+        // check on subsequent mutating calls still passes (with
+        // `Unauthorized` taking over as the rejection reason).
+        $.policies[policyId] = _encode(address(0));
         delete $.pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, address(0));
     }
@@ -132,7 +126,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function updateAllowlist(uint64 policyId, bool allowed, address[] calldata accounts) external {
         uint256 packed = _requireCustom(policyId);
-        if (_decodeType(packed) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
+        if (_typeOf(policyId) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.ALLOWLIST, value: allowed, accounts: accounts});
     }
@@ -140,7 +134,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external {
         uint256 packed = _requireCustom(policyId);
-        if (_decodeType(packed) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
+        if (_typeOf(policyId) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});
     }
@@ -151,16 +145,18 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address account) external view returns (bool) {
-        _requireWellFormed(policyId);
-        // Built-in short-circuits MUST precede any storage read: IDs 0 and 1
-        // have no entry in storage and must never reach the storage path.
+        // Built-in short-circuits precede any SLOAD; sentinels have no
+        // storage entry.
         if (policyId == ALWAYS_ALLOW_ID) return true;
         if (policyId == ALWAYS_BLOCK_ID) return false;
-        MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
-        uint256 packed = $.policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
-        bool member = $.members[policyId][account];
-        return _decodeType(packed) == PolicyType.ALLOWLIST ? member : !member;
+        // Short-circuit malformed IDs so the `_typeOf` enum cast can't panic.
+        if (!_isWellFormed(policyId)) return false;
+        // Hot path: one SLOAD (the membership bit). No existence check —
+        // callers pre-validate via `policyExists` at write time. For
+        // non-existent IDs the result collapses to empty-member-set
+        // semantics (ALLOWLIST → false, BLOCKLIST → true).
+        bool member = MockPolicyRegistryStorage.layout().members[policyId][account];
+        return _typeOf(policyId) == PolicyType.ALLOWLIST ? member : !member;
     }
 
     // ============================================================
@@ -168,42 +164,24 @@ contract MockPolicyRegistry is IPolicyRegistry {
     // ============================================================
 
     /// @inheritdoc IPolicyRegistry
-    function nextPolicyId(PolicyType policyType) external view returns (uint64) {
-        uint56 counter = MockPolicyRegistryStorage.layout().nextCounter;
-        if (counter < INITIAL_CUSTOM_COUNTER) counter = INITIAL_CUSTOM_COUNTER;
-        return _makeId({policyType: policyType, counter: counter});
-    }
-
-    /// @inheritdoc IPolicyRegistry
     function policyExists(uint64 policyId) external view returns (bool) {
-        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
+        if (!_isWellFormed(policyId)) return false;
         return MockPolicyRegistryStorage.layout().policies[policyId] != 0;
     }
 
     /// @inheritdoc IPolicyRegistry
-    function policyType(uint64 policyId) external view returns (PolicyType) {
-        _requireWellFormed(policyId);
-        if (policyId == ALWAYS_ALLOW_ID) return PolicyType.ALWAYS_ALLOW;
-        if (policyId == ALWAYS_BLOCK_ID) return PolicyType.ALWAYS_BLOCK;
-        uint256 packed = MockPolicyRegistryStorage.layout().policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
-        return _decodeType(packed);
-    }
-
-    /// @inheritdoc IPolicyRegistry
     function policyAdmin(uint64 policyId) external view returns (address) {
-        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
-        uint256 packed = MockPolicyRegistryStorage.layout().policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
-        return _decodeAdmin(packed);
+        if (!_isWellFormed(policyId)) return address(0);
+        // Returns address(0) for both "never created" and "renounced".
+        return _decodeAdmin(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
     /// @inheritdoc IPolicyRegistry
     function pendingPolicyAdmin(uint64 policyId) external view returns (address) {
-        _requireWellFormed(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
+        if (!_isWellFormed(policyId)) return address(0);
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
     }
 
@@ -212,8 +190,8 @@ contract MockPolicyRegistry is IPolicyRegistry {
     // ============================================================
 
     function _create(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
-        if (policyType != PolicyType.ALLOWLIST && policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();
         if (admin == address(0)) revert ZeroAddress();
+        // Out-of-range `policyType` rejected by ABI decoding before this body runs.
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         uint56 counter = $.nextCounter;
         if (counter < INITIAL_CUSTOM_COUNTER) counter = INITIAL_CUSTOM_COUNTER;
@@ -223,7 +201,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
             $.nextCounter = counter + 1;
         }
         newPolicyId = _makeId({policyType: policyType, counter: counter});
-        $.policies[newPolicyId] = _encode({policyType: policyType, admin: admin});
+        $.policies[newPolicyId] = _encode(admin);
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
     }
@@ -251,27 +229,24 @@ contract MockPolicyRegistry is IPolicyRegistry {
         return (uint64(uint8(policyType)) << POLICY_ID_TYPE_SHIFT) | uint64(counter);
     }
 
-    function _encode(PolicyType policyType, address admin) internal pure returns (uint256) {
-        return (uint256(uint160(admin)) << PACKED_ADMIN_SHIFT) | uint256(policyType);
-    }
-
-    function _decodeType(uint256 packed) internal pure returns (PolicyType) {
-        return PolicyType(uint8(packed));
+    /// @dev Composes a packed slot value. Always sets the exists bit; pass
+    ///      `address(0)` to encode the post-renounce slot.
+    function _encode(address admin) internal pure returns (uint256) {
+        return (uint256(1) << MockPolicyRegistryStorage.EXISTS_BIT) | uint256(uint160(admin));
     }
 
     function _decodeAdmin(uint256 packed) internal pure returns (address) {
-        return address(uint160(packed >> PACKED_ADMIN_SHIFT));
+        return address(uint160(packed));
     }
 
-    /// @dev Reverts `MalformedPolicyId` if `policyId`'s top byte (the
-    ///      `PolicyType` discriminator) is outside the enum range. Every
-    ///      entry point that accepts a `policyId` calls this first, so
-    ///      malformed IDs are rejected distinctly from well-formed
-    ///      IDs that simply haven't been created (which still revert
-    ///      `PolicyNotFound`).
-    function _requireWellFormed(uint64 policyId) internal pure {
-        if (uint8(policyId >> POLICY_ID_TYPE_SHIFT) > uint8(type(PolicyType).max)) {
-            revert MalformedPolicyId(policyId);
-        }
+    /// @dev Recovers the `PolicyType` from a well-formed `policyId`'s top byte.
+    ///      Caller MUST ensure `_isWellFormed(policyId)`; otherwise the cast panics.
+    function _typeOf(uint64 policyId) internal pure returns (PolicyType) {
+        return PolicyType(uint8(policyId >> POLICY_ID_TYPE_SHIFT));
+    }
+
+    /// @dev True iff `policyId`'s top byte is within the `PolicyType` enum range.
+    function _isWellFormed(uint64 policyId) internal pure returns (bool) {
+        return uint8(policyId >> POLICY_ID_TYPE_SHIFT) <= uint8(type(PolicyType).max);
     }
 }

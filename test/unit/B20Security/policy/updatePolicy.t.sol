@@ -7,15 +7,18 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20Constants} from "src/lib/B20Constants.sol";
 import {MockB20Storage, MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20SecurityUpdatePolicyTest is B20SecurityTest {
     /// @notice Verifies updatePolicy(REDEEM_SENDER_POLICY, ...) reverts when caller lacks admin
     /// @dev Access control inherited from base: updatePolicy is `onlyRole(DEFAULT_ADMIN_ROLE)`
     ///      regardless of which policyType is being written.
-    function test_updatePolicy_revert_unauthorized_redeemSender(address caller, uint64 newPolicyId) public {
+    function test_updatePolicy_revert_unauthorized_redeemSender(address caller, bool useBlock) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
-        newPolicyId = uint64(bound(newPolicyId, 0, 1)); // sentinel ids only, no registry setup
+        // Use a sentinel id (ALWAYS_ALLOW or ALWAYS_BLOCK) so no registry setup is needed.
+        uint64 newPolicyId =
+            useBlock ? PolicyRegistryConstants.ALWAYS_BLOCK_ID : PolicyRegistryConstants.ALWAYS_ALLOW_ID;
 
         vm.prank(caller);
         vm.expectRevert(
@@ -36,11 +39,15 @@ contract B20SecurityUpdatePolicyTest is B20SecurityTest {
         bytes32 transferBefore = vm.load(address(token), MockB20Storage.transferPolicyIdsSlot());
         bytes32 mintBefore = vm.load(address(token), MockB20Storage.mintPolicyIdsSlot());
 
-        _setRedeemPolicy(uint64(1));
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         // Variant lane got the write (low 64 bits of redeemPolicyIds).
         uint256 redeemPacked = uint256(vm.load(address(token), MockB20RedeemStorage.redeemPolicyIdsSlot()));
-        assertEq(uint64(redeemPacked), uint64(1), "redeemPolicyIds lane 0 must hold the written value");
+        assertEq(
+            uint64(redeemPacked),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "redeemPolicyIds lane 0 must hold the written value"
+        );
 
         // Base slots are unchanged.
         assertEq(
@@ -59,10 +66,18 @@ contract B20SecurityUpdatePolicyTest is B20SecurityTest {
     /// @dev End-to-end round-trip across the variant override's `_writePolicyId` and
     ///      `_readPolicyId` arms.
     function test_updatePolicy_success_redeemSenderReadback() public {
-        _setRedeemPolicy(uint64(1));
-        assertEq(token.policyId(REDEEM_SENDER_POLICY), uint64(1), "policyId must reflect the write");
-        _setRedeemPolicy(uint64(0));
-        assertEq(token.policyId(REDEEM_SENDER_POLICY), uint64(0), "policyId must reflect the second write");
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        assertEq(
+            token.policyId(REDEEM_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "policyId must reflect the write"
+        );
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+        assertEq(
+            token.policyId(REDEEM_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "policyId must reflect the second write"
+        );
     }
 
     /// @notice Verifies the variant override's `_writePolicyId` preserves the redeem slot's high lanes
@@ -76,10 +91,14 @@ contract B20SecurityUpdatePolicyTest is B20SecurityTest {
             | (uint256(0xFEDCBA0987654321) << 192);
         vm.store(address(token), MockB20RedeemStorage.redeemPolicyIdsSlot(), bytes32(reservedPattern));
 
-        _setRedeemPolicy(uint64(1));
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         uint256 after_ = uint256(vm.load(address(token), MockB20RedeemStorage.redeemPolicyIdsSlot()));
-        assertEq(uint64(after_), uint64(1), "lane 0 must hold the written REDEEM_SENDER_POLICY id");
+        assertEq(
+            uint64(after_),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "lane 0 must hold the written REDEEM_SENDER_POLICY id"
+        );
         assertEq(
             after_ & ~uint256(type(uint64).max), reservedPattern, "upper three lanes must be preserved bit-for-bit"
         );
@@ -88,13 +107,21 @@ contract B20SecurityUpdatePolicyTest is B20SecurityTest {
     /// @notice Verifies updatePolicy still falls through to base types via super
     /// @dev The override checks REDEEM_SENDER_POLICY then `super`s; base types still work
     ///      end-to-end (write touches base packed slot, readback returns the written value).
-    ///      Sentinel id 1 (ALWAYS_BLOCK) is used to avoid having to register a custom policy.
+    ///      The ALWAYS_BLOCK sentinel is used to avoid having to register a custom policy.
     function test_updatePolicy_success_baseTypesStillRouteThroughSuper() public {
         vm.prank(admin);
-        token.updatePolicy(B20Constants.TRANSFER_SENDER_POLICY, uint64(1));
-        assertEq(token.policyId(B20Constants.TRANSFER_SENDER_POLICY), uint64(1), "TRANSFER_SENDER write must persist");
+        token.updatePolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        assertEq(
+            token.policyId(B20Constants.TRANSFER_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "TRANSFER_SENDER write must persist"
+        );
 
         // And the redeem slot is untouched by a base-side write.
-        assertEq(token.policyId(REDEEM_SENDER_POLICY), uint64(0), "REDEEM_SENDER must not be affected by base writes");
+        assertEq(
+            token.policyId(REDEEM_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "REDEEM_SENDER must not be affected by base writes"
+        );
     }
 }

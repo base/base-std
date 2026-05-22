@@ -351,14 +351,12 @@ contract MockB20 is IB20 {
     }
 
     function updatePolicy(bytes32 policyType, uint64 newPolicyId) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // Read the old ID first: this both supplies the value for the
-        // event and validates that `policyType` is supported (reverts
-        // UnsupportedPolicyType cheaply, before the cross-contract
-        // registry call).
+        // Read the old ID for the event payload. Reverts
+        // `UnsupportedPolicyType` here if the type has no slot on this token.
         uint64 oldPolicyId = _readPolicyId(policyType);
-        // Verify the target policy exists in the registry (or is built-in).
-        // Registry rejects malformed IDs (top byte outside PolicyType
-        // enum range) with its own MalformedPolicyId revert.
+        // Existence check at write time is what lets `isAuthorized` skip
+        // its own existence SLOAD on the hot path. `policyExists` rejects
+        // both unknown and malformed IDs.
         if (!IPolicyRegistry(POLICY_REGISTRY).policyExists(newPolicyId)) {
             revert PolicyNotFound(newPolicyId);
         }
