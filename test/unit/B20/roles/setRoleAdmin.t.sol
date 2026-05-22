@@ -40,14 +40,13 @@ contract B20SetRoleAdminTest is B20Test {
 
     /// @notice Verifies setRoleAdmin emits RoleAdminChanged(role, previousAdminRole, newAdminRole)
     /// @dev Event integrity; canonical RoleAdminChanged emission test.
-    ///      For an unconfigured non-default role, previousAdminRole is the implied
-    ///      DEFAULT_ADMIN_ROLE; for DEFAULT_ADMIN_ROLE itself, previous is bytes32(0).
+    ///      Every role on a fresh token is unconfigured, so the previous
+    ///      admin reads as the storage zero-default `bytes32(0)`, which
+    ///      IS `DEFAULT_ADMIN_ROLE`. The same value covers both the
+    ///      DEFAULT_ADMIN_ROLE-itself case and every other role.
     function test_setRoleAdmin_success_emitsRoleAdminChanged(bytes32 role, bytes32 newAdminRole) public {
-        bytes32 previousAdminRole =
-            role == B20Constants.DEFAULT_ADMIN_ROLE ? bytes32(0) : B20Constants.DEFAULT_ADMIN_ROLE;
-
         vm.expectEmit(true, false, false, true, address(token));
-        emit IB20.RoleAdminChanged(role, previousAdminRole, newAdminRole);
+        emit IB20.RoleAdminChanged(role, bytes32(0), newAdminRole);
         vm.prank(admin);
         token.setRoleAdmin(role, newAdminRole);
     }
