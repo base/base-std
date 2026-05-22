@@ -62,6 +62,17 @@ contract MockB20 is IB20 {
 
     /// @notice Default top-level admin role. Equal to `bytes32(0)` per
     ///         the OZ AccessControl convention.
+    ///
+    ///         The `bytes32(0)` identity is load-bearing: because the
+    ///         constant equals the EVM storage zero-default, any role
+    ///         whose admin has never been set via `setRoleAdmin` falls
+    ///         through to DEFAULT_ADMIN_ROLE on a raw read of
+    ///         `roleAdmins[role]` with no fall-through code required.
+    ///         `getRoleAdmin`, `setRoleAdmin`, and `_requireRoleAdmin`
+    ///         all rely on this and do not branch on `role ==
+    ///         DEFAULT_ADMIN_ROLE`. The Rust precompile impl reproduces
+    ///         the same identity so its own raw read returns the same
+    ///         bytes32 for an unconfigured role.
     bytes32 public constant DEFAULT_ADMIN_ROLE = B20Constants.DEFAULT_ADMIN_ROLE;
 
     /// @notice Role identifiers. Values delegate to `B20Constants` so the
@@ -249,9 +260,12 @@ contract MockB20 is IB20 {
     }
 
     function getRoleAdmin(bytes32 role) external view returns (bytes32) {
-        bytes32 adminRole = MockB20Storage.layout().roleAdmins[role];
-        // Default admin if not explicitly overridden via setRoleAdmin.
-        return adminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE ? DEFAULT_ADMIN_ROLE : adminRole;
+        // Raw read. An unconfigured admin reads as `bytes32(0)`, which
+        // IS `DEFAULT_ADMIN_ROLE`, so the OZ "unset roles default to
+        // DEFAULT_ADMIN_ROLE" semantics fall out for free — no
+        // fall-through ternary required. See the DEFAULT_ADMIN_ROLE
+        // constant's natspec for why this identity is load-bearing.
+        return MockB20Storage.layout().roleAdmins[role];
     }
 
     function grantRole(bytes32 role, address account) external onlyRoleAdmin(role) {
@@ -290,11 +304,12 @@ contract MockB20 is IB20 {
     }
 
     function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external onlyRoleAdmin(role) {
+        // Raw read for the event payload. An unconfigured admin reads
+        // as `bytes32(0)` which IS `DEFAULT_ADMIN_ROLE`, so the
+        // `RoleAdminChanged.previousAdminRole` field carries the
+        // correct identifier with no fall-through code. See the
+        // DEFAULT_ADMIN_ROLE constant's natspec.
         bytes32 previousAdminRole = MockB20Storage.layout().roleAdmins[role];
-        // Default admin if not explicitly set; expose it in the event.
-        if (previousAdminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE) {
-            previousAdminRole = DEFAULT_ADMIN_ROLE;
-        }
         MockB20Storage.layout().roleAdmins[role] = newAdminRole;
         emit RoleAdminChanged(role, previousAdminRole, newAdminRole);
     }
@@ -526,12 +541,16 @@ contract MockB20 is IB20 {
     /// @dev Body for the `onlyRoleAdmin` modifier (the privileged bypass
     ///      lives in the modifier, not here, so this helper is reusable
     ///      from any context that has already cleared the bypass).
-    ///      Resolves the admin-of-`role` per `getRoleAdmin` semantics:
-    ///      an unset entry collapses to `DEFAULT_ADMIN_ROLE` unless `role`
-    ///      itself is `DEFAULT_ADMIN_ROLE`.
+    ///      Resolves the admin-of-`role` per `getRoleAdmin` semantics
+    ///      via a raw storage read: an unset entry reads as
+    ///      `bytes32(0)`, which IS `DEFAULT_ADMIN_ROLE`, so unconfigured
+    ///      roles correctly require the default admin to authorize
+    ///      without any fall-through code. The revert payload's
+    ///      `adminRole` field carries the same identifier — for
+    ///      unconfigured roles it's `bytes32(0) == DEFAULT_ADMIN_ROLE`,
+    ///      which is the role the caller actually needs to hold.
     function _requireRoleAdmin(bytes32 role) internal view {
         bytes32 adminRole = MockB20Storage.layout().roleAdmins[role];
-        if (adminRole == bytes32(0) && role != DEFAULT_ADMIN_ROLE) adminRole = DEFAULT_ADMIN_ROLE;
         if (!hasRole(adminRole, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, adminRole);
     }
 
