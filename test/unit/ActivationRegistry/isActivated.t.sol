@@ -15,7 +15,8 @@ contract ActivationRegistryIsActivatedTest is ActivationRegistryTest {
     /// @notice Verifies isActivated returns true after activate(feature) succeeds
     /// @dev State flip is observable immediately on the same feature id
     function test_isActivated_success_trueAfterActivate(bytes32 feature) public {
-        // unimplemented
-        feature; // silence unused-parameter lint until activate() is implemented
+        vm.prank(activationAdmin);
+        activationRegistry.activate(feature);
+        assertTrue(activationRegistry.isActivated(feature), "isActivated must return true after activate");
     }
 }

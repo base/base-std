@@ -65,8 +65,12 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 ///     `ALWAYS_ALLOW_ID = 0` and
 ///     `ALWAYS_BLOCK_ID = (uint64(ALLOWLIST) << 56) | 1` are
 ///     short-circuited before any storage read.
-///   - `MockActivationRegistry` is a SKELETON: implements only `admin()`
-///     to return the hardcoded test admin.
+///   - `MockActivationRegistry` is fully implemented: every
+///     `IActivationRegistry` surface function is live. `admin()` returns
+///     the hardcoded `0xCB00…0000` address; `activate` / `deactivate`
+///     mutate a single ERC-7201-namespaced `features` map and emit the
+///     paired events. Only admin (resolved at setUp via
+///     `activationRegistry.admin()`) may flip features.
 abstract contract BaseTest is Test {
     // -- Actors --
     address internal admin = makeAddr("admin");
