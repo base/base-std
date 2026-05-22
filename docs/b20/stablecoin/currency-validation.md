@@ -62,7 +62,7 @@ Key properties:
 
 ## Supported currencies
 
-All 155 codes on the allowlist, alphabetical by code.
+All 157 codes on the allowlist, alphabetical by code. Two entries (ANG, BGN) are recently-withdrawn ISO codes retained for backwards compatibility — see the Appendix.
 
 | Code | Currency | Region / issuer |
 | --- | --- | --- |
@@ -70,6 +70,7 @@ All 155 codes on the allowlist, alphabetical by code.
 | AFN | Afghan Afghani | Afghanistan |
 | ALL | Albanian Lek | Albania |
 | AMD | Armenian Dram | Armenia |
+| ANG | Netherlands Antillean Guilder | Curaçao, Sint Maarten — withdrawn 2025-03-31 (kept for backwards compatibility, see Appendix) |
 | AOA | Angolan Kwanza | Angola |
 | ARS | Argentine Peso | Argentina |
 | AUD | Australian Dollar | Australia |
@@ -78,6 +79,7 @@ All 155 codes on the allowlist, alphabetical by code.
 | BAM | Bosnia and Herzegovina Convertible Mark | Bosnia and Herzegovina |
 | BBD | Barbadian Dollar | Barbados |
 | BDT | Bangladeshi Taka | Bangladesh |
+| BGN | Bulgarian Lev | Bulgaria — withdrawn 2026-01-01 (kept for backwards compatibility, see Appendix) |
 | BHD | Bahraini Dinar | Bahrain |
 | BIF | Burundian Franc | Burundi |
 | BMD | Bermudian Dollar | Bermuda |
@@ -233,7 +235,9 @@ ISO 4217 is maintained by SIX as the designated Maintenance Agency. The allowlis
 - [List One — current active currencies (XML)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)
 - [Amendments index (all historical amendments)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/lists/overview-amendments.xlsx)
 
-#### Recent amendments reflected in this allowlist
+#### Recent withdrawals — accepted for backwards compatibility
 
-- **Amendment 180** — BGN withdrawn effective 2026-01-01; Bulgaria joined the eurozone at the fixed rate EUR 1 = BGN 1.95583. [PDF](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/dl-currency-iso-amendment-180.pdf)
-- **ANG → XCG** — ANG (Netherlands Antillean Guilder) withdrawn 2025-03-31 and replaced by XCG (Caribbean Guilder) under the Centrale Bank van Curaçao en Sint Maarten (CBCS).
+The codes below have been formally withdrawn from ISO 4217 but remain on our allowlist while supply is still circulating. They will be removed in a future pass once circulation has drained; the official references are listed here so we can revisit the decision against a known anchor.
+
+- **BGN** — withdrawn 2026-01-01 per Amendment 180; Bulgaria joined the eurozone at the fixed rate `EUR 1 = BGN 1.95583`. [Amendment 180 PDF](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/dl-currency-iso-amendment-180.pdf)
+- **ANG** — withdrawn 2025-03-31; replaced by `XCG` (Caribbean Guilder) under the Centrale Bank van Curaçao en Sint Maarten (CBCS). Both codes are currently accepted (`XCG` as a new active code, `ANG` as a backwards-compat carry-over).

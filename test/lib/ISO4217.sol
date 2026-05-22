@@ -29,6 +29,10 @@ library ISO4217 {
     bytes3 private constant AFN = "AFN";
     bytes3 private constant ALL = "ALL";
     bytes3 private constant AMD = "AMD";
+    // ANG: ISO-withdrawn 2025-03-31 (replaced by XCG). Retained for
+    // backwards compatibility while ANG-denominated balances remain in
+    // circulation.
+    bytes3 private constant ANG = "ANG";
     bytes3 private constant AOA = "AOA";
     bytes3 private constant ARS = "ARS";
     bytes3 private constant AUD = "AUD";
@@ -38,6 +42,10 @@ library ISO4217 {
     bytes3 private constant BAM = "BAM";
     bytes3 private constant BBD = "BBD";
     bytes3 private constant BDT = "BDT";
+    // BGN: ISO-withdrawn 2026-01-01 per Amendment 180 (Bulgaria adopted
+    // EUR). Retained for backwards compatibility while BGN-denominated
+    // balances remain in circulation.
+    bytes3 private constant BGN = "BGN";
     bytes3 private constant BHD = "BHD";
     bytes3 private constant BIF = "BIF";
     bytes3 private constant BMD = "BMD";
@@ -253,8 +261,8 @@ library ISO4217 {
         }
         // A: AUD is G10; AED is a high-volume oil-linked unit.
         if (first == "A") {
-            return c == AUD || c == AED || c == ARS || c == AMD || c == AOA || c == AFN || c == ALL
-                || c == AWG || c == AZN;
+            return c == AUD || c == AED || c == ARS || c == AMD || c == ANG || c == AOA || c == AFN
+                || c == ALL || c == AWG || c == AZN;
         }
         // N: NOK and NZD are both G10; NGN is the largest African economy.
         if (first == "N") return c == NOK || c == NZD || c == NGN || c == NPR || c == NIO || c == NAD;
@@ -287,8 +295,9 @@ library ISO4217 {
         }
         // B: BRL is the major; rest are long-tail.
         if (first == "B") {
-            return c == BRL || c == BHD || c == BDT || c == BAM || c == BBD || c == BIF || c == BMD
-                || c == BND || c == BOB || c == BSD || c == BTN || c == BWP || c == BYN || c == BZD;
+            return c == BRL || c == BHD || c == BDT || c == BGN || c == BAM || c == BBD || c == BIF
+                || c == BMD || c == BND || c == BOB || c == BSD || c == BTN || c == BWP || c == BYN
+                || c == BZD;
         }
         // H: HKD is a major financial-center currency.
         if (first == "H") return c == HKD || c == HUF || c == HNL || c == HTG;
@@ -317,8 +326,8 @@ library ISO4217 {
     /// @notice Number of ISO 4217 codes deliberately excluded from
     ///         `isValidFiatCode`. Pair with `excludedAt` to enumerate.
     ///         Excludes only currently-active ISO 4217 entries; deprecated
-    ///         codes (ANG, BGN, CUC, HRK, VEF, ZWL, etc.) are caught by
-    ///         absence from the allowlist instead.
+    ///         codes (CUC, HRK, VEF, ZWL, etc.) are caught by absence
+    ///         from the allowlist instead.
     function excludedCount() internal pure returns (uint256) {
         return 22;
     }
