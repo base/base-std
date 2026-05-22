@@ -203,7 +203,7 @@ contract MockB20 is IB20 {
     //                         METADATA UPDATES
     // ============================================================
 
-    function updateName(string calldata newName) external onlyRole(METADATA_ROLE) {
+    function updateName(string calldata newName) public virtual onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().name = newName;
         emit NameUpdated(msg.sender, newName);
         emit EIP712DomainChanged();
@@ -498,6 +498,7 @@ contract MockB20 is IB20 {
     function eip712Domain()
         external
         view
+        virtual
         returns (
             bytes1 fields,
             string memory name_,
