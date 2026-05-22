@@ -9,7 +9,7 @@ import {IB20} from "./IB20.sol";
 interface IB20Stablecoin is IB20 {
     /// @notice The currency identifier this stablecoin tracks
     ///         (e.g. `"USD"`, `"EUR"`, `"JPY"`). Set at creation,
-    ///         immutable thereafter. Three uppercase ASCII letters;
+    ///         immutable thereafter. Uppercase ASCII letters (`A`–`Z`);
     ///         self-declared and not verified by the contract.
     function currency() external view returns (string memory);
 }

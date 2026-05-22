@@ -115,10 +115,9 @@ contract MockB20Factory is IB20Factory {
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version, variant);
-            // Format check: exactly three uppercase ASCII letters (A-Z).
+            // Format check: every byte must be an uppercase ASCII letter (A-Z).
             bytes memory cb = bytes(p.currency);
-            if (cb.length != 3) revert InvalidCurrency(p.currency);
-            for (uint256 i = 0; i < 3; ++i) {
+            for (uint256 i = 0; i < cb.length; ++i) {
                 if (cb[i] < 0x41 || cb[i] > 0x5A) revert InvalidCurrency(p.currency);
             }
             name_ = p.name;

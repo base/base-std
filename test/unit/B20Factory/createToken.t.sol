@@ -76,11 +76,11 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
-    // STABLECOIN currency validation: exactly three uppercase ASCII letters (A-Z).
+    // STABLECOIN currency validation: every byte must be an uppercase ASCII letter (A-Z).
 
-    /// @notice Any string failing the format check reverts with `InvalidCurrency(code)`.
-    /// @dev Subsumes every point case (empty, wrong length, lowercase, digits, symbols)
-    ///      via `vm.assume(!_isValidFiatCode)`.
+    /// @notice Any string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
+    /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
+    ///      `vm.assume(!_isValidFiatCode)`. Length is unconstrained.
     function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
@@ -94,8 +94,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     function _isValidFiatCode(string memory code) private pure returns (bool) {
         bytes memory b = bytes(code);
-        if (b.length != 3) return false;
-        for (uint256 i = 0; i < 3; ++i) {
+        for (uint256 i = 0; i < b.length; ++i) {
             if (b[i] < 0x41 || b[i] > 0x5A) return false;
         }
         return true;

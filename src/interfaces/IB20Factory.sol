@@ -114,8 +114,8 @@ interface IB20Factory {
     /// @param symbol        ERC-20 token symbol.
     /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
     /// @param currency      Immutable self-declared currency
-    ///                      identifier — exactly three uppercase ASCII
-    ///                      letters (`A`–`Z`).
+    ///                      identifier — uppercase ASCII letters
+    ///                      (`A`–`Z`).
     /// @dev    Decimals are fixed at `6`. There is no decimals field
     ///         and no setter for `currency` — both are fixed for the
     ///         token's lifetime at creation.
@@ -185,8 +185,7 @@ interface IB20Factory {
     ///         security `isin`).
     error MissingRequiredField();
 
-    /// @notice The stablecoin `currency` was not three uppercase ASCII
-    ///         letters (`A`–`Z`).
+    /// @notice The stablecoin `currency` contained a non-`A`–`Z` byte.
     error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the
