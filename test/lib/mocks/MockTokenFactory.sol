@@ -118,7 +118,7 @@ contract MockTokenFactory is ITokenFactory {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version);
             // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
-            if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
+            if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency();
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
