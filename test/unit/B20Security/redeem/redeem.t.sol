@@ -12,6 +12,13 @@ import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20SecurityRedeemTest is B20SecurityTest {
+    /// @dev Open redemption by default for this test suite. Individual tests that need
+    ///      ALWAYS_BLOCK call _setRedeemPolicy(ALWAYS_BLOCK_ID) explicitly.
+    function setUp() public override {
+        super.setUp();
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+    }
+
     /// @notice Verifies redeem reverts when REDEEM feature is paused
     /// @dev Pause guard fires first in execution order; checks ContractPaused(REDEEM) error.
     function test_redeem_revert_whenRedeemPaused(uint256 amount) public {

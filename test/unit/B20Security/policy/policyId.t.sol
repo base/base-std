@@ -7,12 +7,15 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20SecurityPolicyIdTest is B20SecurityTest {
-    /// @notice Verifies policyId(REDEEM_SENDER_POLICY) returns 0 on a fresh token
-    /// @dev The variant override `_readPolicyId` routes REDEEM_SENDER_POLICY to the
-    ///      `redeemPolicyIds` lane in the redeem namespace; uninitialised default is 0
-    ///      (ALWAYS_ALLOW_ID).
-    function test_policyId_success_redeemSenderDefaultIsZero() public view {
-        assertEq(token.policyId(REDEEM_SENDER_POLICY), uint64(0), "default REDEEM_SENDER_POLICY id must be 0");
+    /// @notice Verifies policyId(REDEEM_SENDER_POLICY) returns ALWAYS_BLOCK_ID on a fresh token.
+    /// @dev The factory seeds the redeemPolicyIds lane with ALWAYS_BLOCK_ID at creation so
+    ///      redemption is closed by default. Issuers must explicitly open it via updatePolicy.
+    function test_policyId_success_redeemSenderDefaultIsAlwaysBlock() public view {
+        assertEq(
+            token.policyId(REDEEM_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "default REDEEM_SENDER_POLICY id must be ALWAYS_BLOCK_ID"
+        );
     }
 
     /// @notice Verifies policyId(REDEEM_SENDER_POLICY) reads back the last write
