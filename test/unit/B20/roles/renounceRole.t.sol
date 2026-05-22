@@ -85,8 +85,10 @@ contract B20RenounceRoleTest is B20Test {
     /// @dev LastAdminCannotRenounce only fires when the renouncer would leave the role empty.
     ///      Paired slot assertions verify both `roles[ADMIN][admin]`
     ///      (cleared) and `roles[ADMIN][otherAdmin]` (still set), plus
-    ///      the packed `adminCount` decrements from 2 to 1 while
-    ///      `initialized` stays true (sharing slot 8).
+    ///      the `adminCount` slot decrements from 2 to 1 while the
+    ///      `initialized` slot stays true. `adminCount` and `initialized`
+    ///      now live in disjoint slots (slot 8 and slot 14 respectively),
+    ///      so each is asserted with its own `vm.load`.
     function test_renounceRole_success_adminWithOthers(address otherAdmin) public {
         _assumeValidActor(otherAdmin);
         vm.assume(otherAdmin != admin);
@@ -110,9 +112,14 @@ contract B20RenounceRoleTest is B20Test {
             uint256(1),
             "roles[ADMIN][otherAdmin] slot must still be set"
         );
-        uint256 packed = uint256(vm.load(address(token), MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must drop to 1");
-        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized bit must stay set");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 1, "adminCount must drop to 1"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.initializedSlot())),
+            1,
+            "initialized slot must stay set"
+        );
     }
 
     /// @notice Verifies the internal adminCount tracker stays consistent with role state

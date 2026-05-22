@@ -204,12 +204,10 @@ contract MockTokenFactory is ITokenFactory {
         // -- 9. Close the bootstrap window by setting initialized=true.
         //       After this, the factory's privilege is gone; only
         //       role / policy / pause holders can mutate state.
-        _writePackedBool(
-            token,
-            MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET),
-            MockB20Storage.INITIALIZED_BYTE_OFFSET,
-            true
-        );
+        //       `initialized` lives alone in its own slot at the end
+        //       of the base layout, so writing the slot is a plain
+        //       1-store with no masking against neighbouring fields.
+        _writeUint(token, MockB20Storage.initializedSlot(), 1);
     }
 
     /// @dev `DEFAULT_ADMIN_ROLE` per OZ AccessControl convention.
@@ -228,13 +226,10 @@ contract MockTokenFactory is ITokenFactory {
     /// @inheritdoc ITokenFactory
     function isB20Initialized(address token) external view returns (bool) {
         if (!_isB20Prefix(token)) return false;
-        // Same packed-bool slot the factory flips at the end of
-        // createToken (MockB20Storage.INITIALIZED_OFFSET +
-        // INITIALIZED_BYTE_OFFSET).
-        bytes32 slot = MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET);
-        uint256 word = uint256(vm.load(token, slot));
-        uint256 shift = uint256(MockB20Storage.INITIALIZED_BYTE_OFFSET) * 8;
-        return ((word >> shift) & 0xff) != 0;
+        // Same dedicated slot the factory flips at the end of createToken
+        // (MockB20Storage.INITIALIZED_OFFSET). The slot holds nothing
+        // else, so any non-zero word means initialized=true.
+        return uint256(vm.load(token, MockB20Storage.initializedSlot())) != 0;
     }
 
     // ============================================================
@@ -274,10 +269,12 @@ contract MockTokenFactory is ITokenFactory {
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET), name_);
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.SYMBOL_OFFSET), symbol_);
         _writeUint(token, MockB20Storage.slotOf(MockB20Storage.SUPPLY_CAP_OFFSET), type(uint256).max);
-        // Everything else (totalSupply, allowances, roles, roleAdmins,
-        // adminCount, transferPolicyIds, mintPolicyIds, pausedVectors,
-        // nonces, contractURI, initialized) defaults to the EVM's zero
-        // state, which is correct for a fresh token.
+        // Everything else (totalSupply, balances, allowances, roles,
+        // roleAdmins, adminCount, transferPolicyIds, mintPolicyIds,
+        // pausedVectors, nonces, contractURI, initialized) defaults to
+        // the EVM's zero state, which is correct for a fresh token.
+        // The factory flips `initialized` to true in createToken step 9
+        // after initCalls have run.
     }
 
     /// @dev Writes the stablecoin variant's `currency` field at its
@@ -305,14 +302,6 @@ contract MockTokenFactory is ITokenFactory {
 
     function _writeUint(address target, bytes32 slot, uint256 value) internal {
         vm.store(target, slot, bytes32(value));
-    }
-
-    function _writePackedBool(address target, bytes32 slot, uint8 byteOffset, bool value) internal {
-        uint256 shift = uint256(byteOffset) * 8;
-        uint256 mask = uint256(0xff) << shift;
-        uint256 current = uint256(vm.load(target, slot));
-        uint256 bit = value ? (uint256(1) << shift) : 0;
-        vm.store(target, slot, bytes32((current & ~mask) | bit));
     }
 
     /// @dev Solidity string storage encoding:

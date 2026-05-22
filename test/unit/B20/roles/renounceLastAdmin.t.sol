@@ -111,34 +111,40 @@ contract B20RenounceLastAdminTest is B20Test {
     }
 
     /// @notice Verifies renounceLastAdmin drives the internal adminCount tracker to zero
-    /// @dev    adminCount is internal state with no public getter; it shares
-    ///         a slot with the `initialized` bool (uint248 in the low 31
-    ///         bytes, bool in byte 31). We read the slot directly via
-    ///         `vm.load` and decode each field via the codecs on
-    ///         `MockB20Storage` so the test exercises the canonical
-    ///         packed-slot layout the Rust impl must match.
+    /// @dev    adminCount is internal state with no public getter; it lives
+    ///         alone in its own slot (slot 8). We read the slot directly via
+    ///         `vm.load` so the test exercises the canonical storage
+    ///         layout the Rust impl must match.
     ///
     ///         A buggy impl that cleared the role but left adminCount > 0
     ///         would be otherwise undetectable from the public surface
     ///         (since with no admins, no path that reads adminCount is
     ///         reachable). Directly inspecting storage closes the loop on
-    ///         the storage-layout contract. Equally important: a buggy
-    ///         renounce that mis-masks the slot would clobber `initialized`
-    ///         and re-open the factory bootstrap window — also caught here.
+    ///         the storage-layout contract. We additionally re-assert the
+    ///         `initialized` slot (now disjoint at slot 14) is still set,
+    ///         so a buggy renounce that scribbled past adminCount's slot
+    ///         and re-opened the factory bootstrap window would be caught
+    ///         here too.
     function test_renounceLastAdmin_success_adminCountDrivenToZero() public {
-        bytes32 packedSlot = MockB20Storage.adminCountAndInitializedSlot();
-        uint256 before = uint256(vm.load(address(token), packedSlot));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(before)), 1, "precondition: adminCount is 1");
-        assertTrue(MockB20Storage.initializedFromPacked(before), "precondition: initialized is true");
+        bytes32 adminCountSlot = MockB20Storage.adminCountSlot();
+        bytes32 initializedSlot = MockB20Storage.initializedSlot();
+        assertEq(
+            uint256(vm.load(address(token), adminCountSlot)), 1, "precondition: adminCount is 1"
+        );
+        assertEq(
+            uint256(vm.load(address(token), initializedSlot)), 1, "precondition: initialized is true"
+        );
 
         vm.prank(admin);
         token.renounceLastAdmin();
 
-        uint256 packedAfter = uint256(vm.load(address(token), packedSlot));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packedAfter)), 0, "adminCount must be 0 post-renounce");
-        assertTrue(
-            MockB20Storage.initializedFromPacked(packedAfter),
-            "initialized bit must remain set (renounce only clears adminCount)"
+        assertEq(
+            uint256(vm.load(address(token), adminCountSlot)), 0, "adminCount must be 0 post-renounce"
+        );
+        assertEq(
+            uint256(vm.load(address(token), initializedSlot)),
+            1,
+            "initialized slot must remain set (renounce only clears adminCount)"
         );
     }
 

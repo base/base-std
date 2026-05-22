@@ -291,9 +291,16 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
         assertEq(IB20Security(token).securityIdentifier(IDENTIFIER_ISIN), DEFAULT_ISIN, "ISIN must still be set");
 
-        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 0, "adminCount must be 0 on zero-admin path");
-        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must still be set on zero-admin path");
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
+            0,
+            "adminCount must be 0 on zero-admin path"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.initializedSlot())),
+            1,
+            "initialized must still be set on zero-admin path"
+        );
     }
 
     /// @notice Major reserve currencies (USD, EUR, JPY, GBP, CHF, CNY, CAD, AUD) are accepted.
@@ -400,9 +407,16 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
             uint256(0),
             "factory must NOT appear in roles[ADMIN] slot"
         );
-        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must be 1 after bootstrap grant");
-        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized bit must be set after bootstrap closes");
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
+            1,
+            "adminCount must be 1 after bootstrap grant"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.initializedSlot())),
+            1,
+            "initialized slot must be set after bootstrap closes"
+        );
     }
 
     /// @notice Verifies TokenCreated fires before any state-change events from initCalls
@@ -437,14 +451,14 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         address token = _createDefault(caller, salt, _b20Params(), new bytes[](0));
 
         // Paired slot assertion: the bootstrap window's gate is the
-        // `initialized` byte in the packed slot. Confirming it's set
-        // proves the factory's privileged path is closed at the storage
-        // level (the surface-level role revert below is the consequence).
-        assertTrue(
-            MockB20Storage.initializedFromPacked(
-                uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()))
-            ),
-            "initialized bit must be set after createToken returns"
+        // `initialized` slot (dedicated, at the end of the layout).
+        // Confirming it's set proves the factory's privileged path is
+        // closed at the storage level (the surface-level role revert
+        // below is the consequence).
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.initializedSlot())),
+            1,
+            "initialized slot must be set after createToken returns"
         );
 
         // Pranking the factory address into a direct mint should now revert with the standard
@@ -475,9 +489,16 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // Paired slot assertion: packed adminCount lane is 0 (no
         // bootstrap grant happened) but the initialized bit is still
         // set (the factory closed the bootstrap window after returning).
-        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 0, "adminCount must be 0 on zero-admin path");
-        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must still be set on zero-admin path");
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
+            0,
+            "adminCount must be 0 on zero-admin path"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.initializedSlot())),
+            1,
+            "initialized must still be set on zero-admin path"
+        );
     }
 
     /// @notice Verifies stablecoin createToken executes with admin == address(0)
@@ -495,9 +516,16 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         // The stablecoin still got its variant data: currency is set.
         assertEq(IB20Stablecoin(token).currency(), "USD", "stablecoin currency must still be set");
 
-        uint256 packed = uint256(vm.load(token, MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 0, "adminCount must be 0 on zero-admin path");
-        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must still be set on zero-admin path");
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
+            0,
+            "adminCount must be 0 on zero-admin path"
+        );
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.initializedSlot())),
+            1,
+            "initialized must still be set on zero-admin path"
+        );
         assertEq(
             vm.load(token, MockB20StablecoinStorage.currencySlot()),
             _expectedStringFieldSlot("USD"),

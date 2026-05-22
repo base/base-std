@@ -53,12 +53,10 @@ library MockB20Storage {
         mapping(bytes32 role => bytes32 adminRole) roleAdmins;
         // Tracks DEFAULT_ADMIN_ROLE holder count so renounceRole can enforce
         // LastAdminCannotRenounce in O(1). Bumped on grant, decremented on
-        // revoke / renounce.
-        uint248 adminCount;
-        // False from etch until the factory sets it true at the end of
-        // createToken. Packed with adminCount in the same slot to avoid
-        // dedicating a full slot to a single flag.
-        bool initialized;
+        // revoke / renounce. Lives alone in its own slot — packing it with
+        // `initialized` is no longer required since `initialized` was moved
+        // out to its own slot at the end of the layout.
+        uint256 adminCount;
         // ---------- Policy slots (PACKED, per-operation) ----------
         // Hot-path policy IDs live in per-operation packed slots so each
         // op reads exactly one slot, AND so adding granularity to one op
@@ -103,6 +101,16 @@ library MockB20Storage {
         uint256 supplyCap;
         // ---------- Permit (EIP-2612) ----------
         mapping(address owner => uint256 nonce) nonces;
+        // ---------- Bootstrap flag ----------
+        // False from etch until the factory sets it true at the end of
+        // createToken. Pinned to its own slot at the END of the layout
+        // because the EVM impl uses this flag as the demarcation between
+        // the privileged bootstrap window and post-init state, while the
+        // Rust impl distinguishes those phases through a different
+        // mechanism and does not need a storage slot for the flag at all.
+        // Keeping it last lets the Rust impl's layout omit it without
+        // disturbing the offset of any other field.
+        bool initialized;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff))
@@ -135,14 +143,14 @@ library MockB20Storage {
     uint256 internal constant ROLES_OFFSET = 6;
     uint256 internal constant ROLE_ADMINS_OFFSET = 7;
     uint256 internal constant ADMIN_COUNT_OFFSET = 8;
-    uint256 internal constant INITIALIZED_OFFSET = 8;
-    // `initialized` is the high byte in slot 8 (packed after uint248 adminCount).
-    uint8 internal constant INITIALIZED_BYTE_OFFSET = 31;
     uint256 internal constant TRANSFER_POLICY_IDS_OFFSET = 9;
     uint256 internal constant MINT_POLICY_IDS_OFFSET = 10;
     uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;
+    // `initialized` sits alone in its own slot at the END of the layout;
+    // see the field-level natspec above for why.
+    uint256 internal constant INITIALIZED_OFFSET = 14;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the
@@ -180,12 +188,13 @@ library MockB20Storage {
     function allowancesBaseSlot() internal pure returns (bytes32) { return slotOf(ALLOWANCES_OFFSET); }
     function rolesBaseSlot() internal pure returns (bytes32) { return slotOf(ROLES_OFFSET); }
     function roleAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(ROLE_ADMINS_OFFSET); }
-    function adminCountAndInitializedSlot() internal pure returns (bytes32) { return slotOf(ADMIN_COUNT_OFFSET); }
+    function adminCountSlot() internal pure returns (bytes32) { return slotOf(ADMIN_COUNT_OFFSET); }
     function transferPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(TRANSFER_POLICY_IDS_OFFSET); }
     function mintPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(MINT_POLICY_IDS_OFFSET); }
     function pausedVectorsSlot() internal pure returns (bytes32) { return slotOf(PAUSED_VECTORS_OFFSET); }
     function supplyCapSlot() internal pure returns (bytes32) { return slotOf(SUPPLY_CAP_OFFSET); }
     function noncesBaseSlot() internal pure returns (bytes32) { return slotOf(NONCES_OFFSET); }
+    function initializedSlot() internal pure returns (bytes32) { return slotOf(INITIALIZED_OFFSET); }
 
         // forgefmt: disable-end
 
@@ -230,35 +239,12 @@ library MockB20Storage {
     // ============================================================
     //                     PACKED-SLOT CODECS
     // ============================================================
-    // Two slots in `Layout` pack multiple logical values:
-    //   - Slot at ADMIN_COUNT_OFFSET (8): uint248 adminCount in the low
-    //     31 bytes, bool initialized in the high byte (byte 31).
-    //   - Slots at TRANSFER_POLICY_IDS_OFFSET (9) and
-    //     MINT_POLICY_IDS_OFFSET (10): four uint64 lanes packed
-    //     low-to-high (lane 0 in bits  0..63, lane 1 in bits 64..127,
-    //     lane 2 in bits 128..191, lane 3 in bits 192..255).
-    //
-    // These pure codecs let test callers extract / compose lane values
-    // without re-deriving the shifts at every callsite.
-
-    /// @notice Extracts `adminCount` (low 248 bits) from the packed slot.
-    /// @dev Mirrors the read side of MockB20's `_isPrivileged` /
-    ///      `_adminCount` accessors.
-    function adminCountFromPacked(uint256 packed) internal pure returns (uint248) {
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return uint248(packed & ((uint256(1) << 248) - 1));
-    }
-
-    /// @notice Extracts `initialized` (high byte) from the packed slot.
-    function initializedFromPacked(uint256 packed) internal pure returns (bool) {
-        return (packed >> 248) != 0;
-    }
-
-    /// @notice Composes the packed slot value from its two fields.
-    function packAdminCountAndInitialized(uint248 adminCount_, bool initialized_) internal pure returns (uint256) {
-        uint256 base = uint256(adminCount_);
-        return initialized_ ? (base | (uint256(1) << 248)) : base;
-    }
+    // The transfer-side and mint-side policy slots each pack four
+    // uint64 lanes into a single 256-bit slot, low-to-high (lane 0 in
+    // bits  0..63, lane 1 in bits 64..127, lane 2 in bits 128..191,
+    // lane 3 in bits 192..255). These pure codecs let test callers
+    // extract / compose lane values without re-deriving the shifts at
+    // every callsite.
 
     /// @notice Extracts the TRANSFER_SENDER policy id (lane 0) from the packed slot.
     function transferSenderPolicyId(uint256 packed) internal pure returns (uint64) {
