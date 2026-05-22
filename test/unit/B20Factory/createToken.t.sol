@@ -7,7 +7,6 @@ import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {ISO4217} from "test/lib/ISO4217.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
@@ -77,20 +76,28 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
-    // STABLECOIN currency validation — see docs/b20/stablecoin/currency-validation.md.
+    // STABLECOIN currency validation: every byte must be an uppercase ASCII letter (A-Z).
 
-    /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
-    /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
-    ///      via `vm.assume(!isValidFiatCode)`.
-    function test_createB20_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
+    /// @notice Any string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
+    /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
+    ///      `vm.assume(!_isValidFiatCode)`. Length is unconstrained.
+    function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
-        vm.assume(!ISO4217.isValidFiatCode(code));
+        vm.assume(!_isValidFiatCode(code));
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, code));
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+    }
+
+    function _isValidFiatCode(string memory code) private pure returns (bool) {
+        bytes memory b = bytes(code);
+        for (uint256 i = 0; i < b.length; ++i) {
+            if (b[i] < 0x41 || b[i] > 0x5A) return false;
+        }
+        return true;
     }
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant

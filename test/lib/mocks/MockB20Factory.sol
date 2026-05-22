@@ -5,8 +5,6 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 
-import {ISO4217} from "test/lib/ISO4217.sol";
-
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
@@ -117,8 +115,11 @@ contract MockB20Factory is IB20Factory {
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != 1) revert UnsupportedVersion(p.version, variant);
-            // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
-            if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
+            // Format check: every byte must be an uppercase ASCII letter (A-Z).
+            bytes memory cb = bytes(p.currency);
+            for (uint256 i = 0; i < cb.length; ++i) {
+                if (cb[i] < 0x41 || cb[i] > 0x5A) revert InvalidCurrency(p.currency);
+            }
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
