@@ -246,6 +246,71 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
+    //              EIP-712 DOMAIN OVERRIDE (ERC-5267)
+    // ============================================================
+
+    /// @dev Variant domain typehash: like the base typehash, but with
+    ///      `string name` as the leading field. The struct hash binds
+    ///      `keccak256(bytes(name))` (read live from storage on each
+    ///      call), so any successful `updateName(...)` invalidates
+    ///      previously-issued domain separators and the signatures
+    ///      that were produced under them. See the `IB20Security`
+    ///      interface-level "EIP-712 domain override" notes for
+    ///      rationale.
+    bytes32 internal constant SECURITY_EIP712_DOMAIN_TYPEHASH =
+        keccak256("EIP712Domain(string name,uint256 chainId,address verifyingContract)");
+
+    function DOMAIN_SEPARATOR() public view override(MockB20, IB20) returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                SECURITY_EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes(MockB20Storage.layout().name)),
+                block.chainid,
+                address(this)
+            )
+        );
+    }
+
+    function eip712Domain()
+        external
+        view
+        override(MockB20, IB20)
+        returns (
+            bytes1 fields,
+            string memory name_,
+            string memory version,
+            uint256 chainId,
+            address verifyingContract,
+            bytes32 salt,
+            uint256[] memory extensions
+        )
+    {
+        // Bits 0, 2, 3 set: name, chainId, verifyingContract are populated.
+        // version, salt, extensions are empty/zero. See IB20Security's
+        // contract-level natspec for why `name` joins the domain on this
+        // variant but not on the base.
+        fields = hex"0d";
+        name_ = MockB20Storage.layout().name;
+        version = "";
+        chainId = block.chainid;
+        verifyingContract = address(this);
+        salt = bytes32(0);
+        extensions = new uint256[](0);
+    }
+
+    /// @dev Override: defer to the base's `updateName` (which handles
+    ///      the `METADATA_ROLE` gate, the storage write, and the
+    ///      `NameUpdated` emission), then emit the ERC-5267
+    ///      `EIP712DomainChanged()` signal so off-chain integrators
+    ///      that cache `DOMAIN_SEPARATOR()` or `eip712Domain()`
+    ///      re-fetch. Event order is `NameUpdated` then
+    ///      `EIP712DomainChanged`, per the interface contract.
+    function updateName(string calldata newName) public override(MockB20, IB20) {
+        super.updateName(newName);
+        emit EIP712DomainChanged();
+    }
+
+    // ============================================================
     //                       POLICY OVERRIDES
     // ============================================================
 
