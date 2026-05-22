@@ -127,13 +127,10 @@ contract B20RenounceLastAdminTest is B20Test {
     ///         here too.
     function test_renounceLastAdmin_success_adminCountDrivenToZero() public {
         bytes32 adminCountSlot = MockB20Storage.adminCountSlot();
-        bytes32 initializedSlot = MockB20Storage.initializedSlot();
         assertEq(
             uint256(vm.load(address(token), adminCountSlot)), 1, "precondition: adminCount is 1"
         );
-        assertEq(
-            uint256(vm.load(address(token), initializedSlot)), 1, "precondition: initialized is true"
-        );
+        _assertInitialized(address(token), "precondition: initialized marker is set");
 
         vm.prank(admin);
         token.renounceLastAdmin();
@@ -141,10 +138,9 @@ contract B20RenounceLastAdminTest is B20Test {
         assertEq(
             uint256(vm.load(address(token), adminCountSlot)), 0, "adminCount must be 0 post-renounce"
         );
-        assertEq(
-            uint256(vm.load(address(token), initializedSlot)),
-            1,
-            "initialized slot must remain set (renounce only clears adminCount)"
+        _assertInitialized(
+            address(token),
+            "initialized marker must remain set (renounce only clears adminCount)"
         );
     }
 

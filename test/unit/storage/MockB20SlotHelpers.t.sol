@@ -258,7 +258,14 @@ contract MockB20SlotHelpersTest is B20Test {
     ///         flips at the end of createToken to close the bootstrap window.
     /// @dev `initialized` lives alone in its own slot at the end of the
     ///      layout, so the raw word IS the flag's value (1 = true, 0 = false).
-    function test_initializedSlot_success_decodesAfterBootstrap() public view {
+    ///
+    ///      Mock-world-only: the Rust precompile impl marks initialization
+    ///      via a 0xef bytecode stub at the token address rather than a
+    ///      storage slot (see `B20FactoryTest._assertInitialized`), so the
+    ///      slot pinned here is a Solidity-mock invariant with no
+    ///      counterpart on the live precompile. Skip under LIVE_PRECOMPILES.
+    function test_initializedSlot_success_decodesAfterBootstrap() public {
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         assertEq(
             uint256(vm.load(address(token), MockB20Storage.initializedSlot())),
             1,
@@ -269,7 +276,13 @@ contract MockB20SlotHelpersTest is B20Test {
     /// @notice Verifies `adminCountSlot()` and `initializedSlot()` are disjoint.
     /// @dev Regression: under the old packed layout these aliased to slot 8;
     ///      after the move they must land at distinct absolute slots.
-    function test_adminCountSlot_success_disjointFromInitializedSlot() public pure {
+    ///
+    ///      Mock-world-only: same rationale as
+    ///      `test_initializedSlot_success_decodesAfterBootstrap`. The Rust
+    ///      layout doesn't have an `initialized` slot at all, so disjointness
+    ///      from `adminCountSlot` is a Solidity-mock invariant.
+    function test_adminCountSlot_success_disjointFromInitializedSlot() public {
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         assertTrue(
             MockB20Storage.adminCountSlot() != MockB20Storage.initializedSlot(),
             "adminCount and initialized must live in disjoint slots"

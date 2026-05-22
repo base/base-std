@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {BaseTest} from "test/lib/BaseTest.sol";
+import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
@@ -148,5 +149,51 @@ contract B20FactoryTest is BaseTest {
     /// @notice Create a security-variant token with defaults.
     function _createSecurity() internal returns (address token) {
         return _createSecurity(alice, keccak256("security-salt"), _securityParams(), new bytes[](0));
+    }
+
+    // ============================================================
+    //                  INITIALIZED-MARKER ASSERTION
+    // ============================================================
+
+    /// @notice Asserts `token` was initialized by the factory, working in
+    ///         both mock and live-precompile worlds.
+    /// @dev    The two impls mark "this B20 has been brought to life by
+    ///         the factory" through different mechanisms:
+    ///
+    ///         - **Mock world** (default): `MockB20Factory` writes `1`
+    ///           directly via `vm.store` to a dedicated storage slot at
+    ///           the end of the B-20 storage layout
+    ///           (`MockB20Storage.initializedSlot()`). The mock has no
+    ///           bytecode-stub mechanism — token addresses get the full
+    ///           `MockB20` runtimeCode etched, and the bootstrap window
+    ///           is gated on the slot's value.
+    ///
+    ///         - **Live precompile world** (`LIVE_PRECOMPILES=true`):
+    ///           the Rust factory precompile calls `set_code(token, [0xef])`,
+    ///           planting a single-byte stub at the token address. The
+    ///           Rust `is_initialized` check is just `!info.is_empty_code_hash()`
+    ///           (see `crates/common/precompile-storage/src/provider.rs`).
+    ///           `0xef` is the EIP-3541-reserved opcode prefix, so the
+    ///           only way an address picks up that bytecode is via the
+    ///           factory's privileged `set_code` — making it an
+    ///           unforgeable "this is a live B-20" marker. The Rust
+    ///           `B20TokenStorage` layout has no `initialized` field
+    ///           at all; the dedicated mock slot would alias to
+    ///           `mint_policy_ids` on the Rust side, which is actively
+    ///           used for something else.
+    ///
+    ///         Tests that pin the bootstrap-window-closed state should
+    ///         use this helper instead of reading the slot directly, so
+    ///         the same test body is meaningful under both backends.
+    ///         Tests that specifically pin the SOLIDITY MOCK's slot
+    ///         layout (e.g. `MockB20SlotHelpers.t.sol`) should
+    ///         `vm.skip(vm.envOr("LIVE_PRECOMPILES", false))` instead —
+    ///         those assertions are inherently mock-world invariants.
+    function _assertInitialized(address token, string memory err) internal view {
+        if (vm.envOr("LIVE_PRECOMPILES", false)) {
+            assertGt(token.code.length, 0, err);
+        } else {
+            assertEq(uint256(vm.load(token, MockB20Storage.initializedSlot())), 1, err);
+        }
     }
 }

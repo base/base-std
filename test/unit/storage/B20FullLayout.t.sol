@@ -168,13 +168,20 @@ contract B20FullLayoutTest is B20Test {
             uint256(vm.load(tokenAddr, MockB20Storage.nonceSlot(alice))), token.nonces(alice), "slot 13: nonces[alice]"
         );
 
-        // ---------- initialized (slot 14) ----------
-        // Pinned at the end of the layout in its own slot. The factory
-        // flips this to true at the end of createToken; any non-zero
-        // word means the bootstrap window is closed.
-        assertEq(
-            uint256(vm.load(tokenAddr, MockB20Storage.initializedSlot())), 1, "slot 14: initialized must be true"
-        );
+        // ---------- initialized ----------
+        // Mock world: pinned at the end of the layout in its own slot
+        // (slot 14); the factory flips this to true at the end of
+        // createToken; any non-zero word means the bootstrap window is
+        // closed. Live world: the Rust factory plants a 0xef bytecode
+        // stub at the token address instead; the dedicated mock slot
+        // doesn't exist (would alias to a different field in the Rust
+        // layout). The helper picks the right check per backend.
+        //
+        // The other slot-by-slot assertions in this test are NOT
+        // dual-backend; they pin the Solidity layout exactly. Per-slot
+        // divergence against the Rust impl is the cross-validation
+        // signal documented in FORK_TESTING.md's bucket table.
+        _assertInitialized(tokenAddr, "initialized marker must be set");
     }
 
     /// @notice Populates the token with non-default values across every

@@ -296,11 +296,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             0,
             "adminCount must be 0 on zero-admin path"
         );
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.initializedSlot())),
-            1,
-            "initialized must still be set on zero-admin path"
-        );
+        _assertInitialized(token, "initialized must still be set on zero-admin path");
     }
 
     /// @notice Major reserve currencies (USD, EUR, JPY, GBP, CHF, CNY, CAD, AUD) are accepted.
@@ -412,11 +408,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             1,
             "adminCount must be 1 after bootstrap grant"
         );
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.initializedSlot())),
-            1,
-            "initialized slot must be set after bootstrap closes"
-        );
+        _assertInitialized(token, "initialized marker must be set after bootstrap closes");
     }
 
     /// @notice Verifies B20Created fires before any state-change events from initCalls
@@ -450,16 +442,12 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         _assumeValidCaller(caller);
         address token = _createDefault(caller, salt, _b20Params(), new bytes[](0));
 
-        // Paired slot assertion: the bootstrap window's gate is the
-        // `initialized` slot (dedicated, at the end of the layout).
-        // Confirming it's set proves the factory's privileged path is
-        // closed at the storage level (the surface-level role revert
-        // below is the consequence).
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.initializedSlot())),
-            1,
-            "initialized slot must be set after createToken returns"
-        );
+        // Paired assertion: the bootstrap window's gate is the
+        // `initialized` marker (mock: dedicated storage slot; live: 0xef
+        // bytecode stub at the token address). Confirming it's set
+        // proves the factory's privileged path is closed (the
+        // surface-level role revert below is the consequence).
+        _assertInitialized(token, "initialized marker must be set after createToken returns");
 
         // Pranking the factory address into a direct mint should now revert with the standard
         // role check, because the bootstrap window is closed.
@@ -494,11 +482,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             0,
             "adminCount must be 0 on zero-admin path"
         );
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.initializedSlot())),
-            1,
-            "initialized must still be set on zero-admin path"
-        );
+        _assertInitialized(token, "initialized must still be set on zero-admin path");
     }
 
     /// @notice Verifies stablecoin createToken executes with admin == address(0)
@@ -521,11 +505,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             0,
             "adminCount must be 0 on zero-admin path"
         );
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.initializedSlot())),
-            1,
-            "initialized must still be set on zero-admin path"
-        );
+        _assertInitialized(token, "initialized must still be set on zero-admin path");
         assertEq(
             vm.load(token, MockB20StablecoinStorage.currencySlot()),
             _expectedStringFieldSlot("USD"),
