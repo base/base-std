@@ -25,7 +25,9 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
     function test_policyRegistryLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         // Create one of each policy type with distinct admins; bob will
-        // be the staged pending admin for the allowlist policy.
+        // be the staged pending admin for the allowlist policy. The first
+        // `createPolicy` also lazily writes the built-in policies, populating
+        // the ALWAYS_ALLOW / ALWAYS_BLOCK slots before any custom write.
         uint64 allowlistId = _createAllowlist(admin, alice);
         uint64 blocklistId = _createBlocklist(admin, attacker);
 
@@ -49,6 +51,29 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         address registry = address(policyRegistry);
 
         // ---------- policies (slot 0 hashed by id) ----------
+        // Built-in slots populated by lazy init on the first create: both
+        // carry a renounced (zero) admin with the exists bit set, so the
+        // packed word is `1 << EXISTS_BIT`.
+        {
+            uint256 expectedBuiltin = MockPolicyRegistryStorage.packPolicy(address(0));
+            assertEq(
+                uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(0))),
+                expectedBuiltin,
+                "policies[ALWAYS_ALLOW_ID] must be packed(address(0)) after lazy init"
+            );
+            assertEq(
+                uint256(
+                    vm.load(
+                        registry,
+                        MockPolicyRegistryStorage.policySlot(
+                            MockPolicyRegistryStorage.packPolicyId(uint8(IPolicyRegistry.PolicyType.ALLOWLIST), 1)
+                        )
+                    )
+                ),
+                expectedBuiltin,
+                "policies[ALWAYS_BLOCK_ID] must be packed(address(0)) after lazy init"
+            );
+        }
         // Allowlist policy: admin = alice; type carried by the ID's top byte.
         {
             uint256 packedA = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(allowlistId)));
@@ -108,9 +133,10 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         );
 
         // ---------- nextCounter (slot 3) ----------
-        // First create pays the floor (skip 0/1) → counter 2; second → 3;
-        // nextCounter ends at 4 (lastCounter + 1). Compare counters
-        // directly since the full IDs differ in their type byte.
+        // Lazy init advances the counter from 0 to BUILTIN_POLICY_COUNT (=2)
+        // on the first create; allowlistId then consumes counter 2 and
+        // blocklistId consumes counter 3. nextCounter ends at lastCounter+1.
+        // Compare counters directly since the full IDs differ in their type byte.
         uint64 counterMask = (uint64(1) << 56) - 1;
         uint256 allowCounter = uint256(allowlistId & counterMask);
         uint256 blockCounter = uint256(blocklistId & counterMask);

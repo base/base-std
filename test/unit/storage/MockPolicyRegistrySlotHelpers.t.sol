@@ -110,12 +110,15 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
 
     /// @notice Verifies `nextCounterSlot()` advances by exactly 1 per
     ///         createPolicy in the steady state.
-    /// @dev    A first create pays the floor (skip 0/1) and lands counter at 3.
-    ///         Pre-create to exit the floor regime, then measure the delta.
+    /// @dev    The very first `createPolicy` also lazily writes the two
+    ///         built-in policies, advancing the counter from 0 to
+    ///         `BUILTIN_POLICY_COUNT` before consuming a slot for the new
+    ///         policy (so the apparent delta is `BUILTIN_POLICY_COUNT + 1`).
+    ///         Pre-create to clear init, then measure the steady-state delta.
     function test_nextCounterSlot_success_advancesByOneOnCreate(address policyAdmin) public {
         vm.assume(policyAdmin != address(0));
 
-        // Pre-create to clear the lazy floor.
+        // Pre-create to clear the lazy init.
         _createAllowlist(admin, policyAdmin);
 
         uint256 before = uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot()));
@@ -143,7 +146,8 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
 
     /// @notice Verifies the policy-ID layout matches the documented schema.
     /// @dev    A real createPolicy yields an ID whose top byte equals the
-    ///         enum value of the policy type passed in (ALLOWLIST = 2).
+    ///         enum value of the policy type passed in (ALLOWLIST = 1,
+    ///         BLOCKLIST = 0).
     function test_policyTypeFromId_success_decodesCreatePolicyResult(address policyAdmin) public {
         vm.assume(policyAdmin != address(0));
 
