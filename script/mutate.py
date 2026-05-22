@@ -205,8 +205,8 @@ MUTATIONS: list[Mutation] = [
     # === MockTokenFactory: skip the closeBootstrap step ===
     Mutation(
         MOCK_FACTORY,
-        "_writeBool(token, MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET), true);",
-        "// _writeBool(token, MockB20Storage.slotOf(MockB20Storage.INITIALIZED_OFFSET), true);",
+        "_writeUint(token, MockB20Storage.initializedSlot(), 1);",
+        "// _writeUint(token, MockB20Storage.initializedSlot(), 1);",
         "createToken: never closes the bootstrap window (factory remains permanently privileged)",
     ),
     # === MockTokenFactory: wrong supply cap default ===

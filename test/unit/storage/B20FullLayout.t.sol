@@ -43,12 +43,13 @@ contract B20FullLayoutTest is B20Test {
     ///         - 5: allowances (alice -> bob)
     ///         - 6: roles (DEFAULT_ADMIN_ROLE for admin, MINT_ROLE for minter, BURN_ROLE for burner)
     ///         - 7: roleAdmins (MINT_ROLE re-parented to PAUSE_ROLE)
-    ///         - 8: packed adminCount + initialized
+    ///         - 8: adminCount (own slot)
     ///         - 9: transferPolicyIds (all 3 lanes)
     ///         - 10: mintPolicyIds (receiver lane)
     ///         - 11: pausedVectors (TRANSFER + MINT bits)
     ///         - 12: supplyCap
     ///         - 13: nonces (advanced via permit)
+    ///         - 14: initialized (own slot at end of layout)
     function test_b20Layout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -114,12 +115,11 @@ contract B20FullLayoutTest is B20Test {
             "slot 7: roleAdmins[MINT_ROLE] re-parented to PAUSE_ROLE"
         );
 
-        // ---------- Packed adminCount + initialized (slot 8) ----------
-        // adminCount = 1 (only `admin` holds DEFAULT_ADMIN_ROLE),
-        // initialized = true (bootstrap closed).
-        uint256 packedAdmin = uint256(vm.load(tokenAddr, MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packedAdmin)), 1, "slot 8 lane: adminCount");
-        assertTrue(MockB20Storage.initializedFromPacked(packedAdmin), "slot 8 lane: initialized");
+        // ---------- adminCount (slot 8) ----------
+        // adminCount = 1 (only `admin` holds DEFAULT_ADMIN_ROLE). Lives
+        // alone in its own slot now that `initialized` was moved to the
+        // end of the layout.
+        assertEq(uint256(vm.load(tokenAddr, MockB20Storage.adminCountSlot())), 1, "slot 8: adminCount");
 
         // ---------- Policy lanes (slots 9..10) ----------
         // All three transfer-side lanes set to ALWAYS_BLOCK_ID; mint-side
@@ -166,6 +166,14 @@ contract B20FullLayoutTest is B20Test {
         // surface and the slot match.
         assertEq(
             uint256(vm.load(tokenAddr, MockB20Storage.nonceSlot(alice))), token.nonces(alice), "slot 13: nonces[alice]"
+        );
+
+        // ---------- initialized (slot 14) ----------
+        // Pinned at the end of the layout in its own slot. The factory
+        // flips this to true at the end of createToken; any non-zero
+        // word means the bootstrap window is closed.
+        assertEq(
+            uint256(vm.load(tokenAddr, MockB20Storage.initializedSlot())), 1, "slot 14: initialized must be true"
         );
     }
 

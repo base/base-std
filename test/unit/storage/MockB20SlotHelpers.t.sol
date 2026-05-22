@@ -12,7 +12,9 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPo
 ///         packed-slot codec helpers. Each test sets a known value via
 ///         the IB20 surface, reads the helper-computed slot via
 ///         `vm.load`, and asserts the slot reflects the same value the
-///         surface returns.
+///         surface returns. Both single-field slots (`adminCount`,
+///         `initialized`) and packed-lane slots (`transferPolicyIds`,
+///         `mintPolicyIds`) get coverage here.
 ///
 /// @dev These tests are the canonical reference for what slot each
 ///      logical field lives at and how packed slots are decoded. The
@@ -238,23 +240,40 @@ contract MockB20SlotHelpersTest is B20Test {
         assertEq(MockB20Storage.mintReceiverPolicyId(MockB20Storage.packMintPolicyIds(receiverId)), receiverId);
     }
 
-    /// @notice Verifies the packed adminCount+initialized slot decodes
-    ///         correctly after factory bootstrap.
-    /// @dev Factory bootstrap grants DEFAULT_ADMIN_ROLE (→ adminCount = 1)
-    ///      and flips `initialized` to true. The packed slot must decode
-    ///      to (1, true).
-    function test_adminCountAndInitializedSlot_success_decodesAfterBootstrap() public view {
-        uint256 packed = uint256(vm.load(address(token), MockB20Storage.adminCountAndInitializedSlot()));
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), 1, "adminCount must be 1 after bootstrap");
-        assertTrue(MockB20Storage.initializedFromPacked(packed), "initialized must be true after bootstrap");
+    /// @notice Verifies `adminCountSlot()` locates the slot factory
+    ///         bootstrap and `_grantRole(DEFAULT_ADMIN_ROLE, ...)` write to.
+    /// @dev Factory bootstrap grants DEFAULT_ADMIN_ROLE to `admin`, so
+    ///      the slot must read exactly `1` after setup. `adminCount`
+    ///      lives alone in its own slot (no packing with `initialized`
+    ///      anymore), so the raw slot value IS the count.
+    function test_adminCountSlot_success_decodesAfterBootstrap() public view {
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())),
+            1,
+            "adminCount slot must read 1 after bootstrap"
+        );
     }
 
-    /// @notice Verifies `packAdminCountAndInitialized` is the inverse of the decoders.
-    /// @dev Round-trip: pack, then unpack, expect the inputs back.
-    function test_packAdminCountAndInitialized_success_roundtrips(uint248 count, bool init) public pure {
-        uint256 packed = MockB20Storage.packAdminCountAndInitialized(count, init);
-        assertEq(uint256(MockB20Storage.adminCountFromPacked(packed)), uint256(count), "count round-trip");
-        assertEq(MockB20Storage.initializedFromPacked(packed), init, "init round-trip");
+    /// @notice Verifies `initializedSlot()` locates the slot the factory
+    ///         flips at the end of createToken to close the bootstrap window.
+    /// @dev `initialized` lives alone in its own slot at the end of the
+    ///      layout, so the raw word IS the flag's value (1 = true, 0 = false).
+    function test_initializedSlot_success_decodesAfterBootstrap() public view {
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.initializedSlot())),
+            1,
+            "initialized slot must read 1 after bootstrap (window closed)"
+        );
+    }
+
+    /// @notice Verifies `adminCountSlot()` and `initializedSlot()` are disjoint.
+    /// @dev Regression: under the old packed layout these aliased to slot 8;
+    ///      after the move they must land at distinct absolute slots.
+    function test_adminCountSlot_success_disjointFromInitializedSlot() public pure {
+        assertTrue(
+            MockB20Storage.adminCountSlot() != MockB20Storage.initializedSlot(),
+            "adminCount and initialized must live in disjoint slots"
+        );
     }
 
     /// @notice Verifies `nameSlot()` returns a slot whose value encodes
