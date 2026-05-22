@@ -361,22 +361,22 @@ contract MockB20 is IB20 {
     //                            POLICY
     // ============================================================
 
-    function policyId(bytes32 policyName) external view returns (uint64) {
-        return _readPolicyId(policyName);
+    function policyId(bytes32 policyScope) external view returns (uint64) {
+        return _readPolicyId(policyScope);
     }
 
-    function updatePolicy(bytes32 policyName, uint64 newPolicyId) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updatePolicy(bytes32 policyScope, uint64 newPolicyId) external onlyRole(DEFAULT_ADMIN_ROLE) {
         // Read the old ID for the event payload. Reverts
         // `UnsupportedPolicyType` here if the type has no slot on this token.
-        uint64 oldPolicyId = _readPolicyId(policyName);
+        uint64 oldPolicyId = _readPolicyId(policyScope);
         // Existence check at write time is what lets `isAuthorized` skip
         // its own existence SLOAD on the hot path. `policyExists` rejects
         // both unknown and malformed IDs.
         if (!IPolicyRegistry(POLICY_REGISTRY).policyExists(newPolicyId)) {
             revert PolicyNotFound(newPolicyId);
         }
-        _writePolicyId(policyName, newPolicyId);
-        emit PolicyUpdated(policyName, oldPolicyId, newPolicyId);
+        _writePolicyId(policyScope, newPolicyId);
+        emit PolicyUpdated(policyScope, oldPolicyId, newPolicyId);
     }
 
     /// @dev Reads a policy ID from storage. Each supported policy type
@@ -387,13 +387,13 @@ contract MockB20 is IB20 {
     ///      masquerade as "no restriction". Variants that add their own
     ///      policy types override this to check their own slots before
     ///      falling through to `super`.
-    function _readPolicyId(bytes32 policyName) internal view virtual returns (uint64) {
+    function _readPolicyId(bytes32 policyScope) internal view virtual returns (uint64) {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
-        if (policyName == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds);
-        if (policyName == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 64);
-        if (policyName == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds >> 128);
-        if (policyName == MINT_RECEIVER_POLICY) return uint64($.mintPolicyIds);
-        revert UnsupportedPolicyType(policyName);
+        if (policyScope == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds);
+        if (policyScope == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 64);
+        if (policyScope == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds >> 128);
+        if (policyScope == MINT_RECEIVER_POLICY) return uint64($.mintPolicyIds);
+        revert UnsupportedPolicyType(policyScope);
     }
 
     /// @dev Writes a policy ID to storage. Hot-path types update their
@@ -403,19 +403,19 @@ contract MockB20 is IB20 {
     ///      Variants override to handle their own policy types before
     ///      falling through to `super`. Mask + shift are explicit so
     ///      the Rust impl can replicate the exact bit layout.
-    function _writePolicyId(bytes32 policyName, uint64 newPolicyId) internal virtual {
+    function _writePolicyId(bytes32 policyScope, uint64 newPolicyId) internal virtual {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 mask = uint256(type(uint64).max);
-        if (policyName == TRANSFER_SENDER_POLICY) {
+        if (policyScope == TRANSFER_SENDER_POLICY) {
             $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);
-        } else if (policyName == TRANSFER_RECEIVER_POLICY) {
+        } else if (policyScope == TRANSFER_RECEIVER_POLICY) {
             $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);
-        } else if (policyName == TRANSFER_EXECUTOR_POLICY) {
+        } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);
-        } else if (policyName == MINT_RECEIVER_POLICY) {
+        } else if (policyScope == MINT_RECEIVER_POLICY) {
             $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);
         } else {
-            revert UnsupportedPolicyType(policyName);
+            revert UnsupportedPolicyType(policyScope);
         }
     }
 

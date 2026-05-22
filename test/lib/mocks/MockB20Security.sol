@@ -253,21 +253,21 @@ contract MockB20Security is MockB20, IB20Security {
     ///      this variant's own packed slot; everything else falls
     ///      through to the base. The base's UnsupportedPolicyType
     ///      revert is the terminal case.
-    function _readPolicyId(bytes32 policyName) internal view virtual override returns (uint64) {
-        if (policyName == REDEEM_SENDER_POLICY) {
+    function _readPolicyId(bytes32 policyScope) internal view virtual override returns (uint64) {
+        if (policyScope == REDEEM_SENDER_POLICY) {
             return uint64(MockB20RedeemStorage.layout().redeemPolicyIds);
         }
-        return super._readPolicyId(policyName);
+        return super._readPolicyId(policyScope);
     }
 
-    function _writePolicyId(bytes32 policyName, uint64 newPolicyId) internal virtual override {
-        if (policyName == REDEEM_SENDER_POLICY) {
+    function _writePolicyId(bytes32 policyScope, uint64 newPolicyId) internal virtual override {
+        if (policyScope == REDEEM_SENDER_POLICY) {
             MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
             uint256 mask = uint256(type(uint64).max);
             $.redeemPolicyIds = ($.redeemPolicyIds & ~mask) | uint256(newPolicyId);
             return;
         }
-        super._writePolicyId(policyName, newPolicyId);
+        super._writePolicyId(policyScope, newPolicyId);
     }
 
     // ============================================================
