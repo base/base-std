@@ -29,7 +29,7 @@ library ISO4217 {
     bytes3 private constant AFN = "AFN";
     bytes3 private constant ALL = "ALL";
     bytes3 private constant AMD = "AMD";
-    bytes3 private constant ANG = "ANG";
+    bytes3 private constant ANG = "ANG"; // ISO-withdrawn 2025-03-31 (replaced by XCG); kept for backwards compatibility
     bytes3 private constant AOA = "AOA";
     bytes3 private constant ARS = "ARS";
     bytes3 private constant AUD = "AUD";
@@ -39,7 +39,7 @@ library ISO4217 {
     bytes3 private constant BAM = "BAM";
     bytes3 private constant BBD = "BBD";
     bytes3 private constant BDT = "BDT";
-    bytes3 private constant BGN = "BGN";
+    bytes3 private constant BGN = "BGN"; // ISO-withdrawn 2026-01-01 (Amendment 180, Bulgaria → EUR); kept for backwards compatibility
     bytes3 private constant BHD = "BHD";
     bytes3 private constant BIF = "BIF";
     bytes3 private constant BMD = "BMD";
@@ -55,6 +55,7 @@ library ISO4217 {
     bytes3 private constant CAD = "CAD";
     bytes3 private constant CDF = "CDF";
     bytes3 private constant CHF = "CHF";
+    bytes3 private constant CLP = "CLP";
     bytes3 private constant CNY = "CNY";
     bytes3 private constant COP = "COP";
     bytes3 private constant CRC = "CRC";
@@ -195,9 +196,10 @@ library ISO4217 {
 
     bytes3 private constant WST = "WST";
 
-    // Multi-country circulating fiat (BCEAO, BEAC, ECCB, IEOM).
+    // Multi-country circulating fiat (BCEAO, BEAC, ECCB, IEOM, CBCS).
     bytes3 private constant XAF = "XAF";
     bytes3 private constant XCD = "XCD";
+    bytes3 private constant XCG = "XCG";
     bytes3 private constant XOF = "XOF";
     bytes3 private constant XPF = "XPF";
 
@@ -248,8 +250,8 @@ library ISO4217 {
         }
         // C: three G10/major currencies (CHF, CNY, CAD) lead, then CZK.
         if (first == "C") {
-            return c == CHF || c == CNY || c == CAD || c == CZK || c == COP || c == CRC || c == CUP
-                || c == CVE || c == CDF;
+            return c == CHF || c == CNY || c == CAD || c == CZK || c == COP || c == CLP || c == CRC
+                || c == CUP || c == CVE || c == CDF;
         }
         // A: AUD is G10; AED is a high-volume oil-linked unit.
         if (first == "A") {
@@ -298,7 +300,7 @@ library ISO4217 {
         // D: DKK is top-25 FX.
         if (first == "D") return c == DKK || c == DOP || c == DZD || c == DJF;
         // X: multi-country circulating fiat; XOF covers the largest population.
-        if (first == "X") return c == XOF || c == XAF || c == XCD || c == XPF;
+        if (first == "X") return c == XOF || c == XAF || c == XCD || c == XCG || c == XPF;
         // Z: ZAR is top-25 FX.
         if (first == "Z") return c == ZAR || c == ZMW || c == ZWG;
         // V: VND is the largest by economy/population in the bucket.
