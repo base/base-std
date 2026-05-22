@@ -193,6 +193,7 @@ contract B20FullLayoutTest is B20Test {
         // name/symbol come from factory bootstrap ("Test" / "TST" via
         // B20FactoryTest._b20Params()). Set contractURI explicitly so
         // slot 2 has a non-zero value to assert.
+        _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
         token.updateContractURI("https://example.com/contract.json");
 

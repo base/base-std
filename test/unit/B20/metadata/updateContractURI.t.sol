@@ -8,17 +8,19 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20UpdateContractURITest is B20Test {
-    /// @notice Verifies updateContractURI reverts when caller lacks DEFAULT_ADMIN_ROLE
-    /// @dev Access control: only admin may update the URI; checks AccessControlUnauthorizedAccount
+    /// @notice Verifies updateContractURI reverts when caller lacks METADATA_ROLE
+    /// @dev Access control: only METADATA_ROLE holders may update the URI (separated
+    ///      from DEFAULT_ADMIN_ROLE per IB20 spec so metadata authority can be
+    ///      delegated to a corporate-actions desk). Checks AccessControlUnauthorizedAccount.
     function test_updateContractURI_revert_unauthorized(address caller, string calldata newURI) public {
         _assumeValidCaller(caller);
-        vm.assume(caller != admin);
+        // Admin doesn't hold METADATA_ROLE by default either; only filter out callers we've
+        // explicitly granted the role.
+        vm.assume(!token.hasRole(B20Constants.METADATA_ROLE, caller));
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
-            )
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.METADATA_ROLE)
         );
         token.updateContractURI(newURI);
     }
@@ -28,6 +30,7 @@ contract B20UpdateContractURITest is B20Test {
     ///      Paired slot assertion: the `contractURI` field slot holds
     ///      the Solidity-encoded string value byte-for-byte.
     function test_updateContractURI_success_updatesURI(string calldata newURI) public {
+        _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
         token.updateContractURI(newURI);
         assertEq(token.contractURI(), newURI, "contractURI() must return the new value");
@@ -41,6 +44,7 @@ contract B20UpdateContractURITest is B20Test {
     /// @notice Verifies updateContractURI emits ContractURIUpdated()
     /// @dev ERC-7572 convention: the event is argument-free; integrators refetch via contractURI()
     function test_updateContractURI_success_emitsContractURIUpdated(string calldata newURI) public {
+        _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.expectEmit(false, false, false, false, address(token));
         emit IB20.ContractURIUpdated();
         vm.prank(admin);

@@ -70,9 +70,9 @@ import {IB20} from "./IB20.sol";
 ///         **Announcement pairing.** Every state-changing operator
 ///         call that affects holder-visible token semantics
 ///         (`updateShareRatio`, `updateSecurityIdentifier`, `updateName`,
-///         `updateSymbol`, `batchMint`, `batchBurn`, and admin-level
-///         changes such as `updatePolicy` / `updateSupplyCap` /
-///         `updateContractURI` / `pause` / `unpause`) SHOULD be issued by
+///         `updateSymbol`, `updateContractURI`, `batchMint`, `batchBurn`,
+///         and admin-level changes such as `updatePolicy` /
+///         `updateSupplyCap` / `pause` / `unpause`) SHOULD be issued by
 ///         encoding the call into the `internalCalls` parameter of
 ///         `announce(...)`. The token then:
 ///         1. emits `Announcement(caller, id, description, uri)`,

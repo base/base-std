@@ -311,10 +311,10 @@ interface IB20 {
     ///         previousAdmin)` event. Signals the irreversible
     ///         transition of the token to a permanently adminless
     ///         state: no `grantRole`, `revokeRole`, `setRoleAdmin`,
-    ///         `updatePolicy`, `updateSupplyCap`, or `updateContractURI` call
-    ///         can ever succeed again. Existing role holders
-    ///         (`MINT_ROLE`, `BURN_ROLE`, `METADATA_ROLE`, etc.) retain
-    ///         their abilities, but no new grants are possible.
+    ///         `updatePolicy`, or `updateSupplyCap` call can ever
+    ///         succeed again. Existing role holders (`MINT_ROLE`,
+    ///         `BURN_ROLE`, `METADATA_ROLE`, etc.) retain their
+    ///         abilities, but no new grants are possible.
     ///         Indexers should treat this event as a one-way state
     ///         transition.
     event LastAdminRenounced(address indexed previousAdmin);
@@ -374,9 +374,9 @@ interface IB20 {
     /// @notice The default top-level admin role, equal to `bytes32(0)` per
     ///         the OpenZeppelin AccessControl convention. The admin
     ///         manages all other roles via `grantRole`, `revokeRole`, and
-    ///         `setRoleAdmin`. The admin can also `updatePolicy`,
-    ///         `updateSupplyCap`, and `updateContractURI`. Name and symbol
-    ///         updates are gated by `METADATA_ROLE`, not by this role.
+    ///         `setRoleAdmin`. The admin can also `updatePolicy` and
+    ///         `updateSupplyCap`. Name, symbol, and `contractURI` updates
+    ///         are gated by `METADATA_ROLE`, not by this role.
     /// @dev    There is NO two-step delay-protected transfer for this
     ///         role. `grantRole(DEFAULT_ADMIN_ROLE, ...)` and
     ///         `revokeRole(DEFAULT_ADMIN_ROLE, ...)` work uniformly.
@@ -412,13 +412,14 @@ interface IB20 {
     ///         action than the pause itself.
     function UNPAUSE_ROLE() external view returns (bytes32);
 
-    /// @notice Required to call `updateName` and `updateSymbol`. Held
-    ///         separately from `DEFAULT_ADMIN_ROLE` so the authority to
-    ///         re-brand or legally-restructure the token can be
-    ///         delegated to a metadata operator (e.g. corporate-actions
-    ///         desk for security tokens) without granting the broader
-    ///         admin powers (role grants, policy changes, supply-cap
-    ///         changes, etc.).
+    /// @notice Required to call `updateName`, `updateSymbol`, and
+    ///         `updateContractURI`. Held separately from
+    ///         `DEFAULT_ADMIN_ROLE` so the authority to re-brand or
+    ///         legally-restructure the token can be delegated to a
+    ///         metadata operator (e.g. corporate-actions desk for
+    ///         security tokens) without granting the broader admin
+    ///         powers (role grants, policy changes, supply-cap changes,
+    ///         etc.).
     function METADATA_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
@@ -659,10 +660,10 @@ interface IB20 {
     ///         reinstated: `grantRole(DEFAULT_ADMIN_ROLE, ...)` would
     ///         require an admin caller and there is none. All
     ///         admin-gated operations (`updatePolicy`, `updateSupplyCap`,
-    ///         `updateContractURI`, and any `grantRole` / `revokeRole` /
-    ///         `setRoleAdmin` for other roles) become permanently
-    ///         uncallable. Operations gated by other roles
-    ///         (`updateName` / `updateSymbol` via `METADATA_ROLE`, `mint` via
+    ///         and any `grantRole` / `revokeRole` / `setRoleAdmin` for
+    ///         other roles) become permanently uncallable. Operations
+    ///         gated by other roles (`updateName` / `updateSymbol` /
+    ///         `updateContractURI` via `METADATA_ROLE`, `mint` via
     ///         `MINT_ROLE`, etc.) remain callable by their existing
     ///         role holders, but no new grants for those roles are
     ///         possible.
@@ -825,7 +826,7 @@ interface IB20 {
     ///         this token, per ERC-7572.
     function contractURI() external view returns (string memory);
 
-    /// @notice Updates `contractURI`. Requires `DEFAULT_ADMIN_ROLE`. Emits
+    /// @notice Updates `contractURI`. Requires `METADATA_ROLE`. Emits
     ///         the parameterless `ContractURIUpdated` event per ERC-7572;
     ///         integrators re-fetch `contractURI()` after observing it.
     function updateContractURI(string calldata newURI) external;
