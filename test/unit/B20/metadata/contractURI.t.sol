@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {B20Test} from "test/lib/B20Test.sol";
+import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20ContractURITest is B20Test {
     /// @notice Verifies contractURI returns the value set at token creation
@@ -15,6 +16,7 @@ contract B20ContractURITest is B20Test {
     /// @notice Verifies contractURI reflects updates made via updateContractURI
     /// @dev Mutable-metadata readback; canonical setter test lives in updateContractURI.t.sol
     function test_contractURI_success_reflectsSetContractURI(string calldata newURI) public {
+        _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
         token.updateContractURI(newURI);
         assertEq(token.contractURI(), newURI, "contractURI must reflect updateContractURI");

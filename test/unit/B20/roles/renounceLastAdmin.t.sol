@@ -69,8 +69,10 @@ contract B20RenounceLastAdminTest is B20Test {
     /// @notice Verifies admin-gated operations revert after renounceLastAdmin
     /// @dev    Permanent-immutability invariant. updatePolicy is the canonical example;
     ///         the same mechanism (no admin holder → AccessControlUnauthorizedAccount on
-    ///         any DEFAULT_ADMIN_ROLE-gated call) covers updateSupplyCap, updateContractURI,
-    ///         updateName, updateSymbol, grantRole / revokeRole / setRoleAdmin for any role.
+    ///         any DEFAULT_ADMIN_ROLE-gated call) covers updateSupplyCap and grantRole /
+    ///         revokeRole / setRoleAdmin for any role. (updateContractURI / updateName /
+    ///         updateSymbol are gated by METADATA_ROLE, not DEFAULT_ADMIN_ROLE, so existing
+    ///         METADATA_ROLE holders can keep calling them after renunciation.)
     ///         No test should be able to reinstate an admin after this transition.
     function test_renounceLastAdmin_success_subsequentAdminCallsRevert(bytes32 policyType, uint64 newPolicyId) public {
         // Use a built-in policy ID so updatePolicy gets past policyExists() and would

@@ -528,7 +528,7 @@ contract MockB20 is IB20 {
         return MockB20Storage.layout().contractURI;
     }
 
-    function updateContractURI(string calldata newURI) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateContractURI(string calldata newURI) external onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().contractURI = newURI;
         emit ContractURIUpdated();
     }
