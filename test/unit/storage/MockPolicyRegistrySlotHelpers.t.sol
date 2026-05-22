@@ -110,11 +110,11 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
 
     /// @notice Verifies `nextCounterSlot()` advances by exactly 1 per
     ///         createPolicy in the steady state.
-    /// @dev    The very first `createPolicy` also triggers `writeBuiltins`,
-    ///         which advances the counter from 0 to `BUILTIN_POLICY_COUNT`
-    ///         before consuming a slot for the new policy (so the apparent
-    ///         delta is `BUILTIN_POLICY_COUNT + 1`). Pre-create to clear
-    ///         init, then measure the steady-state delta.
+    /// @dev    The very first `createPolicy` also lazily writes the two
+    ///         built-in policies, advancing the counter from 0 to
+    ///         `BUILTIN_POLICY_COUNT` before consuming a slot for the new
+    ///         policy (so the apparent delta is `BUILTIN_POLICY_COUNT + 1`).
+    ///         Pre-create to clear init, then measure the steady-state delta.
     function test_nextCounterSlot_success_advancesByOneOnCreate(address policyAdmin) public {
         vm.assume(policyAdmin != address(0));
 

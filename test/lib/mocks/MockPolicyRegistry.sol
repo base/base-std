@@ -21,6 +21,17 @@ library PolicyRegistryConstants {
     /// @notice Built-in policy ID that always rejects any account.
     /// @dev    Encodes as an ALLOWLIST at counter 1 (empty allowlist → block all).
     uint64 internal constant ALWAYS_BLOCK_ID = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | 1;
+
+    /// @notice Number of built-in policies the registry initializes on
+    ///         first use. The global counter is advanced to this value
+    ///         once both sentinels are populated, so custom policies
+    ///         start at counter `BUILTIN_POLICY_COUNT`.
+    /// @dev    Library `internal constant` so callers (tests + the Rust
+    ///         impl validator) can reference it at compile time without
+    ///         routing through a runtime getter — important because the
+    ///         live Rust precompile does NOT expose this value via its
+    ///         dispatch ABI.
+    uint56 internal constant BUILTIN_POLICY_COUNT = 2;
 }
 
 /// @title MockPolicyRegistry
@@ -57,44 +68,8 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///         redemption by pointing `REDEEM_SENDER_POLICY` here).
     uint64 public constant ALWAYS_BLOCK_ID = PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
-    /// @notice Number of built-in policies written by `writeBuiltins`.
-    ///         The global counter is left at this value after init so the
-    ///         first custom policy lands at counter `BUILTIN_POLICY_COUNT`.
-    /// @dev    Exposed publicly so tests and the Rust impl validator can
-    ///         reference the canonical floor without copying the literal.
-    uint56 public constant BUILTIN_POLICY_COUNT = 2;
-
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
     uint64 internal constant POLICY_ID_TYPE_SHIFT = 56;
-
-    // ============================================================
-    //                       INITIALIZATION
-    // ============================================================
-
-    /// @notice Writes the two built-in policies into the `policies` mapping.
-    ///
-    ///         Consumes counters `0` and `1`, leaving `nextCounter` at
-    ///         `BUILTIN_POLICY_COUNT` so custom policies start there. Both
-    ///         built-ins are written with a renounced (zero) admin so any
-    ///         attempt to mutate them via `require_admin`-gated paths fails
-    ///         with `Unauthorized`.
-    ///
-    ///         Idempotent: a re-entry with `nextCounter >= BUILTIN_POLICY_COUNT`
-    ///         is a no-op, so `_create` can call this on every entry without
-    ///         duplicating storage writes.
-    ///
-    /// @dev    Mirrors `PolicyRegistryStorage::write_builtins` in the Rust
-    ///         precompile. Public so `_create` can call it lazily AND so
-    ///         tests can assert the post-init slot layout without going
-    ///         through `createPolicy`.
-    function writeBuiltins() public {
-        MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
-        if ($.nextCounter >= BUILTIN_POLICY_COUNT) return;
-        uint256 packed = _encode(address(0));
-        $.policies[ALWAYS_ALLOW_ID] = packed;
-        $.policies[ALWAYS_BLOCK_ID] = packed;
-        $.nextCounter = BUILTIN_POLICY_COUNT;
-    }
 
     // ============================================================
     //                       POLICY CREATION
@@ -205,9 +180,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function policyAdmin(uint64 policyId) external view returns (address) {
         if (!_isWellFormed(policyId)) return address(0);
-        // No fast path for built-in IDs needed: `writeBuiltins` writes them
-        // with a zero admin, so the normal storage read returns address(0)
-        // for them just like for renounced policies and uncreated IDs.
+        // No fast path for built-in IDs needed: lazy init writes them with
+        // a zero admin, so the normal storage read returns address(0) for
+        // them just like for renounced policies and uncreated IDs.
         return _decodeAdmin(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
@@ -226,9 +201,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function _create(address admin, PolicyType policyType) internal returns (uint64 newPolicyId) {
         if (admin == address(0)) revert ZeroAddress();
         // Out-of-range `policyType` rejected by ABI decoding before this body runs.
-        // Lazy-init the built-in policies on the first create. `writeBuiltins`
+        // Lazy-init the built-in policies on the first create. `_writeBuiltins`
         // is idempotent, so calls after init are a cheap conditional return.
-        writeBuiltins();
+        _writeBuiltins();
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         uint56 counter = $.nextCounter;
         // No overflow guard: at one policy per 2-second block, exhausting the
@@ -240,6 +215,26 @@ contract MockPolicyRegistry is IPolicyRegistry {
         $.policies[newPolicyId] = _encode(admin);
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
+    }
+
+    /// @dev Writes the two built-in policies into the `policies` mapping and
+    ///      advances `nextCounter` past them so custom policies start at
+    ///      `PolicyRegistryConstants.BUILTIN_POLICY_COUNT`. Both built-ins are
+    ///      written with a renounced (zero) admin, so any later `require_admin`
+    ///      check against them rejects with `Unauthorized`.
+    ///
+    ///      Idempotent: re-entry with `nextCounter >= BUILTIN_POLICY_COUNT` is
+    ///      a no-op, so `_create` can call this on every entry. Internal /
+    ///      not exposed in the ABI to mirror `PolicyRegistryStorage::write_builtins`
+    ///      in the Rust precompile, which is `pub` in-crate but absent from
+    ///      the dispatched `PolicyRegistry` trait.
+    function _writeBuiltins() internal {
+        MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
+        if ($.nextCounter >= PolicyRegistryConstants.BUILTIN_POLICY_COUNT) return;
+        uint256 packed = _encode(address(0));
+        $.policies[PolicyRegistryConstants.ALWAYS_ALLOW_ID] = packed;
+        $.policies[PolicyRegistryConstants.ALWAYS_BLOCK_ID] = packed;
+        $.nextCounter = PolicyRegistryConstants.BUILTIN_POLICY_COUNT;
     }
 
     function _batchSetMembers(uint64 policyId, PolicyType policyType, bool value, address[] calldata accounts)

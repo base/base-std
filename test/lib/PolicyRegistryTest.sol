@@ -5,7 +5,7 @@ import {BaseTest} from "test/lib/BaseTest.sol";
 
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
-import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @notice Base test contract for `IPolicyRegistry` unit tests.
@@ -54,13 +54,14 @@ contract PolicyRegistryTest is BaseTest {
     /// @notice Predict the ID the next `createPolicy(_, policyType)` would assign.
     /// @dev    Reads `nextCounter` directly via `vm.load`. When the registry
     ///         has not yet been initialized (counter == 0), the next
-    ///         `createPolicy` call triggers `writeBuiltins` which advances
-    ///         the counter to `BUILTIN_POLICY_COUNT` before consuming it; the
-    ///         prediction matches by clamping pre-init reads up to that floor.
+    ///         `createPolicy` call advances the counter past the built-in
+    ///         sentinels before consuming it; the prediction matches by
+    ///         clamping pre-init reads up to `BUILTIN_POLICY_COUNT`.
     function _predictNextPolicyId(IPolicyRegistry.PolicyType policyType) internal view returns (uint64) {
-        uint56 counter = uint56(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot())));
-        if (counter < MockPolicyRegistry(address(policyRegistry)).BUILTIN_POLICY_COUNT()) {
-            counter = MockPolicyRegistry(address(policyRegistry)).BUILTIN_POLICY_COUNT();
+        uint56 counter =
+            uint56(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot())));
+        if (counter < PolicyRegistryConstants.BUILTIN_POLICY_COUNT) {
+            counter = PolicyRegistryConstants.BUILTIN_POLICY_COUNT;
         }
         return (uint64(uint8(policyType)) << 56) | uint64(counter);
     }

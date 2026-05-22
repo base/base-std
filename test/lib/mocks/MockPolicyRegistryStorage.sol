@@ -35,10 +35,10 @@ library MockPolicyRegistryStorage {
         // Staged pending admin for in-flight two-step admin transfers.
         mapping(uint64 policyId => address pendingAdmin) pendingAdmins;
         // Global monotonic counter for the low 56 bits of every policy ID.
-        // Starts at 0; advanced to 2 by `MockPolicyRegistry.writeBuiltins`
-        // (consuming counters 0 and 1 for the ALWAYS_ALLOW / ALWAYS_BLOCK
-        // built-ins). Custom policies are handed out the post-init value
-        // and onward.
+        // Starts at 0; lazily advanced to 2 on the first `createPolicy`
+        // call, which writes the ALWAYS_ALLOW / ALWAYS_BLOCK built-ins
+        // into counters 0 and 1 before consuming counter 2 for the new
+        // custom policy.
         uint56 nextCounter;
     }
 
@@ -148,8 +148,8 @@ library MockPolicyRegistryStorage {
     // ============================================================
     // Encoding: top byte = uint8(PolicyType); low 56 bits = counter.
     // Counters 0 and 1 belong to the ALWAYS_ALLOW / ALWAYS_BLOCK built-ins
-    // (written by `MockPolicyRegistry.writeBuiltins`); custom policies are
-    // assigned counter 2 and onward.
+    // (written by the registry on its first `createPolicy` call); custom
+    // policies are assigned counter 2 and onward.
 
     /// @notice Extracts the PolicyType discriminator byte (top 8 bits) from a custom policy ID.
     function policyTypeFromId(uint64 policyId) internal pure returns (uint8) {
