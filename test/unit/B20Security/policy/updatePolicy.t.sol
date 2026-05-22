@@ -12,7 +12,7 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 contract B20SecurityUpdatePolicyTest is B20SecurityTest {
     /// @notice Verifies updatePolicy(REDEEM_SENDER_POLICY, ...) reverts when caller lacks admin
     /// @dev Access control inherited from base: updatePolicy is `onlyRole(DEFAULT_ADMIN_ROLE)`
-    ///      regardless of which policyType is being written.
+    ///      regardless of which policyName is being written.
     function test_updatePolicy_revert_unauthorized_redeemSender(address caller, bool useBlock) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
