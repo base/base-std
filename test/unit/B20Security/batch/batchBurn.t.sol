@@ -27,7 +27,7 @@ contract B20SecurityBatchBurnTest is B20SecurityTest {
     ///      `batchBurn(...)` initCall: the call arrives at the token with `msg.sender == factory`
     ///      and `initialized == false`, but `onlyRoleStrict` requires the factory to actually
     ///      hold `BURN_FROM_ROLE` (which it never does), so the init-call reverts and the
-    ///      factory bubbles the inner AccessControlUnauthorizedAccount per ITokenFactory.InitCallFailed.
+    ///      factory bubbles the inner AccessControlUnauthorizedAccount per IB20Factory.InitCallFailed.
     function test_batchBurn_revert_factoryBootstrapBypassRejected(bytes32 salt) public {
         bytes[] memory initCalls = new bytes[](1);
         initCalls[0] = abi.encodeWithSelector(

@@ -9,8 +9,8 @@ library ActivationRegistryFeatureList {
     /// @dev keccak256("base.b20_token")
     bytes32 internal constant B20_TOKEN = 0x47a1afe8d3d691b87e090ee972d223a11f4da971ff5416c04985bb2393aca752;
 
-    /// @dev keccak256("base.token_factory")
-    bytes32 internal constant TOKEN_FACTORY = 0xceff857b4173841a3aef07ca52b183282fe74fe117e8f9dda0dcb3ddafd18a5b;
+    /// @dev keccak256("base.b20_factory")
+    bytes32 internal constant B20_FACTORY = 0x78751e29c8bcc0d609ab18e9fbc4158e73f7db25ae2ee095dad42e2578b1e800;
 
     /// @dev keccak256("base.policy_registry")
     bytes32 internal constant POLICY_REGISTRY = 0xb582ebae03f16fee49a6763f78df482fb11ae73f103ed0d330bbe556aa90a43f;

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
+import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
-contract TokenFactoryIsB20Test is TokenFactoryTest {
+contract B20FactoryIsB20Test is B20FactoryTest {
     /// @notice Verifies isB20 returns true for a freshly-created token
     /// @dev Recognition via address-prefix match; no storage read
     function test_isB20_success_trueForCreatedToken(bytes32 salt) public {

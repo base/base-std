@@ -284,7 +284,7 @@ contract MockB20SlotHelpersTest is B20Test {
     ///      against `bytes(name).length * 2` for the bootstrap-default name.
     function test_nameSlot_success_holdsShortStringEncoding() public view {
         bytes32 raw = vm.load(address(token), MockB20Storage.nameSlot());
-        // Bootstrap-default name from MockTokenFactory: empty string until
+        // Bootstrap-default name from MockB20Factory: empty string until
         // updateName is called, so encoding is the all-zero slot. We
         // also check the encoding is well-formed for whatever name is
         // currently set.

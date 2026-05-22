@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
+import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 
 import {ISO4217} from "test/lib/ISO4217.sol";
 
@@ -17,9 +17,9 @@ import {
     MockB20RedeemStorage
 } from "test/lib/mocks/MockB20Storage.sol";
 
-/// @title MockTokenFactory
-/// @notice Reference implementation of the `ITokenFactory` precompile
-///         surface. Etched at `StdPrecompiles.TOKEN_FACTORY_ADDRESS`
+/// @title MockB20Factory
+/// @notice Reference implementation of the `IB20Factory` precompile
+///         surface. Etched at `StdPrecompiles.B20_FACTORY_ADDRESS`
 ///         in `BaseTest.setUp` so local tests dispatch through this
 ///         mock; fork tests against a chain with the live precompile
 ///         hit the real factory at the same address with no test-code
@@ -41,7 +41,7 @@ import {
 ///            directly** via `vm.store` at the slot offsets declared in
 ///            `MockB20Storage`. The token has NO factory-only
 ///            entrypoints; its surface is exactly `IB20`.
-///         6. Emit `TokenCreated` (now WITHOUT an `admin` field —
+///         6. Emit `B20Created` (now WITHOUT an `admin` field —
 ///            see step 7).
 ///         7. Grant the initial admin role via a single low-level
 ///            `token.grantRole(DEFAULT_ADMIN_ROLE, admin)` call during
@@ -51,7 +51,7 @@ import {
 ///            `grantRole` call, and it emits the standard
 ///            `RoleGranted(DEFAULT_ADMIN_ROLE, admin, factory)` from
 ///            the token's own context. There is no separate "bootstrap
-///            admin write" or "TokenCreated.admin" field; the canonical
+///            admin write" or "B20Created.admin" field; the canonical
 ///            event for role changes is always `RoleGranted` regardless
 ///            of when it fires. Skipped when `admin == address(0)`
 ///            (the "demonstrate no owner" path).
@@ -60,7 +60,7 @@ import {
 ///            (the factory). During the bootstrap window the token
 ///            bypasses all authorization gates for factory-originated
 ///            calls per the "fully privileged" semantics on
-///            `ITokenFactory`.
+///            `IB20Factory`.
 ///         9. Flip the `initialized` flag (via `vm.store`), closing the
 ///            privileged window. After this point the factory has no
 ///            special access; all subsequent operations on the token
@@ -85,7 +85,7 @@ import {
 ///         impl's behavior matches the *observable result* even though
 ///         the path differs (atomic slot-write + log-push vs. a single
 ///         self-call frame).
-contract MockTokenFactory is ITokenFactory {
+contract MockB20Factory is IB20Factory {
     /// @dev Hardcoded forge-std VM address. The factory uses `vm.etch`
     ///      to plant token bytecode at the deterministic address and
     ///      `vm.store` to write the token's initial state directly.
@@ -93,8 +93,8 @@ contract MockTokenFactory is ITokenFactory {
     ///      reference impls live under `test/` rather than `src/`.
     Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    /// @inheritdoc ITokenFactory
-    function createToken(TokenVariant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
+    /// @inheritdoc IB20Factory
+    function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
         returns (address token)
     {
@@ -107,16 +107,16 @@ contract MockTokenFactory is ITokenFactory {
         string memory isin_;
         uint256 minimumRedeemable_;
 
-        if (variant == TokenVariant.DEFAULT) {
+        if (variant == B20Variant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 18;
-        } else if (variant == TokenVariant.STABLECOIN) {
+        } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
             // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
             if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
             name_ = p.name;
@@ -124,9 +124,9 @@ contract MockTokenFactory is ITokenFactory {
             admin = p.initialAdmin;
             decimals = 6;
             currency_ = p.currency;
-        } else if (variant == TokenVariant.SECURITY) {
+        } else if (variant == B20Variant.SECURITY) {
             B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version);
+            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
             if (bytes(p.isin).length == 0) revert MissingRequiredField();
             name_ = p.name;
             symbol_ = p.symbol;
@@ -143,9 +143,9 @@ contract MockTokenFactory is ITokenFactory {
         if (token.code.length != 0) revert TokenAlreadyExists(token);
 
         // -- 4. Etch the variant-appropriate runtime bytecode --
-        if (variant == TokenVariant.DEFAULT) {
+        if (variant == B20Variant.DEFAULT) {
             vm.etch(token, type(MockB20).runtimeCode);
-        } else if (variant == TokenVariant.STABLECOIN) {
+        } else if (variant == B20Variant.STABLECOIN) {
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
         } else {
             // SECURITY (NONE / unknown variants already reverted above).
@@ -157,16 +157,16 @@ contract MockTokenFactory is ITokenFactory {
         //       canonical grantRole path in step 7 so RoleGranted fires
         //       from the token.
         _writeBaseStorage(token, name_, symbol_);
-        if (variant == TokenVariant.STABLECOIN) {
+        if (variant == B20Variant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
-        } else if (variant == TokenVariant.SECURITY) {
+        } else if (variant == B20Variant.SECURITY) {
             _writeSecurityStorage(token, isin_, minimumRedeemable_);
         }
 
-        // -- 6. Emit TokenCreated. Identity-only signal; admin role
+        // -- 6. Emit B20Created. Identity-only signal; admin role
         //       assignment is announced via the standard RoleGranted
         //       event from step 7.
-        emit TokenCreated(token, variant, name_, symbol_, decimals);
+        emit B20Created(token, variant, name_, symbol_, decimals);
 
         // -- 7. Grant the initial admin role via the canonical path.
         //       msg.sender at the token is address(this) == factory,
@@ -181,7 +181,7 @@ contract MockTokenFactory is ITokenFactory {
 
         // -- 8. Dispatch initCalls. Same privileged-window bypass as
         //       step 7; init-call reverts roll up to abort the whole
-        //       creation. Per ITokenFactory.InitCallFailed NatSpec, we
+        //       creation. Per IB20Factory.InitCallFailed NatSpec, we
         //       bubble the underlying revert data when present so
         //       developers see the actual cause (e.g. InvalidReceiver,
         //       SupplyCapExceeded) rather than an opaque wrapper. Only
@@ -213,17 +213,17 @@ contract MockTokenFactory is ITokenFactory {
     /// @dev `DEFAULT_ADMIN_ROLE` per OZ AccessControl convention.
     bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
 
-    /// @inheritdoc ITokenFactory
-    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt) external pure returns (address) {
+    /// @inheritdoc IB20Factory
+    function getB20Address(B20Variant variant, address sender, bytes32 salt) external pure returns (address) {
         return _computeAddress(variant, sender, salt);
     }
 
-    /// @inheritdoc ITokenFactory
+    /// @inheritdoc IB20Factory
     function isB20(address token) external pure returns (bool) {
         return _isB20Prefix(token);
     }
 
-    /// @inheritdoc ITokenFactory
+    /// @inheritdoc IB20Factory
     function isB20Initialized(address token) external view returns (bool) {
         if (!_isB20Prefix(token)) return false;
         // Same dedicated slot the factory flips at the end of createToken
@@ -242,7 +242,7 @@ contract MockTokenFactory is ITokenFactory {
     ///        bytes [1:10]  = 0x00 (9 zero bytes)
     ///        byte [10]     = variant
     ///        bytes [11:20] = keccak256(sender, salt)[0:9]
-    function _computeAddress(TokenVariant variant, address sender, bytes32 salt) internal pure returns (address) {
+    function _computeAddress(B20Variant variant, address sender, bytes32 salt) internal pure returns (address) {
         bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));
         uint160 addr = (uint160(0xB2) << 152) | (uint160(uint8(variant)) << 72) | uint160(uint72(tail));
         return address(addr);

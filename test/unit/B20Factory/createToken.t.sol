@@ -6,7 +6,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
-import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
+import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {ISO4217} from "test/lib/ISO4217.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
@@ -17,9 +17,9 @@ import {
     MockB20SecurityStorage,
     MockB20RedeemStorage
 } from "test/lib/mocks/MockB20Storage.sol";
-import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
+import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
-contract TokenFactoryCreateTokenTest is TokenFactoryTest {
+contract B20FactoryCreateB20Test is B20FactoryTest {
     // Role identifiers are accessed as `MINT_ROLE` etc. — these are
     // compile-time constants on the contract type, so they don't require an
     // instantiated token (relevant during createToken setup where the token
@@ -29,22 +29,22 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
                                 REVERTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Verifies createToken rejects raw variant bytes outside the TokenVariant enum range
-    /// @dev TokenVariant has no "NONE" sentinel; typed callers cannot construct an out-of-range
+    /// @notice Verifies createToken rejects raw variant bytes outside the B20Variant enum range
+    /// @dev B20Variant has no "NONE" sentinel; typed callers cannot construct an out-of-range
     ///      value. The ABI decoder rejects out-of-range enum bytes with a Panic(0x21) before the
     ///      factory body's `else { revert InvalidVariant(); }` branch is ever reached, so the
     ///      observable behavior from a raw-bytes caller is a decode-time panic rather than a
     ///      typed factory revert.
-    function test_createToken_revert_outOfRangeVariant(address caller, bytes32 salt, uint8 badVariant) public {
+    function test_createB20_revert_outOfRangeVariant(address caller, bytes32 salt, uint8 badVariant) public {
         _assumeValidCaller(caller);
-        badVariant = uint8(bound(uint256(badVariant), uint256(type(ITokenFactory.TokenVariant).max) + 1, 255));
+        badVariant = uint8(bound(uint256(badVariant), uint256(type(IB20Factory.B20Variant).max) + 1, 255));
         vm.prank(caller);
         // ABI decoder panic for out-of-range enum value.
         vm.expectRevert();
         (bool ok,) = address(factory)
             .call(
                 abi.encodeWithSelector(
-                    ITokenFactory.createToken.selector, badVariant, salt, abi.encode(_b20Params()), new bytes[](0)
+                    IB20Factory.createB20.selector, badVariant, salt, abi.encode(_b20Params()), new bytes[](0)
                 )
             );
         ok; // silence unused warning; the revert is asserted via vm.expectRevert.
@@ -52,29 +52,29 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     /// @notice Verifies createToken reverts for any unsupported params version byte (DEFAULT variant)
     /// @dev Fuzz confirms only the known version (1) decodes; checks UnsupportedVersion(version) error
-    function test_createToken_revert_unsupportedVersion(address caller, uint8 badVersion, bytes32 salt) public {
+    function test_createB20_revert_unsupportedVersion(address caller, uint8 badVersion, bytes32 salt) public {
         _assumeValidCaller(caller);
         vm.assume(badVersion != 1);
-        ITokenFactory.B20CreateParams memory p = _b20Params();
+        IB20Factory.B20CreateParams memory p = _b20Params();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, badVersion));
-        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(p), new bytes[](0));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.DEFAULT));
+        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the STABLECOIN variant
     /// @dev Each variant arm has its own version check; this exercises the stablecoin arm's check
     ///      (the default-variant arm has a parallel test above).
-    function test_createToken_revert_unsupportedVersion_stablecoin(address caller, uint8 badVersion, bytes32 salt)
+    function test_createB20_revert_unsupportedVersion_stablecoin(address caller, uint8 badVersion, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
         vm.assume(badVersion != 1);
-        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams();
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, badVersion));
-        factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.STABLECOIN));
+        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
     // STABLECOIN currency validation — see docs/b20/stablecoin/currency-validation.md.
@@ -82,65 +82,65 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
     ///      via `vm.assume(!isValidFiatCode)`.
-    function test_createToken_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
+    function test_createB20_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
         vm.assume(!ISO4217.isValidFiatCode(code));
-        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InvalidCurrency.selector, code));
-        factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, code));
+        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant
     /// @dev Each variant arm has its own version check; this exercises the security arm's check.
-    function test_createToken_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt)
+    function test_createB20_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
         vm.assume(badVersion != 1);
-        ITokenFactory.B20SecurityCreateParams memory p = _securityParams();
+        IB20Factory.B20SecurityCreateParams memory p = _securityParams();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.UnsupportedVersion.selector, badVersion));
-        factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(p), new bytes[](0));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.SECURITY));
+        factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies security createToken reverts when isin is the empty string
     /// @dev Per-variant required-field check; checks MissingRequiredField() error
-    function test_createToken_revert_missingIsin(address caller, bytes32 salt) public {
+    function test_createB20_revert_missingIsin(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
+        IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
         vm.prank(caller);
-        vm.expectRevert(ITokenFactory.MissingRequiredField.selector);
-        factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(p), new bytes[](0));
+        vm.expectRevert(IB20Factory.MissingRequiredField.selector);
+        factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts when (variant, sender, salt) collides
     /// @dev Deterministic-address uniqueness; checks TokenAlreadyExists(token) error
-    function test_createToken_revert_tokenAlreadyExists(address caller, bytes32 salt) public {
+    function test_createB20_revert_tokenAlreadyExists(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address first = _createDefault(caller, salt, _b20Params(), new bytes[](0));
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.TokenAlreadyExists.selector, first));
-        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), new bytes[](0));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.TokenAlreadyExists.selector, first));
+        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), new bytes[](0));
     }
 
     /// @notice Verifies a failing initCall bubbles the underlying revert reason (regression test for L-01)
-    /// @dev ITokenFactory.InitCallFailed NatSpec (L194-197) specifies two-tier error behavior:
+    /// @dev IB20Factory.InitCallFailed NatSpec (L194-197) specifies two-tier error behavior:
     ///      bubble the underlying revert reason when the call returns one; wrap empty reverts
     ///      with InitCallFailed(index). `mint(address(0), 1)` reverts with `InvalidReceiver(0)`
     ///      inside the token, and the factory MUST surface that error verbatim, not swallow
     ///      it into `InitCallFailed(0)`. A buggy impl that discards revert data via `(bool ok,)`
     ///      surfaces the opaque wrapper instead.
-    function test_createToken_revert_initCallFailed_bubblesRevertReason(address caller, bytes32 salt) public {
+    function test_createB20_revert_initCallFailed_bubblesRevertReason(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         bytes[] memory initCalls = new bytes[](1);
         initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies an empty-revert initCall is wrapped as InitCallFailed(index) (L-01 complement)
@@ -149,14 +149,14 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      token; MockB20 has no fallback, so Solidity's dispatcher reverts with empty data.
     ///      Without this carve-out the caller would receive a generic "" revert with no signal
     ///      about which init index failed.
-    function test_createToken_revert_initCallFailed_wrapsEmptyRevert(address caller, bytes32 salt) public {
+    function test_createB20_revert_initCallFailed_wrapsEmptyRevert(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         bytes[] memory initCalls = new bytes[](1);
         // Non-existent selector "0xdeadbeef" -> MockB20 dispatcher rejects with empty data.
         initCalls[0] = abi.encodeWithSelector(bytes4(0xdeadbeef));
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(ITokenFactory.InitCallFailed.selector, uint256(0)));
-        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.InitCallFailed.selector, uint256(0)));
+        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies bubble + index for the SECOND init call (L-01 index correctness)
@@ -164,7 +164,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      underlying error. A buggy impl that swallows revert data would mask not just
     ///      the error but also the implicit "which index" signal a developer needs to
     ///      debug a multi-call setup.
-    function test_createToken_revert_initCallFailed_bubblesFromLaterIndex(address caller, bytes32 salt) public {
+    function test_createB20_revert_initCallFailed_bubblesFromLaterIndex(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         bytes[] memory initCalls = new bytes[](2);
         // Index 0 is benign — set the supply cap to 100. Index 1 attempts to mint to
@@ -173,7 +173,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         initCalls[1] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies a failing initCall leaves the deterministic address empty
@@ -182,17 +182,17 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      (variant, sender, salt) succeeds. After L-01 the revert reason is
     ///      bubbled (InvalidReceiver) rather than wrapped (InitCallFailed), but atomicity
     ///      is unchanged.
-    function test_createToken_revert_initCallFailed_revertsWholeCreation(address caller, bytes32 salt) public {
+    function test_createB20_revert_initCallFailed_revertsWholeCreation(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params();
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, caller, salt);
+        IB20Factory.B20CreateParams memory p = _b20Params();
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
 
         bytes[] memory initCalls = new bytes[](1);
         initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
 
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(p), initCalls);
+        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(p), initCalls);
 
         // After the failed creation, the predicted address has no code,
         // and a fresh creation with the same args succeeds.
@@ -207,28 +207,28 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     /// @notice Verifies createToken returns the predicted address for the default variant
     /// @dev Address determinism: returned address must equal getTokenAddress(DEFAULT, sender, salt)
-    function test_createToken_success_defaultMatchesPrediction(address caller, bytes32 salt) public {
+    function test_createB20_success_defaultMatchesPrediction(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params("Test", "TST", admin);
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, caller, salt);
+        IB20Factory.B20CreateParams memory p = _b20Params("Test", "TST", admin);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
         address actual = _createDefault(caller, salt, p, new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
     }
 
     /// @notice Verifies createToken returns the predicted address for the stablecoin variant
     /// @dev Address determinism: returned address must equal getTokenAddress(STABLECOIN, sender, salt)
-    function test_createToken_success_stablecoinMatchesPrediction(address caller, bytes32 salt) public {
+    function test_createB20_success_stablecoinMatchesPrediction(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.STABLECOIN, caller, salt);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.STABLECOIN, caller, salt);
         address actual = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
     }
 
     /// @notice Verifies createToken returns the predicted address for the security variant
     /// @dev Address determinism: returned address must equal getTokenAddress(SECURITY, sender, salt)
-    function test_createToken_success_securityMatchesPrediction(address caller, bytes32 salt) public {
+    function test_createB20_success_securityMatchesPrediction(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.SECURITY, caller, salt);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
         address actual = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
     }
@@ -238,11 +238,11 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      `base.b20.security` namespace and `minimumRedeemable` at the
     ///      `base.b20.redeem` namespace. Paired slot assertions confirm both fields
     ///      land at the expected slots with the correct encodings.
-    function test_createToken_success_securitySeedsInitialState(address caller, bytes32 salt, uint256 minRedeem)
+    function test_createB20_success_securitySeedsInitialState(address caller, bytes32 salt, uint256 minRedeem)
         public
     {
         _assumeValidCaller(caller);
-        ITokenFactory.B20SecurityCreateParams memory p =
+        IB20Factory.B20SecurityCreateParams memory p =
             _securityParams("Security Test", "SEC", admin, APPLE_ISIN, minRedeem);
         address token = _createSecurity(caller, salt, p, new bytes[](0));
 
@@ -264,7 +264,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @dev Creation-time initial state is written directly via vm.store and emits no event,
     ///      paralleling how stablecoin currency is seeded. Post-creation
     ///      `updateSecurityIdentifier` calls DO emit the event; that's covered separately.
-    function test_createToken_success_securitySeededIsinEmitsNoEvent(address caller, bytes32 salt) public {
+    function test_createB20_success_securitySeededIsinEmitsNoEvent(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         vm.recordLogs();
         _createSecurity(caller, salt, _securityParams(), new bytes[](0));
@@ -281,9 +281,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @dev Same zero-admin success behavior on the security variant. Paired slot assertions
     ///      cross-check both the base namespace (adminCount=0, initialized=true) and the variant
     ///      namespace (ISIN identifier present, minimumRedeemable set).
-    function test_createToken_success_zeroAdminGrantsNoRole_security(address caller, bytes32 salt) public {
+    function test_createB20_success_zeroAdminGrantsNoRole_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20SecurityCreateParams memory p =
+        IB20Factory.B20SecurityCreateParams memory p =
             _securityParams("NoOwner Security", "NOSEC", address(0), DEFAULT_ISIN, 0);
         address token = _createSecurity(caller, salt, p, new bytes[](0));
 
@@ -305,7 +305,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     /// @notice Major reserve currencies (USD, EUR, JPY, GBP, CHF, CNY, CAD, AUD) are accepted.
     /// @dev Round-trip through `currency()` proves the string is stored verbatim.
-    function test_createToken_success_currency_acceptsMajorFiatCodes(address caller) public {
+    function test_createB20_success_currency_acceptsMajorFiatCodes(address caller) public {
         _assumeValidCaller(caller);
         string[8] memory majors = ["USD", "EUR", "JPY", "GBP", "CHF", "CNY", "CAD", "AUD"];
         for (uint256 i = 0; i < majors.length; i++) {
@@ -325,7 +325,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     /// @notice Multi-country X-prefix fiat (XOF, XAF, XCD, XPF) is accepted.
     /// @dev Pins the deliberate carve-out: X-prefix is not a categorical exclusion.
-    function test_createToken_success_currency_acceptsMultiCountryXPrefix(address caller) public {
+    function test_createB20_success_currency_acceptsMultiCountryXPrefix(address caller) public {
         _assumeValidCaller(caller);
         string[4] memory xFiat = ["XOF", "XAF", "XCD", "XPF"];
         for (uint256 i = 0; i < xFiat.length; i++) {
@@ -343,31 +343,31 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         }
     }
 
-    /// @notice Verifies createToken emits TokenCreated with the correct identity fields
+    /// @notice Verifies createToken emits B20Created with the correct identity fields
     /// @dev Event integrity: token, variant, name, symbol, decimals must match derived variant defaults.
     ///      Admin role assignment is announced via RoleGranted, not as a field on this event;
-    ///      see test_createToken_success_emitsRoleGrantedForInitialAdmin for that.
-    function test_createToken_success_emitsTokenCreated(address caller, bytes32 salt) public {
+    ///      see test_createB20_success_emitsRoleGrantedForInitialAdmin for that.
+    function test_createB20_success_emitsB20Created(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params("MyToken", "MYT", admin);
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, caller, salt);
+        IB20Factory.B20CreateParams memory p = _b20Params("MyToken", "MYT", admin);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit ITokenFactory.TokenCreated(predicted, ITokenFactory.TokenVariant.DEFAULT, "MyToken", "MYT", 18);
+        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.DEFAULT, "MyToken", "MYT", 18);
         _createDefault(caller, salt, p, new bytes[](0));
     }
 
-    /// @notice Verifies createToken emits TokenCreated with decimals=6 for the security variant
+    /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 the same
     ///      way the default emitter test pins decimals=18.
-    function test_createToken_success_emitsTokenCreated_security(address caller, bytes32 salt) public {
+    function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20SecurityCreateParams memory p =
+        IB20Factory.B20SecurityCreateParams memory p =
             _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
-        address predicted = factory.getTokenAddress(ITokenFactory.TokenVariant.SECURITY, caller, salt);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit ITokenFactory.TokenCreated(predicted, ITokenFactory.TokenVariant.SECURITY, "Security Test", "SEC", 6);
+        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.SECURITY, "Security Test", "SEC", 6);
         _createSecurity(caller, salt, p, new bytes[](0));
     }
 
@@ -376,7 +376,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      not to RBAC. The factory is never granted any role on the token. We verify the bypass by passing
     ///      an initCall (grantRole) that would normally require DEFAULT_ADMIN_ROLE on the caller, and asserting
     ///      it took effect even though the factory has no role.
-    function test_createToken_success_executesInitCalls(address caller, bytes32 salt) public {
+    function test_createB20_success_executesInitCalls(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         bytes[] memory initCalls = new bytes[](1);
         // Grant MINT_ROLE to bob during the bootstrap window. This would normally
@@ -419,11 +419,11 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         );
     }
 
-    /// @notice Verifies TokenCreated fires before any state-change events from initCalls
-    /// @dev Log ordering invariant per ITokenFactory natspec: "Emits TokenCreated once the token's identity
+    /// @notice Verifies B20Created fires before any state-change events from initCalls
+    /// @dev Log ordering invariant per IB20Factory natspec: "Emits B20Created once the token's identity
     ///      is sealed and BEFORE any initCalls are dispatched, so init-call effects appear strictly after
     ///      the creation event in the log order." Sanity check using vm.recordLogs.
-    function test_createToken_success_emitsTokenCreatedBeforeInitCallEvents(address caller, bytes32 salt) public {
+    function test_createB20_success_emitsB20CreatedBeforeInitCallEvents(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         // Use an init call that emits a single, distinctive event we can find: grantRole emits RoleGranted.
         bytes[] memory initCalls = new bytes[](1);
@@ -433,20 +433,20 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         _createDefault(caller, salt, _b20Params(), initCalls);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        // Find indices of TokenCreated and RoleGranted. Since the storage-direct-write
+        // Find indices of B20Created and RoleGranted. Since the storage-direct-write
         // factory emits no RoleGranted at bootstrap, the only RoleGranted in the log
         // is the one from the init call.
-        int256 tokenCreatedAt = _firstLogIndex(logs, ITokenFactory.TokenCreated.selector);
+        int256 tokenCreatedAt = _firstLogIndex(logs, IB20Factory.B20Created.selector);
         int256 roleGrantedAt = _firstLogIndex(logs, IB20.RoleGranted.selector);
-        assertGt(tokenCreatedAt, -1, "TokenCreated must be present in the log");
+        assertGt(tokenCreatedAt, -1, "B20Created must be present in the log");
         assertGt(roleGrantedAt, -1, "RoleGranted must be present in the log (from initCall)");
-        assertLt(tokenCreatedAt, roleGrantedAt, "TokenCreated must precede initCall-emitted events");
+        assertLt(tokenCreatedAt, roleGrantedAt, "B20Created must precede initCall-emitted events");
     }
 
     /// @notice Verifies the factory has no persistent privilege after createToken returns
     /// @dev The bootstrap-window bypass closes when closeBootstrap flips initialized = true. A direct
     ///      call from the factory address after creation must hit the standard auth path and revert.
-    function test_createToken_success_factoryHasNoPersistentPrivilege(address caller, bytes32 salt) public {
+    function test_createB20_success_factoryHasNoPersistentPrivilege(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address token = _createDefault(caller, salt, _b20Params(), new bytes[](0));
 
@@ -476,9 +476,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @dev "Demonstrate no owner" path: factory accepts zero admin, token has no admin afterward
     ///      (no role grants, policy changes, or pauses ever possible). Replaces the prior
     ///      _revert_zeroAdmin_default stub now that the design explicitly allows this.
-    function test_createToken_success_zeroAdminGrantsNoRole_default(address caller, bytes32 salt) public {
+    function test_createB20_success_zeroAdminGrantsNoRole_default(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params("NoOwner", "NOWN", address(0));
+        IB20Factory.B20CreateParams memory p = _b20Params("NoOwner", "NOWN", address(0));
         address token = _createDefault(caller, salt, p, new bytes[](0));
 
         // No admin was granted. Any admin-gated call from any account reverts.
@@ -506,9 +506,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      Paired slot assertions cross-check both the base namespace
     ///      (adminCount=0, initialized=true) and the variant namespace
     ///      (currency slot holds the short-string encoding of "USD").
-    function test_createToken_success_zeroAdminGrantsNoRole_stablecoin(address caller, bytes32 salt) public {
+    function test_createB20_success_zeroAdminGrantsNoRole_stablecoin(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20StablecoinCreateParams memory p = _stablecoinParams("NoOwner USD", "NOUSD", address(0), "USD");
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("NoOwner USD", "NOUSD", address(0), "USD");
         address token = _createStablecoin(caller, salt, p, new bytes[](0));
 
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
@@ -536,27 +536,27 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @notice Verifies the variant byte at address position [10] matches the created variant
     /// @dev Address schema: byte [10] of the token address IS the variant; readable
     ///      statelessly off the address with no factory lookup.
-    function test_createToken_success_encodesVariantByte(address caller, bytes32 salt) public {
+    function test_createB20_success_encodesVariantByte(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
 
         address defaultToken = _createDefault(caller, salt, _b20Params(), new bytes[](0));
         assertEq(
             uint256(uint8(uint160(defaultToken) >> 72)),
-            uint256(ITokenFactory.TokenVariant.DEFAULT),
+            uint256(IB20Factory.B20Variant.DEFAULT),
             "default variant byte mismatch"
         );
 
         address stablecoinToken = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
         assertEq(
             uint256(uint8(uint160(stablecoinToken) >> 72)),
-            uint256(ITokenFactory.TokenVariant.STABLECOIN),
+            uint256(IB20Factory.B20Variant.STABLECOIN),
             "stablecoin variant byte mismatch"
         );
 
         address securityToken = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
         assertEq(
             uint256(uint8(uint160(securityToken) >> 72)),
-            uint256(ITokenFactory.TokenVariant.SECURITY),
+            uint256(IB20Factory.B20Variant.SECURITY),
             "security variant byte mismatch"
         );
     }
@@ -566,7 +566,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      The factory's _writeString handles both paths via vm.store; this test exercises
     ///      the long-string path explicitly. Short-string path is covered by every other
     ///      success test (default name "Test", symbol "TST" are both < 32 bytes).
-    function test_createToken_success_writesLongStrings(address caller, bytes32 salt) public {
+    function test_createB20_success_writesLongStrings(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         // Both strings are 40 bytes -> exercises the long-string storage encoding.
         string memory longName = "A token name that is forty bytes long!!!";
@@ -574,7 +574,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
         assertEq(bytes(longName).length, 40, "test setup: longName must be 40 bytes");
         assertEq(bytes(longSymbol).length, 40, "test setup: longSymbol must be 40 bytes");
 
-        ITokenFactory.B20CreateParams memory p = _b20Params(longName, longSymbol, admin);
+        IB20Factory.B20CreateParams memory p = _b20Params(longName, longSymbol, admin);
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).name(), longName, "long name must round-trip via storage");
@@ -601,14 +601,14 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      try to pack 32 bytes into a 31-byte short-string slot, silently losing data.
     ///      Paired slot assertions confirm both 32-byte and 33-byte slots hold
     ///      the long-string marker (low bit set).
-    function test_createToken_success_writesStringsAtEncodingBoundary(address caller, bytes32 salt) public {
+    function test_createB20_success_writesStringsAtEncodingBoundary(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         string memory name32 = "abcdefghijklmnopqrstuvwxyzABCDEF";
         string memory symbol33 = "abcdefghijklmnopqrstuvwxyzABCDEFG";
         assertEq(bytes(name32).length, 32, "test setup: name must be exactly 32 bytes");
         assertEq(bytes(symbol33).length, 33, "test setup: symbol must be exactly 33 bytes");
 
-        ITokenFactory.B20CreateParams memory p = _b20Params(name32, symbol33, admin);
+        IB20Factory.B20CreateParams memory p = _b20Params(name32, symbol33, admin);
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).name(), name32, "32-byte name must round-trip (long path)");
@@ -630,12 +630,12 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      actual paths share the same encoding choice. The Rust impl must agree on
     ///      abi.encode specifically; this test recomputes the address externally using
     ///      abi.encode and asserts the factory returns the same value.
-    function test_getTokenAddress_pinsDownAbiEncoding(address sender, bytes32 salt) public view {
+    function test_getB20Address_pinsDownAbiEncoding(address sender, bytes32 salt) public view {
         bytes9 expectedTail = bytes9(keccak256(abi.encode(sender, salt)));
-        uint160 expectedAddr = (uint160(0xB2) << 152) | (uint160(uint8(ITokenFactory.TokenVariant.DEFAULT)) << 72)
+        uint160 expectedAddr = (uint160(0xB2) << 152) | (uint160(uint8(IB20Factory.B20Variant.DEFAULT)) << 72)
             | uint160(uint72(expectedTail));
 
-        address actual = factory.getTokenAddress(ITokenFactory.TokenVariant.DEFAULT, sender, salt);
+        address actual = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, sender, salt);
         assertEq(actual, address(expectedAddr), "factory must derive address via abi.encode of (sender, salt)");
     }
 
@@ -647,9 +647,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      reads the low bit (1 -> long string), then computes length as (3-1)/2 = 1, and reads
     ///      keccak256(slot) for content, returning garbage. The assertion below catches both the
     ///      length-1 long-string interpretation AND any future regressions of the same shape.
-    function test_createToken_success_emptyName_roundTripsAsEmpty(address caller, bytes32 salt) public {
+    function test_createB20_success_emptyName_roundTripsAsEmpty(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params("", "ETH", admin);
+        IB20Factory.B20CreateParams memory p = _b20Params("", "ETH", admin);
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
@@ -664,9 +664,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     ///      reads past it, into whatever the next memory allocation placed there. Whether it's
     ///      garbage from the free-memory pointer or padded zeros depends on calling context; we
     ///      assert the result is the empty string regardless.
-    function test_createToken_success_emptySymbol_roundTripsAsEmpty(address caller, bytes32 salt) public {
+    function test_createB20_success_emptySymbol_roundTripsAsEmpty(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params("Token", "", admin);
+        IB20Factory.B20CreateParams memory p = _b20Params("Token", "", admin);
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).symbol(), "", "empty symbol must round-trip as empty");
@@ -678,9 +678,9 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
     /// @notice Verifies both empty name and empty symbol round-trip correctly (regression test for L-04)
     /// @dev Belt-and-suspenders: both strings empty is the most degenerate case and would be
     ///      most likely to surface memory-layout assumptions in the writer.
-    function test_createToken_success_bothEmpty_roundTripAsEmpty(address caller, bytes32 salt) public {
+    function test_createB20_success_bothEmpty_roundTripAsEmpty(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        ITokenFactory.B20CreateParams memory p = _b20Params("", "", admin);
+        IB20Factory.B20CreateParams memory p = _b20Params("", "", admin);
         address tokenAddr = _createDefault(caller, salt, p, new bytes[](0));
 
         assertEq(MockB20(tokenAddr).name(), "", "empty name must round-trip as empty");
@@ -693,7 +693,7 @@ contract TokenFactoryCreateTokenTest is TokenFactoryTest {
 
     /// @notice Verifies decimals are fixed by variant and not encoded in address bytes
     /// @dev Default tokens return 18, stablecoin and security tokens return 6.
-    function test_createToken_success_decimalsFixedByVariant(address caller, bytes32 salt) public {
+    function test_createB20_success_decimalsFixedByVariant(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address defaultToken = _createDefault(caller, salt, _b20Params("Test", "TST", admin), new bytes[](0));
         address stablecoinToken = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));

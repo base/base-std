@@ -6,7 +6,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol";
 import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {MockTokenFactory} from "test/lib/mocks/MockTokenFactory.sol";
+import {MockB20Factory} from "test/lib/mocks/MockB20Factory.sol";
 
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
@@ -15,7 +15,7 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 ///
 /// Owns the actors / labels and the precompile-mock etch wiring that
 /// every concrete base would otherwise re-declare. Concrete bases
-/// (`TokenFactoryTest`, `PolicyRegistryTest`, ...) extend this and
+/// (`B20FactoryTest`, `PolicyRegistryTest`, ...) extend this and
 /// layer on their own helpers and any test-class-specific state.
 ///
 /// **Mock-vs-live.** `setUp` etches each precompile mock at its
@@ -49,7 +49,7 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// available, the way the EVM has `SLOAD`.
 ///
 /// **Mock status.**
-///   - `MockTokenFactory` is fully implemented: `createToken` decodes
+///   - `MockB20Factory` is fully implemented: `createToken` decodes
 ///     params, etches the variant-appropriate runtime bytecode at the
 ///     computed B-20 address, writes initial state directly via vm.store
 ///     (no init function on the token), runs initCalls, and closes the
@@ -85,7 +85,7 @@ abstract contract BaseTest is Test {
         vm.label(bob, "bob");
         vm.label(attacker, "attacker");
 
-        vm.label(StdPrecompiles.TOKEN_FACTORY_ADDRESS, "TokenFactory");
+        vm.label(StdPrecompiles.B20_FACTORY_ADDRESS, "B20Factory");
         vm.label(StdPrecompiles.POLICY_REGISTRY_ADDRESS, "PolicyRegistry");
         vm.label(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, "ActivationRegistry");
 
@@ -94,7 +94,7 @@ abstract contract BaseTest is Test {
         // level NatSpec for the rationale on the env var rather than
         // auto-detection.
         if (!vm.envOr("LIVE_PRECOMPILES", false)) {
-            vm.etch(StdPrecompiles.TOKEN_FACTORY_ADDRESS, type(MockTokenFactory).runtimeCode);
+            vm.etch(StdPrecompiles.B20_FACTORY_ADDRESS, type(MockB20Factory).runtimeCode);
             vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
             vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
         }
@@ -117,7 +117,7 @@ abstract contract BaseTest is Test {
     function _assumeValidCaller(address caller) internal pure {
         vm.assume(caller != address(0));
         vm.assume(caller != address(vm));
-        vm.assume(caller != StdPrecompiles.TOKEN_FACTORY_ADDRESS);
+        vm.assume(caller != StdPrecompiles.B20_FACTORY_ADDRESS);
         vm.assume(caller != StdPrecompiles.POLICY_REGISTRY_ADDRESS);
         vm.assume(caller != StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS);
     }
@@ -170,7 +170,7 @@ abstract contract BaseTest is Test {
     ///         byte-for-byte. This is the storage contract the Rust
     ///         precompile impl must match exactly.
     ///
-    ///         Encoding (mirrors `MockTokenFactory._writeString`):
+    ///         Encoding (mirrors `MockB20Factory._writeString`):
     ///         - Empty string: slot is zero.
     ///         - Length < 32: high portion holds the bytes (left-justified
     ///           in the slot); low byte is `length * 2` (low bit clear).
