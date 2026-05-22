@@ -79,10 +79,22 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         **Permit.** EIP-2612 permit, EOA signatures only. ERC-1271
 ///         contract signatures are NOT supported on the default surface
 ///         (smart-contract accounts use call-batching or paymaster flows
-///         instead to set allowances). EIP-712 domain is
-///         `(chainId, verifyingContract)` only, with `name` and `version`
-///         empty. ERC-5267 `eip712Domain()` is exposed for domain
-///         introspection by integrators.
+///         instead to set allowances). The EIP-712 domain binds
+///         `(name, version, chainId, verifyingContract)` — the
+///         canonical EIP-2612 shape, so off-the-shelf permit helpers
+///         (viem, ethers, wagmi, OpenZeppelin) and wallet UIs
+///         (MetaMask in particular, which renders `domain.name`
+///         prominently in the signing prompt) work without
+///         per-token customization. `name` is the live token `name()`,
+///         re-hashed into the domain on each call so a successful
+///         `updateName(...)` invalidates outstanding signatures and
+///         emits ERC-5267 `EIP712DomainChanged()` to signal the
+///         change. `version` is the constant string `"1"` and never
+///         changes; bumping it would require a new contract anyway.
+///         `salt` is unused (empty). ERC-5267 `eip712Domain()` is
+///         exposed for domain introspection by integrators that
+///         prefer to read the domain dynamically rather than
+///         reconstruct it from `name()` + the conventional shape.
 interface IB20 {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
@@ -342,6 +354,19 @@ interface IB20 {
     ///         indexer consumption.
     event SymbolUpdated(address indexed updater, string newSymbol);
 
+    /// @notice ERC-5267 domain-change signal. Emitted whenever a
+    ///         field that participates in this token's EIP-712
+    ///         domain changes value. On this surface the only such
+    ///         field is `name`, so this event is emitted exactly
+    ///         once per successful `updateName(...)` call,
+    ///         immediately after the inherited `NameUpdated` event.
+    ///         The event signature is parameterless per ERC-5267:
+    ///         off-chain integrators that cache `DOMAIN_SEPARATOR()`
+    ///         or `eip712Domain()` re-fetch after observing it.
+    ///         `updateSymbol(...)` does NOT emit this event; `symbol`
+    ///         is not in the EIP-712 domain.
+    event EIP712DomainChanged();
+
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
     //////////////////////////////////////////////////////////////*/
@@ -488,12 +513,21 @@ interface IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Updates the token's `name`. Requires `METADATA_ROLE`.
-    ///         No length restrictions. Emits `NameUpdated`.
+    ///         No length restrictions. Emits `NameUpdated` followed by
+    ///         the ERC-5267 `EIP712DomainChanged()` event (in that
+    ///         order). 
     /// @dev    Several customers (Coinbase Tokenized Equities, Coinbase
     ///         Wrapped Assets) need the ability to update name and symbol
     ///         post-deployment for re-branding or legal-restructuring
     ///         events. Tokens that do not want to update their name
     ///         simply never grant `METADATA_ROLE`.
+    ///
+    ///         Because `name` is bound into the EIP-712 domain (see
+    ///         the contract-level "Permit" notes), a successful
+    ///         `updateName(...)` invalidates outstanding off-chain
+    ///         `permit` signatures issued under the previous name —
+    ///         the recovered signer no longer matches the new
+    ///         domain separator.
     function updateName(string calldata newName) external;
 
     /// @notice Updates the token's `symbol`. Requires `METADATA_ROLE`.
@@ -733,10 +767,15 @@ interface IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The current EIP-712 domain separator for this token.
-    ///         Computed dynamically each call so it remains correct after
-    ///         a chain fork that changes `block.chainid`.
-    /// @dev    Domain content: `chainId` and `verifyingContract` only.
-    ///         `name` and `version` are intentionally empty strings.
+    ///         Computed dynamically each call so it remains correct
+    ///         after a chain fork that changes `block.chainid` and
+    ///         after any `updateName(...)` that mutates `name`.
+    /// @dev    Domain content: `(name, version, chainId, verifyingContract)`.
+    ///         `name` is the live `name()` value, re-hashed on each
+    ///         call. `version` is the constant string `"1"`. `salt`
+    ///         is unused (empty). Type hash is
+    ///         `keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")`,
+    ///         the canonical EIP-2612 shape.
     function DOMAIN_SEPARATOR() external view returns (bytes32);
 
     /// @notice The current permit nonce for `owner`. Incremented by
@@ -760,10 +799,11 @@ interface IB20 {
 
     /// @notice ERC-5267 EIP-712 domain introspection. Returns the parts
     ///         of the EIP-712 domain populated for this token.
-    /// @dev    For Default tokens, `fields` is `0x0c` (bits 2 and 3 set,
-    ///         indicating `chainId` and `verifyingContract` are populated).
-    ///         `name`, `version`, and `salt` are empty / zero.
-    ///         `extensions` is empty.
+    /// @dev    `fields` is `0x0f` (bits 0, 1, 2, 3 set — `name`,
+    ///         `version`, `chainId`, `verifyingContract` are
+    ///         populated). `name` is the live `name()` value;
+    ///         `version` is the constant string `"1"`. `salt` is
+    ///         zero and `extensions` is empty.
     function eip712Domain()
         external
         view

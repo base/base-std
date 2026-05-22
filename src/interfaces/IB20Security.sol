@@ -44,27 +44,6 @@ import {IB20} from "./IB20.sol";
 ///            for the holder-initiated off-chain settlement path.
 ///         5. `securityIdentifier(...)` / `updateSecurityIdentifier(...)`
 ///            for ISIN, CUSIP, FIGI, and similar off-chain registry IDs.
-///         6. An EIP-712 domain override that binds `name` into the
-///            domain hash (where `IB20` leaves it empty) plus the
-///            ERC-5267 `EIP712DomainChanged` event. See the
-///            "EIP-712 domain override" section below.
-///
-///         **EIP-712 domain override.** Unlike base `IB20`, whose
-///         permit domain is `(chainId, verifyingContract)` only, this
-///         variant additionally binds the token `name` into its
-///         EIP-712 domain.
-///         - `updateName(...)` emits the inherited `NameUpdated`
-///           event AND `EIP712DomainChanged()` (in that order). The
-///           pair is atomic: indexers that observe `NameUpdated`
-///           without the matching `EIP712DomainChanged` (or vice
-///           versa) should treat that as a protocol violation.
-///         - Outstanding off-chain `permit` signatures issued under
-///           a previous `name` cease to be valid as soon as
-///           `updateName` lands, because the recovered signer no
-///           longer matches the new domain separator. This is the
-///           intended behavior; renaming the security is a
-///           material event and signed-but-unsubmitted approvals
-///           should not survive it.
 ///
 ///         **Metadata updates.** The inherited `updateName(...)` and
 ///         `updateSymbol(...)` continue to be gated by `METADATA_ROLE`
@@ -212,23 +191,6 @@ interface IB20Security is IB20 {
     ///         within-tx unambiguous; the `id` field hardens cross-tx
     ///         indexing as well.
     event EndAnnouncement(string id);
-
-    /// @notice ERC-5267 domain-change signal. Emitted whenever a
-    ///         field that participates in this token's EIP-712
-    ///         domain changes value. On `IB20Security` the only
-    ///         such field is `name`, so this event is emitted
-    ///         exactly once per successful `updateName(...)` call,
-    ///         immediately after the inherited `NameUpdated` event.
-    ///         The event signature is parameterless per ERC-5267:
-    ///         off-chain integrators that cache `DOMAIN_SEPARATOR()`
-    ///         or `eip712Domain()` re-fetch after observing it.
-    /// @dev    The base `IB20` surface does NOT emit this event
-    ///         because its domain depends only on `chainId` and
-    ///         `verifyingContract`, neither of which the contract
-    ///         can mutate. `IB20Security` adds it specifically to
-    ///         signal `name` changes; see the contract-level
-    ///         "EIP-712 domain override" notes.
-    event EIP712DomainChanged();
 
     /*//////////////////////////////////////////////////////////////
                             ROLE IDENTIFIERS
