@@ -12,6 +12,19 @@ import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20SecurityRedeemTest is B20SecurityTest {
+    /// @notice Opens REDEEM_SENDER_POLICY for the redemption-path tests in this contract.
+    ///         Security tokens default REDEEM_SENDER_POLICY to ALWAYS_BLOCK_ID at creation
+    ///         time so admins must explicitly open redemption. Tests in this contract
+    ///         exercise the redemption code path itself (balance, minimum, ratio, events,
+    ///         ordering), not the policy guard — so we open the policy in setUp to let
+    ///         the path under test be the thing being asserted. The one test that pins
+    ///         the policy guard (`test_redeem_revert_senderPolicyForbids`) explicitly
+    ///         sets ALWAYS_BLOCK_ID itself.
+    function setUp() public virtual override {
+        super.setUp();
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+    }
+
     /// @notice Verifies redeem reverts when REDEEM feature is paused
     /// @dev Pause guard fires first in execution order; checks ContractPaused(REDEEM) error.
     function test_redeem_revert_whenRedeemPaused(uint256 amount) public {

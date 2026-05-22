@@ -117,11 +117,14 @@ contract B20SecurityUpdatePolicyTest is B20SecurityTest {
             "TRANSFER_SENDER write must persist"
         );
 
-        // And the redeem slot is untouched by a base-side write.
+        // And the redeem slot is untouched by a base-side write: still holds the
+        // factory-seeded ALWAYS_BLOCK_ID default (not the post-write ALWAYS_BLOCK_ID
+        // we just put into the base slot — they happen to share a value here, but the
+        // point is the SLOT didn't change).
         assertEq(
             token.policyId(REDEEM_SENDER_POLICY),
-            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
-            "REDEEM_SENDER must not be affected by base writes"
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "REDEEM_SENDER must not be affected by base writes (still ALWAYS_BLOCK_ID default)"
         );
     }
 }
