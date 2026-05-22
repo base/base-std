@@ -297,5 +297,5 @@ interface ITokenFactory {
     ///         inside `createToken`) is fully privileged but not yet
     ///         initialized; this flag flips exactly once, at the moment
     ///         `createToken` returns.
-    function isInitialized(address token) external view returns (bool);
+    function isB20Initialized(address token) external view returns (bool);
 }

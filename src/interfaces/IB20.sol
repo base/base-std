@@ -688,20 +688,20 @@ interface IB20 {
 
     /// @notice The current policy ID configured for `policyType`. Returns
     ///         `0` (always-allow built-in) for any policy slot that has
-    ///         never been assigned. Standard policy types are exposed as
-    ///         the role-identifier constants `TRANSFER_SENDER_POLICY()`,
-    ///         `TRANSFER_RECEIVER_POLICY()`, `TRANSFER_EXECUTOR_POLICY()`, and
-    ///         `MINT_RECEIVER_POLICY()`. Variants add their own constants for
-    ///         variant-specific operations (e.g. `REDEEM_SENDER_POLICY()` on
-    ///         `IB20Security`). User-defined policy types are also
-    ///         supported and may be used by periphery contracts that
-    ///         layer additional gating on top.
+    ///         never been assigned. Reverts `UnsupportedPolicyType` for
+    ///         a `policyType` not supported by this token (or its
+    ///         variant). Standard policy types are exposed as the
+    ///         role-identifier constants `TRANSFER_SENDER_POLICY()`,
+    ///         `TRANSFER_RECEIVER_POLICY()`, `TRANSFER_EXECUTOR_POLICY()`,
+    ///         and `MINT_RECEIVER_POLICY()`. Variants add their own
+    ///         constants for variant-specific operations (e.g.
+    ///         `REDEEM_SENDER_POLICY()` on `IB20Security`).
     /// @dev    All slots default to `0` (always-allow) at token creation:
     ///         newly created tokens are unrestricted until the admin
     ///         points each slot at a concrete policy. To explicitly
     ///         hard-deny a slot (e.g. disabling redemption on a
-    ///         non-redeemable token), point it at `type(uint64).max`
-    ///         (always-reject).
+    ///         non-redeemable token), point it at the ALWAYS_BLOCK
+    ///         sentinel.
     function policyId(bytes32 policyType) external view returns (uint64);
 
     /// @notice Updates the policy ID assigned to `policyType`. Requires

@@ -4,36 +4,44 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
-    /// @notice Verifies isAuthorized reverts PolicyNotFound for a well-formed but uncreated id
-    /// @dev Lookup guard for non-existent ids; uses a well-formed id so the malformed
-    ///      check passes and the storage-lookup miss fires.
-    function test_isAuthorized_revert_policyNotFound(uint64 seed, address account) public {
-        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
-        vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
-        policyRegistry.isAuthorized(policyId, account);
+    /// @notice Verifies isAuthorized on an uncreated ALLOWLIST id returns false
+    /// @dev Documents empty-member-set semantics: no existence check, so an
+    ///      empty allowlist authorizes no one.
+    function test_isAuthorized_success_uncreatedAllowlistReturnsFalse(uint56 counter, address account) public view {
+        vm.assume(counter > 1);
+        uint64 policyId = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(counter);
+        assertFalse(policyRegistry.isAuthorized(policyId, account));
     }
 
-    /// @notice Verifies isAuthorized reverts MalformedPolicyId for any id whose top byte
+    /// @notice Verifies isAuthorized on an uncreated BLOCKLIST id returns true
+    /// @dev Empty-member-set semantics: an empty blocklist blocks no one.
+    function test_isAuthorized_success_uncreatedBlocklistReturnsTrue(uint56 counter, address account) public view {
+        vm.assume(counter > 1);
+        uint64 policyId = (uint64(uint8(IPolicyRegistry.PolicyType.BLOCKLIST)) << 56) | uint64(counter);
+        assertTrue(policyRegistry.isAuthorized(policyId, account));
+    }
+
+    /// @notice Verifies isAuthorized returns false for any id whose top byte
     ///         is outside the PolicyType enum range.
-    /// @dev Encoding invariant on the registry surface.
-    function test_isAuthorized_revert_malformedPolicyId(uint64 seed, address account) public {
+    /// @dev Malformed-ID short-circuit returns false rather than reverting.
+    function test_isAuthorized_success_falseForMalformedId(uint64 seed, address account) public view {
         uint64 policyId = _malformedPolicyId(seed);
-        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.MalformedPolicyId.selector, policyId));
-        policyRegistry.isAuthorized(policyId, account);
+        assertFalse(policyRegistry.isAuthorized(policyId, account));
     }
 
-    /// @notice Verifies isAuthorized returns true for any account under built-in id 0 (always-allow)
-    /// @dev Built-in sentinel semantics: id 0 returns true unconditionally
+    /// @notice Verifies isAuthorized returns true for any account under ALWAYS_ALLOW_ID
+    /// @dev Built-in sentinel semantics: ALWAYS_ALLOW_ID returns true unconditionally
     function test_isAuthorized_success_alwaysAllowBuiltin(address account) public view {
-        assertTrue(policyRegistry.isAuthorized(0, account));
+        assertTrue(policyRegistry.isAuthorized(PolicyRegistryConstants.ALWAYS_ALLOW_ID, account));
     }
 
-    /// @notice Verifies isAuthorized returns false for any account under built-in id 1 (always-block)
-    /// @dev Built-in sentinel semantics: id 1 returns false unconditionally
+    /// @notice Verifies isAuthorized returns false for any account under ALWAYS_BLOCK_ID
+    /// @dev Built-in sentinel semantics: ALWAYS_BLOCK_ID returns false unconditionally
     function test_isAuthorized_success_alwaysBlockBuiltin(address account) public view {
-        assertFalse(policyRegistry.isAuthorized(1, account));
+        assertFalse(policyRegistry.isAuthorized(PolicyRegistryConstants.ALWAYS_BLOCK_ID, account));
     }
 
     /// @notice Verifies isAuthorized returns true for an allowlist member

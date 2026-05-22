@@ -19,25 +19,23 @@ pragma solidity ^0.8.20;
 ///         `keccak256(abi.encode(uint256(keccak256("base.policy_registry")) - 1)) & ~bytes32(uint256(0xff))`.
 ///
 ///         **Packed policy slot layout** (field `policies[id]`):
-///           [255:168]  unused
-///           [167:8]    admin address (160 bits). Zero after renounceAdmin.
-///           [7:0]      PolicyType (ALLOWLIST = 2, BLOCKLIST = 3).
-///                      Both values are non-zero, so `policies[id] == 0`
-///                      reliably means the policy was never created.
+///           [255]      exists flag (set on create, never cleared)
+///           [254:160]  unused
+///           [159:0]    admin address; zero after renounceAdmin
+///         The exists bit survives renunciation, so `policies[id] == 0`
+///         reliably means "never created". PolicyType is NOT stored —
+///         it is recovered from `policyId`'s top byte.
 library MockPolicyRegistryStorage {
     /// @custom:storage-location erc7201:base.policy_registry
     struct Layout {
-        // Each entry packs admin + PolicyType into a single uint256.
-        // packed == 0 means the policy was never created (see packed layout above).
+        // Packed admin + exists flag; see header for layout.
         mapping(uint64 policyId => uint256 packed) policies;
-        // ALLOWLIST: true → account IS authorized.
-        // BLOCKLIST: true → account IS blocked (NOT authorized).
+        // ALLOWLIST member: true → authorized. BLOCKLIST member: true → blocked.
         mapping(uint64 policyId => mapping(address account => bool)) members;
         // Staged pending admin for in-flight two-step admin transfers.
         mapping(uint64 policyId => address pendingAdmin) pendingAdmins;
-        // Global monotonic counter for the low 56 bits of custom policy IDs.
-        // MockPolicyRegistry floors this to 2 on first read/write so the first
-        // custom ID explicitly reserves built-ins 0 and 1.
+        // Global counter for the low 56 bits of custom IDs. Floored to 2
+        // on first use to skip counters 0 (ALWAYS_ALLOW) and 1 (ALWAYS_BLOCK).
         uint56 nextCounter;
     }
 
@@ -99,7 +97,7 @@ library MockPolicyRegistryStorage {
     // outer key first to obtain an inner base slot, then hash the inner
     // key against that.
 
-    /// @notice Slot of `policies[policyId]` (the packed admin+type uint256).
+    /// @notice Slot of `policies[policyId]` (the packed admin+exists uint256).
     function policySlot(uint64 policyId) internal pure returns (bytes32) {
         return keccak256(abi.encode(policyId, policiesBaseSlot()));
     }
@@ -118,44 +116,35 @@ library MockPolicyRegistryStorage {
     // ============================================================
     //                     PACKED-SLOT CODECS
     // ============================================================
-    // `policies[id]` packs an admin address and a PolicyType into a
-    // single uint256:
-    //   [255:168]  unused
-    //   [167:8]    admin address (160 bits, zero after renounceAdmin)
-    //   [7:0]      PolicyType (ALLOWLIST = 2, BLOCKLIST = 3)
-    // Both defined PolicyType values are non-zero, so `policies[id] == 0`
-    // reliably means "never created".
+    // See the library header for the `policies[id]` layout.
 
-    /// @notice Extracts the policy admin address (bits 8..167) from the packed slot.
+    /// @notice Bit position of the existence flag (top bit). Leaves the
+    ///         low 160 bits for the admin lane and reserves bits 161-254
+    ///         for future fields.
+    uint256 internal constant EXISTS_BIT = 255;
+
+    /// @notice Extracts the policy admin (low 160 bits) from the packed slot.
     function policyAdminFromPacked(uint256 packed) internal pure returns (address) {
         // forge-lint: disable-next-line(unsafe-typecast)
-        return address(uint160(packed >> 8));
+        return address(uint160(packed));
     }
 
-    /// @notice Extracts the PolicyType byte (bits 0..7) from the packed slot.
-    function policyTypeFromPacked(uint256 packed) internal pure returns (uint8) {
-        return uint8(packed);
+    /// @notice Reads the existence flag. Lets tests distinguish "renounced"
+    ///         (exists set, admin zero) from "never created" (both zero).
+    function policyExistsFromPacked(uint256 packed) internal pure returns (bool) {
+        return (packed >> EXISTS_BIT) & 1 != 0;
     }
 
-    /// @notice Composes the packed slot value from its two fields.
-    /// @dev `policyType` is the raw uint8 of the `IPolicyRegistry.PolicyType`
-    ///      enum value the registry stores.
-    function packPolicy(address admin, uint8 policyType) internal pure returns (uint256) {
-        return (uint256(uint160(admin)) << 8) | uint256(policyType);
+    /// @notice Composes a packed slot from an admin (exists bit always set).
+    function packPolicy(address admin) internal pure returns (uint256) {
+        return (uint256(1) << EXISTS_BIT) | uint256(uint160(admin));
     }
 
     // ============================================================
     //                     POLICY-ID CODEC
     // ============================================================
-    // Custom policy IDs encode the policy type in the high byte of the
-    // uint64 and the global counter in the low 56 bits:
-    //   [63:56]  uint8(PolicyType) discriminator
-    //   [55:0]   nextCounter value at creation
-    //
-    // Built-in IDs 0 and 1 (ALWAYS_ALLOW, ALWAYS_BLOCK) are short-
-    // circuited in `MockPolicyRegistry` before storage and don't follow
-    // this encoding; these codecs decode the bit layout literally
-    // regardless.
+    // Encoding: top byte = uint8(PolicyType); low 56 bits = counter
+    // (built-ins use 0 / 1; custom policies start at 2).
 
     /// @notice Extracts the PolicyType discriminator byte (top 8 bits) from a custom policy ID.
     function policyTypeFromId(uint64 policyId) internal pure returns (uint8) {

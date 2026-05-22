@@ -29,10 +29,7 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies renounceAdmin sets policyAdmin to address(0)
-    /// @dev Admin slot cleared permanently; policy continues to exist.
-    ///      Paired slot assertion: `policies[id]` packed admin lane is
-    ///      zero, and the type lane is unchanged (so `policyExists`
-    ///      still returns true).
+    /// @dev Admin lane cleared; exists bit survives so `policyExists` stays true.
     function test_renounceAdmin_success_clearsAdmin(address currentAdmin) public {
         vm.assume(currentAdmin != address(0));
         uint64 policyId = policyRegistry.createPolicy(currentAdmin, IPolicyRegistry.PolicyType.ALLOWLIST);
@@ -47,10 +44,9 @@ contract PolicyRegistryRenounceAdminTest is PolicyRegistryTest {
             address(0),
             "policies[id] admin lane must be cleared after renounce"
         );
-        assertEq(
-            MockPolicyRegistryStorage.policyTypeFromPacked(packed),
-            uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
-            "policies[id] type lane must remain ALLOWLIST after renounce"
+        assertTrue(
+            MockPolicyRegistryStorage.policyExistsFromPacked(packed),
+            "policies[id] exists bit must remain set after renounce"
         );
     }
 

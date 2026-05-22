@@ -4,31 +4,27 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract PolicyRegistryPolicyAdminTest is PolicyRegistryTest {
-    /// @notice Verifies policyAdmin reverts PolicyNotFound for a well-formed but uncreated id
-    /// @dev Lookup guard for non-existent ids; uses a well-formed id so the malformed
-    ///      check passes and the storage-lookup miss fires.
-    function test_policyAdmin_revert_policyNotFound(uint64 seed) public {
+    /// @notice Verifies policyAdmin returns address(0) for a well-formed but uncreated id
+    /// @dev Lookup miss returns zero rather than reverting.
+    function test_policyAdmin_success_zeroForUncreated(uint64 seed) public view {
         uint64 policyId = _wellFormedUncreatedPolicyId(seed);
-        vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
-        policyRegistry.policyAdmin(policyId);
+        assertEq(policyRegistry.policyAdmin(policyId), address(0));
     }
 
-    /// @notice Verifies policyAdmin reverts MalformedPolicyId for any id whose top byte
-    ///         is outside the PolicyType enum range.
-    /// @dev Encoding invariant on the registry surface.
-    function test_policyAdmin_revert_malformedPolicyId(uint64 seed) public {
+    /// @notice Verifies policyAdmin returns address(0) for a malformed id
+    /// @dev Malformed-ID short-circuit returns zero.
+    function test_policyAdmin_success_zeroForMalformedId(uint64 seed) public view {
         uint64 policyId = _malformedPolicyId(seed);
-        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.MalformedPolicyId.selector, policyId));
-        policyRegistry.policyAdmin(policyId);
+        assertEq(policyRegistry.policyAdmin(policyId), address(0));
     }
 
-    /// @notice Verifies policyAdmin returns address(0) for built-in policies
-    /// @dev Built-ins have no admin; both id 0 and id 1 return zero
+    /// @notice Verifies policyAdmin returns address(0) for built-in sentinels.
     function test_policyAdmin_success_zeroForBuiltins() public view {
-        assertEq(policyRegistry.policyAdmin(0), address(0));
-        assertEq(policyRegistry.policyAdmin(1), address(0));
+        assertEq(policyRegistry.policyAdmin(PolicyRegistryConstants.ALWAYS_ALLOW_ID), address(0));
+        assertEq(policyRegistry.policyAdmin(PolicyRegistryConstants.ALWAYS_BLOCK_ID), address(0));
     }
 
     /// @notice Verifies policyAdmin returns the admin nominated at creation time

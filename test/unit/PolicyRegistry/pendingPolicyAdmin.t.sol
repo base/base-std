@@ -53,4 +53,16 @@ contract PolicyRegistryPendingPolicyAdminTest is PolicyRegistryTest {
         assertEq(policyRegistry.pendingPolicyAdmin(0), address(0));
         assertEq(policyRegistry.pendingPolicyAdmin(1), address(0));
     }
+
+    /// @notice Verifies pendingPolicyAdmin returns address(0) for an uncreated id
+    function test_pendingPolicyAdmin_success_zeroForUncreated(uint64 seed) public view {
+        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
+        assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
+    }
+
+    /// @notice Verifies pendingPolicyAdmin returns address(0) for a malformed id
+    function test_pendingPolicyAdmin_success_zeroForMalformedId(uint64 seed) public view {
+        uint64 policyId = _malformedPolicyId(seed);
+        assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
+    }
 }

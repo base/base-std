@@ -41,9 +41,10 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// deploy a token, and need the policy-registry mock so the token's
 /// cross-precompile `isAuthorized` calls don't hit empty code and
 /// revert at the EVM level (the most common B20 policy tests use the
-/// built-in sentinel IDs `0` (ALWAYS_ALLOW) and `1` (ALWAYS_BLOCK) to
-/// exercise both authorize and forbid paths without any custom registry
-/// state). Centralizing the etch here means concrete bases don't need to
+/// built-in sentinel IDs `PolicyRegistryConstants.ALWAYS_ALLOW_ID` and
+/// `PolicyRegistryConstants.ALWAYS_BLOCK_ID` to exercise both authorize
+/// and forbid paths without any custom registry state). Centralizing
+/// the etch here means concrete bases don't need to
 /// reason about which precompiles they "depend on" — they're all just
 /// available, the way the EVM has `SLOAD`.
 ///
@@ -60,9 +61,10 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 ///     pause / supply-cap checks otherwise.
 ///   - `MockPolicyRegistry` is fully implemented: every `IPolicyRegistry`
 ///     surface function is live. Custom policy creation, membership
-///     mutation, and admin rotation all work. Built-in IDs `0`
-///     (ALWAYS_ALLOW) and `1` (ALWAYS_BLOCK) are short-circuited before
-///     any storage read.
+///     mutation, and admin rotation all work. Built-in IDs
+///     `ALWAYS_ALLOW_ID = 0` and
+///     `ALWAYS_BLOCK_ID = (uint64(ALLOWLIST) << 56) | 1` are
+///     short-circuited before any storage read.
 ///   - `MockActivationRegistry` is a SKELETON: implements only `admin()`
 ///     to return the hardcoded test admin.
 abstract contract BaseTest is Test {
@@ -124,32 +126,28 @@ abstract contract BaseTest is Test {
     // tests fuzzing arbitrary uint64s need to partition their inputs
     // into well-formed and malformed regions to assert the right error.
 
-    /// @notice True iff `policyId`'s top byte (the PolicyType
-    ///         discriminator) is in the valid `PolicyType` enum range.
+    /// @notice True iff `policyId`'s top byte is in the `PolicyType` enum range.
     function _isWellFormedPolicyId(uint64 policyId) internal pure returns (bool) {
-        return uint8(policyId >> 56) <= uint8(IPolicyRegistry.PolicyType.BLOCKLIST);
+        return uint8(policyId >> 56) <= uint8(type(IPolicyRegistry.PolicyType).max);
     }
 
     /// @notice Maps a fuzz seed to a well-formed but uncreated `policyId`.
-    ///         Top byte is forced into `{ALLOWLIST, BLOCKLIST}` (custom
-    ///         range, never sentinel) and low 56 bits are forced strictly
-    ///         above the sentinel range so the ID can never collide with
-    ///         a sentinel or with any policy a registry could create from
-    ///         a fresh state.
+    ///         Top byte is forced into the `PolicyType` enum range; counter
+    ///         is forced >= 2 to skip both sentinel counters.
     function _wellFormedUncreatedPolicyId(uint64 seed) internal pure returns (uint64) {
-        uint8 typeByte = uint8(IPolicyRegistry.PolicyType.ALLOWLIST) + uint8(seed % 2);
-        // Use bits [62:8] as the counter source so the top byte and the
-        // counter selection are independent. Force counter >= 2 to skip
-        // both sentinel IDs (0 and 1).
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint8 typeByte = uint8(seed % (uint64(type(IPolicyRegistry.PolicyType).max) + 1));
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint56 counter = uint56((seed >> 8) | 2);
         return (uint64(typeByte) << 56) | uint64(counter);
     }
 
     /// @notice Maps a fuzz seed to a MALFORMED `policyId`: top byte is
-    ///         forced strictly above the `PolicyType` enum range so the
-    ///         registry rejects it with `MalformedPolicyId`.
+    ///         forced above the `PolicyType` enum range. View queries
+    ///         short-circuit these to the "absent" value; mutating calls
+    ///         reject via `PolicyNotFound`.
     function _malformedPolicyId(uint64 seed) internal pure returns (uint64) {
-        uint8 maxValidType = uint8(IPolicyRegistry.PolicyType.BLOCKLIST);
+        uint8 maxValidType = uint8(type(IPolicyRegistry.PolicyType).max);
         uint8 invalidRange = type(uint8).max - maxValidType;
         uint8 typeByte = maxValidType + 1 + uint8(seed % invalidRange);
         return (uint64(typeByte) << 56) | uint64(seed & ((1 << 56) - 1));
