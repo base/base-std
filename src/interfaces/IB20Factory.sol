@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.20 <0.9.0;
 
-/// @title ITokenFactory
+/// @title IB20Factory
 /// @notice Singleton factory precompile for creating B-20 tokens of any
 ///         variant. A single entry point `createToken` dispatches on a
-///         `TokenVariant` discriminator; per-variant creation arguments
+///         `B20Variant` discriminator; per-variant creation arguments
 ///         are ABI-encoded into `params` and prefixed with a `version`
 ///         byte so the encoding can evolve without breaking the factory's
 ///         immutable surface. Creation is permissionless; the caller picks
@@ -19,7 +19,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         **Token address schema (20 bytes).**
 ///         - `[0:10]`  — `bytes10(0xB200000000000000000000)` shared
 ///                       prefix identifying a factory-created B-20.
-///         - `[10]`    — `bytes1(variant)` (matches `TokenVariant`).
+///         - `[10]`    — `bytes1(variant)` (matches `B20Variant`).
 ///         - `[11:20]` — `bytes9(keccak256(abi.encode(msg.sender, salt)))`.
 ///
 ///         **Variant evolution.** Adding new required fields to an
@@ -59,7 +59,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         checks (e.g. stablecoins must specify a non-empty `currency`)
 ///         are applied at the end of the variant decode, after the
 ///         common version check, so each variant owns its own invariants.
-interface ITokenFactory {
+interface IB20Factory {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
     //////////////////////////////////////////////////////////////*/
@@ -70,7 +70,7 @@ interface ITokenFactory {
     ///         factory-created B-20 in the first place is answered by
     ///         `isB20` (a prefix check on bytes `[0:10]`); the variant
     ///         byte itself does not need an "absent" sentinel.
-    enum TokenVariant {
+    enum B20Variant {
         DEFAULT,
         STABLECOIN,
         SECURITY
@@ -174,7 +174,7 @@ interface ITokenFactory {
     ///         Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
-    /// @notice `variant` is not a recognized `TokenVariant`. Reached
+    /// @notice `variant` is not a recognized `B20Variant`. Reached
     ///         only when the factory is invoked with a raw variant byte
     ///         outside the enum range (typed `createToken` callers are
     ///         rejected by ABI decoding before this check fires).
@@ -222,7 +222,7 @@ interface ITokenFactory {
     ///         `TokenCreated` is the token-identity signal only. The
     ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
     ///         skips the grant and emits no `RoleGranted` at bootstrap.
-    event TokenCreated(address indexed token, TokenVariant indexed variant, string name, string symbol, uint8 decimals);
+    event TokenCreated(address indexed token, B20Variant indexed variant, string name, string symbol, uint8 decimals);
 
     /*//////////////////////////////////////////////////////////////
                                  CREATE
@@ -269,7 +269,7 @@ interface ITokenFactory {
     ///                   token-side authorization checks are bypassed
     ///                   for this window only.
     /// @return token     The address of the newly created token.
-    function createToken(TokenVariant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
+    function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
         returns (address token);
 
@@ -282,7 +282,7 @@ interface ITokenFactory {
     ///         depends only on these inputs; the remaining `params`
     ///         fields (including decimals, which are fixed by variant)
     ///         do not affect the address.
-    function getTokenAddress(TokenVariant variant, address sender, bytes32 salt) external view returns (address);
+    function getB20Address(B20Variant variant, address sender, bytes32 salt) external view returns (address);
 
     /// @notice Whether `token` was created by this factory. Recovered
     ///         from the address prefix (bytes `[0:10]`); no storage read.

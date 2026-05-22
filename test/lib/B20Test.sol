@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenFactoryTest} from "test/lib/TokenFactoryTest.sol";
+import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 import {IB20} from "src/interfaces/IB20.sol";
@@ -10,7 +10,7 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @notice Base test contract for `IB20` unit tests.
 ///
-/// Extends `TokenFactoryTest` because an IB20 token cannot exist
+/// Extends `B20FactoryTest` because an IB20 token cannot exist
 /// without the factory: `setUp` calls `super.setUp()` to etch every
 /// precompile mock (via `BaseTest`) and pick up the factory create
 /// helpers, then deploys a default-variant token here so the token's
@@ -22,7 +22,7 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 /// token-specific role-holders (`minter`, `burner`, `pauser`,
 /// `unpauser`, `burnBlocker`) so role-gated tests have explicit named
 /// accounts to grant roles to in setUp's initCalls.
-contract B20Test is TokenFactoryTest {
+contract B20Test is B20FactoryTest {
     // Role identifiers (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
     // BURN_BLOCKED_ROLE, PAUSE_ROLE, UNPAUSE_ROLE, METADATA_ROLE) and
     // policy-type identifiers (TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY,
@@ -62,7 +62,7 @@ contract B20Test is TokenFactoryTest {
     ///         token via the factory mock; variant-specific bases (e.g.
     ///         `B20StablecoinTest`) override to deploy their variant while
     ///         reusing every other piece of `B20Test`.
-    /// @dev    `MockTokenFactory.createToken` etches `MockB20` runtime
+    /// @dev    `MockB20Factory.createToken` etches `MockB20` runtime
     ///         bytecode at the computed address, writes initial state
     ///         directly via vm.store (no init function on the token),
     ///         runs initCalls, then closes the bootstrap window. Calls

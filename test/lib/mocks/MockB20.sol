@@ -11,7 +11,7 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 /// @title MockB20
 /// @notice Reference implementation of the `IB20` default-token surface.
 ///         Etched at every default-variant B-20 token's factory-derived
-///         address via `vm.etch` from `MockTokenFactory.createToken`.
+///         address via `vm.etch` from `MockB20Factory.createToken`.
 ///
 /// @dev    Written as Solidity-as-if-Rust: the goal is unambiguous
 ///         spec-correspondence with the production Rust precompile, not
@@ -53,7 +53,7 @@ contract MockB20 is IB20 {
     ///         during the bootstrap window (before the factory writes
     ///         `initialized = true` via vm.store) bypass all token-side
     ///         authorization gates.
-    address internal constant FACTORY = StdPrecompiles.TOKEN_FACTORY_ADDRESS;
+    address internal constant FACTORY = StdPrecompiles.B20_FACTORY_ADDRESS;
 
     /// @notice The policy registry precompile address. Consulted on
     ///         every transfer, mint, and `burnBlocked` to resolve the

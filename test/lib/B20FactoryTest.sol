@@ -3,10 +3,10 @@ pragma solidity ^0.8.20;
 
 import {BaseTest} from "test/lib/BaseTest.sol";
 
-import {ITokenFactory} from "src/interfaces/ITokenFactory.sol";
+import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
-/// @notice Base test contract for `ITokenFactory` unit tests, and the
+/// @notice Base test contract for `IB20Factory` unit tests, and the
 ///         parent for token-test bases (`B20Test`, `B20StablecoinTest`)
 ///         which need factory create helpers in setUp.
 ///
@@ -14,16 +14,16 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 /// `BaseTest`; adds the factory handle and the per-variant param
 /// builder / create wrapper helpers used by both factory tests and
 /// token tests.
-contract TokenFactoryTest is BaseTest {
+contract B20FactoryTest is BaseTest {
     // -- Precompile handle --
-    ITokenFactory internal factory = StdPrecompiles.TOKEN_FACTORY;
+    IB20Factory internal factory = StdPrecompiles.B20_FACTORY;
 
     // ============================================================
     //                  SECURITY-VARIANT FIXTURES
     // ============================================================
     // Shared across every test that constructs `B20SecurityCreateParams`
     // (the factory-side `createToken` tests and the variant-side
-    // `B20Security/*` tests). Lives on `TokenFactoryTest` because it's
+    // `B20Security/*` tests). Lives on `B20FactoryTest` because it's
     // the deepest common base of both. Production code (the factory
     // mock and the Rust precompile) hardcodes the `"ISIN"` key the
     // same way; that's intentional and not test-fixture data.
@@ -50,13 +50,13 @@ contract TokenFactoryTest is BaseTest {
     function _b20Params(string memory name_, string memory symbol_, address initialAdmin_)
         internal
         pure
-        returns (ITokenFactory.B20CreateParams memory)
+        returns (IB20Factory.B20CreateParams memory)
     {
-        return ITokenFactory.B20CreateParams({version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_});
+        return IB20Factory.B20CreateParams({version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_});
     }
 
     /// @notice Build a default `B20CreateParams` (`Test`/`TST`, admin).
-    function _b20Params() internal view returns (ITokenFactory.B20CreateParams memory) {
+    function _b20Params() internal view returns (IB20Factory.B20CreateParams memory) {
         return _b20Params("Test", "TST", admin);
     }
 
@@ -66,14 +66,14 @@ contract TokenFactoryTest is BaseTest {
         string memory symbol_,
         address initialAdmin_,
         string memory currency_
-    ) internal pure returns (ITokenFactory.B20StablecoinCreateParams memory) {
-        return ITokenFactory.B20StablecoinCreateParams({
+    ) internal pure returns (IB20Factory.B20StablecoinCreateParams memory) {
+        return IB20Factory.B20StablecoinCreateParams({
             version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_, currency: currency_
         });
     }
 
     /// @notice Build a default `B20StablecoinCreateParams` (`USD Test`/`USDT`, admin, `USD`).
-    function _stablecoinParams() internal view returns (ITokenFactory.B20StablecoinCreateParams memory) {
+    function _stablecoinParams() internal view returns (IB20Factory.B20StablecoinCreateParams memory) {
         return _stablecoinParams("USD Test", "USDT", admin, "USD");
     }
 
@@ -84,8 +84,8 @@ contract TokenFactoryTest is BaseTest {
         address initialAdmin_,
         string memory isin_,
         uint256 minimumRedeemable_
-    ) internal pure returns (ITokenFactory.B20SecurityCreateParams memory) {
-        return ITokenFactory.B20SecurityCreateParams({
+    ) internal pure returns (IB20Factory.B20SecurityCreateParams memory) {
+        return IB20Factory.B20SecurityCreateParams({
             version: 1,
             name: name_,
             symbol: symbol_,
@@ -96,7 +96,7 @@ contract TokenFactoryTest is BaseTest {
     }
 
     /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin, `DEFAULT_ISIN`).
-    function _securityParams() internal view returns (ITokenFactory.B20SecurityCreateParams memory) {
+    function _securityParams() internal view returns (IB20Factory.B20SecurityCreateParams memory) {
         return _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
     }
 
@@ -106,11 +106,11 @@ contract TokenFactoryTest is BaseTest {
     function _createDefault(
         address caller,
         bytes32 salt,
-        ITokenFactory.B20CreateParams memory params,
+        IB20Factory.B20CreateParams memory params,
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createToken(ITokenFactory.TokenVariant.DEFAULT, salt, abi.encode(params), initCalls);
+        return factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(params), initCalls);
     }
 
     /// @notice Create a default-variant token with defaults (alice creator, fresh salt, empty init calls).
@@ -122,11 +122,11 @@ contract TokenFactoryTest is BaseTest {
     function _createStablecoin(
         address caller,
         bytes32 salt,
-        ITokenFactory.B20StablecoinCreateParams memory params,
+        IB20Factory.B20StablecoinCreateParams memory params,
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createToken(ITokenFactory.TokenVariant.STABLECOIN, salt, abi.encode(params), initCalls);
+        return factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(params), initCalls);
     }
 
     /// @notice Create a stablecoin-variant token with defaults.
@@ -138,11 +138,11 @@ contract TokenFactoryTest is BaseTest {
     function _createSecurity(
         address caller,
         bytes32 salt,
-        ITokenFactory.B20SecurityCreateParams memory params,
+        IB20Factory.B20SecurityCreateParams memory params,
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createToken(ITokenFactory.TokenVariant.SECURITY, salt, abi.encode(params), initCalls);
+        return factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(params), initCalls);
     }
 
     /// @notice Create a security-variant token with defaults.
