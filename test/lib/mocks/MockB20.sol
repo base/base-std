@@ -206,6 +206,7 @@ contract MockB20 is IB20 {
     function updateName(string calldata newName) public virtual onlyRole(METADATA_ROLE) {
         MockB20Storage.layout().name = newName;
         emit NameUpdated(msg.sender, newName);
+        emit EIP712DomainChanged();
     }
 
     function updateSymbol(string calldata newSymbol) external onlyRole(METADATA_ROLE) {
@@ -439,18 +440,32 @@ contract MockB20 is IB20 {
     //                  PERMIT (EIP-2612 + ERC-5267)
     // ============================================================
 
-    /// @dev Domain content per IB20 spec: chainId and verifyingContract
-    ///      only. No name, no version. Type hash is the bare EIP712Domain
-    ///      with those two fields.
+    /// @dev Domain content per IB20 spec: name, version, chainId, and
+    ///      verifyingContract — the canonical EIP-2612 shape. `name`
+    ///      is live from storage, `version` is the constant `"1"`.
     bytes32 internal constant EIP712_DOMAIN_TYPEHASH =
-        keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
+        keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    /// @dev Version field bound into the EIP-712 domain. Constant
+    ///      string `"1"`; pre-hashed here so `DOMAIN_SEPARATOR()`
+    ///      doesn't redo the keccak on every call. Bumping requires
+    ///      a new contract anyway, so there's no runtime mutator.
+    bytes32 internal constant EIP712_DOMAIN_VERSION_HASH = keccak256(bytes("1"));
 
     /// @dev EIP-2612 permit type hash.
     bytes32 internal constant PERMIT_TYPEHASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
-    function DOMAIN_SEPARATOR() public view virtual returns (bytes32) {
-        return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, block.chainid, address(this)));
+    function DOMAIN_SEPARATOR() public view returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                EIP712_DOMAIN_TYPEHASH,
+                keccak256(bytes(MockB20Storage.layout().name)),
+                EIP712_DOMAIN_VERSION_HASH,
+                block.chainid,
+                address(this)
+            )
+        );
     }
 
     function nonces(address owner) external view returns (uint256) {
@@ -494,11 +509,11 @@ contract MockB20 is IB20 {
             uint256[] memory extensions
         )
     {
-        // Bits 2 and 3 set: chainId and verifyingContract are populated.
-        // name, version, salt, extensions are all empty/zero.
-        fields = hex"0c";
-        name_ = "";
-        version = "";
+        // Bits 0, 1, 2, 3 set: name, version, chainId, verifyingContract
+        // are populated. salt and extensions are empty/zero.
+        fields = hex"0f";
+        name_ = MockB20Storage.layout().name;
+        version = "1";
         chainId = block.chainid;
         verifyingContract = address(this);
         salt = bytes32(0);
