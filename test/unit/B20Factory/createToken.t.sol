@@ -79,9 +79,9 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     // STABLECOIN currency validation — see docs/b20/stablecoin/currency-validation.md.
 
-    /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
-    /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
-    ///      via `vm.assume(!isValidFiatCode)`.
+    /// @notice Any string failing the format check reverts with `InvalidCurrency(code)`.
+    /// @dev Subsumes every point case (empty, wrong length, lowercase, digits, symbols)
+    ///      via `vm.assume(!isValidFiatCode)`. Format = exactly three uppercase ASCII letters.
     function test_createB20_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
         public
     {

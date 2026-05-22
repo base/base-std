@@ -1,243 +1,56 @@
 # Currency Validation
 
-How the `B20Stablecoin` variant constrains its `currency` field at creation, and why the chosen filter is scoped narrower than "stablecoin" colloquially suggests.
+How the `B20Stablecoin` variant constrains its `currency` field at creation, and why the chosen filter is a permissive format check rather than a curated allowlist.
 
 ## Problem
 
-The `B20Stablecoin` variant declares an immutable `currency` identifier at creation. Without a constraint on what issuers can pass:
+The `B20Stablecoin` variant declares an immutable `currency` identifier at creation. Without any constraint on what issuers can pass:
 
 - Two issuers might use `"USD"` and `"usd"` for the same currency, breaking any consumer that groups by the field.
 - An issuer might pass their token's symbol (`"USDC"`) instead of a currency code.
-- Tokens claiming non-currency assets (gold, crypto, governance tokens) would all coexist under the same variant, polluting any tooling that categorizes by `currency()`.
+- Empty strings or numeric / punctuation junk could end up persisted in `currency()` forever.
 
 The factory needs a deterministic, machine-readable filter rather than a free-form string.
 
 ## Solution
 
-Validate `currency` at creation against a hardcoded allowlist of active **ISO 4217 alphabetic codes** for circulating national fiat currencies, implemented in [`test/lib/ISO4217.sol`](../../../test/lib/ISO4217.sol). Anything off the list reverts with `ITokenFactory.InvalidCurrency(code)` carrying the offending string verbatim.
+Validate `currency` at creation as **exactly three uppercase ASCII letters (`A`–`Z`)**, implemented in [`test/lib/ISO4217.sol`](../../../test/lib/ISO4217.sol). Anything failing the format check reverts with `IB20Factory.InvalidCurrency(code)` carrying the offending string verbatim.
 
-Scope aligns with **MiCA E-Money Tokens** and **MAS Single-Currency Stablecoins** — narrower than the broader **FSB** (Financial Stability Board) and **BIS** (Bank for International Settlements) definition that includes commodities, baskets, and crypto pegs.
+Format only — **membership in the ISO 4217 register is not enforced on-chain.** Any 3-letter uppercase string is accepted, including codes that are not on ISO 4217 at all.
 
 Key properties:
 
 - Set at creation by the factory; immutable thereafter.
-- Self-declared — the filter gates format and membership, not truthfulness.
-- Any consumer using `currency()` for authorization or routing MUST add its own issuer/contract allowlist on top.
+- Self-declared — the filter gates shape, not truthfulness or even existence as a real currency.
+- Any consumer using `currency()` for authorization or routing MUST add its own issuer / contract allowlist on top.
 
-## Specification
+## Why format-only
 
-| Category | Status | Description | Codes |
-| --- | --- | --- | --- |
-| G10 + SGD | Included | Most-traded reserve currencies; MAS-anchored set | USD, EUR, JPY, GBP, AUD, NZD, CAD, CHF, NOK, SEK, SGD |
-| Multi-country X-prefix fiat | Included | Real circulating fiat issued by supranational / multi-jurisdiction central banks (BCEAO, BEAC, ECCB, IEOM, CBCS) | XOF, XAF, XCD, XCG, XPF |
-| Precious metals | Excluded | Commodities, not means of payment — commodity-backed tokens belong on `B20Security` | XAU, XAG, XPT, XPD |
-| European composite units | Excluded | Defunct supranational accounting units retained for historical reconciliation | XBA, XBB, XBC, XBD |
-| Other supranational synthetics | Excluded | Reserve assets and regional units of account, not circulating currencies | XDR, XSU, XUA |
-| Sentinels | Excluded | Reserved markers ("no currency" / test code), not currencies | XXX, XTS |
-| Funds codes / indexing units | Excluded | Inflation-indexing devices, complementary currencies, and forex settlement conventions — not things one can hold or settle in | BOV, CHE, CHW, CLF, COU, MXV, USN, UYI, UYW |
+Earlier iterations of this validation maintained a curated allowlist of active ISO 4217 alphabetic codes for circulating national fiat currencies (excluding metals, sentinels, funds codes, supranational synthetic units, etc.). That approach has been removed in favor of the simple format check. Reasons:
 
-- Crypto tickers and arbitrary strings are rejected by virtue of being off the ISO 4217 active list (no explicit entry needed).
-- Per-entry rationale for each blocklist code lives inline in `ISO4217.excludedAt`.
-- Any future Rust precompile implementation must mirror this allowlist and blocklist exactly.
+| Concern with the allowlist | Why it pushed us off the allowlist |
+| --- | --- |
+| **Maintenance overhead.** ISO 4217 publishes amendments on the order of once per year. Each amendment requires a code change in lockstep across the Solidity reference and any Rust precompile implementation. Examples just in the last year: ANG (Netherlands Antillean Guilder) withdrawn 2025-03-31 and replaced by XCG; BGN withdrawn 2026-01-01 when Bulgaria adopted the euro. | The Solidity / Rust lockstep requirement is a recurring tax on a non-core surface. |
+| **Backwards-compat ambiguity.** When ISO withdraws a code, real balances often remain in circulation for years. There's no clean answer to "drop the code on the date ISO says" vs. "keep the code while supply persists" — both have costs, and both require ongoing judgement. | Format-only sidesteps the question entirely. |
+| **Self-declared anyway.** The filter never asserted that the issuer's reserves actually back the declared currency. Any protocol routing or authorizing on `currency()` already had to layer its own issuer / contract allowlist on top of the ISO check. | The ISO check was never the trust signal; consumer-side allowlists are. Removing the ISO check removes redundant work, not real validation. |
+| **Coverage gaps.** Basket-pegged stablecoins, algorithmic non-pegged stable assets, and commodity-backed tokens marketed as stablecoins all have no clean home under a fiat-only allowlist — they'd need separate variants or carve-outs. | A permissive format check lets the consumer-side allowlists decide what categories they care about, instead of baking those decisions into an immutable precompile. |
+
+The format check still catches the typo / shape errors the original problem statement called out (`"usd"`, `"USDC"`, empty string, wrong length, digits, symbols) — those were always the cheap-to-catch failures, and we still catch them.
 
 ## Risks and mitigations
 
 | Concern | Mitigation |
 | --- | --- |
-| Commodity-backed tokens marketed as stablecoins (PAXG, XAUT, AABBG) will not be admitted here | These are structurally claims on a vault — securities-shaped instruments. They belong on the `B20Security` variant. |
-| Crypto-collateralized stablecoins (DAI, LUSD, crvUSD) appear to be excluded | They fit this variant fine. The backing mechanism (custodial reserves, on-chain collateral, T-bills) is irrelevant to `currency()`; what matters is the peg target. If a token pegs to USD, declare `"USD"`. |
-| Basket-pegged tokens (historically Libra/Diem) and algorithmic non-pegged stable assets (Ampleforth, historically Terra UST) have no current B-20 home | Accepted trade-off. A future basket / ART variant or use of the `B20` Default variant with custom monetary policy would be the path, not relaxation of this variant. |
-| The variant name "Stablecoin" carries broader industry connotations than its admitted set | Anchored in regulatory precedent — MiCA EMT, MAS SCS, and US payment-stablecoin legislative proposals all draw the same line. |
-| The allowlist is self-declared, not a trust signal — an issuer can declare `currency = "USD"` without backing reserves | The factory enforces format and membership only. Any protocol consuming `currency()` for an authorization or routing decision MUST layer its own issuer/contract allowlist on top. The standardized identifier is what those consumer-side allowlists organize around, not a substitute for them. |
-| Adding or removing an ISO 4217 code requires a contract change | Real but rare — ISO 4217 registrations happen on the order of once per year. Both the Solidity reference and any Rust precompile implementation must be updated in lockstep when changes do occur. |
+| `currency = "ZZZ"` or `"XYZ"` is now accepted even though no such currency exists | The on-chain field is self-declared; this was already the case at the protocol level. Consumer-side allowlists are responsible for asserting the declared currency is one they recognize. |
+| Commodity-backed tokens (PAXG, XAUT, AABBG) can now declare `currency = "XAU"` and pass validation | They still belong on the `B20Security` variant for structural reasons (claims on a vault) — a permissive `currency` check on the Stablecoin variant doesn't change the variant choice. Consumer-side categorization is unchanged. |
+| Two issuers might still pick incompatible identifiers for the same underlying asset (e.g. `"USD"` vs. a hypothetical `"US$"`) | The format check rules out the second example (symbols), and conventional ISO 4217 codes are the obvious schelling point for the first. Standardization is now norms-driven rather than enforced. |
+| Adding richer validation later (e.g. an explicit blocklist for sentinels) would require a precompile change | True, but the same was true under the allowlist — and the format-only baseline makes additive policy easier than starting from a curated set. |
 
 ## Alternatives considered
 
 | Option | Pros | Cons |
 | --- | --- | --- |
-| **No validation**<br>Accept any non-empty<br>string for `currency` | • Simplest impl<br>• Zero maintenance<br>• Max issuer flexibility | • Typos (`"usd"`, `"USDC"`) pollute value space<br>• No on-chain categorization<br>• Admits arbitrary strings |
-| **Format-only check**<br>Length 3 + uppercase<br>ASCII; no allowlist | • Cheap<br>• No allowlist to maintain<br>• Catches obvious garbage | • Admits `"ZZZ"`, `"BTC"`, `"ETH"`, etc.<br>• No semantic gate |
-| **Full ISO 4217 active list**<br>Every alphabetic code,<br>incl. X-prefix metals,<br>supranational synthetics,<br>funds codes<br>(TIP-20 broad-scope<br>precedent) | • Matches the official standard literally<br>• Broadest legitimate value space<br>• Familiar to FX-adjacent tooling | • Includes commodities (belong on `B20Security`)<br>• Includes funds codes (CLF, USN — not holdable)<br>• Breaks regulatory alignment with MiCA EMT / MAS SCS |
-| **Narrow ISO 4217 fiat allowlist** *(chosen)*<br>Circulating national<br>fiat only;<br>MiCA EMT / MAS SCS<br>aligned | • Standardized value space<br>• Rejects typos at creation<br>• Regulatory-category alignment<br>• Commodities pushed to `B20Security` | • Requires allowlist maintenance (~1/year)<br>• ISO 4217 updates need lockstep Rust impl change |
-
-## Supported currencies
-
-All 157 codes on the allowlist, alphabetical by code. Two entries (ANG, BGN) are recently-withdrawn ISO codes retained for backwards compatibility — see the Appendix.
-
-| Code | Currency | Region / issuer |
-| --- | --- | --- |
-| AED | UAE Dirham | United Arab Emirates |
-| AFN | Afghan Afghani | Afghanistan |
-| ALL | Albanian Lek | Albania |
-| AMD | Armenian Dram | Armenia |
-| ANG | Netherlands Antillean Guilder | Curaçao, Sint Maarten — withdrawn 2025-03-31 (kept for backwards compatibility, see Appendix) |
-| AOA | Angolan Kwanza | Angola |
-| ARS | Argentine Peso | Argentina |
-| AUD | Australian Dollar | Australia |
-| AWG | Aruban Florin | Aruba |
-| AZN | Azerbaijani Manat | Azerbaijan |
-| BAM | Bosnia and Herzegovina Convertible Mark | Bosnia and Herzegovina |
-| BBD | Barbadian Dollar | Barbados |
-| BDT | Bangladeshi Taka | Bangladesh |
-| BGN | Bulgarian Lev | Bulgaria — withdrawn 2026-01-01 (kept for backwards compatibility, see Appendix) |
-| BHD | Bahraini Dinar | Bahrain |
-| BIF | Burundian Franc | Burundi |
-| BMD | Bermudian Dollar | Bermuda |
-| BND | Brunei Dollar | Brunei |
-| BOB | Bolivian Boliviano | Bolivia |
-| BRL | Brazilian Real | Brazil |
-| BSD | Bahamian Dollar | Bahamas |
-| BTN | Bhutanese Ngultrum | Bhutan |
-| BWP | Botswana Pula | Botswana |
-| BYN | Belarusian Ruble | Belarus |
-| BZD | Belize Dollar | Belize |
-| CAD | Canadian Dollar | Canada |
-| CDF | Congolese Franc | DR Congo |
-| CHF | Swiss Franc | Switzerland, Liechtenstein |
-| CLP | Chilean Peso | Chile |
-| CNY | Chinese Yuan Renminbi | China |
-| COP | Colombian Peso | Colombia |
-| CRC | Costa Rican Colón | Costa Rica |
-| CUP | Cuban Peso | Cuba |
-| CVE | Cape Verdean Escudo | Cape Verde |
-| CZK | Czech Koruna | Czech Republic |
-| DJF | Djiboutian Franc | Djibouti |
-| DKK | Danish Krone | Denmark, Greenland, Faroe Islands |
-| DOP | Dominican Peso | Dominican Republic |
-| DZD | Algerian Dinar | Algeria |
-| EGP | Egyptian Pound | Egypt |
-| ERN | Eritrean Nakfa | Eritrea |
-| ETB | Ethiopian Birr | Ethiopia |
-| EUR | Euro | Eurozone |
-| FJD | Fijian Dollar | Fiji |
-| FKP | Falkland Islands Pound | Falkland Islands |
-| GBP | British Pound Sterling | United Kingdom |
-| GEL | Georgian Lari | Georgia |
-| GHS | Ghanaian Cedi | Ghana |
-| GIP | Gibraltar Pound | Gibraltar |
-| GMD | Gambian Dalasi | The Gambia |
-| GNF | Guinean Franc | Guinea |
-| GTQ | Guatemalan Quetzal | Guatemala |
-| GYD | Guyanese Dollar | Guyana |
-| HKD | Hong Kong Dollar | Hong Kong |
-| HNL | Honduran Lempira | Honduras |
-| HTG | Haitian Gourde | Haiti |
-| HUF | Hungarian Forint | Hungary |
-| IDR | Indonesian Rupiah | Indonesia |
-| ILS | Israeli New Shekel | Israel |
-| INR | Indian Rupee | India, Bhutan |
-| IQD | Iraqi Dinar | Iraq |
-| IRR | Iranian Rial | Iran |
-| ISK | Icelandic Króna | Iceland |
-| JMD | Jamaican Dollar | Jamaica |
-| JOD | Jordanian Dinar | Jordan |
-| JPY | Japanese Yen | Japan |
-| KES | Kenyan Shilling | Kenya |
-| KGS | Kyrgyzstani Som | Kyrgyzstan |
-| KHR | Cambodian Riel | Cambodia |
-| KMF | Comorian Franc | Comoros |
-| KPW | North Korean Won | North Korea |
-| KRW | South Korean Won | South Korea |
-| KWD | Kuwaiti Dinar | Kuwait |
-| KYD | Cayman Islands Dollar | Cayman Islands |
-| KZT | Kazakhstani Tenge | Kazakhstan |
-| LAK | Lao Kip | Laos |
-| LBP | Lebanese Pound | Lebanon |
-| LKR | Sri Lankan Rupee | Sri Lanka |
-| LRD | Liberian Dollar | Liberia |
-| LSL | Lesotho Loti | Lesotho |
-| LYD | Libyan Dinar | Libya |
-| MAD | Moroccan Dirham | Morocco |
-| MDL | Moldovan Leu | Moldova |
-| MGA | Malagasy Ariary | Madagascar |
-| MKD | Macedonian Denar | North Macedonia |
-| MMK | Burmese Kyat | Myanmar |
-| MNT | Mongolian Tögrög | Mongolia |
-| MOP | Macanese Pataca | Macau |
-| MRU | Mauritanian Ouguiya | Mauritania |
-| MUR | Mauritian Rupee | Mauritius |
-| MVR | Maldivian Rufiyaa | Maldives |
-| MWK | Malawian Kwacha | Malawi |
-| MXN | Mexican Peso | Mexico |
-| MYR | Malaysian Ringgit | Malaysia |
-| MZN | Mozambican Metical | Mozambique |
-| NAD | Namibian Dollar | Namibia |
-| NGN | Nigerian Naira | Nigeria |
-| NIO | Nicaraguan Córdoba | Nicaragua |
-| NOK | Norwegian Krone | Norway |
-| NPR | Nepalese Rupee | Nepal |
-| NZD | New Zealand Dollar | New Zealand |
-| OMR | Omani Rial | Oman |
-| PAB | Panamanian Balboa | Panama |
-| PEN | Peruvian Sol | Peru |
-| PGK | Papua New Guinean Kina | Papua New Guinea |
-| PHP | Philippine Peso | Philippines |
-| PKR | Pakistani Rupee | Pakistan |
-| PLN | Polish Złoty | Poland |
-| PYG | Paraguayan Guaraní | Paraguay |
-| QAR | Qatari Riyal | Qatar |
-| RON | Romanian Leu | Romania |
-| RSD | Serbian Dinar | Serbia |
-| RUB | Russian Ruble | Russia |
-| RWF | Rwandan Franc | Rwanda |
-| SAR | Saudi Riyal | Saudi Arabia |
-| SBD | Solomon Islands Dollar | Solomon Islands |
-| SCR | Seychellois Rupee | Seychelles |
-| SDG | Sudanese Pound | Sudan |
-| SEK | Swedish Krona | Sweden |
-| SGD | Singapore Dollar | Singapore |
-| SHP | Saint Helena Pound | Saint Helena, Ascension |
-| SLE | Sierra Leonean Leone | Sierra Leone |
-| SOS | Somali Shilling | Somalia |
-| SRD | Surinamese Dollar | Suriname |
-| SSP | South Sudanese Pound | South Sudan |
-| STN | São Tomé and Príncipe Dobra | São Tomé and Príncipe |
-| SVC | Salvadoran Colón | El Salvador |
-| SYP | Syrian Pound | Syria |
-| SZL | Eswatini Lilangeni | Eswatini |
-| THB | Thai Baht | Thailand |
-| TJS | Tajikistani Somoni | Tajikistan |
-| TMT | Turkmenistani Manat | Turkmenistan |
-| TND | Tunisian Dinar | Tunisia |
-| TOP | Tongan Paʻanga | Tonga |
-| TRY | Turkish Lira | Turkey |
-| TTD | Trinidad and Tobago Dollar | Trinidad and Tobago |
-| TWD | New Taiwan Dollar | Taiwan |
-| TZS | Tanzanian Shilling | Tanzania |
-| UAH | Ukrainian Hryvnia | Ukraine |
-| UGX | Ugandan Shilling | Uganda |
-| USD | United States Dollar | United States (and El Salvador, Ecuador, Panama, others) |
-| UYU | Uruguayan Peso | Uruguay |
-| UZS | Uzbekistani Som | Uzbekistan |
-| VED | Venezuelan Bolívar Digital | Venezuela |
-| VES | Venezuelan Bolívar Soberano | Venezuela |
-| VND | Vietnamese Đồng | Vietnam |
-| VUV | Vanuatu Vatu | Vanuatu |
-| WST | Samoan Tālā | Samoa |
-| XAF | Central African CFA Franc | BEAC members (Cameroon, CAR, Chad, Congo, Equatorial Guinea, Gabon) |
-| XCD | East Caribbean Dollar | ECCB members (Anguilla, Antigua, Dominica, Grenada, Montserrat, Saint Kitts and Nevis, Saint Lucia, Saint Vincent and the Grenadines) |
-| XCG | Caribbean Guilder | CBCS members (Curaçao, Sint Maarten) — replaced ANG on 2025-03-31 |
-| XOF | West African CFA Franc | BCEAO members (Benin, Burkina Faso, Côte d'Ivoire, Guinea-Bissau, Mali, Niger, Senegal, Togo) |
-| XPF | CFP Franc | French Pacific (French Polynesia, New Caledonia, Wallis and Futuna) |
-| YER | Yemeni Rial | Yemen |
-| ZAR | South African Rand | South Africa (and CMA: Eswatini, Lesotho, Namibia) |
-| ZMW | Zambian Kwacha | Zambia |
-| ZWG | Zimbabwe Gold | Zimbabwe |
-
-## Appendix
-
-### References
-
-ISO 4217 is maintained by SIX as the designated Maintenance Agency. The allowlist and exclusion set in this document MUST be reconciled against the canonical List One whenever an amendment lands.
-
-- [SIX — data standards landing page](https://www.six-group.com/en/products-services/financial-information/data-standards.html)
-- [List One — current active currencies (XLS)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xls)
-- [List One — current active currencies (XML)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/lists/list-one.xml)
-- [Amendments index (all historical amendments)](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/lists/overview-amendments.xlsx)
-
-#### Recent withdrawals — accepted for backwards compatibility
-
-The codes below have been formally withdrawn from ISO 4217 but remain on our allowlist while supply is still circulating. They will be removed in a future pass once circulation has drained; the official references are listed here so we can revisit the decision against a known anchor.
-
-- **BGN** — withdrawn 2026-01-01 per Amendment 180; Bulgaria joined the eurozone at the fixed rate `EUR 1 = BGN 1.95583`. [Amendment 180 PDF](https://www.six-group.com/dam/download/financial-information/data-center/iso-currrency/amendments/dl-currency-iso-amendment-180.pdf)
-- **ANG** — withdrawn 2025-03-31; replaced by `XCG` (Caribbean Guilder) under the Centrale Bank van Curaçao en Sint Maarten (CBCS). Both codes are currently accepted (`XCG` as a new active code, `ANG` as a backwards-compat carry-over).
+| **No validation**<br>Accept any non-empty string for `currency` | • Simplest possible impl<br>• Zero maintenance | • Typos (`"usd"`, `"USDC"`) pollute the value space<br>• Empty strings and arbitrary junk silently persist |
+| **Format-only check** *(chosen)*<br>Length 3 + uppercase ASCII; no membership check | • Cheap<br>• No allowlist to maintain<br>• Catches obvious garbage<br>• Same precompile contract whether ISO 4217 changes or not | • Admits `"ZZZ"`, `"BTC"`, `"ETH"`, etc. — semantic validity pushed to consumer-side allowlists |
+| **Full ISO 4217 active list**<br>Every alphabetic code, incl. X-prefix metals, supranational synthetics, funds codes | • Matches the official standard literally<br>• Familiar to FX-adjacent tooling | • Includes commodities (belong on `B20Security`)<br>• Includes funds codes (CLF, USN — not holdable)<br>• Annual maintenance + Rust precompile lockstep |
+| **Narrow ISO 4217 fiat allowlist**<br>Circulating national fiat only; MiCA EMT / MAS SCS aligned | • Regulatory-category alignment<br>• Commodities pushed to `B20Security` | • Allowlist maintenance (~1/year)<br>• ISO amendments need lockstep Rust impl change<br>• Backwards-compat ambiguity on withdrawn codes (ANG, BGN) requires per-incident judgement<br>• Self-declared anyway — doesn't substitute for consumer-side allowlists |

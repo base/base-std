@@ -113,11 +113,18 @@ interface IB20Factory {
     /// @param name          ERC-20 token name.
     /// @param symbol        ERC-20 token symbol.
     /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param currency      Immutable ISO 4217 fiat code this stablecoin
-    ///                      tracks (e.g. `"USD"`, `"EUR"`). Validated
-    ///                      against the allowlist in `ISO4217.sol`;
-    ///                      anything off the list reverts with
-    ///                      `InvalidCurrency(code)`. See
+    /// @param currency      Immutable ISO-4217-shaped fiat identifier
+    ///                      this stablecoin tracks (e.g. `"USD"`,
+    ///                      `"EUR"`). Validated as exactly three
+    ///                      uppercase ASCII letters (`A`–`Z`);
+    ///                      membership against the ISO 4217 register is
+    ///                      NOT enforced on-chain. Anything failing the
+    ///                      format check reverts with
+    ///                      `InvalidCurrency(code)`. The field is
+    ///                      self-declared — consumers using
+    ///                      `currency()` for authorization or routing
+    ///                      MUST layer their own issuer / contract
+    ///                      allowlist on top. See
     ///                      `docs/b20/stablecoin/currency-validation.md`.
     /// @dev    Decimals are fixed at `6`. There is no decimals field
     ///         and no setter for `currency` — both are fixed for the
@@ -185,18 +192,18 @@ interface IB20Factory {
     error UnsupportedVersion(uint8 version, B20Variant variant);
 
     /// @notice A required string argument was the empty string (e.g.
-    ///         security `isin`). The stablecoin `currency` field is
-    ///         validated more tightly and reverts with
-    ///         `InvalidCurrency` instead — including for the empty
-    ///         string — so callers get a single, diagnostic-carrying
-    ///         error for every currency rejection rather than two
-    ///         disjoint failure modes for the same field.
+    ///         security `isin`). The stablecoin `currency` field has
+    ///         its own format check and reverts with `InvalidCurrency`
+    ///         instead — including for the empty string — so callers
+    ///         get a single, diagnostic-carrying error for every
+    ///         currency rejection rather than two disjoint failure
+    ///         modes for the same field.
     error MissingRequiredField();
 
-    /// @notice The stablecoin `currency` field was not on the ISO 4217
-    ///         fiat allowlist. Carries the offending string verbatim
-    ///         for diagnostics.
-    /// @dev    See `docs/b20/stablecoin/currency-validation.md` for the allowlist.
+    /// @notice The stablecoin `currency` field was not exactly three
+    ///         uppercase ASCII letters (`A`–`Z`). Carries the offending
+    ///         string verbatim for diagnostics.
+    /// @dev    See `docs/b20/stablecoin/currency-validation.md`.
     error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the
