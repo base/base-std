@@ -78,7 +78,8 @@ FEATURE_IDS=(
     0xceff857b4173841a3aef07ca52b183282fe74fe117e8f9dda0dcb3ddafd18a5b  # TOKEN_FACTORY
     0x47a1afe8d3d691b87e090ee972d223a11f4da971ff5416c04985bb2393aca752  # B20_TOKEN
     0xb582ebae03f16fee49a6763f78df482fb11ae73f103ed0d330bbe556aa90a43f  # POLICY_REGISTRY
-    0x89e4523f0886ce01d76094212ed707081da92a45221e22c15c5689be470db63e  # SECURITIES_TOKEN_CREATION
+    0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601  # B20_STABLECOIN (added base/base#2806)
+    0x83d32fab502ae0e8bc4352a117767262cb5e47cc8d67a744008ed4ff03fcf5e6  # B20_SECURITY (added base/base#2813)
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
