@@ -39,15 +39,19 @@ base-std/                  base-anvil/                base/
   Installs base/base's precompile set into the EVM. Build produces stock
   `forge` and `anvil` binaries with the flag baked in.
 - **base/base**: the Rust precompile crate (`crates/common/precompiles/`).
-  The base-anvil fork consumes it via a path dependency.
+  The base-anvil fork consumes it as a git dep pinned to a specific commit,
+  not as a sibling-path clone. The pinned commit lives in
+  `base-anvil/crates/evm/networks/Cargo.toml` and is updated via
+  `base-anvil/script/bump-base.sh`. A local base/base clone is only needed
+  if you want to iterate on an unpushed branch (see "Local-iteration
+  override" below).
 
 ## Prerequisites (first-time setup)
 
-Clone three repos as siblings:
+Clone two repos as siblings (base/base is fetched automatically by cargo):
 
 ```
 ~/code/
-├── base/         ← github.com/base/base (any B-20-containing branch; default: main)
 ├── base-anvil/   ← github.com/base/base-anvil
 └── base-std/     ← github.com/base/base-std (this repo)
 ```
@@ -62,7 +66,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profil
 brew install lld  # macOS; Linux uses mold per base-anvil's .cargo/config.toml
 ```
 
-Build the patched forge + anvil (~30 min first build, incremental after):
+Build the patched forge + anvil (~30 min first build, incremental after).
+Cargo fetches the pinned base/base commit from github on first build:
 
 ```bash
 cd ~/code/base-anvil
@@ -96,18 +101,23 @@ Forward any `forge test` flag through the script:
 This is the main workflow. base/base's precompile crate changes; you want
 fresh cross-validation against the new impl.
 
-**Step 1: pull the new precompile code.**
+**Step 1: retarget base-anvil at the new commit and rebuild.**
 
 ```bash
-cd ~/code/base
-git checkout <branch>          # main usually; or a feature branch
-git pull
+cd ~/code/base-anvil
+./script/bump-base.sh                  # pin to current main HEAD + rebuild
+./script/bump-base.sh sk/tangor        # pin to a branch HEAD + rebuild
+./script/bump-base.sh 6fcce780144b...  # pin to an explicit commit + rebuild
+./script/bump-base.sh --no-build main  # update Cargo.toml only
 ```
 
-Note any new precompile addresses, new feature IDs, or changed ABI in the
-commit log. Skim
-`base/crates/common/precompiles/src/activation/storage.rs` for new
-`FEATURE_*` constants.
+The script resolves the ref via `git ls-remote`, rewrites the pinned `rev`
+in `crates/evm/networks/Cargo.toml`, and rebuilds `anvil` + `forge` unless
+`--no-build` is passed.
+
+Skim the new commits for new precompile addresses, feature IDs, or ABI
+changes (`crates/common/precompiles/src/activation/storage.rs` for
+`FEATURE_*` constants).
 
 **Step 2: if new feature IDs were added**, append them to the
 `FEATURE_IDS` array in `script/run-fork-tests.sh`. The script must activate
@@ -124,23 +134,16 @@ Update `base-anvil/crates/evm/networks/src/lib.rs`:
 - Add label / address entries in `precompiles_label` and `precompiles`.
 - Add the address constant at the top of the file if it's a new singleton.
 
-**Step 4: rebuild the fork.**
+Then rerun `./script/bump-base.sh <ref>` to rebuild against the new pin.
 
-```bash
-cd ~/code/base-anvil
-cargo build --release -p anvil -p forge
-```
-
-Cargo picks up the new `base-common-precompiles` source via the path dep.
-
-**Step 5: rerun the test suite.**
+**Step 4: rerun the test suite.**
 
 ```bash
 cd ~/code/base-std
 ./script/run-fork-tests.sh
 ```
 
-**Step 6: triage the deltas.** Compare against the last run's failure
+**Step 5: triage the deltas.** Compare against the last run's failure
 buckets. Resolved failures = improvements. New failures = regressions or
 new divergences in the Rust impl. Bucket categories to expect (from the
 v0 run):
@@ -166,6 +169,27 @@ Each divergence belongs to one of:
 - **Test bug** — fuzz input pathology, mock-only assumption that doesn't
   hold for the live impl, etc.; fix the test.
 
+## Local-iteration override (unpushed base/base branches)
+
+When you're iterating on a base/base branch that isn't pushed yet, or when
+you need to apply an unmerged patch to the pinned commit (e.g. the current
+`dispatch.rs` ActivationFeature::B20Stablecoin fix), the git-pin in
+`base-anvil/crates/evm/networks/Cargo.toml` won't reach your local changes.
+
+Use cargo's `[patch]` mechanism to redirect the dep to a local clone.
+Edit `base-anvil/Cargo.toml`, find the commented `[patch."https://github.com/base/base.git"]`
+block, and uncomment it (adjusting the path if needed):
+
+```toml
+[patch."https://github.com/base/base.git"]
+base-common-precompiles = { path = "../base/crates/common/precompiles" }
+base-common-chains = { path = "../base/crates/common/chains" }
+```
+
+Then `cd ~/code/base-anvil && cargo build --release -p anvil -p forge`. Cargo
+uses the local path instead of the pinned remote commit. Re-comment the
+block when you're done iterating.
+
 ## Common failure modes & fixes
 
 **`anvil binary not found`** — run `cargo build --release -p anvil` in
@@ -188,6 +212,17 @@ landed in base/base. Add its ID to `FEATURE_IDS` in
 `script/run-fork-tests.sh`. The payload's 32-byte tail IS the feature ID
 (grep `base/crates/common/precompiles/src/activation/storage.rs` for the
 matching `FEATURE_*` constant).
+
+**Build fails with `error[E0599]: no variant or associated item named B20_STABLECOIN`
+in `b20_stablecoin/dispatch.rs`** — you bumped past base/base commit
+`d7662c05e` (PR #2834, "replace feature id constants with ActivationFeature
+enum"). That refactor removed `ActivationRegistryStorage::B20_STABLECOIN`
+but the call site in `dispatch.rs` still references it. Until upstream
+fixes this, either pin the dep back to a pre-d7662c05e commit (e.g.
+`./script/bump-base.sh 6fcce780144b31da208809161e4f9f2bd936c3de`) or apply
+the one-line workaround via a local clone + the `[patch]` block (see
+"Local-iteration override" above), changing the line to
+`.ensure_activated(crate::ActivationFeature::B20Stablecoin.id())?;`.
 
 **Cargo version conflicts when building the fork** — base/base bumped its
 `revm` / `alloy-evm` / `alloy-primitives` versions away from what
@@ -217,8 +252,10 @@ If this returns garbage / fails, the fork's build is broken or out of date.
 | Storage helpers | `test/lib/mocks/MockB20Storage.sol`, `MockPolicyRegistryStorage.sol` | the slot-derivation library every assertion uses |
 | Patched forge + anvil | `~/code/base-anvil/target/.../{forge,anvil}` | built by `cargo build -p forge -p anvil` |
 | `--base` flag implementation | `~/code/base-anvil/crates/evm/networks/src/lib.rs` | edit here when precompile set changes |
-| Rust precompile source | `~/code/base/crates/common/precompiles/` | path-dep'd into the base-anvil fork |
-| Feature IDs | `~/code/base/crates/common/precompiles/src/activation/storage.rs` | `FEATURE_*` consts |
+| base/base git pin | `~/code/base-anvil/crates/evm/networks/Cargo.toml` | the `rev = "..."` line, bumped via `./script/bump-base.sh` |
+| Local-iteration override | `~/code/base-anvil/Cargo.toml` | commented `[patch."https://github.com/base/base.git"]` block |
+| Rust precompile source | `github.com/base/base`, pinned commit | fetched by cargo on build; optional local clone for [patch] |
+| Feature IDs | `base/crates/common/precompiles/src/activation/storage.rs` (on github) | `FEATURE_*` consts |
 | ActivationRegistry default admin | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | codified in base/base PR #2811 |
 | Vibenet chainid | 84538453 | auto-enables `--base` |
 
