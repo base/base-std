@@ -8,10 +8,11 @@
 
 Runs base-std's existing unit test suite (~346 tests with paired
 `vm.load`-based slot assertions, from PR #43) against a **local node that
-hosts Base's Rust precompiles** (`base-anvil`). Forge dispatches calls to
-those precompiles instead of to base-std's Solidity mocks; the suite's
-slot-level assertions then surface any divergence between the Solidity
-reference and the Rust impl as a precise failure.
+hosts Base's Rust precompiles** (the patched `anvil` from the base-anvil
+fork). Forge dispatches calls to those precompiles instead of to base-std's
+Solidity mocks; the suite's slot-level assertions then surface any
+divergence between the Solidity reference and the Rust impl as a precise
+failure.
 
 Failures are the cross-validation signal — each one tells you exactly which
 storage slot / field encoding / packing scheme diverges.
@@ -23,20 +24,22 @@ base-std/                  base-anvil/                base/
 └── test/unit/*.t.sol  ──→ └── target/.../forge   ──→ └── crates/common/
     (Solidity tests +          (foundry fork w/         precompiles/
      slot assertions)           --base flag)             (Rust impls)
-                            └── target/.../base-anvil
-                                (local node hosting
-                                 the precompiles)
+                            └── target/.../anvil
+                                (same fork's anvil
+                                 binary; --base flag
+                                 hosts precompiles)
 ```
 
 - **base-std** (this repo): tests + mocks. Unchanged from `main` except for
   `[profile.fork] base = true` in `foundry.toml` and the
   `LIVE_PRECOMPILES` skip-etch in `test/lib/BaseTest.sol`.
 - **base-anvil** (`github.com/base/base-anvil`, fork of foundry-rs/foundry):
-  one trait extension in anvil's `PrecompileFactory` + a `--base` flag
-  added to `foundry-evm-networks` (~80 LOC of real change). The flag
-  installs base/base's precompile set into both forge's and anvil's REVM.
+  a single `--base` flag added to `foundry-evm-networks::NetworkConfigs`,
+  reached by both `forge` and `anvil` through their shared CLI flatten.
+  Installs base/base's precompile set into the EVM. Build produces stock
+  `forge` and `anvil` binaries with the flag baked in.
 - **base/base**: the Rust precompile crate (`crates/common/precompiles/`).
-  base-anvil consumes it via a path dependency.
+  The base-anvil fork consumes it via a path dependency.
 
 ## Prerequisites (first-time setup)
 
@@ -49,7 +52,7 @@ Clone three repos as siblings:
 └── base-std/     ← github.com/base/base-std (this repo)
 ```
 
-If your layout differs, set `BASE_ANVIL_BIN` and `FORGE_BIN` env vars to
+If your layout differs, set `ANVIL_BIN` and `FORGE_BIN` env vars to
 override the script's defaults.
 
 Install Rust + the fast linker:
@@ -59,12 +62,11 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profil
 brew install lld  # macOS; Linux uses mold per base-anvil's .cargo/config.toml
 ```
 
-Build base-anvil and our patched forge (~30 min first build, incremental
-after):
+Build the patched forge + anvil (~30 min first build, incremental after):
 
 ```bash
 cd ~/code/base-anvil
-cargo build --release -p base-anvil -p forge
+cargo build --release -p anvil -p forge
 ```
 
 ## Run the tests
@@ -76,12 +78,12 @@ cd ~/code/base-std
 
 The script:
 
-1. Launches `base-anvil --base --base-activation-admin 0x9965507D...` on port 8546.
+1. Launches `anvil --base --base-activation-admin 0x9965507D...` on port 8546.
 2. Funds + impersonates the activation admin, sends `activate(bytes32)` for
-   each of the 4 gated features.
+   each of the gated features.
 3. Runs `LIVE_PRECOMPILES=true FOUNDRY_PROFILE=fork forge test --fork-url
    http://localhost:8546`.
-4. Tears down base-anvil.
+4. Tears down anvil.
 
 Forward any `forge test` flag through the script:
 
@@ -122,11 +124,11 @@ Update `base-anvil/crates/evm/networks/src/lib.rs`:
 - Add label / address entries in `precompiles_label` and `precompiles`.
 - Add the address constant at the top of the file if it's a new singleton.
 
-**Step 4: rebuild base-anvil.**
+**Step 4: rebuild the fork.**
 
 ```bash
 cd ~/code/base-anvil
-cargo build --release -p base-anvil -p forge
+cargo build --release -p anvil -p forge
 ```
 
 Cargo picks up the new `base-common-precompiles` source via the path dep.
@@ -166,14 +168,14 @@ Each divergence belongs to one of:
 
 ## Common failure modes & fixes
 
-**`base-anvil binary not found`** — run `cargo build --release -p base-anvil`
-in `base-anvil/`. Or `BASE_ANVIL_BIN=/abs/path ./script/run-fork-tests.sh`.
+**`anvil binary not found`** — run `cargo build --release -p anvil` in
+`base-anvil/`. Or `ANVIL_BIN=/abs/path ./script/run-fork-tests.sh`.
 
-**`port 8546 is already in use`** — `pkill -f "target/.*/base-anvil"` or
-`PORT=8547 ./script/run-fork-tests.sh`.
+**`port 8546 is already in use`** — `pkill -f "base-anvil/target/.*/anvil"`
+or `PORT=8547 ./script/run-fork-tests.sh`.
 
-**`base-anvil exited during startup`** — check `/tmp/base-anvil.log`. Usual
-cause: rust build is stale after a base/base change; rebuild.
+**`anvil exited during startup`** — check `/tmp/anvil.log`. Usual cause:
+rust build is stale after a base/base change; rebuild.
 
 **Hundreds of `EvmError: Revert` with `gas: 0` in `setUp`** — either the
 `LIVE_PRECOMPILES` env var wasn't set (BaseTest etched the mocks over the
@@ -187,23 +189,22 @@ landed in base/base. Add its ID to `FEATURE_IDS` in
 (grep `base/crates/common/precompiles/src/activation/storage.rs` for the
 matching `FEATURE_*` constant).
 
-**Cargo version conflicts when building base-anvil** — base/base bumped
-its `revm` / `alloy-evm` / `alloy-primitives` versions away from what
+**Cargo version conflicts when building the fork** — base/base bumped its
+`revm` / `alloy-evm` / `alloy-primitives` versions away from what
 base-anvil's foundry fork has. Edit `base-anvil/Cargo.toml` to match
 base/base's versions (see existing fork-comments next to those entries).
 Most version bumps inside the same major version are source-compatible.
 
 **Everything reverts even with `--base` set** — verify the precompiles are
-deployed by running base-anvil manually and probing:
+deployed by running anvil manually and probing:
 
 ```bash
-~/code/base-anvil/target/release/base-anvil --base --port 8546 &
+~/code/base-anvil/target/release/anvil --base --port 8546 &
 cast call 0x84530000000000000000000000000000000000ff "admin()(address)" --rpc-url http://localhost:8546
 # Should return 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc.
 ```
 
-If this returns garbage / fails, the base-anvil build is broken or out of
-date.
+If this returns garbage / fails, the fork's build is broken or out of date.
 
 ## Where everything lives
 
@@ -214,9 +215,9 @@ date.
 | Skip-etch logic | `test/lib/BaseTest.sol` | guarded by `LIVE_PRECOMPILES` env var |
 | Slot assertions | `test/unit/**/*.t.sol`, `test/lib/mocks/Mock*Storage.sol` | shipped in base-std PR #43 |
 | Storage helpers | `test/lib/mocks/MockB20Storage.sol`, `MockPolicyRegistryStorage.sol` | the slot-derivation library every assertion uses |
-| Patched forge + base-anvil | `~/code/base-anvil/target/.../{forge,base-anvil}` | built by `cargo build -p forge -p base-anvil` |
+| Patched forge + anvil | `~/code/base-anvil/target/.../{forge,anvil}` | built by `cargo build -p forge -p anvil` |
 | `--base` flag implementation | `~/code/base-anvil/crates/evm/networks/src/lib.rs` | edit here when precompile set changes |
-| Rust precompile source | `~/code/base/crates/common/precompiles/` | path-dep'd into base-anvil |
+| Rust precompile source | `~/code/base/crates/common/precompiles/` | path-dep'd into the base-anvil fork |
 | Feature IDs | `~/code/base/crates/common/precompiles/src/activation/storage.rs` | `FEATURE_*` consts |
 | ActivationRegistry default admin | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | codified in base/base PR #2811 |
 | Vibenet chainid | 84538453 | auto-enables `--base` |
@@ -226,9 +227,9 @@ date.
 - **Calling the live vibenet RPC directly with `--fork-url
   https://rpc.vibes.base.org/`**. That can work, but vibenet's state may
   not have the features you need activated, and the activation admin is
-  the real-chain key, not anvil's account 0. Use base-anvil locally for
-  iteration; reserve live vibenet for final verification of features the
-  team has already activated upstream.
+  the real-chain key, not anvil's account 0. Use the patched anvil locally
+  for iteration; reserve live vibenet for final verification of features
+  the team has already activated upstream.
 
 - **Maintaining the foundry fork rebase against upstream foundry-rs**.
   That's base-anvil's `README.md` / `BUILDING.md`. This doc only covers
@@ -238,4 +239,4 @@ date.
   admin is the local-dev account; producing test transactions from the
   real activation admin on vibenet requires that key (which we don't
   have). Use `ACTIVATION_ADMIN=<addr>` + `--private-key` only if you have
-  the key, otherwise stay on base-anvil.
+  the key, otherwise stay on the local patched anvil.
