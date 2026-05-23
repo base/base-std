@@ -75,14 +75,26 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
             );
         }
         // Allowlist policy: admin = alice; type carried by the ID's top byte.
+        // Layout pin on the packed word: bits 0..159 hold the admin, bits
+        // 160..254 are reserved (must be zero), bit 255 is the exists flag.
+        // Assertions go directly against raw bit ranges rather than through
+        // codec helpers so a buggy codec can't hide a buggy layout (the
+        // codec's bit math is separately verified by roundtrip tests in
+        // `MockPolicyRegistrySlotHelpers.t.sol`).
         {
             uint256 packedA = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(allowlistId)));
             assertEq(
-                MockPolicyRegistryStorage.policyAdminFromPacked(packedA), alice, "policies[allowlistId] admin lane"
+                packedA & ((uint256(1) << 160) - 1),
+                uint256(uint160(alice)),
+                "policies[allowlistId] bits 0..159: admin lane"
             );
-            assertTrue(
-                MockPolicyRegistryStorage.policyExistsFromPacked(packedA),
-                "policies[allowlistId] exists bit must be set"
+            assertEq(
+                (packedA >> 160) & ((uint256(1) << 95) - 1),
+                uint256(0),
+                "policies[allowlistId] bits 160..254: reserved must be zero"
+            );
+            assertEq(
+                packedA >> 255, uint256(1), "policies[allowlistId] bit 255: exists flag must be set"
             );
             assertEq(
                 MockPolicyRegistryStorage.policyTypeFromId(allowlistId),
@@ -94,11 +106,17 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
         {
             uint256 packedB = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(blocklistId)));
             assertEq(
-                MockPolicyRegistryStorage.policyAdminFromPacked(packedB), attacker, "policies[blocklistId] admin lane"
+                packedB & ((uint256(1) << 160) - 1),
+                uint256(uint160(attacker)),
+                "policies[blocklistId] bits 0..159: admin lane"
             );
-            assertTrue(
-                MockPolicyRegistryStorage.policyExistsFromPacked(packedB),
-                "policies[blocklistId] exists bit must be set"
+            assertEq(
+                (packedB >> 160) & ((uint256(1) << 95) - 1),
+                uint256(0),
+                "policies[blocklistId] bits 160..254: reserved must be zero"
+            );
+            assertEq(
+                packedB >> 255, uint256(1), "policies[blocklistId] bit 255: exists flag must be set"
             );
             assertEq(
                 MockPolicyRegistryStorage.policyTypeFromId(blocklistId),
@@ -131,6 +149,32 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
             bytes32(0),
             "pendingAdmins[blocklistId] must be cleared"
         );
+
+        // ---------- Post-renounce slot layout ----------
+        // Renouncing admin must clear bits 0..159 (admin lane) AND leave
+        // bit 255 (exists) set AND keep bits 160..254 (reserved) zero.
+        // This is the invariant that lets `policyExists` distinguish
+        // "renounced" (exists=1, admin=0) from "never created" (slot==0).
+        vm.prank(attacker);
+        policyRegistry.renounceAdmin(blocklistId);
+        {
+            uint256 packedBafter = uint256(vm.load(registry, MockPolicyRegistryStorage.policySlot(blocklistId)));
+            assertEq(
+                packedBafter & ((uint256(1) << 160) - 1),
+                uint256(0),
+                "renounced policies[blocklistId] bits 0..159: admin lane must be cleared"
+            );
+            assertEq(
+                (packedBafter >> 160) & ((uint256(1) << 95) - 1),
+                uint256(0),
+                "renounced policies[blocklistId] bits 160..254: reserved must remain zero"
+            );
+            assertEq(
+                packedBafter >> 255,
+                uint256(1),
+                "renounced policies[blocklistId] bit 255: exists flag must survive renunciation"
+            );
+        }
 
         // ---------- nextCounter (slot 3) ----------
         // Lazy init advances the counter from 0 to BUILTIN_POLICY_COUNT (=2)
