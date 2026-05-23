@@ -127,4 +127,29 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
         vm.prank(currentAdmin);
         policyRegistry.updateBlocklist(policyId, blocked, accounts);
     }
+
+    /// @notice Verifies updateBlocklist reverts when the batch exceeds MAX_BATCH_SIZE
+    /// @dev Mirrors the Rust precompile's batch limit (base/base#2876); checks
+    ///      BatchSizeTooLarge(maxBatchSize). Fuzz drives `overflow` so the test exercises
+    ///      arbitrary over-the-limit sizes.
+    function test_updateBlocklist_revert_batchSizeTooLarge(address currentAdmin, bool blocked, uint8 overflow) public {
+        vm.assume(currentAdmin != address(0));
+        uint64 policyId = _createBlocklist(admin, currentAdmin);
+        uint256 n = MAX_BATCH_SIZE + 1 + (uint256(overflow) % 16);
+        address[] memory accounts = _makeAccounts(n);
+        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_BATCH_SIZE));
+        vm.prank(currentAdmin);
+        policyRegistry.updateBlocklist(policyId, blocked, accounts);
+    }
+
+    /// @notice Verifies updateBlocklist accepts a batch exactly at MAX_BATCH_SIZE
+    /// @dev Boundary check: the limit is inclusive.
+    function test_updateBlocklist_success_batchAtLimit(address currentAdmin, bool blocked) public {
+        vm.assume(currentAdmin != address(0));
+        uint64 policyId = _createBlocklist(admin, currentAdmin);
+        address[] memory accounts = _makeAccounts(MAX_BATCH_SIZE);
+        vm.prank(currentAdmin);
+        policyRegistry.updateBlocklist(policyId, blocked, accounts);
+        assertTrue(policyRegistry.policyExists(policyId));
+    }
 }
