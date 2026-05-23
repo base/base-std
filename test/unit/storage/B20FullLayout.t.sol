@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {IB20} from "src/interfaces/IB20.sol";
+import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
@@ -23,7 +25,38 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPo
 ///         field drift AND as a self-contained spec that a Rust
 ///         implementer can compare against without running the rest
 ///         of the suite.
+///
+///         **Lane / bit assertions use explicit bit math, not codec
+///         helpers.** Asserting through `MockB20Storage.transferSenderPolicyId(packed)`
+///         lets a buggy codec hide a buggy layout (the codec would
+///         translate the wrong slot bits into the value the caller
+///         wrote, and the assertion would pass). Reading the raw slot
+///         and asserting bit ranges grounds the test at the bytes; the
+///         codec helpers are separately verified by roundtrip tests in
+///         `MockB20SlotHelpers.t.sol`. Both signals together prove
+///         "the layout is what we think AND the codec matches that
+///         layout".
+///
+///         **Lane markers are deliberately distinct per lane** so a
+///         lane-swap regression (e.g. Rust putting sender at lane 1
+///         and receiver at lane 0) produces an assertion failure with
+///         a recognizable counterexample. Reusing the same value across
+///         lanes would mask exactly the bug this test exists to catch.
 contract B20FullLayoutTest is B20Test {
+    // ---------- Distinct policy ID markers per lane ----------
+    // Set in `_populate` by `createPolicy` calls into the registry.
+    // Each lane gets a freshly-created, distinct policy ID so a
+    // lane-swap regression produces a recognizable diff in the
+    // assertion failure. Built-in sentinel IDs (ALWAYS_ALLOW_ID,
+    // ALWAYS_BLOCK_ID) would only give us TWO distinct values for
+    // the three transfer lanes; real custom policies give us as many
+    // distinct IDs as we need AND satisfy `updatePolicy`'s
+    // `policyExists` precondition.
+
+    uint64 internal transferSenderMarker;
+    uint64 internal transferReceiverMarker;
+    uint64 internal transferExecutorMarker;
+    uint64 internal mintReceiverMarker;
     /// @notice Cross-cuts every field of MockB20Storage.Layout in a single
     ///         populated snapshot.
     /// @dev    Setup writes non-default values to every reachable storage
@@ -122,41 +155,50 @@ contract B20FullLayoutTest is B20Test {
         assertEq(uint256(vm.load(tokenAddr, MockB20Storage.adminCountSlot())), 1, "slot 8: adminCount");
 
         // ---------- Policy lanes (slots 9..10) ----------
-        // All three transfer-side lanes set to ALWAYS_BLOCK_ID; mint-side
-        // receiver lane likewise. Reserved lanes pinned to zero.
+        // Lanes set to DISTINCT markers (not all the same value) so a
+        // lane-swap regression in the Rust impl produces a recognizable
+        // diff. Assertions go directly against raw bit ranges rather
+        // than through codec helpers (see contract-level NatSpec for
+        // the rationale).
         uint256 packedTransfer = uint256(vm.load(tokenAddr, MockB20Storage.transferPolicyIdsSlot()));
         assertEq(
-            MockB20Storage.transferSenderPolicyId(packedTransfer),
-            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "slot 9 lane 0: transfer SENDER"
+            packedTransfer & 0xFFFFFFFFFFFFFFFF,
+            uint256(transferSenderMarker),
+            "slot 9 bits 0..63: transfer SENDER lane"
         );
         assertEq(
-            MockB20Storage.transferReceiverPolicyId(packedTransfer),
-            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "slot 9 lane 1: transfer RECEIVER"
+            (packedTransfer >> 64) & 0xFFFFFFFFFFFFFFFF,
+            uint256(transferReceiverMarker),
+            "slot 9 bits 64..127: transfer RECEIVER lane"
         );
         assertEq(
-            MockB20Storage.transferExecutorPolicyId(packedTransfer),
-            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "slot 9 lane 2: transfer EXECUTOR"
+            (packedTransfer >> 128) & 0xFFFFFFFFFFFFFFFF,
+            uint256(transferExecutorMarker),
+            "slot 9 bits 128..191: transfer EXECUTOR lane"
         );
-        // Lane 3 (bits 192..255) is reserved and must be zero.
-        assertEq(packedTransfer >> 192, 0, "slot 9 lane 3: reserved must be zero");
+        assertEq(packedTransfer >> 192, 0, "slot 9 bits 192..255: reserved lane must be zero");
 
         uint256 packedMint = uint256(vm.load(tokenAddr, MockB20Storage.mintPolicyIdsSlot()));
         assertEq(
-            MockB20Storage.mintReceiverPolicyId(packedMint),
-            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "slot 10 lane 0: mint RECEIVER"
+            packedMint & 0xFFFFFFFFFFFFFFFF,
+            uint256(mintReceiverMarker),
+            "slot 10 bits 0..63: mint RECEIVER lane"
         );
-        // Lanes 1..3 reserved.
-        assertEq(packedMint >> 64, 0, "slot 10 lanes 1..3: reserved must be zero");
+        assertEq(packedMint >> 64, 0, "slot 10 bits 64..255: three reserved lanes must be zero");
 
         // ---------- pausedVectors (slot 11) ----------
-        uint256 expectedPaused = (1 << uint8(IB20.PausableFeature.TRANSFER)) | (1 << uint8(IB20.PausableFeature.MINT));
-        assertEq(
-            uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot())), expectedPaused, "slot 11: pausedVectors"
-        );
+        // Every PausableFeature is paused so every defined bit position
+        // is independently asserted. Pinning all four (vs only two) is
+        // what makes "Rust uses different bit positions for these
+        // features" detectable.
+        uint256 pausedRaw = uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot()));
+        uint256 expectedPaused = (uint256(1) << uint8(IB20.PausableFeature.TRANSFER))
+            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN))
+            | (uint256(1) << uint8(IB20.PausableFeature.REDEEM));
+        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the four defined bits");
+        // No bits set outside the defined PausableFeature range. Computed
+        // as the complement of the union of all defined bits.
+        assertEq(pausedRaw & ~expectedPaused, 0, "slot 11: no bits may be set outside the defined PausableFeature range");
 
         // ---------- supplyCap (slot 12) ----------
         assertEq(uint256(vm.load(tokenAddr, MockB20Storage.supplyCapSlot())), token.supplyCap(), "slot 12: supplyCap");
@@ -218,17 +260,33 @@ contract B20FullLayoutTest is B20Test {
         token.setRoleAdmin(B20Constants.MINT_ROLE, B20Constants.PAUSE_ROLE);
 
         // ---------- Policy lanes ----------
-        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        // Create four real custom policies in the registry so each lane
+        // gets a DISTINCT, well-formed ID. `updatePolicy`'s `policyExists`
+        // precondition rejects arbitrary uint64s, so we can't use synthetic
+        // hex markers like `0x1111...`. Mixing ALLOWLIST + BLOCKLIST types
+        // makes the top byte vary between lanes too, not just the counter.
+        transferSenderMarker =
+            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        transferReceiverMarker =
+            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        transferExecutorMarker =
+            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        mintReceiverMarker =
+            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
+        _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------
-        // Pause TRANSFER and MINT (note: we just blocked MINT via policy
-        // above so this is consistent — the pause bit and the policy ID
-        // are independent storage fields).
+        // Pause every defined PausableFeature so the layout pin covers
+        // each enum position. The policy lanes above blocked MINT
+        // already via policy ID; pause and policy are independent
+        // storage fields so both signals are simultaneously valid.
         _pause(IB20.PausableFeature.TRANSFER);
         _pause(IB20.PausableFeature.MINT);
+        _pause(IB20.PausableFeature.BURN);
+        _pause(IB20.PausableFeature.REDEEM);
 
         // ---------- Nonce ----------
         // Permit increments alice's nonce. To sign a valid permit we
