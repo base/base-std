@@ -102,8 +102,8 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function stageUpdateAdmin(uint64 policyId, address newAdmin) external {
-        uint256 packed = _requireCustom(policyId);
-        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
+        MockPolicyRegistryStorage.PolicyPacked memory packed = _requireCustom(policyId);
+        if (packed.admin != msg.sender) revert Unauthorized();
         MockPolicyRegistryStorage.layout().pendingAdmins[policyId] = newAdmin;
         emit PolicyAdminStaged(policyId, msg.sender, newAdmin);
     }
@@ -111,45 +111,46 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @inheritdoc IPolicyRegistry
     function finalizeUpdateAdmin(uint64 policyId) external {
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
-        uint256 packed = $.policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
+        MockPolicyRegistryStorage.PolicyPacked memory packed = $.policies[policyId];
+        if (!MockPolicyRegistryStorage.existsSet(packed)) revert PolicyNotFound();
         address pending = $.pendingAdmins[policyId];
         if (pending == address(0)) revert NoPendingAdmin();
         if (pending != msg.sender) revert Unauthorized();
-        address previousAdmin = _decodeAdmin(packed);
-        $.policies[policyId] = _encode(msg.sender);
+        // Replace the admin lane in place. Solidity emits a single
+        // masked SSTORE; the existence byte at bits 248..255 is untouched.
+        $.policies[policyId].admin = msg.sender;
         delete $.pendingAdmins[policyId];
-        emit PolicyAdminUpdated(policyId, previousAdmin, msg.sender);
+        emit PolicyAdminUpdated(policyId, packed.admin, msg.sender);
     }
 
     /// @inheritdoc IPolicyRegistry
     function renounceAdmin(uint64 policyId) external {
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
-        uint256 packed = $.policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
-        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        // Admin lane cleared, exists flag (bit 160) survives so the
-        // policy stays observable via `policyExists` and the existence
-        // check on subsequent mutating calls still passes (with
-        // `Unauthorized` taking over as the rejection reason).
-        $.policies[policyId] = _encode(address(0));
+        MockPolicyRegistryStorage.PolicyPacked memory packed = $.policies[policyId];
+        if (!MockPolicyRegistryStorage.existsSet(packed)) revert PolicyNotFound();
+        if (packed.admin != msg.sender) revert Unauthorized();
+        // Admin lane cleared, existence byte survives so the policy
+        // stays observable via `policyExists` and the existence check
+        // on subsequent mutating calls still passes (with `Unauthorized`
+        // taking over as the rejection reason).
+        $.policies[policyId].admin = address(0);
         delete $.pendingAdmins[policyId];
         emit PolicyAdminUpdated(policyId, msg.sender, address(0));
     }
 
     /// @inheritdoc IPolicyRegistry
     function updateAllowlist(uint64 policyId, bool allowed, address[] calldata accounts) external {
-        uint256 packed = _requireCustom(policyId);
+        MockPolicyRegistryStorage.PolicyPacked memory packed = _requireCustom(policyId);
         if (_typeOf(policyId) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();
-        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
+        if (packed.admin != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.ALLOWLIST, value: allowed, accounts: accounts});
     }
 
     /// @inheritdoc IPolicyRegistry
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external {
-        uint256 packed = _requireCustom(policyId);
+        MockPolicyRegistryStorage.PolicyPacked memory packed = _requireCustom(policyId);
         if (_typeOf(policyId) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();
-        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
+        if (packed.admin != msg.sender) revert Unauthorized();
         _batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});
     }
 
@@ -181,7 +182,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function policyExists(uint64 policyId) external view returns (bool) {
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
         if (!_isWellFormed(policyId)) return false;
-        return MockPolicyRegistryStorage.layout().policies[policyId] != 0;
+        return MockPolicyRegistryStorage.existsSet(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -190,7 +191,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         // No fast path for built-in IDs needed: lazy init writes them with
         // a zero admin, so the normal storage read returns address(0) for
         // them just like for renounced policies and uncreated IDs.
-        return _decodeAdmin(MockPolicyRegistryStorage.layout().policies[policyId]);
+        return MockPolicyRegistryStorage.layout().policies[policyId].admin;
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -219,7 +220,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
             $.nextCounter = counter + 1;
         }
         newPolicyId = _makeId({policyType: policyType, counter: counter});
-        $.policies[newPolicyId] = _encode(admin);
+        $.policies[newPolicyId] = MockPolicyRegistryStorage.newPolicy(admin);
         emit PolicyCreated(newPolicyId, msg.sender, policyType);
         emit PolicyAdminUpdated(newPolicyId, address(0), admin);
     }
@@ -227,7 +228,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @dev Writes the two built-in policies into the `policies` mapping and
     ///      advances `nextCounter` past them so custom policies start at
     ///      `PolicyRegistryConstants.BUILTIN_POLICY_COUNT`. Both built-ins are
-    ///      written with a renounced (zero) admin, so any later `require_admin`
+    ///      written with a renounced (zero) admin, so any later admin-gated
     ///      check against them rejects with `Unauthorized`.
     ///
     ///      Idempotent: re-entry with `nextCounter >= BUILTIN_POLICY_COUNT` is
@@ -238,9 +239,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function _writeBuiltins() internal {
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         if ($.nextCounter >= PolicyRegistryConstants.BUILTIN_POLICY_COUNT) return;
-        uint256 packed = _encode(address(0));
-        $.policies[PolicyRegistryConstants.ALWAYS_ALLOW_ID] = packed;
-        $.policies[PolicyRegistryConstants.ALWAYS_BLOCK_ID] = packed;
+        MockPolicyRegistryStorage.PolicyPacked memory builtin = MockPolicyRegistryStorage.newPolicy(address(0));
+        $.policies[PolicyRegistryConstants.ALWAYS_ALLOW_ID] = builtin;
+        $.policies[PolicyRegistryConstants.ALWAYS_BLOCK_ID] = builtin;
         $.nextCounter = PolicyRegistryConstants.BUILTIN_POLICY_COUNT;
     }
 
@@ -259,23 +260,17 @@ contract MockPolicyRegistry is IPolicyRegistry {
         }
     }
 
-    function _requireCustom(uint64 policyId) internal view returns (uint256 packed) {
+    function _requireCustom(uint64 policyId)
+        internal
+        view
+        returns (MockPolicyRegistryStorage.PolicyPacked memory packed)
+    {
         packed = MockPolicyRegistryStorage.layout().policies[policyId];
-        if (packed == 0) revert PolicyNotFound();
+        if (!MockPolicyRegistryStorage.existsSet(packed)) revert PolicyNotFound();
     }
 
     function _makeId(PolicyType policyType, uint56 counter) internal pure returns (uint64) {
         return (uint64(uint8(policyType)) << POLICY_ID_TYPE_SHIFT) | uint64(counter);
-    }
-
-    /// @dev Composes a packed slot value. Always sets the exists bit; pass
-    ///      `address(0)` to encode the post-renounce slot.
-    function _encode(address admin) internal pure returns (uint256) {
-        return (uint256(1) << MockPolicyRegistryStorage.EXISTS_BIT) | uint256(uint160(admin));
-    }
-
-    function _decodeAdmin(uint256 packed) internal pure returns (address) {
-        return address(uint160(packed));
     }
 
     /// @dev Recovers the `PolicyType` from a well-formed `policyId`'s top byte.
