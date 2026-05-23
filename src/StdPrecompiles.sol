@@ -14,7 +14,7 @@ library StdPrecompiles {
     ///      disjoint (B-20 tokens have `0x00` at byte [1]; the factory has `0x0F`),
     ///      so `isB20(B20_FACTORY_ADDRESS)` returns false unambiguously. The
     ///      trailing `0x0F` byte echoes the prefix for visual symmetry.
-    address internal constant B20_FACTORY_ADDRESS = 0xB20F000000000000000000000000000000000000;
+    address internal constant B20_FACTORY_ADDRESS = 0xB20f000000000000000000000000000000000000;
     address internal constant POLICY_REGISTRY_ADDRESS = 0x8453000000000000000000000000000000000002;
     address internal constant ACTIVATION_REGISTRY_ADDRESS = 0x8453000000000000000000000000000000000001;
 
