@@ -119,4 +119,36 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         uint64 policyId = policyRegistry.createPolicyWithAccounts(admin_, pt, empty);
         assertTrue(policyRegistry.policyExists(policyId));
     }
+
+    /// @notice Verifies createPolicyWithAccounts reverts when the batch exceeds MAX_BATCH_SIZE
+    /// @dev Mirrors the Rust precompile's batch limit (base/base#2876); checks
+    ///      BatchSizeTooLarge(maxBatchSize). Fuzz drives `overflow` so the test exercises
+    ///      arbitrary over-the-limit sizes, not just the immediate neighbor.
+    function test_createPolicyWithAccounts_revert_batchSizeTooLarge(
+        address caller,
+        address admin_,
+        uint8 typeIdx,
+        uint8 overflow
+    ) public {
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
+        uint256 n = MAX_BATCH_SIZE + 1 + (uint256(overflow) % 16);
+        address[] memory accounts = _makeAccounts(n);
+        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_BATCH_SIZE));
+        vm.prank(caller);
+        policyRegistry.createPolicyWithAccounts(admin_, pt, accounts);
+    }
+
+    /// @notice Verifies createPolicyWithAccounts accepts a batch exactly at MAX_BATCH_SIZE
+    /// @dev Boundary check: the limit is inclusive (length == MAX_BATCH_SIZE succeeds).
+    function test_createPolicyWithAccounts_success_batchAtLimit(address caller, address admin_, uint8 typeIdx) public {
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
+        address[] memory accounts = _makeAccounts(MAX_BATCH_SIZE);
+        vm.prank(caller);
+        uint64 policyId = policyRegistry.createPolicyWithAccounts(admin_, pt, accounts);
+        assertTrue(policyRegistry.policyExists(policyId));
+    }
 }
