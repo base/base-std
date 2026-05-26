@@ -25,8 +25,10 @@ import {IB20Security} from "../interfaces/IB20Security.sol";
 ///            common multi-entry init-call arrays. Role-grant bundles
 ///            are typed per variant — `B20RoleHolders` for default and
 ///            stablecoin, `B20SecurityRoleHolders` for security — so
-///            the compiler rejects wrong-shape inputs at the call site.
-///            The `bytes[] initCalls` argument to `createB20` is the
+///            the compiler rejects wrong-shape inputs at the call site;
+///            a parallel-arrays `buildRoleGrants(bytes32[], address[])`
+///            overload is the escape hatch for custom role sets. The
+///            `bytes[] initCalls` argument to `createB20` is the
 ///            concatenation of however many of these the integrator
 ///            needs; `concat` stitches typed bundles together with
 ///            caller-supplied extras.
@@ -372,7 +374,7 @@ library B20FactoryLib {
         accounts[4] = holders.unpauser;
         accounts[5] = holders.metadataAdmin;
 
-        return _buildRoleGrants(roles, accounts);
+        return buildRoleGrants(roles, accounts);
     }
 
     /// @notice Builds the `grantRole` initCalls implied by a
@@ -414,24 +416,42 @@ library B20FactoryLib {
         accounts[6] = holders.metadataAdmin;
         accounts[7] = holders.securityOperator;
 
-        return _buildRoleGrants(roles, accounts);
+        return buildRoleGrants(roles, accounts);
     }
 
-    /// @dev Shared loop for the typed `buildRoleGrants` overloads.
-    ///      Callers MUST pass arrays of equal length; the typed
-    ///      overloads guarantee this by construction, so no length
-    ///      check is needed here.
+    /// @notice Builds the `grantRole` initCalls implied by parallel
+    ///         `roles` / `accounts` arrays. The general primitive
+    ///         that the typed-bundle overloads above delegate to; use
+    ///         this directly when your factory bundles roles in a
+    ///         shape that doesn't match `B20RoleHolders` /
+    ///         `B20SecurityRoleHolders` (e.g. a custom config struct
+    ///         that already encodes the parallel arrays inline, or a
+    ///         role set that includes integrator-defined roles).
+    ///
+    ///         Entry `k` produces `encodeGrantRole(roles[k], accounts[k])`;
+    ///         entries whose `accounts[k] == address(0)` are skipped
+    ///         so callers can leave a role unassigned at bootstrap.
+    ///         Output ordering matches input ordering for the kept
+    ///         entries; the returned array is sized exactly to the
+    ///         number of grants (no trailing empty slots).
+    ///
+    /// @dev    Reverts with `LengthMismatch` if `roles` and `accounts`
+    ///         differ in length. The typed overloads above bypass
+    ///         this check by construction (their array allocations
+    ///         are paired in this library).
     ///
     /// @param  roles    Role identifiers; parallel to `accounts`.
     /// @param  accounts Role holders; parallel to `roles`. `address(0)`
     ///                  entries are skipped.
     ///
     /// @return initCalls The ABI-encoded `grantRole` initCalls.
-    function _buildRoleGrants(bytes32[] memory roles, address[] memory accounts)
-        private
+    function buildRoleGrants(bytes32[] memory roles, address[] memory accounts)
+        internal
         pure
         returns (bytes[] memory initCalls)
     {
+        if (roles.length != accounts.length) revert LengthMismatch(roles.length, accounts.length);
+
         uint256 grantCount;
         for (uint256 k = 0; k < accounts.length; k++) {
             if (accounts[k] != address(0)) grantCount++;
