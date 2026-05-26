@@ -1,43 +1,48 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {B20Constants} from "./B20Constants.sol";
 import {IB20} from "../interfaces/IB20.sol";
 import {IB20Factory} from "../interfaces/IB20Factory.sol";
 import {IB20Security} from "../interfaces/IB20Security.sol";
 
 /// @title  B20FactoryLib
 /// @author Coinbase
-/// @notice Helpers for constructing the calldata an integrator passes to
-///         `StdPrecompiles.B20_FACTORY.createB20(...)`. Two layers:
+/// @notice Helpers for constructing the calldata an integrator passes
+///         to `StdPrecompiles.B20_FACTORY.createB20(...)`. Two layers:
 ///
-///         1. Per-variant `encode*CreateParams` helpers that produce the
+///         1. `encode*CreateParams` helpers that produce the per-variant
 ///            `params` blob (a leading version byte plus the
 ///            variant-specific struct fields, ABI-encoded). The factory
-///            decodes this with `abi.decode(params, (<Variant>CreateParams))`,
-///            so the library and the factory use the same struct layouts
-///            from `IB20Factory`.
+///            decodes the blob via
+///            `abi.decode(params, (<Variant>CreateParams))`; the library
+///            and the factory share the struct layouts from
+///            `IB20Factory`.
 ///
 ///         2. `encode*` helpers that produce a single bootstrap
-///            `initCall` (an ABI-encoded function call against `IB20` or
+///            `initCall` (an ABI-encoded call against `IB20` or
 ///            `IB20Security`), plus `build*` helpers that assemble
-///            common multi-entry init-call arrays (role grants,
-///            security-identifier updates) from parallel arrays. The
-///            `bytes[] initCalls` argument to `createB20` is the
+///            common multi-entry init-call arrays. Role-grant bundles
+///            are typed per variant — `B20RoleHolders` for default and
+///            stablecoin, `B20SecurityRoleHolders` for security — so
+///            the compiler rejects wrong-shape inputs at the call site.
+///            The `bytes[] initCalls` argument to `createB20` is the
 ///            concatenation of however many of these the integrator
-///            needs.
+///            needs; `concat` stitches typed bundles together with
+///            caller-supplied extras.
 ///
 /// @dev    Pure encoder library: no precompile dispatch, no storage
 ///         reads, no role/policy checks. Authorization happens inside
 ///         the factory's bootstrap window (see `IB20Factory`) when the
-///         resulting calldata is actually invoked. The library deals in
-///         `bytes` and `bytes[]` only.
+///         resulting calldata is actually invoked. The library deals
+///         in `bytes` and `bytes[]` only.
 ///
-///         Init-call shape: each entry in `initCalls` is the ABI-encoded
-///         function call (selector + args) that the factory will invoke
-///         on the freshly-deployed token during the privileged bootstrap
-///         window. Every `encode*` helper here produces exactly one such
-///         entry; integrators concatenate them in whatever order they
-///         need.
+///         Init-call shape: each entry in `initCalls` is the
+///         ABI-encoded function call (selector + args) that the factory
+///         invokes on the freshly-deployed token during the privileged
+///         bootstrap window. Every `encode*` helper here produces
+///         exactly one such entry; `build*` helpers produce zero or
+///         more, in struct-field order.
 library B20FactoryLib {
     /// @notice Current encoding version for every variant's
     ///         `*CreateParams` struct. Carried as the leading `version`
@@ -47,9 +52,66 @@ library B20FactoryLib {
 
     /// @notice Two parallel arrays passed to a `build*` helper had
     ///         different lengths.
+    ///
     /// @param  leftLen  Length of the first array argument.
     /// @param  rightLen Length of the second array argument.
     error LengthMismatch(uint256 leftLen, uint256 rightLen);
+
+    /*//////////////////////////////////////////////////////////////
+                          ROLE-HOLDER BUNDLES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Bootstrap role-grant bundle for `B20Variant.DEFAULT` and
+    ///         `B20Variant.STABLECOIN` tokens. Each field maps to one
+    ///         named role on `IB20`; `address(0)` skips that role at
+    ///         bootstrap so callers can leave it unassigned and grant
+    ///         it later.
+    ///
+    /// @dev    `DEFAULT_ADMIN_ROLE` is intentionally omitted: it is set
+    ///         via the `*CreateParams.initialAdmin` field, NOT through
+    ///         this struct. Security-only roles (`BURN_FROM_ROLE`,
+    ///         `SECURITY_OPERATOR_ROLE`) are in `B20SecurityRoleHolders`.
+    struct B20RoleHolders {
+        /// @dev Account granted `MINT_ROLE`.
+        address minter;
+        /// @dev Account granted `BURN_ROLE`.
+        address burner;
+        /// @dev Account granted `BURN_BLOCKED_ROLE`.
+        address burnBlocker;
+        /// @dev Account granted `PAUSE_ROLE`.
+        address pauser;
+        /// @dev Account granted `UNPAUSE_ROLE`.
+        address unpauser;
+        /// @dev Account granted `METADATA_ROLE`.
+        address metadataAdmin;
+    }
+
+    /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`
+    ///         tokens. Superset of `B20RoleHolders`: adds the
+    ///         `BURN_FROM_ROLE` and `SECURITY_OPERATOR_ROLE` slots that
+    ///         only exist on `IB20Security`.
+    ///
+    /// @dev    `DEFAULT_ADMIN_ROLE` is intentionally omitted: it is set
+    ///         via `B20SecurityCreateParams.initialAdmin`, NOT through
+    ///         this struct.
+    struct B20SecurityRoleHolders {
+        /// @dev Account granted `MINT_ROLE`.
+        address minter;
+        /// @dev Account granted `BURN_ROLE`.
+        address burner;
+        /// @dev Account granted `BURN_BLOCKED_ROLE`.
+        address burnBlocker;
+        /// @dev Account granted `BURN_FROM_ROLE`.
+        address burnFromOperator;
+        /// @dev Account granted `PAUSE_ROLE`.
+        address pauser;
+        /// @dev Account granted `UNPAUSE_ROLE`.
+        address unpauser;
+        /// @dev Account granted `METADATA_ROLE`.
+        address metadataAdmin;
+        /// @dev Account granted `SECURITY_OPERATOR_ROLE`.
+        address securityOperator;
+    }
 
     /*//////////////////////////////////////////////////////////////
                           CREATE-PARAMS ENCODERS
@@ -280,30 +342,96 @@ library B20FactoryLib {
                        INIT-CALL ARRAY BUILDERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Builds the `grantRole` initCalls implied by parallel
-    ///         `roles` / `accounts` arrays. Entry `k` produces
-    ///         `encodeGrantRole(roles[k], accounts[k])`; entries whose
-    ///         `accounts[k] == address(0)` are skipped, so callers can
-    ///         leave a role unassigned at bootstrap and grant it later.
-    ///         Output ordering matches input ordering for the kept
-    ///         entries; the returned array is sized exactly to the
+    /// @notice Builds the `grantRole` initCalls implied by a
+    ///         `B20RoleHolders` bundle. Use for `B20Variant.DEFAULT`
+    ///         and `B20Variant.STABLECOIN` tokens. Each non-zero
+    ///         address in `holders` produces one `encodeGrantRole`
+    ///         entry in struct-field order: mint, burn, burn-blocked,
+    ///         pause, unpause, metadata. Zero-address fields are
+    ///         skipped so callers can leave a role unassigned at
+    ///         bootstrap. The returned array is sized exactly to the
     ///         number of grants (no trailing empty slots).
     ///
-    /// @dev    Reverts with `LengthMismatch` if `roles` and `accounts`
-    ///         differ in length.
+    /// @param  holders The IB20 role-holder bundle.
+    ///
+    /// @return initCalls The ABI-encoded `grantRole` initCalls.
+    function buildRoleGrants(B20RoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
+        bytes32[] memory roles = new bytes32[](6);
+        roles[0] = B20Constants.MINT_ROLE;
+        roles[1] = B20Constants.BURN_ROLE;
+        roles[2] = B20Constants.BURN_BLOCKED_ROLE;
+        roles[3] = B20Constants.PAUSE_ROLE;
+        roles[4] = B20Constants.UNPAUSE_ROLE;
+        roles[5] = B20Constants.METADATA_ROLE;
+
+        address[] memory accounts = new address[](6);
+        accounts[0] = holders.minter;
+        accounts[1] = holders.burner;
+        accounts[2] = holders.burnBlocker;
+        accounts[3] = holders.pauser;
+        accounts[4] = holders.unpauser;
+        accounts[5] = holders.metadataAdmin;
+
+        return _buildRoleGrants(roles, accounts);
+    }
+
+    /// @notice Builds the `grantRole` initCalls implied by a
+    ///         `B20SecurityRoleHolders` bundle. Use for
+    ///         `B20Variant.SECURITY` tokens. Each non-zero address in
+    ///         `holders` produces one `encodeGrantRole` entry in
+    ///         struct-field order: mint, burn, burn-blocked, burn-from,
+    ///         pause, unpause, metadata, security-operator.
+    ///         Zero-address fields are skipped so callers can leave a
+    ///         role unassigned at bootstrap. The returned array is
+    ///         sized exactly to the number of grants (no trailing
+    ///         empty slots).
+    ///
+    /// @param  holders The security role-holder bundle.
+    ///
+    /// @return initCalls The ABI-encoded `grantRole` initCalls.
+    function buildRoleGrants(B20SecurityRoleHolders memory holders)
+        internal
+        pure
+        returns (bytes[] memory initCalls)
+    {
+        bytes32[] memory roles = new bytes32[](8);
+        roles[0] = B20Constants.MINT_ROLE;
+        roles[1] = B20Constants.BURN_ROLE;
+        roles[2] = B20Constants.BURN_BLOCKED_ROLE;
+        roles[3] = B20Constants.BURN_FROM_ROLE;
+        roles[4] = B20Constants.PAUSE_ROLE;
+        roles[5] = B20Constants.UNPAUSE_ROLE;
+        roles[6] = B20Constants.METADATA_ROLE;
+        roles[7] = B20Constants.SECURITY_OPERATOR_ROLE;
+
+        address[] memory accounts = new address[](8);
+        accounts[0] = holders.minter;
+        accounts[1] = holders.burner;
+        accounts[2] = holders.burnBlocker;
+        accounts[3] = holders.burnFromOperator;
+        accounts[4] = holders.pauser;
+        accounts[5] = holders.unpauser;
+        accounts[6] = holders.metadataAdmin;
+        accounts[7] = holders.securityOperator;
+
+        return _buildRoleGrants(roles, accounts);
+    }
+
+    /// @dev Shared loop for the typed `buildRoleGrants` overloads.
+    ///      Callers MUST pass arrays of equal length; the typed
+    ///      overloads guarantee this by construction, so no length
+    ///      check is needed here.
     ///
     /// @param  roles    Role identifiers; parallel to `accounts`.
     /// @param  accounts Role holders; parallel to `roles`. `address(0)`
     ///                  entries are skipped.
     ///
     /// @return initCalls The ABI-encoded `grantRole` initCalls.
-    function buildRoleGrants(bytes32[] memory roles, address[] memory accounts)
-        internal
+    function _buildRoleGrants(bytes32[] memory roles, address[] memory accounts)
+        private
         pure
         returns (bytes[] memory initCalls)
     {
-        if (roles.length != accounts.length) revert LengthMismatch(roles.length, accounts.length);
-
         uint256 grantCount;
         for (uint256 k = 0; k < accounts.length; k++) {
             if (accounts[k] != address(0)) grantCount++;
@@ -349,18 +477,17 @@ library B20FactoryLib {
         }
     }
 
-    /// @notice Concatenates two init-call arrays into a single array.
-    ///         Useful for stitching a typed-core initCall bundle (e.g.
-    ///         the output of `buildRoleGrants`) together with a
-    ///         caller-supplied tail of bespoke entries before passing
-    ///         the combined array to `createB20`.
+    /// @notice Concatenates two init-call arrays into a single array,
+    ///         preserving order. Useful for stitching a typed-core
+    ///         initCall bundle (e.g. the output of `buildRoleGrants`)
+    ///         together with a caller-supplied tail of bespoke entries
+    ///         before passing the combined array to `createB20`.
     ///
     /// @param  head Init calls to place at the start of the result.
-    /// @param  tail Init calls to place after `head`.
+    /// @param  tail Init calls to place after `head`. May be empty.
     ///
-    /// @return initCalls The concatenated array (`head` followed by
-    ///                   `tail`), sized exactly to the sum of the
-    ///                   input lengths.
+    /// @return initCalls The concatenated array (`head` then `tail`),
+    ///                   sized exactly to `head.length + tail.length`.
     function concat(bytes[] memory head, bytes[] memory tail) internal pure returns (bytes[] memory initCalls) {
         initCalls = new bytes[](head.length + tail.length);
         uint256 i;
