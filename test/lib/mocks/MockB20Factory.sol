@@ -119,6 +119,8 @@ contract MockB20Factory is IB20Factory {
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
+            // Required: currency must be non-empty.
+            if (bytes(p.currency).length == 0) revert MissingRequiredField("currency");
             // Format check: every byte must be an uppercase ASCII letter (A-Z).
             bytes memory cb = bytes(p.currency);
             for (uint256 i = 0; i < cb.length; ++i) {
@@ -134,7 +136,7 @@ contract MockB20Factory is IB20Factory {
             if (p.version != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
-            if (bytes(p.isin).length == 0) revert MissingRequiredField();
+            if (bytes(p.isin).length == 0) revert MissingRequiredField("isin");
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
