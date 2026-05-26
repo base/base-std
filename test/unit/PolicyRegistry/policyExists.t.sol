@@ -4,15 +4,14 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract PolicyRegistryPolicyExistsTest is PolicyRegistryTest {
     function test_policyExists_success_builtinAlwaysAllow() public view {
-        assertTrue(policyRegistry.policyExists(PolicyRegistryConstants.ALWAYS_ALLOW_ID));
+        assertTrue(policyRegistry.policyExists(ALWAYS_ALLOW_ID));
     }
 
     function test_policyExists_success_builtinAlwaysBlock() public view {
-        assertTrue(policyRegistry.policyExists(PolicyRegistryConstants.ALWAYS_BLOCK_ID));
+        assertTrue(policyRegistry.policyExists(ALWAYS_BLOCK_ID));
     }
 
     /// @notice policyExists returns false for an uncreated id (storage miss).

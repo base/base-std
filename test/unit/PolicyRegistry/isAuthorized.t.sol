@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
     /// @notice Verifies isAuthorized on an uncreated ALLOWLIST id returns false
@@ -35,13 +34,13 @@ contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
     /// @notice Verifies isAuthorized returns true for any account under ALWAYS_ALLOW_ID
     /// @dev Built-in sentinel semantics: ALWAYS_ALLOW_ID returns true unconditionally
     function test_isAuthorized_success_alwaysAllowBuiltin(address account) public view {
-        assertTrue(policyRegistry.isAuthorized(PolicyRegistryConstants.ALWAYS_ALLOW_ID, account));
+        assertTrue(policyRegistry.isAuthorized(ALWAYS_ALLOW_ID, account));
     }
 
     /// @notice Verifies isAuthorized returns false for any account under ALWAYS_BLOCK_ID
     /// @dev Built-in sentinel semantics: ALWAYS_BLOCK_ID returns false unconditionally
     function test_isAuthorized_success_alwaysBlockBuiltin(address account) public view {
-        assertFalse(policyRegistry.isAuthorized(PolicyRegistryConstants.ALWAYS_BLOCK_ID, account));
+        assertFalse(policyRegistry.isAuthorized(ALWAYS_BLOCK_ID, account));
     }
 
     /// @notice Verifies isAuthorized returns true for an allowlist member

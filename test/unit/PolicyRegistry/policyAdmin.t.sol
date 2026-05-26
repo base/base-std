@@ -4,7 +4,6 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract PolicyRegistryPolicyAdminTest is PolicyRegistryTest {
     /// @notice Verifies policyAdmin returns address(0) for a well-formed but uncreated id
@@ -23,8 +22,8 @@ contract PolicyRegistryPolicyAdminTest is PolicyRegistryTest {
 
     /// @notice Verifies policyAdmin returns address(0) for built-in sentinels.
     function test_policyAdmin_success_zeroForBuiltins() public view {
-        assertEq(policyRegistry.policyAdmin(PolicyRegistryConstants.ALWAYS_ALLOW_ID), address(0));
-        assertEq(policyRegistry.policyAdmin(PolicyRegistryConstants.ALWAYS_BLOCK_ID), address(0));
+        assertEq(policyRegistry.policyAdmin(ALWAYS_ALLOW_ID), address(0));
+        assertEq(policyRegistry.policyAdmin(ALWAYS_BLOCK_ID), address(0));
     }
 
     /// @notice Verifies policyAdmin returns the admin nominated at creation time
