@@ -1,22 +1,59 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseTest} from "test/lib/BaseTest.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
+import {PolicyRegistry} from "src/impls/PolicyRegistry.sol";
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
-/// @notice Base test contract for `IPolicyRegistry` unit tests.
-///
-/// Inherits all precompile-mock etch wiring and common actors from
-/// `BaseTest`; adds the registry handle and policy-creation helpers.
-contract PolicyRegistryTest is BaseTest {
-    // -- Precompile handle --
-    IPolicyRegistry internal policyRegistry = StdPrecompiles.POLICY_REGISTRY;
+import {BaseTest} from "test/lib/BaseTest.sol";
 
-    // -- Helpers --
+/// @notice Base test contract for `PolicyRegistry` unit tests.
+///
+/// Deploys a production `PolicyRegistry` proxy (with `admin` as owner)
+/// in addition to the precompile-mock etch wiring inherited from `BaseTest`.
+/// The etched mock at `StdPrecompiles.POLICY_REGISTRY_ADDRESS` is still
+/// used by B-20 and activation-registry tests that call across precompiles;
+/// this base's `policyRegistry` handle points to the production deployment.
+contract PolicyRegistryTest is BaseTest {
+    // ============================================================
+    //                       CONSTANTS
+    // ============================================================
+
+    /// @dev Mirrors `PolicyRegistry.ALWAYS_ALLOW_ID` for compile-time access in tests.
+    uint64 internal constant ALWAYS_ALLOW_ID = 0;
+
+    /// @dev Mirrors `PolicyRegistry.ALWAYS_BLOCK_ID` for compile-time access in tests.
+    uint64 internal constant ALWAYS_BLOCK_ID = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | 1;
+
+    /// @dev Counter value after built-in sentinel initialization. Custom policies start here.
+    uint56 internal constant BUILTIN_POLICY_COUNT = 2;
+
+    // ============================================================
+    //                       REGISTRY HANDLE
+    // ============================================================
+
+    IPolicyRegistry internal policyRegistry;
+
+    // ============================================================
+    //                          SETUP
+    // ============================================================
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        PolicyRegistry impl = new PolicyRegistry();
+        policyRegistry = IPolicyRegistry(
+            address(new ERC1967Proxy(address(impl), abi.encodeCall(PolicyRegistry.initialize, (admin))))
+        );
+        vm.label(address(policyRegistry), "PolicyRegistry");
+    }
+
+    // ============================================================
+    //                          HELPERS
+    // ============================================================
 
     /// @notice Create an ALLOWLIST policy with explicit admin and caller.
     function _createAllowlist(address caller, address policyAdmin) internal returns (uint64 policyId) {
@@ -43,8 +80,6 @@ contract PolicyRegistryTest is BaseTest {
     // ============================================================
     //                    POLICY-TYPE FUZZ HELPERS
     // ============================================================
-    // The `PolicyType` enum has two values (BLOCKLIST = 0, ALLOWLIST = 1),
-    // both creatable. The helper picks one from a fuzz seed.
 
     /// @notice Maps a fuzz seed to ALLOWLIST or BLOCKLIST.
     function _creatablePolicyType(uint8 idx) internal pure returns (IPolicyRegistry.PolicyType) {
@@ -52,17 +87,11 @@ contract PolicyRegistryTest is BaseTest {
     }
 
     /// @notice Predict the ID the next `createPolicy(_, policyType)` would assign.
-    /// @dev    Reads `nextCounter` directly via `vm.load`. When the registry
-    ///         has not yet been initialized (counter == 0), the next
-    ///         `createPolicy` call advances the counter past the built-in
-    ///         sentinels before consuming it; the prediction matches by
-    ///         clamping pre-init reads up to `BUILTIN_POLICY_COUNT`.
+    /// @dev    Reads `nextCounter` directly via `vm.load`.
     function _predictNextPolicyId(IPolicyRegistry.PolicyType policyType) internal view returns (uint64) {
         uint56 counter =
             uint56(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot())));
-        if (counter < PolicyRegistryConstants.BUILTIN_POLICY_COUNT) {
-            counter = PolicyRegistryConstants.BUILTIN_POLICY_COUNT;
-        }
+        if (counter < BUILTIN_POLICY_COUNT) counter = BUILTIN_POLICY_COUNT;
         return (uint64(uint8(policyType)) << 56) | uint64(counter);
     }
 
@@ -71,14 +100,7 @@ contract PolicyRegistryTest is BaseTest {
     // ============================================================
 
     /// @notice Bounds a fuzzed `address[]` to length 0..5 by
-    ///         overwriting its in-memory length word. Returns the same
-    ///         memory pointer so the helper can be used inline.
-    /// @dev    Foundry-fuzzed `bytes` / arrays default to lengths up to
-    ///         `fuzz.max-test-rejects`-bounded sizes. For per-element
-    ///         membership tests we want a small, predictable spread; 5
-    ///         is large enough to exercise multi-element batches without
-    ///         blowing up gas. The assembly is centralized here so call
-    ///         sites stay focused on what they're testing.
+    ///         overwriting its in-memory length word.
     function _boundAccounts(address[] memory accounts) internal pure returns (address[] memory) {
         uint256 len = bound(accounts.length, 0, 5);
         // forge-lint: disable-next-line(asm-keccak256)
@@ -93,15 +115,9 @@ contract PolicyRegistryTest is BaseTest {
     // ============================================================
 
     /// @notice Per-call membership-batch limit enforced by the registry.
-    /// @dev    Mirrors `MockPolicyRegistry.MAX_BATCH_SIZE`. Kept as a
-    ///         test-side literal (rather than reading from the mock) so
-    ///         fork tests against the real precompile use the same
-    ///         compile-time constant.
     uint256 internal constant MAX_BATCH_SIZE = 64;
 
-    /// @notice Build an `address[]` of length `n` with deterministic,
-    ///         distinct, non-zero entries. Used by batch-limit tests
-    ///         that need arrays straddling `MAX_BATCH_SIZE`.
+    /// @notice Build an `address[]` of length `n` with deterministic, distinct, non-zero entries.
     function _makeAccounts(uint256 n) internal pure returns (address[] memory accounts) {
         accounts = new address[](n);
         for (uint256 i = 0; i < n; ++i) {
