@@ -109,14 +109,16 @@ contract MockB20Factory is IB20Factory {
 
         if (variant == B20Variant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
-            if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.B20_CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 18;
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
-            if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
+                revert UnsupportedVersion(p.version, variant);
+            }
             // Format check: every byte must be an uppercase ASCII letter (A-Z).
             bytes memory cb = bytes(p.currency);
             for (uint256 i = 0; i < cb.length; ++i) {
@@ -129,7 +131,9 @@ contract MockB20Factory is IB20Factory {
             currency_ = p.currency;
         } else if (variant == B20Variant.SECURITY) {
             B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
-            if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION) {
+                revert UnsupportedVersion(p.version, variant);
+            }
             if (bytes(p.isin).length == 0) revert MissingRequiredField();
             name_ = p.name;
             symbol_ = p.symbol;

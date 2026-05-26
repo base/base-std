@@ -46,11 +46,19 @@ import {IB20Security} from "../interfaces/IB20Security.sol";
 ///         exactly one such entry; `build*` helpers produce zero or
 ///         more, in struct-field order.
 library B20FactoryLib {
-    /// @notice Current encoding version for every variant's
-    ///         `*CreateParams` struct. Carried as the leading `version`
-    ///         field so the factory can route between encodings as the
-    ///         schema evolves; today only `1` exists.
-    uint8 internal constant CREATE_PARAMS_VERSION = 1;
+    /// @notice Current encoding version for `B20CreateParams`. Carried
+    ///         as the leading `version` field so the factory can route
+    ///         between encodings as this variant's schema evolves
+    ///         independently of the others.
+    uint8 internal constant B20_CREATE_PARAMS_VERSION = 1;
+
+    /// @notice Current encoding version for `B20StablecoinCreateParams`.
+    ///         Independent of the other variants' versions.
+    uint8 internal constant B20_STABLECOIN_CREATE_PARAMS_VERSION = 1;
+
+    /// @notice Current encoding version for `B20SecurityCreateParams`.
+    ///         Independent of the other variants' versions.
+    uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
 
     /// @notice Two parallel arrays passed to a `build*` helper had
     ///         different lengths.
@@ -122,7 +130,7 @@ library B20FactoryLib {
     /// @notice Encodes a `B20CreateParams` (default variant) as the
     ///         `params` blob expected by `IB20Factory.createB20` when
     ///         `variant == B20Variant.DEFAULT`. The leading byte is
-    ///         `CREATE_PARAMS_VERSION`.
+    ///         `B20_CREATE_PARAMS_VERSION`.
     ///
     /// @param  name         ERC-20 token name.
     /// @param  symbol       ERC-20 token symbol.
@@ -138,7 +146,7 @@ library B20FactoryLib {
     {
         return abi.encode(
             IB20Factory.B20CreateParams({
-                version: CREATE_PARAMS_VERSION,
+                version: B20_CREATE_PARAMS_VERSION,
                 name: name,
                 symbol: symbol,
                 initialAdmin: initialAdmin
@@ -149,7 +157,7 @@ library B20FactoryLib {
     /// @notice Encodes a `B20StablecoinCreateParams` as the `params`
     ///         blob expected by `IB20Factory.createB20` when
     ///         `variant == B20Variant.STABLECOIN`. The leading byte is
-    ///         `CREATE_PARAMS_VERSION`.
+    ///         `B20_STABLECOIN_CREATE_PARAMS_VERSION`.
     ///
     /// @param  name         ERC-20 token name.
     /// @param  symbol       ERC-20 token symbol.
@@ -168,7 +176,7 @@ library B20FactoryLib {
     ) internal pure returns (bytes memory) {
         return abi.encode(
             IB20Factory.B20StablecoinCreateParams({
-                version: CREATE_PARAMS_VERSION,
+                version: B20_STABLECOIN_CREATE_PARAMS_VERSION,
                 name: name,
                 symbol: symbol,
                 initialAdmin: initialAdmin,
@@ -180,7 +188,7 @@ library B20FactoryLib {
     /// @notice Encodes a `B20SecurityCreateParams` as the `params` blob
     ///         expected by `IB20Factory.createB20` when
     ///         `variant == B20Variant.SECURITY`. The leading byte is
-    ///         `CREATE_PARAMS_VERSION`.
+    ///         `B20_SECURITY_CREATE_PARAMS_VERSION`.
     ///
     /// @param  name              ERC-20 token name.
     /// @param  symbol            ERC-20 token symbol.
@@ -202,7 +210,7 @@ library B20FactoryLib {
     ) internal pure returns (bytes memory) {
         return abi.encode(
             IB20Factory.B20SecurityCreateParams({
-                version: CREATE_PARAMS_VERSION,
+                version: B20_SECURITY_CREATE_PARAMS_VERSION,
                 name: name,
                 symbol: symbol,
                 initialAdmin: initialAdmin,
