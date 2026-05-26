@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Vm} from "forge-std/Vm.sol";
 
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
+import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 
 import {ISO4217} from "test/lib/ISO4217.sol";
 
@@ -109,14 +110,14 @@ contract MockB20Factory is IB20Factory {
 
         if (variant == B20Variant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 18;
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
             // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
             if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
             name_ = p.name;
@@ -126,7 +127,7 @@ contract MockB20Factory is IB20Factory {
             currency_ = p.currency;
         } else if (variant == B20Variant.SECURITY) {
             B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
-            if (p.version != 1) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
             if (bytes(p.isin).length == 0) revert MissingRequiredField();
             name_ = p.name;
             symbol_ = p.symbol;
