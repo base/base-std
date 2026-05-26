@@ -21,6 +21,7 @@ library B20Constants {
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
     bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");
+    bytes32 internal constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
 
     bytes32 internal constant TRANSFER_SENDER_POLICY = keccak256("TRANSFER_SENDER_POLICY");
     bytes32 internal constant TRANSFER_RECEIVER_POLICY = keccak256("TRANSFER_RECEIVER_POLICY");
