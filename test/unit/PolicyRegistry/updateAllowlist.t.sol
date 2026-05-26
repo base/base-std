@@ -127,4 +127,29 @@ contract PolicyRegistryUpdateAllowlistTest is PolicyRegistryTest {
         vm.prank(currentAdmin);
         policyRegistry.updateAllowlist(policyId, allowed, accounts);
     }
+
+    /// @notice Verifies updateAllowlist reverts when the batch exceeds MAX_BATCH_SIZE
+    /// @dev Mirrors the Rust precompile's batch limit (base/base#2876); checks
+    ///      BatchSizeTooLarge(maxBatchSize). Fuzz drives `overflow` so the test exercises
+    ///      arbitrary over-the-limit sizes.
+    function test_updateAllowlist_revert_batchSizeTooLarge(address currentAdmin, bool allowed, uint8 overflow) public {
+        vm.assume(currentAdmin != address(0));
+        uint64 policyId = _createAllowlist(admin, currentAdmin);
+        uint256 n = MAX_BATCH_SIZE + 1 + (uint256(overflow) % 16);
+        address[] memory accounts = _makeAccounts(n);
+        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_BATCH_SIZE));
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, allowed, accounts);
+    }
+
+    /// @notice Verifies updateAllowlist accepts a batch exactly at MAX_BATCH_SIZE
+    /// @dev Boundary check: the limit is inclusive.
+    function test_updateAllowlist_success_batchAtLimit(address currentAdmin, bool allowed) public {
+        vm.assume(currentAdmin != address(0));
+        uint64 policyId = _createAllowlist(admin, currentAdmin);
+        address[] memory accounts = _makeAccounts(MAX_BATCH_SIZE);
+        vm.prank(currentAdmin);
+        policyRegistry.updateAllowlist(policyId, allowed, accounts);
+        assertTrue(policyRegistry.policyExists(policyId));
+    }
 }

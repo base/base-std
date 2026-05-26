@@ -255,16 +255,14 @@ contract MockB20Security is MockB20, IB20Security {
     ///      revert is the terminal case.
     function _readPolicyId(bytes32 policyScope) internal view virtual override returns (uint64) {
         if (policyScope == REDEEM_SENDER_POLICY) {
-            return uint64(MockB20RedeemStorage.layout().redeemPolicyIds);
+            return MockB20RedeemStorage.layout().redeemPolicyIds.sender;
         }
         return super._readPolicyId(policyScope);
     }
 
     function _writePolicyId(bytes32 policyScope, uint64 newPolicyId) internal virtual override {
         if (policyScope == REDEEM_SENDER_POLICY) {
-            MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
-            uint256 mask = uint256(type(uint64).max);
-            $.redeemPolicyIds = ($.redeemPolicyIds & ~mask) | uint256(newPolicyId);
+            MockB20RedeemStorage.layout().redeemPolicyIds.sender = newPolicyId;
             return;
         }
         super._writePolicyId(policyScope, newPolicyId);
@@ -290,7 +288,7 @@ contract MockB20Security is MockB20, IB20Security {
     function _redeemBurn(uint256 amount) internal returns (uint256 ratio) {
         if (_isPaused(PausableFeature.REDEEM)) revert ContractPaused(PausableFeature.REDEEM);
         MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
-        uint64 REDEEMSenderPolicyId = uint64($.redeemPolicyIds);
+        uint64 REDEEMSenderPolicyId = $.redeemPolicyIds.sender;
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {
             revert PolicyForbids(REDEEM_SENDER_POLICY, REDEEMSenderPolicyId);
         }

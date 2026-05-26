@@ -87,4 +87,25 @@ contract PolicyRegistryTest is BaseTest {
         }
         return accounts;
     }
+
+    // ============================================================
+    //                       BATCH-LIMIT HELPERS
+    // ============================================================
+
+    /// @notice Per-call membership-batch limit enforced by the registry.
+    /// @dev    Mirrors `MockPolicyRegistry.MAX_BATCH_SIZE`. Kept as a
+    ///         test-side literal (rather than reading from the mock) so
+    ///         fork tests against the real precompile use the same
+    ///         compile-time constant.
+    uint256 internal constant MAX_BATCH_SIZE = 64;
+
+    /// @notice Build an `address[]` of length `n` with deterministic,
+    ///         distinct, non-zero entries. Used by batch-limit tests
+    ///         that need arrays straddling `MAX_BATCH_SIZE`.
+    function _makeAccounts(uint256 n) internal pure returns (address[] memory accounts) {
+        accounts = new address[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            accounts[i] = address(uint160(0x1000 + i));
+        }
+    }
 }

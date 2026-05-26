@@ -71,6 +71,13 @@ contract MockPolicyRegistry is IPolicyRegistry {
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
     uint64 internal constant POLICY_ID_TYPE_SHIFT = 56;
 
+    /// @notice Per-call membership-batch limit. `createPolicyWithAccounts`,
+    ///         `updateAllowlist`, and `updateBlocklist` revert with
+    ///         `BatchSizeTooLarge(MAX_BATCH_SIZE)` when `accounts.length`
+    ///         exceeds this value. Mirrors the Rust PolicyRegistry
+    ///         precompile (base/base#2876).
+    uint256 internal constant MAX_BATCH_SIZE = 64;
+
     // ============================================================
     //                       POLICY CREATION
     // ============================================================
@@ -240,6 +247,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function _batchSetMembers(uint64 policyId, PolicyType policyType, bool value, address[] calldata accounts)
         internal
     {
+        if (accounts.length > MAX_BATCH_SIZE) revert BatchSizeTooLarge(MAX_BATCH_SIZE);
         mapping(address => bool) storage members = MockPolicyRegistryStorage.layout().members[policyId];
         for (uint256 i = 0; i < accounts.length; ++i) {
             members[accounts[i]] = value;

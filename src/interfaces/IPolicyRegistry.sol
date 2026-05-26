@@ -92,6 +92,12 @@ interface IPolicyRegistry {
     /// @notice A required address argument was the zero address.
     error ZeroAddress();
 
+    /// @notice A membership batch exceeded the registry limit.
+    /// @param maxBatchSize The maximum number of accounts permitted per
+    ///        `createPolicyWithAccounts`, `updateAllowlist`, or
+    ///        `updateBlocklist` call.
+    error BatchSizeTooLarge(uint256 maxBatchSize);
+
     /// @notice `finalizeUpdateAdmin` was called for a policy with no
     ///         currently-staged pending admin.
     error NoPendingAdmin();

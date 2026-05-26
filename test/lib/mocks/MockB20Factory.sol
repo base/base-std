@@ -6,11 +6,10 @@ import {Vm} from "forge-std/Vm.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 
-import {ISO4217} from "test/lib/ISO4217.sol";
-
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {
     MockB20Storage,
     MockB20StablecoinStorage,
@@ -118,8 +117,11 @@ contract MockB20Factory is IB20Factory {
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != B20FactoryLib.CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
-            // ISO 4217 fiat allowlist; see docs/b20/stablecoin/currency-validation.md.
-            if (!ISO4217.isValidFiatCode(p.currency)) revert InvalidCurrency(p.currency);
+            // Format check: every byte must be an uppercase ASCII letter (A-Z).
+            bytes memory cb = bytes(p.currency);
+            for (uint256 i = 0; i < cb.length; ++i) {
+                if (cb[i] < 0x41 || cb[i] > 0x5A) revert InvalidCurrency(p.currency);
+            }
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
@@ -285,16 +287,33 @@ contract MockB20Factory is IB20Factory {
     }
 
     /// @dev Writes the security variant's initial `identifiers["ISIN"]`
-    ///      entry at the `base.b20.security` namespace and the initial
-    ///      `minimumRedeemable` at the `base.b20.redeem` namespace.
+    ///      entry at the `base.b20.security` namespace, the initial
+    ///      `minimumRedeemable` at the `base.b20.redeem` namespace, and
+    ///      defaults the `REDEEM_SENDER_POLICY` slot to `ALWAYS_BLOCK_ID`.
     ///      Mirrors stablecoin's `currency` pattern: variant-specific
     ///      initial state is written directly without an event,
     ///      paralleling how base identity (name, symbol, supply cap) is
     ///      seeded. Post-creation identifier mutations go through
     ///      `updateSecurityIdentifier` and emit `SecurityIdentifierUpdated`.
+    ///
+    ///      The `REDEEM_SENDER_POLICY` default differs from the other
+    ///      four policy slots (which default to `ALWAYS_ALLOW_ID = 0`
+    ///      via the EVM zero-default of the slot): for security tokens,
+    ///      redemption is closed by default and admins must explicitly
+    ///      opt-in by pointing the slot at an allowlist or another
+    ///      policy. `ALWAYS_BLOCK_ID` lands in the bottom 64 bits of
+    ///      the packed `redeemPolicyIds` slot; the three reserved lanes
+    ///      above stay zero. To open redemption at creation, override
+    ///      the slot atomically via an
+    ///      `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` initCall.
     function _writeSecurityStorage(address token, string memory isin_, uint256 minimumRedeemable_) internal {
         _writeString(token, MockB20SecurityStorage.identifierSlot("ISIN"), isin_);
         _writeUint(token, MockB20RedeemStorage.minimumRedeemableSlot(), minimumRedeemable_);
+        _writeUint(
+            token,
+            MockB20RedeemStorage.redeemPolicyIdsSlot(),
+            uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID)
+        );
     }
 
     // ============================================================

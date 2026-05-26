@@ -236,7 +236,7 @@ deployed by running anvil manually and probing:
 
 ```bash
 ~/code/base-anvil/target/release/anvil --base --port 8546 &
-cast call 0x84530000000000000000000000000000000000ff "admin()(address)" --rpc-url http://localhost:8546
+cast call 0x8453000000000000000000000000000000000001 "admin()(address)" --rpc-url http://localhost:8546
 # Should return 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc.
 ```
 

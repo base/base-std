@@ -11,6 +11,17 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20SecurityRedeemWithMemoTest is B20SecurityTest {
+    /// @notice Opens REDEEM_SENDER_POLICY for the memo-path redemption tests in this
+    ///         contract. Same rationale as `B20SecurityRedeemTest.setUp`: tests here
+    ///         exercise the memo-path code (memo emission, log ordering, zero memo)
+    ///         rather than the policy guard, so we open the slot in setUp. The one
+    ///         test that pins the policy guard (`test_redeemWithMemo_revert_senderPolicyForbids`)
+    ///         explicitly sets ALWAYS_BLOCK_ID itself.
+    function setUp() public virtual override {
+        super.setUp();
+        _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+    }
+
     /// @notice Verifies redeemWithMemo reverts when REDEEM feature is paused
     /// @dev Pause guard fires first; memo path inherits the same guard as the bare `redeem`.
     function test_redeemWithMemo_revert_whenRedeemPaused(uint256 amount, bytes32 memo) public {

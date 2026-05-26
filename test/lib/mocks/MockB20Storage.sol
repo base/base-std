@@ -38,6 +38,41 @@ pragma solidity ^0.8.20;
 ///         variant-fixed (`18` for default, `6` for stablecoin/security)
 ///         and read from code, not storage.
 library MockB20Storage {
+    // ============================================================
+    //                     PACKED POLICY STRUCTS
+    // ============================================================
+    // Solidity packs struct fields LSB-first into a single 256-bit slot
+    // (all fields fit because each is `uint64` and there are at most
+    // four of them per struct). The struct definition IS the binary
+    // layout spec — the Rust impl mirrors the field order with `u64`s
+    // of the same names. Reserved bits are implicit: any uint64 lane
+    // not declared as a field is simply uninitialized (zero) and the
+    // struct cannot accidentally write to it.
+
+    /// @notice Transfer-side policy IDs (read by `_transfer`,
+    ///         `transferFrom*`, and the seize check in `burnBlocked`).
+    /// @dev    Bit layout (Solidity LSB-first):
+    ///           bits   0.. 63 : sender
+    ///           bits  64..127 : receiver
+    ///           bits 128..191 : executor
+    ///           bits 192..255 : reserved (implicit, no field declared)
+    struct TransferPolicyIds {
+        uint64 sender;
+        uint64 receiver;
+        uint64 executor;
+    }
+
+    /// @notice Mint-side policy IDs (read by `_mint`). Only the
+    ///         receiver policy is defined today; future granular
+    ///         mint-side policy types get added as additional `uint64`
+    ///         fields here so adding one doesn't force a second SLOAD.
+    /// @dev    Bit layout:
+    ///           bits   0.. 63 : receiver
+    ///           bits  64..255 : reserved (implicit)
+    struct MintPolicyIds {
+        uint64 receiver;
+    }
+
     /// @custom:storage-location erc7201:base.b20
     struct Layout {
         // ---------- Identity (mutable via admin) ----------
@@ -65,25 +100,24 @@ library MockB20Storage {
         // matches `uint64 policyId` everywhere else in the system, and
         // four IDs fit exactly into the 256-bit slot.
         //
+        // **Layout via Solidity packed structs.** Each per-op packed slot
+        // is declared as a struct of `uint64` fields. Solidity packs
+        // struct fields LSB-first into the slot, which is the exact
+        // convention the Rust precompile impl must reproduce — so the
+        // struct field DECLARATION ORDER is the binary layout spec, with
+        // no comment-vs-code drift surface. Bit-identical to the prior
+        // hand-rolled `uint256` layout; consumer code uses named field
+        // access (`$.transferPolicyIds.sender = id;`) instead of inline
+        // shifts and mask operations.
+        //
         // Transfer-side policies (read by `_transfer`, `transferFrom*`,
         // and the seize check in `burnBlocked`).
-        // Packed as four uint64 lanes from least-significant to most-significant:
-        //   word0 (bytes  0.. 7, bits   0.. 63): transferSenderPolicyId
-        //   word1 (bytes  8..15, bits  64..127): transferReceiverPolicyId
-        //   word2 (bytes 16..23, bits 128..191): transferExecutorPolicyId
-        //   word3 (bytes 24..31, bits 192..255): reserved
-        // Note: bit ranges are shown low..high to avoid [end:start] ambiguity.
-        uint256 transferPolicyIds;
-        // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER_POLICY` is
-        // defined today; the remaining three uint64 slots are reserved
-        // for future granular mint-side policy types (e.g.
-        // MINT_AUTHORIZER) so adding one doesn't force a second SLOAD.
-        // Layout uses the same uint64 lane convention:
-        //   word0 (bytes  0.. 7, bits   0.. 63): mintReceiverPolicyId
-        //   word1 (bytes  8..15, bits  64..127): reserved
-        //   word2 (bytes 16..23, bits 128..191): reserved
-        //   word3 (bytes 24..31, bits 192..255): reserved
-        uint256 mintPolicyIds;
+        TransferPolicyIds transferPolicyIds;
+        // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER_POLICY`
+        // is defined today; future granular mint-side policy types (e.g.
+        // `MINT_AUTHORIZER`) get added as additional `uint64` fields on
+        // `MintPolicyIds` so adding one doesn't force a second SLOAD.
+        MintPolicyIds mintPolicyIds;
         // There is no generic fallback mapping for "other" policy
         // types. Each supported `policyType` lives in a fixed slot on
         // this struct (or, for variant-specific operations, in the
@@ -239,12 +273,17 @@ library MockB20Storage {
     // ============================================================
     //                     PACKED-SLOT CODECS
     // ============================================================
-    // The transfer-side and mint-side policy slots each pack four
-    // uint64 lanes into a single 256-bit slot, low-to-high (lane 0 in
-    // bits  0..63, lane 1 in bits 64..127, lane 2 in bits 128..191,
-    // lane 3 in bits 192..255). These pure codecs let test callers
-    // extract / compose lane values without re-deriving the shifts at
-    // every callsite.
+    // Production code accesses the packed policy slots via the
+    // `TransferPolicyIds` / `MintPolicyIds` structs (named fields on
+    // `Layout`) — Solidity handles the bit math automatically. These
+    // pure codecs operate on a raw `uint256` (what `vm.load` returns
+    // for the slot) and exist for test-side use only: layout-pin tests
+    // that read the raw slot bytes can use them to extract lanes
+    // without re-deriving the shifts at every callsite.
+    //
+    // The roundtrip tests in `MockB20SlotHelpers.t.sol` verify that
+    // these codecs' bit math matches Solidity's struct packing — so a
+    // codec drifting away from the canonical struct layout fails CI.
 
     /// @notice Extracts the TRANSFER_SENDER policy id (lane 0) from the packed slot.
     function transferSenderPolicyId(uint256 packed) internal pure returns (uint64) {
@@ -413,6 +452,21 @@ library MockB20RedeemStorage {
         }
     }
 
+    /// @notice Redeem-side policy IDs (read by `_redeemBurn` on the
+    ///         security variant). Mirrors the per-op packed-slot
+    ///         convention of `MockB20Storage.TransferPolicyIds` /
+    ///         `MintPolicyIds`. Only the sender policy is defined
+    ///         today; future granular redeem-side types
+    ///         (e.g. `REDEEMER_RECEIVER`) get added as additional
+    ///         `uint64` fields here so adding one doesn't force a
+    ///         second SLOAD.
+    /// @dev    Bit layout (Solidity LSB-first packing):
+    ///           bits   0.. 63 : sender
+    ///           bits  64..255 : reserved (implicit)
+    struct RedeemPolicyIds {
+        uint64 sender;
+    }
+
     /// @custom:storage-location erc7201:base.b20.redeem
     struct Layout {
         // ---------- Redemption ----------
@@ -421,12 +475,11 @@ library MockB20RedeemStorage {
         uint256 minimumRedeemable;
 
         // ---------- Redeem-side policies (PACKED) ----------
-        // Layout:
-        //   [63:0]    redeemerSenderPolicyId
-        //   [127:64]  reserved
-        //   [191:128] reserved
-        //   [255:192] reserved
-        uint256 redeemPolicyIds;
+        // Solidity-packed struct: field declarations are the binary
+        // layout spec. Bit-identical to the prior hand-rolled
+        // `uint256` layout; consumer code uses named field access
+        // (`$.redeemPolicyIds.sender = id;`) instead of inline shifts.
+        RedeemPolicyIds redeemPolicyIds;
     }
 
     /// @notice Returns the storage location derived per the ERC-7201 formula

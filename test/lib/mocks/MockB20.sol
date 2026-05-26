@@ -159,7 +159,7 @@ contract MockB20 is IB20 {
             // Read the executor policy ID out of the transfer-side packed
             // slot. Cold here; warm by the time _transfer reads the same
             // slot for sender + receiver.
-            uint64 executorPolicyId = uint64(MockB20Storage.layout().transferPolicyIds >> 128);
+            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
                 revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
             }
@@ -189,7 +189,7 @@ contract MockB20 is IB20 {
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool) {
         if (!_isPrivileged() && msg.sender != from) {
             _consumeAllowance(from, msg.sender, amount);
-            uint64 executorPolicyId = uint64(MockB20Storage.layout().transferPolicyIds >> 128);
+            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
                 revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
             }
@@ -243,7 +243,7 @@ contract MockB20 is IB20 {
             // accounts. Read the transfer-sender policy ID out of the
             // transfer-side packed slot and reject if the target is
             // currently authorized.
-            uint64 senderPolicyId = uint64(MockB20Storage.layout().transferPolicyIds);
+            uint64 senderPolicyId = MockB20Storage.layout().transferPolicyIds.sender;
             if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
                 revert AccountNotBlocked(from);
             }
@@ -390,31 +390,31 @@ contract MockB20 is IB20 {
     ///      falling through to `super`.
     function _readPolicyId(bytes32 policyScope) internal view virtual returns (uint64) {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
-        if (policyScope == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds);
-        if (policyScope == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 64);
-        if (policyScope == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds >> 128);
-        if (policyScope == MINT_RECEIVER_POLICY) return uint64($.mintPolicyIds);
+        if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.sender;
+        if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;
+        if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;
+        if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;
         revert UnsupportedPolicyType(policyScope);
     }
 
     /// @dev Writes a policy ID to storage. Hot-path types update their
-    ///      per-operation packed slot in-place (preserving the other
-    ///      three packed lanes); anything else reverts
+    ///      named field on the per-operation packed-struct slot
+    ///      (`TransferPolicyIds.sender` etc.); Solidity emits the
+    ///      appropriate mask/shift sequence to preserve the other
+    ///      lanes in the slot. Anything else reverts
     ///      `UnsupportedPolicyType` — the token has no slot for it.
     ///      Variants override to handle their own policy types before
-    ///      falling through to `super`. Mask + shift are explicit so
-    ///      the Rust impl can replicate the exact bit layout.
+    ///      falling through to `super`.
     function _writePolicyId(bytes32 policyScope, uint64 newPolicyId) internal virtual {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
-        uint256 mask = uint256(type(uint64).max);
         if (policyScope == TRANSFER_SENDER_POLICY) {
-            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);
+            $.transferPolicyIds.sender = newPolicyId;
         } else if (policyScope == TRANSFER_RECEIVER_POLICY) {
-            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);
+            $.transferPolicyIds.receiver = newPolicyId;
         } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
-            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);
+            $.transferPolicyIds.executor = newPolicyId;
         } else if (policyScope == MINT_RECEIVER_POLICY) {
-            $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);
+            $.mintPolicyIds.receiver = newPolicyId;
         } else {
             revert UnsupportedPolicyType(policyScope);
         }
@@ -611,14 +611,14 @@ contract MockB20 is IB20 {
             // One SLOAD pulls both policy IDs we need for the transfer
             // check (and was already warmed if we came in via transferFrom,
             // which reads the executor lane of the same slot first).
-            uint256 packed = MockB20Storage.layout().transferPolicyIds;
-            uint64 senderPolicyId = uint64(packed);
-            uint64 receiverPolicyId = uint64(packed >> 64);
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
-                revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicyId);
+            // Solidity emits a single SLOAD for the struct read + masked
+            // extracts for the named fields.
+            MockB20Storage.TransferPolicyIds memory packed = MockB20Storage.layout().transferPolicyIds;
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.sender, from)) {
+                revert PolicyForbids(TRANSFER_SENDER_POLICY, packed.sender);
             }
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(receiverPolicyId, to)) {
-                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicyId);
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.receiver, to)) {
+                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, packed.receiver);
             }
         }
 
@@ -637,7 +637,7 @@ contract MockB20 is IB20 {
 
         if (!_isPrivileged()) {
             if (_isPaused(PausableFeature.MINT)) revert ContractPaused(PausableFeature.MINT);
-            uint64 mintReceiverPolicyId = uint64(MockB20Storage.layout().mintPolicyIds);
+            uint64 mintReceiverPolicyId = MockB20Storage.layout().mintPolicyIds.receiver;
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
                 revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);
             }

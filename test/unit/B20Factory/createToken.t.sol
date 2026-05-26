@@ -7,10 +7,10 @@ import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {ISO4217} from "test/lib/ISO4217.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {
     MockB20Storage,
     MockB20StablecoinStorage,
@@ -20,6 +20,11 @@ import {
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryCreateB20Test is B20FactoryTest {
+    /// @dev Compile-time constant of the security-variant's REDEEM_SENDER_POLICY scope.
+    ///      Mirrors the `bytes32 public constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY")`
+    ///      on `MockB20Security` so tests can reference the scope without a token instance.
+    bytes32 internal constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
+
     // Role identifiers are accessed as `MINT_ROLE` etc. — these are
     // compile-time constants on the contract type, so they don't require an
     // instantiated token (relevant during createToken setup where the token
@@ -77,20 +82,28 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
-    // STABLECOIN currency validation — see docs/b20/stablecoin/currency-validation.md.
+    // STABLECOIN currency validation: every byte must be an uppercase ASCII letter (A-Z).
 
-    /// @notice Any non-allowlist string reverts with `InvalidCurrency(code)`.
-    /// @dev Subsumes every point case (empty, wrong length/case, X-prefix, crypto, etc.)
-    ///      via `vm.assume(!isValidFiatCode)`.
-    function test_createB20_revert_currency_rejectsNonAllowlist(string memory code, address caller, bytes32 salt)
+    /// @notice Any string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
+    /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
+    ///      `vm.assume(!_isValidFiatCode)`. Length is unconstrained.
+    function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
-        vm.assume(!ISO4217.isValidFiatCode(code));
+        vm.assume(!_isValidFiatCode(code));
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, code));
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+    }
+
+    function _isValidFiatCode(string memory code) private pure returns (bool) {
+        bytes memory b = bytes(code);
+        for (uint256 i = 0; i < b.length; ++i) {
+            if (b[i] < 0x41 || b[i] > 0x5A) return false;
+        }
+        return true;
     }
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant
@@ -257,6 +270,106 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             uint256(vm.load(token, MockB20RedeemStorage.minimumRedeemableSlot())),
             minRedeem,
             "minimumRedeemable slot must reflect the seeded value"
+        );
+    }
+
+    /// @notice Verifies security createToken defaults REDEEM_SENDER_POLICY to ALWAYS_BLOCK_ID
+    /// @dev Unlike the four base policy slots (which inherit the EVM zero default == ALWAYS_ALLOW_ID),
+    ///      the security variant's factory writes ALWAYS_BLOCK_ID into the REDEEM_SENDER_POLICY lane
+    ///      at creation time so redemption is closed by default. Admins must explicitly point the
+    ///      slot at an allowlist (or another policy) before any holder can call `redeem`. Paired
+    ///      slot assertion pins both the public surface (`policyId()`) and the underlying packed
+    ///      storage slot.
+    function test_createB20_success_securityDefaultsRedeemPolicyToBlock(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
+
+        assertEq(
+            IB20Security(token).policyId(REDEEM_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "REDEEM_SENDER_POLICY must default to ALWAYS_BLOCK_ID via the public surface"
+        );
+        // The packed slot's bottom 64 bits hold REDEEM_SENDER_POLICY; the three reserved
+        // lanes above stay zero on a fresh token.
+        uint256 packed = uint256(vm.load(token, MockB20RedeemStorage.redeemPolicyIdsSlot()));
+        assertEq(
+            uint64(packed),
+            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
+            "redeemPolicyIds slot lane 0 must hold ALWAYS_BLOCK_ID"
+        );
+        assertEq(
+            packed >> 64,
+            uint256(0),
+            "redeemPolicyIds slot reserved lanes must be zero on a fresh token"
+        );
+    }
+
+    /// @notice Verifies the security REDEEM_SENDER_POLICY default does NOT leak into other
+    ///         policy slots — the four base scopes still default to ALWAYS_ALLOW_ID.
+    /// @dev Storage isolation: the factory's REDEEM_SENDER_POLICY write targets the redeem
+    ///      namespace (`base.b20.redeem`); the base packed policy slots (`transferPolicyIds`,
+    ///      `mintPolicyIds` in the base `base.b20` namespace) must remain at their EVM zero
+    ///      defaults so the four base scopes still read as ALWAYS_ALLOW_ID.
+    function test_createB20_success_securityOtherPolicySlotsDefaultToAllow(address caller, bytes32 salt)
+        public
+    {
+        _assumeValidCaller(caller);
+        address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
+
+        assertEq(
+            IB20Security(token).policyId(B20Constants.TRANSFER_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "TRANSFER_SENDER_POLICY must still default to ALWAYS_ALLOW_ID"
+        );
+        assertEq(
+            IB20Security(token).policyId(B20Constants.TRANSFER_RECEIVER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "TRANSFER_RECEIVER_POLICY must still default to ALWAYS_ALLOW_ID"
+        );
+        assertEq(
+            IB20Security(token).policyId(B20Constants.TRANSFER_EXECUTOR_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "TRANSFER_EXECUTOR_POLICY must still default to ALWAYS_ALLOW_ID"
+        );
+        assertEq(
+            IB20Security(token).policyId(B20Constants.MINT_RECEIVER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "MINT_RECEIVER_POLICY must still default to ALWAYS_ALLOW_ID"
+        );
+        // Paired slot assertions: the base packed policy slots are at the EVM zero default.
+        assertEq(
+            vm.load(token, MockB20Storage.transferPolicyIdsSlot()),
+            bytes32(0),
+            "transferPolicyIds slot must be zero (default state)"
+        );
+        assertEq(
+            vm.load(token, MockB20Storage.mintPolicyIdsSlot()),
+            bytes32(0),
+            "mintPolicyIds slot must be zero (default state)"
+        );
+    }
+
+    /// @notice Verifies an `updatePolicy(REDEEM_SENDER_POLICY, ...)` initCall overrides the default
+    /// @dev Per `IB20Factory.B20SecurityCreateParams` natspec, admins can open redemption at
+    ///      creation time by including an `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` entry
+    ///      in `initCalls`. The privileged-window bypass on the token means the factory-originated
+    ///      call succeeds without the role check. Post-creation the slot reflects the overridden
+    ///      value, NOT the factory-seeded default.
+    function test_createB20_success_securityRedeemPolicyOverridableViaInitCall(address caller, bytes32 salt)
+        public
+    {
+        _assumeValidCaller(caller);
+        bytes[] memory initCalls = new bytes[](1);
+        initCalls[0] = abi.encodeWithSelector(
+            IB20.updatePolicy.selector, REDEEM_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID
+        );
+
+        address token = _createSecurity(caller, salt, _securityParams(), initCalls);
+
+        assertEq(
+            IB20Security(token).policyId(REDEEM_SENDER_POLICY),
+            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
+            "REDEEM_SENDER_POLICY must reflect the initCall override, not the factory default"
         );
     }
 
