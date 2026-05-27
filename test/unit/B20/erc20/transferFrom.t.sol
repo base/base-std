@@ -280,4 +280,84 @@ contract B20TransferFromTest is B20Test {
         vm.prank(caller);
         assertTrue(token.transferFrom(from, to, amount), "transferFrom must return true");
     }
+
+    // ============================================================
+    //              REGRESSION: SELF-CALLER ALLOWANCE
+    // ============================================================
+    //
+    // transferFrom MUST consume allowance even when msg.sender == from.
+    // OZ ERC20 and the Rust precompile both carve no exception for the
+    // self-caller case, so the mock must not either. Earlier the mock
+    // gated `_consumeAllowance` behind `msg.sender != from`, silently
+    // letting an owner-as-caller transfer without burning approval —
+    // these tests pin the corrected behavior.
+
+    /// @notice Verifies transferFrom reverts InsufficientAllowance when caller == from and no self-approval exists
+    /// @dev Regression: without this, msg.sender == from skipped allowance consumption entirely.
+    function test_transferFrom_revert_selfCaller_insufficientAllowance(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        amount = bound(amount, 1, type(uint256).max);
+        // No self-approval; allowance[from][from] is 0.
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, from, 0, amount));
+        token.transferFrom(from, to, amount);
+    }
+
+    /// @notice Verifies transferFrom decreases self-allowance by the spent amount when caller == from
+    /// @dev Regression: matches OZ / Rust — allowance is spent against `allowances[from][from]`.
+    function test_transferFrom_success_selfCaller_decreasesAllowance(
+        address from,
+        address to,
+        uint256 allowanceAmount,
+        uint256 spendAmount
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
+        vm.assume(allowanceAmount != type(uint256).max);
+        spendAmount = bound(spendAmount, 1, allowanceAmount);
+
+        _mint(from, spendAmount);
+        vm.prank(from);
+        token.approve(from, allowanceAmount);
+
+        vm.prank(from);
+        token.transferFrom(from, to, spendAmount);
+
+        assertEq(
+            token.allowance(from, from), allowanceAmount - spendAmount, "self-allowance must decrease by spent amount"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, from))),
+            allowanceAmount - spendAmount,
+            "allowances[from][from] slot must reflect the consumed amount"
+        );
+        assertEq(token.balanceOf(to), spendAmount, "to must receive the spent amount");
+    }
+
+    /// @notice Verifies transferFrom with self-caller skips the executor policy check
+    /// @dev Self-caller is not an executor distinct from `from`; sender-policy already
+    ///      covers `from` inside _transfer. Executor policy MUST NOT fire — pins the
+    ///      one carve-out we intentionally keep around `msg.sender == from`.
+    function test_transferFrom_success_selfCaller_skipsExecutorPolicy(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 1, type(uint128).max);
+
+        _mint(from, amount);
+        vm.prank(from);
+        token.approve(from, amount);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        token.transferFrom(from, to, amount);
+
+        assertEq(token.balanceOf(to), amount, "transfer must succeed despite blocked executor policy");
+    }
 }
