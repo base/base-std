@@ -199,9 +199,9 @@ interface IB20Factory {
 
     /// @notice Emitted once per `createToken` invocation. The fields
     ///         cover the universal token-identity surface only;
-    ///         variant-specific state changes (e.g. `currency`, `isin`,
-    ///         supply cap, policy slots) are observable via the
-    ///         token's own events as they're applied during `initCalls`.
+    ///         variant-specific immutable fields (`currency`, `isin`) are
+    ///         announced in the companion events below, emitted in the same
+    ///         transaction immediately after `B20Created`.
     /// @dev    The initial admin grant (when `initialAdmin != address(0)`)
     ///         is announced via the standard `RoleGranted(DEFAULT_ADMIN_ROLE,
     ///         admin, factory)` event emitted from the token's own
@@ -212,6 +212,27 @@ interface IB20Factory {
     ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
     ///         skips the grant and emits no `RoleGranted` at bootstrap.
     event B20Created(address indexed token, B20Variant indexed variant, string name, string symbol, uint8 decimals);
+
+    /// @notice Emitted immediately after `B20Created` when the new token is
+    ///         a Stablecoin variant. Carries the immutable `currency` field
+    ///         that is set at creation and has no setter on the token.
+    ///         Stream-based indexers (e.g. those that cannot make mid-handler
+    ///         view calls) should subscribe to this event to populate a
+    ///         `currency` column on their stablecoin token tables.
+    /// @param token    The address of the newly created stablecoin token.
+    ///                 Matches the `token` field on the preceding `B20Created`.
+    /// @param currency The ISO 4217 currency identifier (e.g. `"USD"`, `"EUR"`).
+    ///                 Uppercase ASCII letters (`A`–`Z`); immutable after creation.
+    event StablecoinCreated(address indexed token, string currency);
+
+    /// @notice Emitted immediately after `B20Created` when the new token is
+    ///         a Security variant. Carries the immutable `isin` field that is
+    ///         set at creation; additional identifiers (CUSIP, FIGI, SEDOL) can
+    ///         be attached post-creation via `IB20Asset.updateExtraMetadata`.
+    /// @param token The address of the newly created asset token.
+    ///              Matches the `token` field on the preceding `B20Created`.
+    /// @param isin  The ISIN identifier written at creation (e.g. `"US0378331005"`).
+    event AssetCreated(address indexed token, string isin);
 
     /*//////////////////////////////////////////////////////////////
                                  CREATE
