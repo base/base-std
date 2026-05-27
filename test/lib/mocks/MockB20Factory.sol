@@ -172,8 +172,19 @@ contract MockB20Factory is IB20Factory {
 
         // -- 6. Emit B20Created. Identity-only signal; admin role
         //       assignment is announced via the standard RoleGranted
-        //       event from step 7.
+        //       event from step 7. Variant-specific immutable fields
+        //       follow in companion events.
         emit B20Created(token, variant, name_, symbol_, decimals);
+
+        // -- 6a. Emit variant-specific companion events carrying immutable
+        //        fields not included in B20Created. These are emitted
+        //        immediately after B20Created in the same transaction so
+        //        stream-based indexers can correlate them by block position.
+        if (variant == B20Variant.STABLECOIN) {
+            emit StablecoinCreated(token, currency_);
+        } else if (variant == B20Variant.SECURITY) {
+            emit SecurityCreated(token, isin_);
+        }
 
         // -- 7. Grant the initial admin role via the canonical path.
         //       msg.sender at the token is address(this) == factory,
