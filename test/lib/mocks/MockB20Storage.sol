@@ -407,17 +407,12 @@ library MockB20SecurityStorage {
     //                     TOP-LEVEL FIELD SLOTS
     // ============================================================
 
-    function sharesToTokensRatioSlot() internal pure returns (bytes32) {
-        return slotOf(SHARES_TO_TOKENS_RATIO_OFFSET);
-    }
-
-    function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) {
-        return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET);
-    }
-
-    function identifiersBaseSlot() internal pure returns (bytes32) {
-        return slotOf(IDENTIFIERS_OFFSET);
-    }
+    // forgefmt: disable-next-item
+    function sharesToTokensRatioSlot() internal pure returns (bytes32) { return slotOf(SHARES_TO_TOKENS_RATIO_OFFSET); }
+    // forgefmt: disable-next-item
+    function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
+    // forgefmt: disable-next-item
+    function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }
 
     // ============================================================
     //                     MAPPING MEMBER SLOTS
