@@ -348,6 +348,16 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Security.updateSecurityIdentifier, (identifierType, value));
     }
 
+    /// @notice Encodes a call to `IB20Security.updateShareRatio(newShareRatio)`
+    ///         as a bootstrap initCall.
+    ///
+    /// @param  newShareRatio New share ratio.
+    ///
+    /// @return The ABI-encoded initCall blob.
+    function encodeUpdateShareRatio(uint256 newShareRatio) internal pure returns (bytes memory) {
+        return abi.encodeCall(IB20Security.updateShareRatio, (newShareRatio));
+    }
+
     /*//////////////////////////////////////////////////////////////
                        INIT-CALL ARRAY BUILDERS
     //////////////////////////////////////////////////////////////*/
