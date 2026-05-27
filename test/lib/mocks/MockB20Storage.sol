@@ -407,9 +407,17 @@ library MockB20AssetStorage {
     //                     TOP-LEVEL FIELD SLOTS
     // ============================================================
 
-    function sharesToTokensRatioSlot() internal pure returns (bytes32) { return slotOf(SHARES_TO_TOKENS_RATIO_OFFSET); }
-    function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
-    function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }
+    function sharesToTokensRatioSlot() internal pure returns (bytes32) {
+        return slotOf(SHARES_TO_TOKENS_RATIO_OFFSET);
+    }
+
+    function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) {
+        return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET);
+    }
+
+    function identifiersBaseSlot() internal pure returns (bytes32) {
+        return slotOf(IDENTIFIERS_OFFSET);
+    }
 
     // ============================================================
     //                     MAPPING MEMBER SLOTS
@@ -493,8 +501,13 @@ library MockB20RedeemStorage {
     //                     TOP-LEVEL FIELD SLOTS
     // ============================================================
 
-    function minimumRedeemableSlot() internal pure returns (bytes32) { return slotOf(MINIMUM_REDEEMABLE_OFFSET); }
-    function redeemPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(REDEEM_POLICY_IDS_OFFSET); }
+    function minimumRedeemableSlot() internal pure returns (bytes32) {
+        return slotOf(MINIMUM_REDEEMABLE_OFFSET);
+    }
+
+    function redeemPolicyIdsSlot() internal pure returns (bytes32) {
+        return slotOf(REDEEM_POLICY_IDS_OFFSET);
+    }
 }
 
 /// @title MockB20StablecoinStorage

@@ -19,8 +19,7 @@ contract B20FactoryLibEncodeStablecoinCreateParamsTest is B20FactoryLibTest {
         string memory currency
     ) public pure {
         bytes memory blob = B20FactoryLib.encodeStablecoinCreateParams(name, symbol, initialAdmin, currency);
-        IB20Factory.B20StablecoinCreateParams memory decoded =
-            abi.decode(blob, (IB20Factory.B20StablecoinCreateParams));
+        IB20Factory.B20StablecoinCreateParams memory decoded = abi.decode(blob, (IB20Factory.B20StablecoinCreateParams));
 
         assertEq(
             decoded.version,

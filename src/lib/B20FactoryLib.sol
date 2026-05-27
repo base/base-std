@@ -146,10 +146,7 @@ library B20FactoryLib {
     {
         return abi.encode(
             IB20Factory.B20CreateParams({
-                version: B20_CREATE_PARAMS_VERSION,
-                name: name,
-                symbol: symbol,
-                initialAdmin: initialAdmin
+                version: B20_CREATE_PARAMS_VERSION, name: name, symbol: symbol, initialAdmin: initialAdmin
             })
         );
     }
@@ -399,11 +396,7 @@ library B20FactoryLib {
     /// @param  holders The security role-holder bundle.
     ///
     /// @return initCalls The ABI-encoded `grantRole` initCalls.
-    function buildRoleGrants(B20AssetRoleHolders memory holders)
-        internal
-        pure
-        returns (bytes[] memory initCalls)
-    {
+    function buildRoleGrants(B20AssetRoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
         bytes32[] memory roles = new bytes32[](8);
         roles[0] = B20Constants.MINT_ROLE;
         roles[1] = B20Constants.BURN_ROLE;

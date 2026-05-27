@@ -19,10 +19,10 @@ contract B20FactoryLibEncodeAssetCreateParamsTest is B20FactoryLibTest {
         string memory isin,
         uint256 minimumRedeemable
     ) public pure {
-        bytes memory blob =
-            B20FactoryLib.encodeAssetCreateParams(name, symbol, initialAdmin, isin, minimumRedeemable);
-        IB20Factory.B20AssetCreateParams memory decoded =
-            abi.decode(blob, (IB20Factory.B20AssetCreateParams));
+        bytes memory blob = B20FactoryLib.encodeAssetCreateParams(
+            name, symbol, initialAdmin, isin, minimumRedeemable
+        );
+        IB20Factory.B20AssetCreateParams memory decoded = abi.decode(blob, (IB20Factory.B20AssetCreateParams));
 
         assertEq(
             decoded.version,

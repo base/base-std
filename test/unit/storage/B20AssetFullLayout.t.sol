@@ -139,11 +139,7 @@ contract B20AssetFullLayoutTest is B20AssetTest {
             uint256(redeemSenderMarker),
             "redeem slot 1 bits 0..63: REDEEM_SENDER_POLICY lane must hold the marker"
         );
-        assertEq(
-            packedRedeem >> 64,
-            uint256(0),
-            "redeem slot 1 bits 64..255: three reserved lanes must be zero"
-        );
+        assertEq(packedRedeem >> 64, uint256(0), "redeem slot 1 bits 64..255: three reserved lanes must be zero");
     }
 
     /// @notice Verifies the factory-seeded default in `redeemPolicyIds`
@@ -154,18 +150,13 @@ contract B20AssetFullLayoutTest is B20AssetTest {
     ///         (the populate's `_setRedeemPolicy` would overwrite whatever
     ///         the seed left behind).
     function test_b20SecurityLayout_success_freshTokenSeedsRedeemPolicyToBlock() public view {
-        uint256 packedRedeem =
-            uint256(vm.load(address(token), MockB20RedeemStorage.redeemPolicyIdsSlot()));
+        uint256 packedRedeem = uint256(vm.load(address(token), MockB20RedeemStorage.redeemPolicyIdsSlot()));
         assertEq(
             packedRedeem & 0xFFFFFFFFFFFFFFFF,
             uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID),
             "fresh token: redeem slot 1 bits 0..63 must be ALWAYS_BLOCK_ID from factory seed"
         );
-        assertEq(
-            packedRedeem >> 64,
-            uint256(0),
-            "fresh token: redeem slot 1 bits 64..255 reserved lanes must be zero"
-        );
+        assertEq(packedRedeem >> 64, uint256(0), "fresh token: redeem slot 1 bits 64..255 reserved lanes must be zero");
     }
 
     /// @notice Verifies the `base.b20.asset` and `base.b20.redeem`
@@ -208,8 +199,7 @@ contract B20AssetFullLayoutTest is B20AssetTest {
         // uint64 marker. Using a fresh real policy (distinct from the
         // ALWAYS_BLOCK_ID default) gives us a recognizable post-write
         // observable.
-        redeemSenderMarker =
-            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        redeemSenderMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
         _setRedeemPolicy(redeemSenderMarker);
     }
 }

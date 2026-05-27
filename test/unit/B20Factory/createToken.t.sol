@@ -63,7 +63,9 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20CreateParams memory p = _b20Params();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.DEFAULT));
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.DEFAULT)
+        );
         factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(p), new bytes[](0));
     }
 
@@ -78,7 +80,11 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.STABLECOIN));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.STABLECOIN
+            )
+        );
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
@@ -108,15 +114,15 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the ASSET variant
     /// @dev Each variant arm has its own version check; this exercises the security arm's check.
-    function test_createB20_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt)
-        public
-    {
+    function test_createB20_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt) public {
         _assumeValidCaller(caller);
         vm.assume(badVersion != 1);
         IB20Factory.B20AssetCreateParams memory p = _securityParams();
         p.version = badVersion;
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.ASSET));
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.ASSET)
+        );
         factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(p), new bytes[](0));
     }
 
@@ -251,9 +257,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     ///      `base.b20.asset` namespace and `minimumRedeemable` at the
     ///      `base.b20.redeem` namespace. Paired slot assertions confirm both fields
     ///      land at the expected slots with the correct encodings.
-    function test_createB20_success_securitySeedsInitialState(address caller, bytes32 salt, uint256 minRedeem)
-        public
-    {
+    function test_createB20_success_securitySeedsInitialState(address caller, bytes32 salt, uint256 minRedeem) public {
         _assumeValidCaller(caller);
         IB20Factory.B20AssetCreateParams memory p =
             _securityParams("Security Test", "SEC", admin, APPLE_ISIN, minRedeem);
@@ -297,11 +301,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             PolicyRegistryConstants.ALWAYS_BLOCK_ID,
             "redeemPolicyIds slot lane 0 must hold ALWAYS_BLOCK_ID"
         );
-        assertEq(
-            packed >> 64,
-            uint256(0),
-            "redeemPolicyIds slot reserved lanes must be zero on a fresh token"
-        );
+        assertEq(packed >> 64, uint256(0), "redeemPolicyIds slot reserved lanes must be zero on a fresh token");
     }
 
     /// @notice Verifies the security REDEEM_SENDER_POLICY default does NOT leak into other
@@ -310,9 +310,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     ///      namespace (`base.b20.redeem`); the base packed policy slots (`transferPolicyIds`,
     ///      `mintPolicyIds` in the base `base.b20` namespace) must remain at their EVM zero
     ///      defaults so the four base scopes still read as ALWAYS_ALLOW_ID.
-    function test_createB20_success_securityOtherPolicySlotsDefaultToAllow(address caller, bytes32 salt)
-        public
-    {
+    function test_createB20_success_securityOtherPolicySlotsDefaultToAllow(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
 
@@ -355,9 +353,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     ///      in `initCalls`. The privileged-window bypass on the token means the factory-originated
     ///      call succeeds without the role check. Post-creation the slot reflects the overridden
     ///      value, NOT the factory-seeded default.
-    function test_createB20_success_securityRedeemPolicyOverridableViaInitCall(address caller, bytes32 salt)
-        public
-    {
+    function test_createB20_success_securityRedeemPolicyOverridableViaInitCall(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         bytes[] memory initCalls = new bytes[](1);
         initCalls[0] = abi.encodeWithSelector(
@@ -404,11 +400,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
         assertEq(IB20Asset(token).securityIdentifier(IDENTIFIER_ISIN), DEFAULT_ISIN, "ISIN must still be set");
 
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
-            0,
-            "adminCount must be 0 on zero-admin path"
-        );
+        assertEq(uint256(vm.load(token, MockB20Storage.adminCountSlot())), 0, "adminCount must be 0 on zero-admin path");
         _assertInitialized(token, "initialized must still be set on zero-admin path");
     }
 
@@ -444,11 +436,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
                 _stablecoinParams("Test", "TST", admin, xFiat[i]),
                 new bytes[](0)
             );
-            assertEq(
-                IB20Stablecoin(token).currency(),
-                xFiat[i],
-                "multi-country X-prefix fiat code must round-trip"
-            );
+            assertEq(IB20Stablecoin(token).currency(), xFiat[i], "multi-country X-prefix fiat code must round-trip");
         }
     }
 
@@ -471,8 +459,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     ///      way the default emitter test pins decimals=18.
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        IB20Factory.B20AssetCreateParams memory p =
-            _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
+        IB20Factory.B20AssetCreateParams memory p = _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
         address predicted = factory.getB20Address(IB20Factory.B20Variant.ASSET, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
@@ -517,9 +504,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             "factory must NOT appear in roles[ADMIN] slot"
         );
         assertEq(
-            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
-            1,
-            "adminCount must be 1 after bootstrap grant"
+            uint256(vm.load(token, MockB20Storage.adminCountSlot())), 1, "adminCount must be 1 after bootstrap grant"
         );
         _assertInitialized(token, "initialized marker must be set after bootstrap closes");
     }
@@ -590,11 +575,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         // Paired slot assertion: packed adminCount lane is 0 (no
         // bootstrap grant happened) but the initialized bit is still
         // set (the factory closed the bootstrap window after returning).
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
-            0,
-            "adminCount must be 0 on zero-admin path"
-        );
+        assertEq(uint256(vm.load(token, MockB20Storage.adminCountSlot())), 0, "adminCount must be 0 on zero-admin path");
         _assertInitialized(token, "initialized must still be set on zero-admin path");
     }
 
@@ -613,11 +594,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         // The stablecoin still got its variant data: currency is set.
         assertEq(IB20Stablecoin(token).currency(), "USD", "stablecoin currency must still be set");
 
-        assertEq(
-            uint256(vm.load(token, MockB20Storage.adminCountSlot())),
-            0,
-            "adminCount must be 0 on zero-admin path"
-        );
+        assertEq(uint256(vm.load(token, MockB20Storage.adminCountSlot())), 0, "adminCount must be 0 on zero-admin path");
         _assertInitialized(token, "initialized must still be set on zero-admin path");
         assertEq(
             vm.load(token, MockB20StablecoinStorage.currencySlot()),

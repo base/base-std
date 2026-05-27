@@ -516,7 +516,7 @@ interface IB20 {
     /// @notice Updates the token's `name`. Requires `METADATA_ROLE`.
     ///         No length restrictions. Emits `NameUpdated` followed by
     ///         the ERC-5267 `EIP712DomainChanged()` event (in that
-    ///         order). 
+    ///         order).
     /// @dev    Several customers (Coinbase Tokenized Equities, Coinbase
     ///         Wrapped Assets) need the ability to update name and symbol
     ///         post-deployment for re-branding or legal-restructuring

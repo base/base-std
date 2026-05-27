@@ -30,16 +30,14 @@ contract PolicyRegistryWriteBuiltinsTest is PolicyRegistryTest {
         // Sanity: sentinel slots start empty before any create.
         assertEq(
             vm.load(
-                address(policyRegistry),
-                MockPolicyRegistryStorage.policySlot(PolicyRegistryConstants.ALWAYS_ALLOW_ID)
+                address(policyRegistry), MockPolicyRegistryStorage.policySlot(PolicyRegistryConstants.ALWAYS_ALLOW_ID)
             ),
             bytes32(0),
             "ALWAYS_ALLOW_ID slot must be empty before init"
         );
         assertEq(
             vm.load(
-                address(policyRegistry),
-                MockPolicyRegistryStorage.policySlot(PolicyRegistryConstants.ALWAYS_BLOCK_ID)
+                address(policyRegistry), MockPolicyRegistryStorage.policySlot(PolicyRegistryConstants.ALWAYS_BLOCK_ID)
             ),
             bytes32(0),
             "ALWAYS_BLOCK_ID slot must be empty before init"

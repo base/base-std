@@ -313,11 +313,7 @@ contract MockB20Factory is IB20Factory {
     function _writeSecurityStorage(address token, string memory isin_, uint256 minimumRedeemable_) internal {
         _writeString(token, MockB20AssetStorage.identifierSlot("ISIN"), isin_);
         _writeUint(token, MockB20RedeemStorage.minimumRedeemableSlot(), minimumRedeemable_);
-        _writeUint(
-            token,
-            MockB20RedeemStorage.redeemPolicyIdsSlot(),
-            uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID)
-        );
+        _writeUint(token, MockB20RedeemStorage.redeemPolicyIdsSlot(), uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID));
     }
 
     // ============================================================

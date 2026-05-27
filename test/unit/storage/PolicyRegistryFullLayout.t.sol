@@ -93,9 +93,7 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
                 uint256(0),
                 "policies[allowlistId] bits 160..254: reserved must be zero"
             );
-            assertEq(
-                packedA >> 255, uint256(1), "policies[allowlistId] bit 255: exists flag must be set"
-            );
+            assertEq(packedA >> 255, uint256(1), "policies[allowlistId] bit 255: exists flag must be set");
             assertEq(
                 MockPolicyRegistryStorage.policyTypeFromId(allowlistId),
                 uint8(IPolicyRegistry.PolicyType.ALLOWLIST),
@@ -115,9 +113,7 @@ contract PolicyRegistryFullLayoutTest is PolicyRegistryTest {
                 uint256(0),
                 "policies[blocklistId] bits 160..254: reserved must be zero"
             );
-            assertEq(
-                packedB >> 255, uint256(1), "policies[blocklistId] bit 255: exists flag must be set"
-            );
+            assertEq(packedB >> 255, uint256(1), "policies[blocklistId] bit 255: exists flag must be set");
             assertEq(
                 MockPolicyRegistryStorage.policyTypeFromId(blocklistId),
                 uint8(IPolicyRegistry.PolicyType.BLOCKLIST),
