@@ -58,8 +58,7 @@ contract PolicyRegistryTest is BaseTest {
     ///         sentinels before consuming it; the prediction matches by
     ///         clamping pre-init reads up to `BUILTIN_POLICY_COUNT`.
     function _predictNextPolicyId(IPolicyRegistry.PolicyType policyType) internal view returns (uint64) {
-        uint56 counter =
-            uint56(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot())));
+        uint56 counter = uint56(uint256(vm.load(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot())));
         if (counter < PolicyRegistryConstants.BUILTIN_POLICY_COUNT) {
             counter = PolicyRegistryConstants.BUILTIN_POLICY_COUNT;
         }

@@ -174,9 +174,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         assertEq(result[3], abi.encodeCall(IB20.grantRole, (B20Constants.PAUSE_ROLE, pauser_)), "3: PAUSE_ROLE");
         assertEq(result[4], abi.encodeCall(IB20.grantRole, (B20Constants.UNPAUSE_ROLE, unpauser_)), "4: UNPAUSE_ROLE");
         assertEq(
-            result[5],
-            abi.encodeCall(IB20.grantRole, (B20Constants.METADATA_ROLE, metadataAdmin_)),
-            "5: METADATA_ROLE"
+            result[5], abi.encodeCall(IB20.grantRole, (B20Constants.METADATA_ROLE, metadataAdmin_)), "5: METADATA_ROLE"
         );
     }
 
@@ -279,9 +277,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         assertEq(result[4], abi.encodeCall(IB20.grantRole, (B20Constants.PAUSE_ROLE, pauser_)), "4: PAUSE_ROLE");
         assertEq(result[5], abi.encodeCall(IB20.grantRole, (B20Constants.UNPAUSE_ROLE, unpauser_)), "5: UNPAUSE_ROLE");
         assertEq(
-            result[6],
-            abi.encodeCall(IB20.grantRole, (B20Constants.METADATA_ROLE, metadataAdmin_)),
-            "6: METADATA_ROLE"
+            result[6], abi.encodeCall(IB20.grantRole, (B20Constants.METADATA_ROLE, metadataAdmin_)), "6: METADATA_ROLE"
         );
         assertEq(
             result[7],

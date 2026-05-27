@@ -57,6 +57,7 @@ contract B20FullLayoutTest is B20Test {
     uint64 internal transferReceiverMarker;
     uint64 internal transferExecutorMarker;
     uint64 internal mintReceiverMarker;
+
     /// @notice Cross-cuts every field of MockB20Storage.Layout in a single
     ///         populated snapshot.
     /// @dev    Setup writes non-default values to every reachable storage
@@ -179,11 +180,7 @@ contract B20FullLayoutTest is B20Test {
         assertEq(packedTransfer >> 192, 0, "slot 9 bits 192..255: reserved lane must be zero");
 
         uint256 packedMint = uint256(vm.load(tokenAddr, MockB20Storage.mintPolicyIdsSlot()));
-        assertEq(
-            packedMint & 0xFFFFFFFFFFFFFFFF,
-            uint256(mintReceiverMarker),
-            "slot 10 bits 0..63: mint RECEIVER lane"
-        );
+        assertEq(packedMint & 0xFFFFFFFFFFFFFFFF, uint256(mintReceiverMarker), "slot 10 bits 0..63: mint RECEIVER lane");
         assertEq(packedMint >> 64, 0, "slot 10 bits 64..255: three reserved lanes must be zero");
 
         // ---------- pausedVectors (slot 11) ----------
@@ -198,7 +195,9 @@ contract B20FullLayoutTest is B20Test {
         assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the four defined bits");
         // No bits set outside the defined PausableFeature range. Computed
         // as the complement of the union of all defined bits.
-        assertEq(pausedRaw & ~expectedPaused, 0, "slot 11: no bits may be set outside the defined PausableFeature range");
+        assertEq(
+            pausedRaw & ~expectedPaused, 0, "slot 11: no bits may be set outside the defined PausableFeature range"
+        );
 
         // ---------- supplyCap (slot 12) ----------
         assertEq(uint256(vm.load(tokenAddr, MockB20Storage.supplyCapSlot())), token.supplyCap(), "slot 12: supplyCap");
@@ -265,14 +264,12 @@ contract B20FullLayoutTest is B20Test {
         // precondition rejects arbitrary uint64s, so we can't use synthetic
         // hex markers like `0x1111...`. Mixing ALLOWLIST + BLOCKLIST types
         // makes the top byte vary between lanes too, not just the counter.
-        transferSenderMarker =
-            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        transferSenderMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
         transferReceiverMarker =
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         transferExecutorMarker =
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
-        mintReceiverMarker =
-            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        mintReceiverMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);

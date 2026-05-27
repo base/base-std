@@ -11,10 +11,7 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     ///      is happy with the raw byte but Solidity reverts at function entry on an
     ///      out-of-range enum input from a fuzzer.
     function _boundVariant(uint8 variantInt) internal pure returns (IB20Factory.B20Variant) {
-        return
-            IB20Factory.B20Variant(
-                uint8(bound(uint256(variantInt), 0, uint256(type(IB20Factory.B20Variant).max)))
-            );
+        return IB20Factory.B20Variant(uint8(bound(uint256(variantInt), 0, uint256(type(IB20Factory.B20Variant).max))));
     }
 
     /// @notice Verifies getTokenAddress is deterministic for the same inputs

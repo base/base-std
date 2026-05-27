@@ -19,10 +19,10 @@ contract B20FactoryLibEncodeSecurityCreateParamsTest is B20FactoryLibTest {
         string memory isin,
         uint256 minimumRedeemable
     ) public pure {
-        bytes memory blob =
-            B20FactoryLib.encodeSecurityCreateParams(name, symbol, initialAdmin, isin, minimumRedeemable);
-        IB20Factory.B20SecurityCreateParams memory decoded =
-            abi.decode(blob, (IB20Factory.B20SecurityCreateParams));
+        bytes memory blob = B20FactoryLib.encodeSecurityCreateParams(
+            name, symbol, initialAdmin, isin, minimumRedeemable
+        );
+        IB20Factory.B20SecurityCreateParams memory decoded = abi.decode(blob, (IB20Factory.B20SecurityCreateParams));
 
         assertEq(
             decoded.version,
