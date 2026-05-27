@@ -37,10 +37,7 @@ contract B20FactoryLibEncodeDefaultCreateParamsTest is B20FactoryLibTest {
     ) public pure {
         bytes memory expected = abi.encode(
             IB20Factory.B20CreateParams({
-                version: B20FactoryLib.B20_CREATE_PARAMS_VERSION,
-                name: name,
-                symbol: symbol,
-                initialAdmin: initialAdmin
+                version: B20FactoryLib.B20_CREATE_PARAMS_VERSION, name: name, symbol: symbol, initialAdmin: initialAdmin
             })
         );
         bytes memory actual = B20FactoryLib.encodeDefaultCreateParams(name, symbol, initialAdmin);

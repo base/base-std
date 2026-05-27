@@ -29,9 +29,7 @@ contract B20FactoryLibBuildSecurityIdentifierUpdatesTest is B20FactoryLibTest {
     ///         `identifierValues` differ in length.
     /// @dev    Mirrors the length-check semantics of
     ///         `buildRoleGrants(bytes32[], address[])`.
-    function test_buildSecurityIdentifierUpdates_revert_lengthMismatch(uint8 typesLenSeed, uint8 valuesLenSeed)
-        public
-    {
+    function test_buildSecurityIdentifierUpdates_revert_lengthMismatch(uint8 typesLenSeed, uint8 valuesLenSeed) public {
         uint256 typesLen = bound(uint256(typesLenSeed), 0, 16);
         uint256 valuesLen = bound(uint256(valuesLenSeed), 0, 16);
         vm.assume(typesLen != valuesLen);
