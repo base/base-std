@@ -112,9 +112,7 @@ contract B20RenounceRoleTest is B20Test {
             uint256(1),
             "roles[ADMIN][otherAdmin] slot must still be set"
         );
-        assertEq(
-            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 1, "adminCount must drop to 1"
-        );
+        assertEq(uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 1, "adminCount must drop to 1");
         _assertInitialized(address(token), "initialized marker must stay set");
     }
 
