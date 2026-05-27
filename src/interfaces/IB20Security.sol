@@ -479,15 +479,15 @@ interface IB20Security is IB20 {
     /// @param  amount Token amount to redeem from the caller's balance.
     function redeem(uint256 amount) external;
 
-    /// @notice Same as `redeem`, with a memo. Emits `Memo(memo)`
-    ///         immediately after `Transfer()` and before `Redeemed`.
+    /// @notice Same as `redeem`, with a memo. Emits `Memo`
+    ///         immediately after `Transfer` and before `Redeemed`.
     ///         See `IB20.transferWithMemo` for the memo convention; a memo
     ///         of `bytes32(0)` is permitted.
     function redeemWithMemo(uint256 amount, bytes32 memo) external;
 
     /// @notice Sets a new minimum-redeemable threshold in shares.
-    ///         `redeemShares` reverts if the resulting share amount would be
-    ///         below this value.
+    ///         `redeem` / `redeemWithMemo` revert if the resulting share amount
+    ///         would be below this value.
     ///
     /// @dev    Requires `DEFAULT_ADMIN_ROLE`. Emits
     ///         `MinimumRedeemableUpdated`.

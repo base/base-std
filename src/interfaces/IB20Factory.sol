@@ -3,7 +3,7 @@ pragma solidity >=0.8.20 <0.9.0;
 
 /// @title IB20Factory
 /// @notice Singleton factory precompile for creating B-20 tokens of any
-///         variant. A single entry point `createToken` dispatches on a
+///         variant. A single entry point `createB20` dispatches on a
 ///         `B20Variant` discriminator; per-variant creation arguments
 ///         are ABI-encoded into `params` and prefixed with a `version`
 ///         byte so the encoding can evolve without breaking the factory's
@@ -40,7 +40,7 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         enforce against the caller (role checks, transfer-policy
 ///         checks, capability gates) is bypassed for calls originating
 ///         from the factory during the bootstrap window. The window
-///         closes the moment `createToken` returns; from that point
+///         closes the moment `createB20` returns; from that point
 ///         forward every call is subject to the standard role and policy
 ///         checks. The factory is NOT added to any role on the token;
 ///         "privileged" means authorization is skipped for the bootstrap
@@ -77,7 +77,7 @@ interface IB20Factory {
     }
 
     /// @notice Creation parameters for a Default-variant B-20 token.
-    ///         ABI-encoded into the `params` argument of `createToken`.
+    ///         ABI-encoded into the `params` argument of `createB20`.
     /// @param version       Encoding version. Currently `1`. Future
     ///                      hardforks may introduce additional versions
     ///                      with different field layouts; the leading
@@ -91,7 +91,7 @@ interface IB20Factory {
     ///                      `initCalls` are NOT subject to this check:
     ///                      they execute with full privilege regardless
     ///                      of role state, and the privileged window
-    ///                      closes the moment `createToken` returns.
+    ///                      closes the moment `createB20` returns.
     ///                      May be `address(0)` for the "demonstrate no
     ///                      owner" case (memecoins, credibly-neutral
     ///                      tokens). When zero, no role is granted at
@@ -140,9 +140,9 @@ interface IB20Factory {
     /// @param minimumRedeemable  Initial value of `minimumRedeemable`.
     ///                           Use `0` to allow any non-zero redemption.
     /// @dev    Decimals are fixed at `6`. Security tokens have no `initialSupply`
-    ///         parameter: all issuance flows through `create`
-    ///         (rate-limited compliant path) or `adminMint` (cold-path
-    ///         batch with announcement coupling) after deployment.
+    ///         parameter: all issuance flows through the inherited
+    ///         `IB20.mint` (single recipient) or `IB20Security.batchMint`
+    ///         (batched, wrapped in `announce(...)`) after deployment.
     ///
     ///         For the Security variant, the `REDEEM_SENDER_POLICY`
     ///         slot defaults to the always-block built-in (policy ID
@@ -204,7 +204,7 @@ interface IB20Factory {
 
     /// @notice `variant` is not a recognized `B20Variant`. Reached
     ///         only when the factory is invoked with a raw variant byte
-    ///         outside the enum range (typed `createToken` callers are
+    ///         outside the enum range (typed `createB20` callers are
     ///         rejected by ABI decoding before this check fires).
     error InvalidVariant();
 
@@ -229,7 +229,7 @@ interface IB20Factory {
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted once per `createToken` invocation. The fields
+    /// @notice Emitted once per `createB20` invocation. The fields
     ///         cover the universal token-identity surface only;
     ///         variant-specific state changes (e.g. `currency`, `isin`,
     ///         supply cap, policy slots) are observable via the
@@ -285,7 +285,7 @@ interface IB20Factory {
     ///         capability gates) are bypassed for calls from the factory
     ///         during this bootstrap window. The factory is not added to
     ///         any role; the bypass is bound to the call site, not to
-    ///         RBAC state. Once `createToken` returns, every subsequent
+    ///         RBAC state. Once `createB20` returns, every subsequent
     ///         call on the token is subject to the standard checks.
     ///
     ///         This is the supported path for configuring all optional
@@ -317,7 +317,7 @@ interface IB20Factory {
                             ADDRESS QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Returns the deterministic address `createToken` would
+    /// @notice Returns the deterministic address `createB20` would
     ///         assign for `(variant, sender, salt)`. Address derivation
     ///         depends only on these inputs; the remaining `params`
     ///         fields (including decimals, which are fixed by variant)
@@ -329,13 +329,13 @@ interface IB20Factory {
     function isB20(address token) external view returns (bool);
 
     /// @notice Whether the token at `token` has been initialized by this
-    ///         factory (i.e. `createToken` ran to completion at that
+    ///         factory (i.e. `createB20` ran to completion at that
     ///         address). Returns `false` for B-20-prefixed addresses
     ///         whose deterministic slot has not yet been claimed by a
-    ///         `createToken` call, and for any address that is not a
+    ///         `createB20` call, and for any address that is not a
     ///         B-20 at all. The bootstrap window (the `initCalls` loop
-    ///         inside `createToken`) is fully privileged but not yet
+    ///         inside `createB20`) is fully privileged but not yet
     ///         initialized; this flag flips exactly once, at the moment
-    ///         `createToken` returns.
+    ///         `createB20` returns.
     function isB20Initialized(address token) external view returns (bool);
 }

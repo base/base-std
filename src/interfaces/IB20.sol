@@ -553,7 +553,7 @@ interface IB20 {
                           MEMO TRANSFER VARIANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Same as `transfer`, but additionally emits `Memo(memo)`
+    /// @notice Same as `transfer`, but additionally emits `Memo`
     ///         immediately after the standard `Transfer` event. The
     ///         standard `Transfer` event is also emitted for ERC-20
     ///         indexer compatibility.
@@ -593,7 +593,7 @@ interface IB20 {
     ///         Emits `Transfer(address(0), to, amount)`.
     function mint(address to, uint256 amount) external;
 
-    /// @notice Same as `mint`, with a memo. Emits `Memo(memo)` immediately
+    /// @notice Same as `mint`, with a memo. Emits `Memo` immediately
     ///         after the standard `Transfer` event.
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external;
 
@@ -612,7 +612,7 @@ interface IB20 {
     ///         Emits `Transfer(caller, address(0), amount)`.
     function burn(uint256 amount) external;
 
-    /// @notice Same as `burn`, with a memo. Emits `Memo(memo)` immediately
+    /// @notice Same as `burn`, with a memo. Emits `Memo` immediately
     ///         after the standard `Transfer` event.
     function burnWithMemo(uint256 amount, bytes32 memo) external;
 
