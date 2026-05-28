@@ -50,7 +50,7 @@ contract B20SecuritySharesOfTest is B20SecurityTest {
         amount = bound(amount, 0, type(uint128).max);
         if (amount > 0) _mint(account, amount);
         _updateShareRatio(5e18); // seed a non-zero value first
-        _updateShareRatio(0);    // then explicitly clear back to zero
+        _updateShareRatio(0); // then explicitly clear back to zero
         assertEq(security().sharesOf(account), amount, "stored zero ratio must produce identity (WAD fallback)");
     }
 }

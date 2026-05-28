@@ -129,8 +129,8 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     function test_getB20Address_revert_outOfRangeVariant(address sender, bytes32 salt, uint8 badVariant) public {
         badVariant = uint8(bound(uint256(badVariant), uint256(type(IB20Factory.B20Variant).max) + 1, 255));
         vm.expectRevert();
-        (bool ok,) = address(factory)
-            .call(abi.encodeWithSelector(IB20Factory.getB20Address.selector, badVariant, sender, salt));
+        (bool ok,) =
+            address(factory).call(abi.encodeWithSelector(IB20Factory.getB20Address.selector, badVariant, sender, salt));
         ok; // silence unused warning; the revert is asserted via vm.expectRevert.
     }
 }

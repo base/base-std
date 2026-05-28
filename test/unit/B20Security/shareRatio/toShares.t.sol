@@ -42,7 +42,7 @@ contract B20SecurityToSharesTest is B20SecurityTest {
     function test_toShares_success_explicitZeroRatioFallsBackToWad(uint256 balance) public {
         balance = bound(balance, 0, type(uint128).max);
         _updateShareRatio(5e18); // seed a non-zero value first
-        _updateShareRatio(0);    // then explicitly clear back to zero
+        _updateShareRatio(0); // then explicitly clear back to zero
         assertEq(security().toShares(balance), balance, "stored zero ratio must produce identity (WAD fallback)");
     }
 }
