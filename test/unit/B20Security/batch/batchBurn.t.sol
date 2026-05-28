@@ -75,12 +75,13 @@ contract B20SecurityBatchBurnTest is B20SecurityTest {
         security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
     }
 
-    /// @notice Verifies batchBurn reverts when any element's amount is zero
-    /// @dev Per-element zero-amount guard, mirroring the Rust precompile. Fires inside the
-    ///      loop before the balance check, so the position of the zero in the array determines
-    ///      whether any preceding elements were processed (they weren't — the revert unwinds
-    ///      the whole batch). Checks IB20.InvalidAmount() error.
-    function test_batchBurn_revert_zeroAmountInBatch() public {
+    /// @notice Verifies batchBurn treats zero-amount elements as valid no-ops
+    /// @dev Mirrors ERC-20 conventions (transfer(0) is valid). A zero in any slot is a no-op:
+    ///      the balance for that element is unchanged, and `_burnRaw` emits the canonical
+    ///      `Transfer(account, 0, 0)` for it. Non-zero elements in the same batch are processed
+    ///      normally. The "all-or-nothing for non-zero failures" invariant is preserved by the
+    ///      InsufficientBalance check inside `_burnRaw`.
+    function test_batchBurn_success_zeroAmountElementsAreNoOps() public {
         _grantBurnFrom();
         _mint(alice, 100);
         _mint(bob, 100);
@@ -90,15 +91,13 @@ contract B20SecurityBatchBurnTest is B20SecurityTest {
         accounts[1] = bob;
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = 50;
-        amounts[1] = 0; // zero in any slot must revert the whole batch
+        amounts[1] = 0; // zero is a valid no-op per ERC-20 conventions
 
         vm.prank(burnFromActor);
-        vm.expectRevert(IB20.InvalidAmount.selector);
         security().batchBurn(accounts, amounts);
 
-        // Atomicity: alice's balance must NOT have been debited by the preceding element.
-        assertEq(token.balanceOf(alice), 100, "alice balance must be unchanged after reverted batch");
-        assertEq(token.balanceOf(bob), 100, "bob balance must be unchanged after reverted batch");
+        assertEq(token.balanceOf(alice), 50, "alice debited by 50");
+        assertEq(token.balanceOf(bob), 100, "bob balance unchanged by zero-amount element");
     }
 
     /// @notice Verifies batchBurn surfaces per-element InsufficientBalance reverts

@@ -199,10 +199,9 @@ contract MockB20Security is MockB20, IB20Security {
         if (accounts.length == 0) revert EmptyBatch();
         if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
         for (uint256 i = 0; i < accounts.length; i++) {
-            // Per-element zero-amount guard, matching the Rust precompile. Fires inside
-            // the loop before the balance check, so a zero in any slot reverts the whole
-            // batch (all-or-nothing atomicity).
-            if (amounts[i] == 0) revert InvalidAmount();
+            // Zero amounts are allowed per ERC-20 conventions (`transfer(0)` is valid);
+            // `_burnRaw` is a no-op for amount == 0 and emits `Transfer(account, 0, 0)`.
+            // Callers that want all-non-zero semantics can validate upstream.
             _burnRaw(accounts[i], amounts[i]);
         }
     }
@@ -296,18 +295,17 @@ contract MockB20Security is MockB20, IB20Security {
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {
             revert PolicyForbids(REDEEM_SENDER_POLICY, REDEEMSenderPolicyId);
         }
-        // Explicit zero-amount guard matching the Rust precompile. Fires AFTER pause/policy
-        // and BEFORE the shares math, so zero-amount surfaces as InvalidAmount() rather than
-        // being absorbed by the shares == 0 path below (which is reserved for nonzero amounts
-        // that round to zero shares under low ratios).
-        if (amount == 0) revert InvalidAmount();
         ratio = _sharesToTokensRatio();
         uint256 shares = (amount * ratio) / WAD_PRECISION;
         uint256 minimum = $.minimumRedeemable;
-        // Always reject zero-share redemptions, even if the configured
-        // minimum is 0 — burning token dust that resolves to no shares
-        // is never the holder's intent.
-        if (shares == 0 || shares < minimum) revert BelowMinimumRedeemable(shares, minimum);
+        // Zero amounts are allowed per ERC-20 conventions (`transfer(0)` is valid).
+        // For amount > 0, reject dust burns that round to zero shares OR fall below the
+        // configured minimum — burning a positive amount that resolves to no shares is
+        // never the holder's intent. The `amount > 0` guard is what keeps explicit
+        // zero-amount redemptions from being absorbed by the dust path.
+        if (amount > 0 && (shares == 0 || shares < minimum)) {
+            revert BelowMinimumRedeemable(shares, minimum);
+        }
         _burnRaw(msg.sender, amount);
     }
 

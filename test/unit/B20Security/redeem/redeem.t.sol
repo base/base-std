@@ -48,16 +48,20 @@ contract B20SecurityRedeemTest is B20SecurityTest {
         security().redeem(amount);
     }
 
-    /// @notice Verifies redeem reverts when the caller passes amount == 0
-    /// @dev Explicit zero-amount guard mirroring the Rust precompile. Fires AFTER pause/policy
-    ///      but BEFORE the shares math, so the error is IB20.InvalidAmount() (not the
-    ///      BelowMinimumRedeemable that would otherwise catch zero shares downstream). The
-    ///      distinction matters for integrators that distinguish "amount must be non-zero"
-    ///      from "amount too small to clear the minimum-shares floor".
-    function test_redeem_revert_zeroAmount() public {
+    /// @notice Verifies redeem treats amount == 0 as a valid no-op
+    /// @dev Mirrors ERC-20 conventions (transfer(0) is valid). The dust-prevention guard
+    ///      (`shares == 0 || shares < minimum`) only fires for amount > 0, so an explicit
+    ///      zero-amount redemption succeeds without burning or reverting. Emits the canonical
+    ///      `Transfer(caller, 0, 0)` (from `_burnRaw`) followed by `Redeemed(caller, 0, ratio)`.
+    function test_redeem_success_zeroAmountIsNoOp() public {
+        uint256 balanceBefore = token.balanceOf(alice);
+        uint256 supplyBefore = token.totalSupply();
+
         vm.prank(alice);
-        vm.expectRevert(IB20.InvalidAmount.selector);
         security().redeem(0);
+
+        assertEq(token.balanceOf(alice), balanceBefore, "balance unchanged by zero-amount redeem");
+        assertEq(token.totalSupply(), supplyBefore, "totalSupply unchanged by zero-amount redeem");
     }
 
     /// @notice Verifies redeem reverts when the resulting share count is below the configured floor
