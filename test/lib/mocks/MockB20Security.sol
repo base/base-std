@@ -296,6 +296,11 @@ contract MockB20Security is MockB20, IB20Security {
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {
             revert PolicyForbids(REDEEM_SENDER_POLICY, REDEEMSenderPolicyId);
         }
+        // Explicit zero-amount guard matching the Rust precompile. Fires AFTER pause/policy
+        // and BEFORE the shares math, so zero-amount surfaces as InvalidAmount() rather than
+        // being absorbed by the shares == 0 path below (which is reserved for nonzero amounts
+        // that round to zero shares under low ratios).
+        if (amount == 0) revert InvalidAmount();
         ratio = _sharesToTokensRatio();
         uint256 shares = (amount * ratio) / WAD_PRECISION;
         uint256 minimum = $.minimumRedeemable;
