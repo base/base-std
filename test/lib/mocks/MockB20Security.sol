@@ -199,6 +199,10 @@ contract MockB20Security is MockB20, IB20Security {
         if (accounts.length == 0) revert EmptyBatch();
         if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
         for (uint256 i = 0; i < accounts.length; i++) {
+            // Per-element zero-amount guard, matching the Rust precompile. Fires inside
+            // the loop before the balance check, so a zero in any slot reverts the whole
+            // batch (all-or-nothing atomicity).
+            if (amounts[i] == 0) revert InvalidAmount();
             _burnRaw(accounts[i], amounts[i]);
         }
     }

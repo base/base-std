@@ -75,6 +75,32 @@ contract B20SecurityBatchBurnTest is B20SecurityTest {
         security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
     }
 
+    /// @notice Verifies batchBurn reverts when any element's amount is zero
+    /// @dev Per-element zero-amount guard, mirroring the Rust precompile. Fires inside the
+    ///      loop before the balance check, so the position of the zero in the array determines
+    ///      whether any preceding elements were processed (they weren't — the revert unwinds
+    ///      the whole batch). Checks IB20.InvalidAmount() error.
+    function test_batchBurn_revert_zeroAmountInBatch() public {
+        _grantBurnFrom();
+        _mint(alice, 100);
+        _mint(bob, 100);
+
+        address[] memory accounts = new address[](2);
+        accounts[0] = alice;
+        accounts[1] = bob;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 50;
+        amounts[1] = 0; // zero in any slot must revert the whole batch
+
+        vm.prank(burnFromActor);
+        vm.expectRevert(IB20.InvalidAmount.selector);
+        security().batchBurn(accounts, amounts);
+
+        // Atomicity: alice's balance must NOT have been debited by the preceding element.
+        assertEq(token.balanceOf(alice), 100, "alice balance must be unchanged after reverted batch");
+        assertEq(token.balanceOf(bob), 100, "bob balance must be unchanged after reverted batch");
+    }
+
     /// @notice Verifies batchBurn surfaces per-element InsufficientBalance reverts
     /// @dev Per-element invariant: `_burnRaw` reverts InsufficientBalance(account, bal, amount)
     ///      if any element exceeds the account's balance. All-or-nothing atomicity.
