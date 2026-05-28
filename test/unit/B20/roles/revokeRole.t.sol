@@ -69,11 +69,7 @@ contract B20RevokeRoleTest is B20Test {
         _assumeValidActor(otherAdmin);
         vm.assume(otherAdmin != admin);
         _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
-        assertEq(
-            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())),
-            2,
-            "precondition: two admins exist"
-        );
+        assertEq(uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 2, "precondition: two admins exist");
 
         vm.prank(admin);
         token.revokeRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
@@ -81,9 +77,7 @@ contract B20RevokeRoleTest is B20Test {
         assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin), "otherAdmin must lose admin role");
         assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "original admin retains role");
         assertEq(
-            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())),
-            1,
-            "adminCount must drop from 2 to 1"
+            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 1, "adminCount must drop from 2 to 1"
         );
     }
 
