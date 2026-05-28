@@ -197,7 +197,9 @@ contract B20TransferFromTest is B20Test {
         allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
         // Cap below type(uint256).max so we exercise the consume path (not the infinite-allowance bypass).
         vm.assume(allowanceAmount != type(uint256).max);
-        spendAmount = bound(spendAmount, 1, allowanceAmount);
+        // spendAmount includes 0 so the assertion (allowance decreases by spendAmount) is
+        // exercised across the full valid input domain, including the no-op zero-spend case.
+        spendAmount = bound(spendAmount, 0, allowanceAmount);
 
         _mint(from, spendAmount);
         vm.prank(from);
@@ -230,7 +232,9 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(to);
         vm.assume(caller != from);
         vm.assume(from != to);
-        amount = bound(amount, 1, type(uint128).max);
+        // Include amount = 0: the infinite-allowance invariant must hold across the full
+        // valid input domain, including the no-op zero-transfer case.
+        amount = bound(amount, 0, type(uint128).max);
 
         _mint(from, amount);
         vm.prank(from);
