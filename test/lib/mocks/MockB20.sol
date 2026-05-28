@@ -274,6 +274,17 @@ contract MockB20 is IB20 {
     }
 
     function revokeRole(bytes32 role, address account) external onlyRoleAdmin(role) {
+        // Last-admin guard: prevent silently bricking the token by removing the sole
+        // DEFAULT_ADMIN_ROLE holder via revokeRole. The dedicated `renounceLastAdmin()`
+        // path remains the only legitimate way to clear the final admin (and emits the
+        // explicit `LastAdminRenounced` signal). Mirrors the same guard already present
+        // in `renounceRole`. The check fires only when the target ACTUALLY holds the
+        // role, preserving idempotent-no-op semantics for revoke calls against accounts
+        // that don't hold DEFAULT_ADMIN_ROLE.
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        if (role == DEFAULT_ADMIN_ROLE && $.roles[DEFAULT_ADMIN_ROLE][account] && $.adminCount == 1) {
+            revert LastAdminCannotRenounce();
+        }
         _revokeRole(role, account);
     }
 
