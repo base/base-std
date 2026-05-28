@@ -143,15 +143,14 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     }
 
     /// @notice Verifies stablecoin createToken reverts when currency is the empty string
-    /// @dev Per-variant required-field check; mirrors the SECURITY isin guard. The format-check
-    ///      loop on `currency` is vacuously safe on empty input (no bytes to inspect), so an
-    ///      explicit length check is required to reject empty up front. Checks
-    ///      MissingRequiredField() error, matching the Rust precompile.
-    function test_createB20_revert_missingCurrency(address caller, bytes32 salt) public {
+    /// @dev The format-check loop on `currency` is vacuously safe on empty input (no bytes
+    ///      to inspect), so an explicit length check is required to reject empty up front.
+    ///      Checks InvalidCurrency("") error, matching the Rust precompile's selector.
+    function test_createB20_revert_emptyCurrency(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Stablecoin Test", "USD", admin, "");
         vm.prank(caller);
-        vm.expectRevert(IB20Factory.MissingRequiredField.selector);
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, ""));
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
