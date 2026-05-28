@@ -154,14 +154,20 @@ contract MockB20 is IB20 {
     }
 
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        if (!_isPrivileged() && msg.sender != from) {
+        if (!_isPrivileged()) {
+            // Allowance is consumed unconditionally outside the factory
+            // bootstrap window. Matches OZ ERC20 and the Rust precompile,
+            // both of which carve no exception for `msg.sender == from`.
             _consumeAllowance(from, msg.sender, amount);
-            // Read the executor policy ID out of the transfer-side packed
-            // slot. Cold here; warm by the time _transfer reads the same
-            // slot for sender + receiver.
-            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
+            if (msg.sender != from) {
+                // Read the executor policy ID out of the transfer-side packed
+                // slot. Cold here; warm by the time _transfer reads the same
+                // slot for sender + receiver. Skipped when the caller is the
+                // owner — sender-policy already covers `from` inside _transfer.
+                uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
+                if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
+                    revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
+                }
             }
         }
         _transfer(from, to, amount);
@@ -187,11 +193,13 @@ contract MockB20 is IB20 {
     }
 
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool) {
-        if (!_isPrivileged() && msg.sender != from) {
+        if (!_isPrivileged()) {
             _consumeAllowance(from, msg.sender, amount);
-            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
+            if (msg.sender != from) {
+                uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
+                if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
+                    revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
+                }
             }
         }
         _transfer(from, to, amount);
@@ -274,6 +282,17 @@ contract MockB20 is IB20 {
     }
 
     function revokeRole(bytes32 role, address account) external onlyRoleAdmin(role) {
+        // Last-admin guard: prevent silently bricking the token by removing the sole
+        // DEFAULT_ADMIN_ROLE holder via revokeRole. The dedicated `renounceLastAdmin()`
+        // path remains the only legitimate way to clear the final admin (and emits the
+        // explicit `LastAdminRenounced` signal). Mirrors the same guard already present
+        // in `renounceRole`. The check fires only when the target ACTUALLY holds the
+        // role, preserving idempotent-no-op semantics for revoke calls against accounts
+        // that don't hold DEFAULT_ADMIN_ROLE.
+        MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        if (role == DEFAULT_ADMIN_ROLE && $.roles[DEFAULT_ADMIN_ROLE][account] && $.adminCount == 1) {
+            revert LastAdminCannotRenounce();
+        }
         _revokeRole(role, account);
     }
 
