@@ -61,9 +61,7 @@ contract B20SecurityRedeemRevertOrderTest is B20SecurityTest {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IB20.PolicyForbids.selector,
-                security().REDEEM_SENDER_POLICY(),
-                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+                IB20.PolicyForbids.selector, security().REDEEM_SENDER_POLICY(), PolicyRegistryConstants.ALWAYS_BLOCK_ID
             )
         );
         security().redeem(amount);
@@ -77,9 +75,7 @@ contract B20SecurityRedeemRevertOrderTest is B20SecurityTest {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IB20.PolicyForbids.selector,
-                security().REDEEM_SENDER_POLICY(),
-                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+                IB20.PolicyForbids.selector, security().REDEEM_SENDER_POLICY(), PolicyRegistryConstants.ALWAYS_BLOCK_ID
             )
         );
         security().redeem(amount);

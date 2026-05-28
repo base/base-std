@@ -33,7 +33,9 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE
+            )
         );
         token.burnBlocked(from, amount);
     }
@@ -48,7 +50,9 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE
+            )
         );
         token.burnBlocked(from, amount);
     }
@@ -63,7 +67,9 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE)
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE
+            )
         );
         token.burnBlocked(from, amount);
     }
