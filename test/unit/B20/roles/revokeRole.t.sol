@@ -23,10 +23,28 @@ contract B20RevokeRoleTest is B20Test {
         token.revokeRole(role, account);
     }
 
+    /// @notice Verifies revokeRole reverts when the call would remove the sole DEFAULT_ADMIN_ROLE holder
+    /// @dev BOP-196 regression. Without this guard, `revokeRole(DEFAULT_ADMIN_ROLE, soleAdmin)` would
+    ///      succeed silently, bricking the token: admin operations become unreachable, and no
+    ///      `LastAdminRenounced` event is emitted to signal the terminal state. The dedicated
+    ///      `renounceLastAdmin()` path remains the only legitimate way to remove the final admin.
+    ///      Reverts with `LastAdminCannotRenounce` (reused from the renounceRole guard — same
+    ///      invariant: the last admin can only be removed via the explicit
+    ///      `renounceLastAdmin` path).
+    function test_revokeRole_revert_lastAdmin() public {
+        assertEq(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), true, "precondition: admin is the sole admin");
+
+        vm.prank(admin);
+        vm.expectRevert(IB20.LastAdminCannotRenounce.selector);
+        token.revokeRole(B20Constants.DEFAULT_ADMIN_ROLE, admin);
+    }
+
     /// @notice Verifies revokeRole sets hasRole(role, account) to false
     /// @dev Read-after-write; canonical hasRole readback test lives in hasRole.t.sol.
     ///      Skips revoking DEFAULT_ADMIN_ROLE from the sole bootstrap admin
-    ///      (would require renounceLastAdmin instead, covered in that file).
+    ///      (would revert with LastAdminCannotRenounce per the BOP-196 guard;
+    ///      see test_revokeRole_revert_lastAdmin and renounceLastAdmin.t.sol
+    ///      for the terminal-admin removal path).
     ///      Paired slot assertion: the `roles[role][account]` slot
     ///      reads back as zero after the revoke.
     function test_revokeRole_success_clearsRole(bytes32 role, address account) public {
@@ -43,8 +61,30 @@ contract B20RevokeRoleTest is B20Test {
         );
     }
 
+    /// @notice Verifies revokeRole successfully removes a non-sole admin
+    /// @dev With multiple admins, revoking one is permitted because adminCount stays >= 1
+    ///      and the token remains operable. Complements test_revokeRole_revert_lastAdmin
+    ///      which proves the guard only fires when the count would drop to zero.
+    function test_revokeRole_success_revokesNonSoleAdmin(address otherAdmin) public {
+        _assumeValidActor(otherAdmin);
+        vm.assume(otherAdmin != admin);
+        _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
+        assertEq(uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 2, "precondition: two admins exist");
+
+        vm.prank(admin);
+        token.revokeRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin);
+
+        assertFalse(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, otherAdmin), "otherAdmin must lose admin role");
+        assertTrue(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), "original admin retains role");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 1, "adminCount must drop from 2 to 1"
+        );
+    }
+
     /// @notice Verifies revokeRole is idempotent when the account does not hold the role
-    /// @dev No-op for not-held accounts; no revert, no duplicate event.
+    /// @dev No-op for not-held accounts; no revert (including for the
+    ///      DEFAULT_ADMIN_ROLE-on-non-holder case, since the last-admin guard only
+    ///      fires when the target ACTUALLY holds the role), no duplicate event.
     function test_revokeRole_success_idempotent(bytes32 role, address account) public {
         vm.assume(!(role == B20Constants.DEFAULT_ADMIN_ROLE && account == admin));
         assertFalse(token.hasRole(role, account), "precondition: role not held");
