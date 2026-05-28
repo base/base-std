@@ -121,4 +121,58 @@ contract B20TransferFromWithMemoTest is B20Test {
         vm.prank(caller);
         assertTrue(token.transferFromWithMemo(from, to, amount, memo), "transferFromWithMemo must return true");
     }
+
+    // ============================================================
+    //              REGRESSION: SELF-CALLER ALLOWANCE
+    // ============================================================
+    //
+    // Mirrors the transferFrom regression: msg.sender == from MUST still
+    // consume allowance. See transferFrom.t.sol for the canonical
+    // regression discussion.
+
+    /// @notice Verifies transferFromWithMemo reverts InsufficientAllowance when caller == from and no self-approval exists
+    /// @dev Regression: inherits the corrected allowance-consumption invariant from transferFrom.
+    function test_transferFromWithMemo_revert_selfCaller_insufficientAllowance(
+        address from,
+        address to,
+        uint256 amount,
+        bytes32 memo
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        amount = bound(amount, 1, type(uint256).max);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, from, 0, amount));
+        token.transferFromWithMemo(from, to, amount, memo);
+    }
+
+    /// @notice Verifies transferFromWithMemo decreases self-allowance by the spent amount when caller == from
+    /// @dev Regression: spend-tracking parity with transferFrom on the self-caller path.
+    function test_transferFromWithMemo_success_selfCaller_decreasesAllowance(
+        address from,
+        address to,
+        uint256 amount,
+        bytes32 memo
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 1, type(uint128).max);
+
+        _mint(from, amount);
+        vm.prank(from);
+        token.approve(from, amount);
+
+        vm.prank(from);
+        token.transferFromWithMemo(from, to, amount, memo);
+
+        assertEq(token.allowance(from, from), 0, "self-allowance must be consumed");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, from))),
+            0,
+            "allowances[from][from] slot must reflect the consumption"
+        );
+        assertEq(token.balanceOf(to), amount, "to must receive the transferred amount");
+    }
 }
