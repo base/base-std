@@ -119,8 +119,12 @@ contract MockB20Factory is IB20Factory {
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
-            // Format check: every byte must be an uppercase ASCII letter (A-Z).
+            // Empty currency is a missing-required-field, not a format error: an empty byte
+            // string has no bytes to inspect so the format-check loop below would vacuously
+            // succeed without this explicit guard. Mirrors the SECURITY-variant isin check.
             bytes memory cb = bytes(p.currency);
+            if (cb.length == 0) revert MissingRequiredField();
+            // Format check: every byte must be an uppercase ASCII letter (A-Z).
             for (uint256 i = 0; i < cb.length; ++i) {
                 if (cb[i] < 0x41 || cb[i] > 0x5A) revert InvalidCurrency(p.currency);
             }
