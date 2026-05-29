@@ -95,11 +95,11 @@ contract B20GrantRoleTest is B20Test {
         vm.prank(admin);
         token.renounceLastAdmin();
         assertEq(
-            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())),
-            0,
-            "precondition: token is admin-less"
+            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 0, "precondition: token is admin-less"
         );
-        assertTrue(token.hasRole(B20Constants.BURN_ROLE, customAdmin), "precondition: custom-chain admin still holds BURN_ROLE");
+        assertTrue(
+            token.hasRole(B20Constants.BURN_ROLE, customAdmin), "precondition: custom-chain admin still holds BURN_ROLE"
+        );
 
         // 4. customAdmin attempts to mutate the role graph. The shared `onlyRoleAdmin`
         //    modifier rejects with DEFAULT_ADMIN_ROLE as the needed-role payload — matching
