@@ -14,4 +14,7 @@ library ActivationRegistryFeatureList {
 
     /// @dev keccak256("base.policy_registry")
     bytes32 internal constant POLICY_REGISTRY = 0xb582ebae03f16fee49a6763f78df482fb11ae73f103ed0d330bbe556aa90a43f;
+
+    /// @dev keccak256("base.b20_stablecoin")
+    bytes32 internal constant B20_STABLECOIN = 0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601;
 }
