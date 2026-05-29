@@ -225,6 +225,24 @@ library B20FactoryLib {
         );
     }
 
+    /// @notice Encodes a `B20StablecoinEventParams` as the `variantParams`
+    ///         blob the factory emits in the `B20Created` event when
+    ///         `variant == B20Variant.STABLECOIN`. The leading byte is
+    ///         `B20_STABLECOIN_EVENT_PARAMS_VERSION`. Indexers decode
+    ///         this blob by `(variant, leading version byte)` to recover
+    ///         the immutable `currency` without an RPC call.
+    ///
+    /// @param  currency  ISO 4217 fiat code this stablecoin tracks; same
+    ///                   value passed to `encodeStablecoinCreateParams`
+    ///                   at creation time.
+    ///
+    /// @return The ABI-encoded `B20StablecoinEventParams` blob.
+    function encodeStablecoinEventParams(string memory currency) internal pure returns (bytes memory) {
+        return abi.encode(
+            IB20Factory.B20StablecoinEventParams({version: B20_STABLECOIN_EVENT_PARAMS_VERSION, currency: currency})
+        );
+    }
+
     /*//////////////////////////////////////////////////////////////
                         INIT-CALL SETTER ENCODERS
     //////////////////////////////////////////////////////////////*/

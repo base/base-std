@@ -188,11 +188,7 @@ contract MockB20Factory is IB20Factory {
         //       mutable and surfaced via their own update events).
         bytes memory variantParams;
         if (variant == B20Variant.STABLECOIN) {
-            variantParams = abi.encode(
-                IB20Factory.B20StablecoinEventParams({
-                    version: B20FactoryLib.B20_STABLECOIN_EVENT_PARAMS_VERSION, currency: currency_
-                })
-            );
+            variantParams = B20FactoryLib.encodeStablecoinEventParams(currency_);
         }
         emit B20Created(token, variant, name_, symbol_, decimals, variantParams);
 
