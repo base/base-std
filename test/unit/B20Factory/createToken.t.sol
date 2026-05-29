@@ -127,12 +127,12 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     }
 
     /// @notice Verifies security createToken reverts when isin is the empty string
-    /// @dev Per-variant required-field check; checks MissingRequiredField() error
+    /// @dev Per-variant required-field check; checks MissingRequiredField(string) error
     function test_createB20_revert_missingIsin(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
         vm.prank(caller);
-        vm.expectRevert(IB20Factory.MissingRequiredField.selector);
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.MissingRequiredField.selector, "isin"));
         factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
