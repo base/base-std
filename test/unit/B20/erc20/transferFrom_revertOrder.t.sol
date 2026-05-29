@@ -10,28 +10,27 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 /// @title Differential check-order tests for `transferFrom`.
 ///
 /// @notice `transferFrom` layers two body-level preconditions
-///         (ALLOWANCE and EXECUTOR-POLICY) on top of `_transfer`'s policy /
-///         balance checks. The cross-cutting gates (PAUSE, ZERO-RECEIVER,
-///         ZERO-SENDER) live on the entrypoint as modifiers and therefore
-///         fire BEFORE the body's allowance / executor-policy work runs.
+///         (ALLOWANCE and EXECUTOR-POLICY) on top of `_transfer`'s
+///         policy / balance checks. The PAUSE / ZERO-RECEIVER /
+///         ZERO-SENDER guards run before the allowance / executor-policy
+///         work in the entrypoint body.
 ///
-///         **Canonical order (Solidity reference — modifier-led, when
+///         **Canonical order (Solidity reference, when
 ///         `msg.sender != from`):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
-///         2. ZERO-RECEIVER (`validReceiver(to)` modifier) → `InvalidReceiver`
-///         3. ZERO-SENDER (`validSender(from)` modifier) → `InvalidSender`
-///         4. ALLOWANCE (body, `_consumeAllowance`) → `InsufficientAllowance`
-///         5. EXECUTOR-POLICY (body, `isAuthorized(executorPolicyId, msg.sender)`)
+///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
+///         4. ALLOWANCE (`_consumeAllowance`) → `InsufficientAllowance`
+///         5. EXECUTOR-POLICY (`isAuthorized(executorPolicyId, msg.sender)`)
 ///            → `PolicyForbids(EXECUTOR, ...)`
 ///         6..N. All `_transfer` body checks — see `transfer_revertOrder.t.sol`
 ///               (SENDER-POLICY → RECEIVER-POLICY → BALANCE).
 ///
 ///         The full pair matrix between body-level ALLOWANCE/EXECUTOR-POLICY
-///         and the modifier-led PAUSE/ZERO-RECEIVER/ZERO-SENDER is pinned
-///         below to lock in the modifier-first precedence; one test against
-///         a representative `_transfer` body check (SENDER-POLICY) proves
-///         ALLOWANCE and EXECUTOR-POLICY both fire before `_transfer` is
-///         entered.
+///         and the PAUSE/ZERO-RECEIVER/ZERO-SENDER guards is pinned below;
+///         one test against a representative `_transfer` body check
+///         (SENDER-POLICY) proves ALLOWANCE and EXECUTOR-POLICY both
+///         fire before `_transfer` is entered.
 contract B20TransferFromRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
@@ -78,7 +77,7 @@ contract B20TransferFromRevertOrderTest is B20Test {
     // --- Pairs where ZERO-RECEIVER wins (PAUSE not violated) ---
 
     /// @notice ZERO-RECEIVER beats ALLOWANCE.
-    /// @dev `validReceiver` modifier fires before the body's allowance check.
+    /// @dev Zero-receiver check fires before the allowance check.
     function test_transferFrom_revertOrder_zeroReceiver_beats_allowance(address caller, address from, uint256 amount)
         public
     {
@@ -113,7 +112,7 @@ contract B20TransferFromRevertOrderTest is B20Test {
     // --- Pairs where ZERO-SENDER wins (PAUSE + ZERO-RECEIVER not violated) ---
 
     /// @notice ZERO-SENDER beats ALLOWANCE.
-    /// @dev `validSender` modifier fires before the body's allowance check.
+    /// @dev Zero-sender check fires before the allowance check.
     function test_transferFrom_revertOrder_zeroSender_beats_allowance(address caller, address to, uint256 amount)
         public
     {
@@ -163,9 +162,9 @@ contract B20TransferFromRevertOrderTest is B20Test {
     }
 
     /// @notice ALLOWANCE beats anything in `_transfer` (representative: SENDER-POLICY).
-    /// @dev `_transfer`'s body now contains policy + balance + effects only (input
-    ///      validation hoisted to entrypoint modifier); SENDER-POLICY is the
-    ///      first body check inside `_transfer` post-refactor.
+    /// @dev `_transfer`'s body is policy + balance + effects (input validation
+    ///      lives on the entrypoint); SENDER-POLICY is the first body check
+    ///      inside `_transfer`.
     function test_transferFrom_revertOrder_allowance_beats_transferBody(
         address caller,
         address from,

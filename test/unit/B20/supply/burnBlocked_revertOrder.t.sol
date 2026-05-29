@@ -9,11 +9,11 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 /// @title Differential check-order tests for `burnBlocked`.
 ///
-/// @notice **Canonical order (Solidity reference — modifier-led):**
+/// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(BURN)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(BURN_BLOCKED_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. BLOCKED (body, `isAuthorized(senderPolicyId, from) == true` reverts) → `AccountNotBlocked`
-///         4. BALANCE (body, `fromBalance < amount` in `_burnRaw`) → `InsufficientBalance`
+///         3. BLOCKED (`isAuthorized(senderPolicyId, from) == true` reverts) → `AccountNotBlocked`
+///         4. BALANCE (`fromBalance < amount` in `_burnRaw`) → `InsufficientBalance`
 ///
 ///         Note on BLOCKED semantics: `burnBlocked` is a clawback function — it
 ///         only succeeds when `from` is currently NOT authorized by the
@@ -24,7 +24,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
     // --- Pair where PAUSE wins (PAUSE is canonical first) ---
 
     /// @notice PAUSE beats ROLE.
-    /// @dev `whenNotPaused` modifier is listed first; fires before `onlyRole`.
+    /// @dev Pause modifier is listed before the role modifier; fires first.
     function test_burnBlocked_revertOrder_pause_beats_role(address caller, address from, uint256 amount) public {
         _assumeValidCaller(caller);
         _assumeValidActor(from);

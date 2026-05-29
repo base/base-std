@@ -9,13 +9,13 @@ import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @title Differential check-order tests for `batchMint` (security variant).
 ///
-/// @notice **Canonical order (Solidity reference — modifier-led):**
+/// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(MINT)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(MINT_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. LENGTH_MISMATCH (body, `recipients.length != amounts.length`) → `LengthMismatch`
-///         4. EMPTY_BATCH (body, `recipients.length == 0`) → `EmptyBatch`
+///         3. LENGTH_MISMATCH (`recipients.length != amounts.length`) → `LengthMismatch`
+///         4. EMPTY_BATCH (`recipients.length == 0`) → `EmptyBatch`
 ///         5. ZERO-RECEIVER (per-element inline guard) → `InvalidReceiver`
-///         6..N. Per-element `_mint` checks (see `mint_revertOrder.t.sol`):
+///         6..N. Per-element `_mint` body (see `mint_revertOrder.t.sol`):
 ///               POLICY → CAP
 ///
 ///         The pairs within `_mint`'s body are already pinned by
@@ -73,7 +73,7 @@ contract B20SecurityBatchMintRevertOrderTest is B20SecurityTest {
     // --- Pairs where ROLE wins (PAUSE not violated) ---
 
     /// @notice ROLE beats LENGTH_MISMATCH.
-    /// @dev `onlyRole` modifier fires before the body's length check.
+    /// @dev Role modifier fires before the body's length check.
     function test_batchMint_revertOrder_role_beats_lengthMismatch(address caller) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);

@@ -97,15 +97,11 @@ contract MockB20 is IB20 {
 
     /// @dev Reverts `ContractPaused(feature)` if `feature` is paused,
     ///      unless the call is from the factory in the bootstrap window
-    ///      (`_isPrivileged()`). This is the canonical pause gate and
-    ///      is always listed FIRST in a function's modifier set so
-    ///      pause-vs-anything precedence reads off the modifier list
-    ///      directly (modifiers run left-to-right, body at `_`). Token
-    ///      invariants (balance, supply cap) are never bypassed and are
-    ///      enforced regardless. Variants that reject the bootstrap
-    ///      bypass (currently `MockB20Security`'s `redeem` path) declare
-    ///      their own `whenNotPausedStrict` modifier rather than
-    ///      overriding this one.
+    ///      (see `_isPrivileged()`). Always listed FIRST in a gated
+    ///      function's modifier set so pause precedence reads off the
+    ///      signature directly (modifiers run left-to-right, body at
+    ///      `_`). Token invariants (balance, supply cap) are never
+    ///      bypassed and are enforced regardless.
     modifier whenNotPaused(PausableFeature feature) {
         if (!_isPrivileged() && _isPaused(feature)) revert ContractPaused(feature);
         _;
@@ -131,45 +127,6 @@ contract MockB20 is IB20 {
         _;
     }
 
-    /// @dev Input-validation modifier: reverts `InvalidReceiver(to)`
-    ///      if `to == address(0)`. ALWAYS enforced; never bypassed by
-    ///      the factory bootstrap window. Occupies the third slot in
-    ///      the canonical `pause → role → input` modifier order.
-    modifier validReceiver(address to) {
-        if (to == address(0)) revert InvalidReceiver(to);
-        _;
-    }
-
-    /// @dev Input-validation modifier: reverts `InvalidSender(from)`
-    ///      if `from == address(0)`. ALWAYS enforced; never bypassed.
-    modifier validSender(address from) {
-        if (from == address(0)) revert InvalidSender(from);
-        _;
-    }
-
-    /// @dev Input-validation modifier: reverts `InvalidApprover(owner)`
-    ///      if `owner == address(0)`. ALWAYS enforced; never bypassed.
-    modifier validApprover(address owner) {
-        if (owner == address(0)) revert InvalidApprover(owner);
-        _;
-    }
-
-    /// @dev Input-validation modifier: reverts `InvalidSpender(spender)`
-    ///      if `spender == address(0)`. ALWAYS enforced; never bypassed.
-    modifier validSpender(address spender) {
-        if (spender == address(0)) revert InvalidSpender(spender);
-        _;
-    }
-
-    /// @dev Input-validation modifier: reverts `EmptyFeatureSet()` if
-    ///      `features.length == 0`. ALWAYS enforced; never bypassed.
-    modifier nonEmptyFeatures(PausableFeature[] calldata features) {
-        if (features.length == 0) revert EmptyFeatureSet();
-        _;
-    }
-
-    // ============================================================
-    //                          ERC-20: VIEWS
     // ============================================================
     //                          ERC-20: VIEWS
     // ============================================================
@@ -203,13 +160,9 @@ contract MockB20 is IB20 {
     //                       ERC-20: MUTATIONS
     // ============================================================
 
-    function transfer(address to, uint256 amount)
-        external
-        whenNotPaused(PausableFeature.TRANSFER)
-        validReceiver(to)
-        validSender(msg.sender)
-        returns (bool)
-    {
+    function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
+        if (to == address(0)) revert InvalidReceiver(to);
+        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
         _transfer(msg.sender, to, amount);
         return true;
     }
@@ -217,10 +170,10 @@ contract MockB20 is IB20 {
     function transferFrom(address from, address to, uint256 amount)
         external
         whenNotPaused(PausableFeature.TRANSFER)
-        validReceiver(to)
-        validSender(from)
         returns (bool)
     {
+        if (to == address(0)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         if (!_isPrivileged()) {
             // Allowance is consumed unconditionally outside the factory
             // bootstrap window. Matches OZ ERC20 and the Rust precompile,
@@ -241,12 +194,9 @@ contract MockB20 is IB20 {
         return true;
     }
 
-    function approve(address spender, uint256 amount)
-        external
-        validApprover(msg.sender)
-        validSpender(spender)
-        returns (bool)
-    {
+    function approve(address spender, uint256 amount) external returns (bool) {
+        if (msg.sender == address(0)) revert InvalidApprover(msg.sender);
+        if (spender == address(0)) revert InvalidSpender(spender);
         MockB20Storage.layout().allowances[msg.sender][spender] = amount;
         emit Approval(msg.sender, spender, amount);
         return true;
@@ -259,10 +209,10 @@ contract MockB20 is IB20 {
     function transferWithMemo(address to, uint256 amount, bytes32 memo)
         external
         whenNotPaused(PausableFeature.TRANSFER)
-        validReceiver(to)
-        validSender(msg.sender)
         returns (bool)
     {
+        if (to == address(0)) revert InvalidReceiver(to);
+        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -271,10 +221,10 @@ contract MockB20 is IB20 {
     function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo)
         external
         whenNotPaused(PausableFeature.TRANSFER)
-        validReceiver(to)
-        validSender(from)
         returns (bool)
     {
+        if (to == address(0)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         if (!_isPrivileged()) {
             _consumeAllowance(from, msg.sender, amount);
             if (msg.sender != from) {
@@ -308,12 +258,8 @@ contract MockB20 is IB20 {
     //                          MINT / BURN
     // ============================================================
 
-    function mint(address to, uint256 amount)
-        external
-        whenNotPaused(PausableFeature.MINT)
-        onlyRole(MINT_ROLE)
-        validReceiver(to)
-    {
+    function mint(address to, uint256 amount) external whenNotPaused(PausableFeature.MINT) onlyRole(MINT_ROLE) {
+        if (to == address(0)) revert InvalidReceiver(to);
         _mint(to, amount);
     }
 
@@ -321,8 +267,8 @@ contract MockB20 is IB20 {
         external
         whenNotPaused(PausableFeature.MINT)
         onlyRole(MINT_ROLE)
-        validReceiver(to)
     {
+        if (to == address(0)) revert InvalidReceiver(to);
         _mint(to, amount);
         emit Memo(msg.sender, memo);
     }
@@ -458,7 +404,8 @@ contract MockB20 is IB20 {
         return _isPaused(feature);
     }
 
-    function pause(PausableFeature[] calldata features) external onlyRole(PAUSE_ROLE) nonEmptyFeatures(features) {
+    function pause(PausableFeature[] calldata features) external onlyRole(PAUSE_ROLE) {
+        if (features.length == 0) revert EmptyFeatureSet();
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         for (uint256 i = 0; i < features.length; i++) {
             $.pausedVectors |= uint256(1) << uint8(features[i]);
@@ -466,7 +413,8 @@ contract MockB20 is IB20 {
         emit Paused(msg.sender, features);
     }
 
-    function unpause(PausableFeature[] calldata features) external onlyRole(UNPAUSE_ROLE) nonEmptyFeatures(features) {
+    function unpause(PausableFeature[] calldata features) external onlyRole(UNPAUSE_ROLE) {
+        if (features.length == 0) revert EmptyFeatureSet();
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         for (uint256 i = 0; i < features.length; i++) {
             $.pausedVectors &= ~(uint256(1) << uint8(features[i]));
@@ -719,16 +667,14 @@ contract MockB20 is IB20 {
     }
 
     /// @dev Pure mechanics: policy (with bootstrap bypass) + balance +
-    ///      effects. Pause, role, and input validation are enforced by
-    ///      the entrypoint modifiers (`whenNotPaused`, `validReceiver`,
-    ///      `validSender`); every external caller of this helper —
-    ///      `transfer`, `transferFrom`, `transferWithMemo`,
-    ///      `transferFromWithMemo` — declares those modifiers, so the
-    ///      gates run before this function is entered. `transferFrom` /
-    ///      `transferFromWithMemo` additionally consume allowance and
-    ///      check the executor policy in their bodies before calling
-    ///      here; both of those checks ALSO honor the bootstrap bypass,
-    ///      consistent with the policy bypass below.
+    ///      effects. Pause + input validation are enforced upstream by
+    ///      every external caller (`transfer`, `transferFrom`,
+    ///      `transferWithMemo`, `transferFromWithMemo`) before reaching
+    ///      this helper. `transferFrom` / `transferFromWithMemo`
+    ///      additionally consume allowance and check the executor
+    ///      policy in their bodies before calling here; both of those
+    ///      checks ALSO honor the bootstrap bypass, consistent with
+    ///      the policy bypass below.
     function _transfer(address from, address to, uint256 amount) internal {
         if (!_isPrivileged()) {
             // One SLOAD pulls both policy IDs we need for the transfer
@@ -756,13 +702,11 @@ contract MockB20 is IB20 {
     }
 
     /// @dev Pure mechanics: policy (with bootstrap bypass) + supply cap
-    ///      + effects. Pause, role, and input validation are enforced
-    ///      by the entrypoint modifiers (`whenNotPaused`, `onlyRole`,
-    ///      `validReceiver`) on `mint` / `mintWithMemo`. The security
-    ///      variant's `batchMint` declares the same entry-level
-    ///      modifiers ONCE for the whole batch and validates per-element
-    ///      receivers inline before invoking this helper, so `_mint`
-    ///      itself never re-checks them.
+    ///      + effects. Pause, role, and the zero-receiver check are
+    ///      enforced upstream by `mint` / `mintWithMemo`. The security
+    ///      variant's `batchMint` carries the same `whenNotPaused` +
+    ///      `onlyRole` modifiers ONCE for the whole batch and validates
+    ///      per-element receivers inline before invoking this helper.
     function _mint(address to, uint256 amount) internal {
         if (!_isPrivileged()) {
             uint64 mintReceiverPolicyId = MockB20Storage.layout().mintPolicyIds.receiver;

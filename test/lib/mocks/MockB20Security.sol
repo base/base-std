@@ -186,16 +186,10 @@ contract MockB20Security is MockB20, IB20Security {
     //                  BATCHED ISSUANCE / CLAWBACK
     // ============================================================
 
-    /// @dev `whenNotPaused(MINT)` + `onlyRole(MINT_ROLE)` modifiers run
-    ///      ONCE for the entire batch — the underlying `_mint` helper
-    ///      no longer carries its own pause/role gates (those were
-    ///      hoisted to per-entrypoint modifiers as part of the
-    ///      `pause → role → input → ...` canonical ordering). Length /
-    ///      empty-batch checks fire next inside the body. The
-    ///      per-element `validReceiver` guard is inlined in the loop
-    ///      because modifier parameters evaluate once at function
-    ///      entry, not per-iteration; this preserves the per-recipient
-    ///      `InvalidReceiver` revert that callers depend on.
+    /// @dev Pause + role enforced ONCE for the entire batch via the
+    ///      entrypoint modifiers. Per-element zero-receiver guard is
+    ///      inlined in the loop since `_mint` no longer carries an
+    ///      input check.
     function batchMint(address[] calldata recipients, uint256[] calldata amounts)
         external
         whenNotPaused(PausableFeature.MINT)
@@ -204,24 +198,16 @@ contract MockB20Security is MockB20, IB20Security {
         if (recipients.length != amounts.length) revert LengthMismatch(recipients.length, amounts.length);
         if (recipients.length == 0) revert EmptyBatch();
         for (uint256 i = 0; i < recipients.length; i++) {
-            // Per-element zero-receiver guard: `_mint` no longer checks
-            // input (modifier-only on the single-recipient `mint` /
-            // `mintWithMemo` entrypoints).
             if (recipients[i] == address(0)) revert InvalidReceiver(recipients[i]);
             _mint(recipients[i], amounts[i]);
         }
     }
 
-    /// @dev Modifier order: `pause → role` (canonical for the variant).
-    ///      `onlyRoleStrict` (not `onlyRole`): the factory bootstrap
+    /// @dev `onlyRoleStrict` (not `onlyRole`): the factory bootstrap
     ///      bypass is deliberately NOT honored here, per the contract
     ///      natspec — clawback against existing balances has no init-time
     ///      use case, so granting the factory a bypass would only widen
-    ///      the attack surface. `whenNotPaused` retains the bypass; the
-    ///      practical effect is identical because the factory never
-    ///      reaches the body anyway (role-strict blocks it first), and
-    ///      mirroring the rest of the contract on the pause vector
-    ///      keeps the modifier set uniform.
+    ///      the attack surface.
     function batchBurn(address[] calldata accounts, uint256[] calldata amounts)
         external
         whenNotPaused(PausableFeature.BURN)

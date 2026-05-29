@@ -16,12 +16,12 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPo
 ///         between the two backends surfaces as a fork-mode-only failure with a
 ///         clear "selector A vs selector B" diff.
 ///
-///         **Canonical order (Solidity reference — modifier-led):**
+///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(MINT)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(MINT_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. ZERO-RECEIVER (`validReceiver(to)` modifier) → `InvalidReceiver`
-///         4. POLICY (body, in `_mint`) → `PolicyForbids`
-///         5. SUPPLY-CAP (body, in `_mint`) → `SupplyCapExceeded`
+///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         4. POLICY (`_mint` body) → `PolicyForbids`
+///         5. SUPPLY-CAP (`_mint` body) → `SupplyCapExceeded`
 ///
 ///         A `mint` call that violates two or more preconditions must always
 ///         revert with the selector for the earliest-listed violation. The 10
@@ -30,7 +30,7 @@ contract B20MintRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
     /// @notice With both PAUSE and ROLE violated, PAUSE fires first.
-    /// @dev `whenNotPaused` modifier is listed before `onlyRole`; runs first.
+    /// @dev Pause modifier is listed before the role modifier; runs first.
     function test_mint_revertOrder_pause_beats_role(address caller, address to, uint256 amount) public {
         _assumeValidCaller(caller);
         _assumeValidActor(to);
@@ -44,7 +44,7 @@ contract B20MintRevertOrderTest is B20Test {
     }
 
     /// @notice With both PAUSE and ZERO-RECEIVER violated, PAUSE fires first.
-    /// @dev `whenNotPaused` modifier runs before `validReceiver` modifier.
+    /// @dev Pause modifier runs before the body's zero-receiver check.
     function test_mint_revertOrder_pause_beats_zeroRecipient(uint256 amount) public {
         _grantRole(B20Constants.MINT_ROLE, minter);
         _pause(IB20.PausableFeature.MINT);
@@ -84,7 +84,7 @@ contract B20MintRevertOrderTest is B20Test {
     // --- Pairs where ROLE wins (PAUSE not violated) ---
 
     /// @notice With both ROLE and ZERO-RECEIVER violated, ROLE fires first.
-    /// @dev `onlyRole` modifier runs before `validReceiver` modifier.
+    /// @dev Role modifier runs before the body's zero-receiver check.
     function test_mint_revertOrder_role_beats_zeroRecipient(address caller, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin); // admin holds DEFAULT_ADMIN_ROLE but not MINT_ROLE on fresh token
@@ -132,7 +132,7 @@ contract B20MintRevertOrderTest is B20Test {
     // --- Pairs where ZERO-RECEIVER wins (PAUSE + ROLE satisfied) ---
 
     /// @notice With ZERO-RECEIVER and POLICY violated, ZERO-RECEIVER fires first.
-    /// @dev `validReceiver` modifier runs before the receiver-policy check in `_mint`.
+    /// @dev Zero-receiver check runs before the receiver-policy check in `_mint`.
     function test_mint_revertOrder_zeroRecipient_beats_policy(uint256 amount) public {
         _grantRole(B20Constants.MINT_ROLE, minter);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
@@ -143,7 +143,7 @@ contract B20MintRevertOrderTest is B20Test {
     }
 
     /// @notice With ZERO-RECEIVER and CAP violated, ZERO-RECEIVER fires first.
-    /// @dev `validReceiver` modifier runs before the supply-cap arithmetic in `_mint`.
+    /// @dev Zero-receiver check runs before the supply-cap arithmetic in `_mint`.
     function test_mint_revertOrder_zeroRecipient_beats_cap(uint256 amount) public {
         _grantRole(B20Constants.MINT_ROLE, minter);
         amount = bound(amount, 1, type(uint128).max);

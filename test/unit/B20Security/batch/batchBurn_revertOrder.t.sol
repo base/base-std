@@ -8,11 +8,11 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 
 /// @title Differential check-order tests for `batchBurn` (security variant).
 ///
-/// @notice **Canonical order (Solidity reference — modifier-led):**
+/// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(BURN)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRoleStrict(BURN_FROM_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. LENGTH_MISMATCH (body, `accounts.length != amounts.length`) → `LengthMismatch`
-///         4. EMPTY_BATCH (body, `accounts.length == 0`) → `EmptyBatch`
+///         3. LENGTH_MISMATCH (`accounts.length != amounts.length`) → `LengthMismatch`
+///         4. EMPTY_BATCH (`accounts.length == 0`) → `EmptyBatch`
 ///         5. BALANCE (per-element `_burnRaw`) → `InsufficientBalance`
 ///
 ///         Some pairs are not reachable because the violations are mutually
@@ -36,7 +36,7 @@ contract B20SecurityBatchBurnRevertOrderTest is B20SecurityTest {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
     /// @notice PAUSE beats ROLE.
-    /// @dev `whenNotPaused` modifier is listed before `onlyRoleStrict`.
+    /// @dev Pause modifier is listed before the role-strict modifier; fires first.
     function test_batchBurn_revertOrder_pause_beats_role(address caller, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);

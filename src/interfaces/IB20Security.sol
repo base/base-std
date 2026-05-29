@@ -387,8 +387,8 @@ interface IB20Security is IB20 {
     ///               `SupplyCapExceeded` — see `mint`'s natspec for the
     ///               per-element precedence.
     ///         The pause and role gates are evaluated ONCE for the
-    ///         whole batch (entrypoint modifiers); per-element gates
-    ///         fire per recipient inside the loop.
+    ///         whole batch; per-element gates fire per recipient inside
+    ///         the loop.
     ///         All-or-nothing: if any element reverts, the entire
     ///         transaction reverts and no partial state is committed.
     ///         Emits `Transfer(address(0), recipients[i], amounts[i])`

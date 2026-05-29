@@ -9,13 +9,13 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 /// @title Differential check-order tests for `transfer`.
 ///
-/// @notice **Canonical order (Solidity reference — modifier-led):**
+/// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
-///         2. ZERO-RECEIVER (`validReceiver(to)` modifier) → `InvalidReceiver`
-///         3. ZERO-SENDER (`validSender(from)` modifier) → `InvalidSender`
-///         4. SENDER-POLICY (body, in `_transfer`) → `PolicyForbids(SENDER, ...)`
-///         5. RECEIVER-POLICY (body, in `_transfer`) → `PolicyForbids(RECEIVER, ...)`
-///         6. BALANCE (body, in `_transfer`) → `InsufficientBalance`
+///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
+///         4. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
+///         5. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
+///         6. BALANCE (`_transfer` body) → `InsufficientBalance`
 ///
 ///         The public `transfer(to, amount)` entry sets `from = msg.sender`, so
 ///         pairs involving ZERO-SENDER require pranking `address(0)`. C(6, 2) = 15 pairs.

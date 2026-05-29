@@ -12,14 +12,13 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 ///         canonical first-firing revert selector. See `mint_revertOrder.t.sol`
 ///         for the harness rationale.
 ///
-///         **Canonical order (Solidity reference — modifier-led):**
+///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(BURN)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(BURN_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. BALANCE (body, `fromBalance < amount` in `_burnRaw`) → `InsufficientBalance`
+///         3. BALANCE (`fromBalance < amount` in `_burnRaw`) → `InsufficientBalance`
 contract B20BurnRevertOrderTest is B20Test {
     /// @notice PAUSE beats ROLE.
-    /// @dev The pause modifier is listed FIRST in the modifier set, so it fires
-    ///      before the role modifier. With both violated, ContractPaused surfaces.
+    /// @dev Pause modifier is listed before the role modifier; fires first.
     function test_burn_revertOrder_pause_beats_role(address caller, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
