@@ -181,9 +181,10 @@ interface IB20Factory {
     ///         any known encoding for the requested variant.
     error UnsupportedVersion(uint8 version, B20Variant variant);
 
-    /// @notice A required string argument was the empty string (e.g.
-    ///         security `isin`).
-    error MissingRequiredField();
+    /// @notice A required string argument was the empty string.
+    /// @param field Name of the missing field (e.g. `"isin"`). Empty
+    ///        `currency` is rejected separately via `InvalidCurrency("")`.
+    error MissingRequiredField(string field);
 
     /// @notice The stablecoin `currency` contained a non-`A`–`Z` byte.
     error InvalidCurrency(string code);
