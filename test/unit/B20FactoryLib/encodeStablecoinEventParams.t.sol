@@ -10,7 +10,7 @@ contract B20FactoryLibEncodeStablecoinEventParamsTest is B20FactoryLibTest {
     /// @notice Verifies the output decodes back to a `B20StablecoinEventParams`
     ///         with the caller's currency and the current event-encoding version byte.
     /// @dev    Round-trips through `abi.decode` to pin the wire format the
-    ///         `B20Created` `variantParams` field carries for STABLECOIN. The
+    ///         `B20Created` `eventParams` field carries for STABLECOIN. The
     ///         event-params version is independent of the create-params version,
     ///         so this test pins against `B20_STABLECOIN_EVENT_PARAMS_VERSION`
     ///         specifically (not `B20_STABLECOIN_CREATE_PARAMS_VERSION`).

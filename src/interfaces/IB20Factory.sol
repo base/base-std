@@ -162,7 +162,7 @@ interface IB20Factory {
         uint256 minimumRedeemable;
     }
 
-    /// @notice Event payload carried in the `variantParams` field of
+    /// @notice Event payload carried in the `eventParams` field of
     ///         `B20Created` for STABLECOIN-variant tokens. ABI-encoded
     ///         and emitted with a leading `version` byte so stream-based
     ///         indexers can decode by `(variant, version)` without an
@@ -176,11 +176,11 @@ interface IB20Factory {
     ///                   `B20StablecoinCreateParams.currency`. Surfaced here
     ///                   because `currency` has no setter and no other
     ///                   event ever emits it; indexers that cannot make
-    ///                   mid-handler view calls (e.g. Coindexer) would
+    ///                   mid-handler view calls would
     ///                   otherwise have no way to recover it from the
     ///                   event stream.
     /// @dev    DEFAULT and SECURITY variants currently emit an empty
-    ///         `variantParams` byte string: DEFAULT has no extra
+    ///         `eventParams` byte string: DEFAULT has no extra
     ///         immutable identity fields beyond what's already in
     ///         `B20Created`, and SECURITY's `isin` and
     ///         `minimumRedeemable` are mutable and surfaced via their
@@ -247,7 +247,7 @@ interface IB20Factory {
     /// @param name          ERC-20 token name.
     /// @param symbol        ERC-20 token symbol.
     /// @param decimals      ERC-20 decimals (fixed per variant).
-    /// @param variantParams ABI-encoded variant-specific immutable identity
+    /// @param eventParams ABI-encoded variant-specific immutable identity
     ///                      fields, leading with a version byte. Empty
     ///                      (`""`) for DEFAULT and SECURITY (no extra
     ///                      immutable fields not already covered); for
@@ -255,12 +255,7 @@ interface IB20Factory {
     ///                      with `currency`. Indexers decode by
     ///                      `(variant, leading version byte)`.
     event B20Created(
-        address indexed token,
-        B20Variant indexed variant,
-        string name,
-        string symbol,
-        uint8 decimals,
-        bytes variantParams
+        address indexed token, B20Variant indexed variant, string name, string symbol, uint8 decimals, bytes eventParams
     );
 
     /*//////////////////////////////////////////////////////////////
