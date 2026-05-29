@@ -92,6 +92,17 @@ contract MockPolicyRegistry is IPolicyRegistry {
         external
         returns (uint64 newPolicyId)
     {
+        // Match the Rust precompile's check precedence:
+        //   validate_create_policy_inputs (zero-admin) → require_account_batch_size →
+        //   create_policy_inner → write members
+        // Both checks are duplicated downstream (`_create` re-checks zero-admin for
+        // direct `createPolicy` callers, `_batchSetMembers` re-checks batch size for
+        // `updateAllowlist` / `updateBlocklist` callers). The hoisted entry-point
+        // copies ensure we revert before any `_create` mutation on the failing path
+        // AND pin the same revert-selector precedence Rust enforces (see Rust test
+        // `create_policy_with_accounts_zero_admin_precedes_batch_size_revert`).
+        if (admin == address(0)) revert ZeroAddress();
+        if (accounts.length > MAX_BATCH_SIZE) revert BatchSizeTooLarge(MAX_BATCH_SIZE);
         newPolicyId = _create(admin, policyType);
         _batchSetMembers({policyId: newPolicyId, policyType: policyType, value: true, accounts: accounts});
     }
@@ -181,7 +192,13 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function policyExists(uint64 policyId) external view returns (bool) {
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
         if (!_isWellFormed(policyId)) return false;
-        return MockPolicyRegistryStorage.layout().policies[policyId] != 0;
+        // Use the typed `policyExistsFromPacked` helper rather than a raw
+        // `packed != 0` test. Functionally identical given the encoding
+        // invariant (exists bit is always set when `_encode` writes the
+        // slot), but matches the Rust precompile's `packed.exists()`
+        // call and survives any future encoding change that adds bits
+        // above the admin lane without setting the exists bit.
+        return MockPolicyRegistryStorage.policyExistsFromPacked(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
     /// @inheritdoc IPolicyRegistry
@@ -190,14 +207,28 @@ contract MockPolicyRegistry is IPolicyRegistry {
         // No fast path for built-in IDs needed: lazy init writes them with
         // a zero admin, so the normal storage read returns address(0) for
         // them just like for renounced policies and uncreated IDs.
+        //
+        // No explicit `exists()` gate either: the Rust impl reads `packed`,
+        // checks `exists()`, and returns `None` (→ `address(0)` on the ABI
+        // boundary) for non-existent slots. The Solidity encoding invariant
+        // makes the gate unobservable — a never-written `policies[id]` slot
+        // reads as `packed == 0`, so `_decodeAdmin` recovers `address(0)`
+        // with no SLOAD overhead vs. the gated implementation.
         return _decodeAdmin(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
     /// @inheritdoc IPolicyRegistry
     function pendingPolicyAdmin(uint64 policyId) external view returns (address) {
+        // Defense-in-depth short-circuit for built-in IDs. The Rust impl
+        // gates pending-admin reads on the ID being non-built-in (see
+        // `crates/common/precompiles/src/policy/storage.rs` `pending_policy_admin`),
+        // so a corrupted `pendingAdmins[builtin]` slot can never leak a
+        // non-zero address through the view. The default-zero storage read
+        // below would also return `address(0)` for built-ins in normal
+        // operation (they never have a pending admin staged), but the
+        // explicit branch removes that assumption from the trust boundary.
+        if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         if (!_isWellFormed(policyId)) return address(0);
-        // Built-in IDs never have a pending admin staged, so the default
-        // zero return from the storage read is correct without a fast path.
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
     }
 

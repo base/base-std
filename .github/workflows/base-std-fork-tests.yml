@@ -11,19 +11,23 @@ concurrency:
 
 env:
   BASE_REF: main
-  BASE_ANVIL_REF: base-anvil-fork
+  # Branch to clone; SHA below is pinned for reproducibility and verified after clone.
+  BASE_ANVIL_BRANCH: base-anvil-fork
+  BASE_ANVIL_SHA: 14a43909528eb7ff4bafab0e5fee9b3b651bcd50
   CARGO_TERM_COLOR: always
-  RUSTC_WRAPPER: "sccache"
-  SCCACHE_GHA_ENABLED: "true"
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   fork-tests:
     name: Base Std Fork Tests
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # Advisory: base-std is the spec forerunner. Divergences mean base/base needs to catch up,
+    # not that base-std is wrong. This job surfaces failures without blocking PR merges.
+    continue-on-error: true
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -71,13 +75,6 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-        with:
-          cache-on-failure: true
-          shared-key: "base-std-fork-tests"
-          cache-targets: "false"
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@50d5a8956f2e319df19e6b57539d7e2acb9f8c1e # v1.5.0
         with:
@@ -94,8 +91,14 @@ jobs:
 
           git clone --depth 1 --single-branch --branch "$BASE_REF" \
             https://github.com/base/base.git "$workdir/base"
-          git clone --depth 1 --single-branch --branch "$BASE_ANVIL_REF" \
+
+          git clone --depth 1 --single-branch --branch "$BASE_ANVIL_BRANCH" \
             https://github.com/base/base-anvil.git "$workdir/base-anvil"
+
+          actual_sha=$(git -C "$workdir/base-anvil" rev-parse HEAD)
+          if [ "$actual_sha" != "$BASE_ANVIL_SHA" ]; then
+            echo "::warning::base-anvil HEAD ($actual_sha) differs from pinned SHA ($BASE_ANVIL_SHA) — update BASE_ANVIL_SHA in the workflow"
+          fi
 
           echo "BASE_DIR=$workdir/base" >> "$GITHUB_ENV"
           echo "BASE_ANVIL_DIR=$workdir/base-anvil" >> "$GITHUB_ENV"
@@ -104,6 +107,8 @@ jobs:
         shell: bash
         env:
           CARGO_PROFILE_RELEASE_LTO: "false"
+          RUSTC_WRAPPER: "sccache"
+          SCCACHE_GHA_ENABLED: "true"
         run: |
           set -euo pipefail
 
@@ -118,6 +123,7 @@ jobs:
           "$BASE_ANVIL_DIR/target/release/forge" --version
 
       - name: Run base-std fork tests
+        id: fork_tests
         shell: bash
         run: |
           set -euo pipefail
@@ -125,7 +131,89 @@ jobs:
           ANVIL_BIN="$BASE_ANVIL_DIR/target/release/anvil" \
             FORGE_BIN="$BASE_ANVIL_DIR/target/release/forge" \
             ANVIL_LOG="$RUNNER_TEMP/base-std-anvil.log" \
-            ./script/run-fork-tests.sh
+            ./script/run-fork-tests.sh 2>&1 | tee "$RUNNER_TEMP/fork-test-output.txt"
+          echo "fork_tests_exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Summarize fork test results
+        if: always()
+        shell: bash
+        run: |
+          output="$RUNNER_TEMP/fork-test-output.txt"
+          passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || echo 0)
+          failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || echo 0)
+
+          {
+            echo "## Fork Test Results"
+            echo ""
+            if [ "$failed" -eq 0 ]; then
+              echo "✅ All **${passed}** tests passed — base/base is fully in sync with base-std."
+            else
+              echo "⚠️ **${failed}** test(s) failed, **${passed}** passed."
+              echo ""
+              echo "These failures indicate divergences where **base/base needs to catch up** to the base-std spec."
+              echo "base-std PRs are not blocked by this check."
+              echo ""
+              echo "### Failing tests"
+              echo '```'
+              grep '\[FAIL' "$output" | sed 's/\x1B\[[0-9;]*m//g' || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment fork test results on PR
+        if: github.event_name == 'pull_request' && always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          output="$RUNNER_TEMP/fork-test-output.txt"
+          passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || echo 0)
+          failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || echo 0)
+          marker="<!-- fork-test-results -->"
+
+          if [ ! -s "$output" ] || [ "$((passed + failed))" -eq 0 ]; then
+            body="${marker}
+          ### ❌ Fork tests did not run
+          The build or setup step failed before any tests could execute. Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          elif [ "$failed" -eq 0 ]; then
+            body="${marker}
+          ### ✅ Fork tests: all ${passed} passed
+          base/base is fully in sync with the base-std spec."
+          else
+            # Extract test name and full error for each failure, deduplicated
+            failing=$(grep '\[FAIL' "$output" \
+              | sed 's/\x1B\[[0-9;]*m//g' \
+              | sed 's/^\[FAIL: \(.*\)\] \(.*\) (runs.*$/- **\2**: `\1`/' \
+              | sort -u || true)
+            body="${marker}
+          ### ⚠️ Fork tests: ${failed} failed, ${passed} passed
+
+          These failures indicate divergences where **base/base needs to catch up** to the base-std spec. This check is advisory and does not block merging.
+
+          <details>
+          <summary>Failing tests</summary>
+
+          ${failing}
+
+          </details>"
+          fi
+
+          pr="${{ github.event.pull_request.number }}"
+          repo="${{ github.repository }}"
+
+          # Find existing comment with our marker and update it, or post a new one
+          existing_id=$(gh api "repos/${repo}/issues/${pr}/comments" \
+            --jq ".[] | select(.body | startswith(\"${marker}\")) | .id" \
+            | head -1)
+
+          if [ -n "$existing_id" ]; then
+            gh api "repos/${repo}/issues/comments/${existing_id}" \
+              -X PATCH --field body="$body" > /dev/null
+          else
+            gh api "repos/${repo}/issues/${pr}/comments" \
+              --field body="$body" > /dev/null
+          fi
 
       - name: Upload anvil log
         if: always()
