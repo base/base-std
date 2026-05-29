@@ -170,13 +170,20 @@ jobs:
           output="$RUNNER_TEMP/fork-test-output.txt"
           passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || echo 0)
           failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || echo 0)
+          marker="<!-- fork-test-results -->"
 
           if [ "$failed" -eq 0 ]; then
-            body="### ✅ Fork tests: all ${passed} passed
+            body="${marker}
+          ### ✅ Fork tests: all ${passed} passed
           base/base is fully in sync with the base-std spec."
           else
-            failing=$(grep '\[FAIL' "$output" | sed 's/\x1B\[[0-9;]*m//g' | sed 's/\[FAIL[^]]*\] /- /' | cut -d'(' -f1 | sort -u || true)
-            body="### ⚠️ Fork tests: ${failed} failed, ${passed} passed
+            # Extract test name and full error for each failure, deduplicated
+            failing=$(grep '\[FAIL' "$output" \
+              | sed 's/\x1B\[[0-9;]*m//g' \
+              | sed 's/^\[FAIL: \(.*\)\] \(.*\) (runs.*$/- **\2**: `\1`/' \
+              | sort -u || true)
+            body="${marker}
+          ### ⚠️ Fork tests: ${failed} failed, ${passed} passed
 
           These failures indicate divergences where **base/base needs to catch up** to the base-std spec. This check is advisory and does not block merging.
 
@@ -188,9 +195,21 @@ jobs:
           </details>"
           fi
 
-          gh pr comment "${{ github.event.pull_request.number }}" \
-            --repo "${{ github.repository }}" \
-            --body "$body"
+          pr="${{ github.event.pull_request.number }}"
+          repo="${{ github.repository }}"
+
+          # Find existing comment with our marker and update it, or post a new one
+          existing_id=$(gh api "repos/${repo}/issues/${pr}/comments" \
+            --jq ".[] | select(.body | startswith(\"${marker}\")) | .id" \
+            | head -1)
+
+          if [ -n "$existing_id" ]; then
+            gh api "repos/${repo}/issues/comments/${existing_id}" \
+              -X PATCH --field body="$body" > /dev/null
+          else
+            gh api "repos/${repo}/issues/${pr}/comments" \
+              --field body="$body" > /dev/null
+          fi
 
       - name: Upload anvil log
         if: always()
