@@ -24,6 +24,9 @@ jobs:
     name: Base Std Fork Tests
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    # Advisory: base-std is the spec forerunner. Divergences mean base/base needs to catch up,
+    # not that base-std is wrong. This job surfaces failures without blocking PR merges.
+    continue-on-error: true
     steps:
       - name: Harden the runner (Audit all outbound calls)
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -119,6 +122,7 @@ jobs:
           "$BASE_ANVIL_DIR/target/release/forge" --version
 
       - name: Run base-std fork tests
+        id: fork_tests
         shell: bash
         run: |
           set -euo pipefail
@@ -126,7 +130,35 @@ jobs:
           ANVIL_BIN="$BASE_ANVIL_DIR/target/release/anvil" \
             FORGE_BIN="$BASE_ANVIL_DIR/target/release/forge" \
             ANVIL_LOG="$RUNNER_TEMP/base-std-anvil.log" \
-            ./script/run-fork-tests.sh
+            ./script/run-fork-tests.sh 2>&1 | tee "$RUNNER_TEMP/fork-test-output.txt"
+          echo "fork_tests_exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Summarize fork test results
+        if: always()
+        shell: bash
+        run: |
+          output="$RUNNER_TEMP/fork-test-output.txt"
+          passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || echo 0)
+          failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || echo 0)
+
+          {
+            echo "## Fork Test Results"
+            echo ""
+            if [ "$failed" -eq 0 ]; then
+              echo "✅ All **${passed}** tests passed — base/base is fully in sync with base-std."
+            else
+              echo "⚠️ **${failed}** test(s) failed, **${passed}** passed."
+              echo ""
+              echo "These failures indicate divergences where **base/base needs to catch up** to the base-std spec."
+              echo "base-std PRs are not blocked by this check."
+              echo ""
+              echo "### Failing tests"
+              echo '```'
+              grep '\[FAIL' "$output" | sed 's/\x1B\[[0-9;]*m//g' || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload anvil log
         if: always()
