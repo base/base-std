@@ -64,4 +64,52 @@ contract B20GrantRoleTest is B20Test {
         emit IB20.RoleGranted(role, account, admin);
         _grantRole(role, account);
     }
+
+    /// @notice Verifies grantRole reverts on an admin-less token even when the caller holds a
+    ///         custom-admin role that would otherwise authorize the grant.
+    /// @dev Admin-role-resurrection guard — mirrors base/base PR #2961
+    ///      (`ensure_role_admin_mutations_available`). Without this guard a custom-admin
+    ///      role chain set up while an admin existed (e.g. setRoleAdmin(MINT_ROLE, BURN_ROLE)
+    ///      + grantRole(BURN_ROLE, alice)) survives `renounceLastAdmin()` and lets BURN_ROLE
+    ///      holders keep mutating the role graph on a token that has no admin. The shared
+    ///      `onlyRoleAdmin` modifier short-circuits when adminCount == 0 with
+    ///      `AccessControlUnauthorizedAccount(caller, DEFAULT_ADMIN_ROLE)`, matching Rust.
+    ///
+    ///      Same guard fires on `revokeRole` and `setRoleAdmin` (also `onlyRoleAdmin`-gated);
+    ///      this test pins the property at the modifier level via the grantRole entry.
+    function test_grantRole_revert_adminResurrectionViaCustomChain(address customAdmin, address recipient) public {
+        _assumeValidActor(customAdmin);
+        _assumeValidActor(recipient);
+        vm.assume(customAdmin != admin);
+        vm.assume(recipient != admin);
+        vm.assume(customAdmin != recipient);
+
+        // 1. admin makes BURN_ROLE the admin-of MINT_ROLE.
+        vm.prank(admin);
+        token.setRoleAdmin(B20Constants.MINT_ROLE, B20Constants.BURN_ROLE);
+
+        // 2. admin grants BURN_ROLE to customAdmin so they become an admin-of-MINT_ROLE.
+        _grantRole(B20Constants.BURN_ROLE, customAdmin);
+
+        // 3. admin renounces the last admin — adminCount drops to 0.
+        vm.prank(admin);
+        token.renounceLastAdmin();
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.adminCountSlot())), 0, "precondition: token is admin-less"
+        );
+        assertTrue(
+            token.hasRole(B20Constants.BURN_ROLE, customAdmin), "precondition: custom-chain admin still holds BURN_ROLE"
+        );
+
+        // 4. customAdmin attempts to mutate the role graph. The shared `onlyRoleAdmin`
+        //    modifier rejects with DEFAULT_ADMIN_ROLE as the needed-role payload — matching
+        //    Rust's `ensure_role_admin_mutations_available`.
+        vm.prank(customAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, customAdmin, B20Constants.DEFAULT_ADMIN_ROLE
+            )
+        );
+        token.grantRole(B20Constants.MINT_ROLE, recipient);
+    }
 }
