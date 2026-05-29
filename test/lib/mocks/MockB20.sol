@@ -111,7 +111,19 @@ contract MockB20 is IB20 {
     ///      / `setRoleAdmin`, where the gate is over the meta-role,
     ///      not the role itself.
     modifier onlyRoleAdmin(bytes32 role) {
-        if (!_isPrivileged()) _requireRoleAdmin(role);
+        if (!_isPrivileged()) {
+            // Admin-resurrection guard: once `adminCount == 0` the token is admin-less
+            // by design (post-`renounceLastAdmin`). No role-mgmt mutation is permitted
+            // even if the caller holds a custom-admin role that would otherwise
+            // authorize them, because allowing such mutations would let a custom-admin
+            // chain (e.g. setRoleAdmin(MINT_ROLE, BURN_ROLE) → grantRole(BURN_ROLE, X))
+            // re-establish admin power on a token that has explicitly relinquished it.
+            // Mirrors base/base PR #2961 (`ensure_role_admin_mutations_available`).
+            if (MockB20Storage.layout().adminCount == 0) {
+                revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);
+            }
+            _requireRoleAdmin(role);
+        }
         _;
     }
 
