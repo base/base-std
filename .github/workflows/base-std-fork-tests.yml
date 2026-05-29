@@ -172,7 +172,11 @@ jobs:
           failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || echo 0)
           marker="<!-- fork-test-results -->"
 
-          if [ "$failed" -eq 0 ]; then
+          if [ ! -s "$output" ] || [ "$((passed + failed))" -eq 0 ]; then
+            body="${marker}
+          ### ❌ Fork tests did not run
+          The build or setup step failed before any tests could execute. Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
+          elif [ "$failed" -eq 0 ]; then
             body="${marker}
           ### ✅ Fork tests: all ${passed} passed
           base/base is fully in sync with the base-std spec."
