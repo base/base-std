@@ -93,7 +93,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Any non-empty string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
     ///      `vm.assume(!_isValidFiatCode)`. Empty input is covered by
-    ///      `test_createB20_revert_missingCurrency` (rejected with MissingRequiredField).
+    ///      `test_createB20_revert_emptyCurrency` (rejected with `InvalidCurrency("")`).
     function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
@@ -133,12 +133,12 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     }
 
     /// @notice Verifies security createToken reverts when isin is the empty string
-    /// @dev Per-variant required-field check; checks MissingRequiredField() error
+    /// @dev Per-variant required-field check; checks MissingRequiredField(string) error
     function test_createB20_revert_missingIsin(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
         vm.prank(caller);
-        vm.expectRevert(IB20Factory.MissingRequiredField.selector);
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.MissingRequiredField.selector, "isin"));
         factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
