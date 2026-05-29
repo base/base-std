@@ -34,6 +34,8 @@ User-defined roles are supported via `setRoleAdmin` and `grantRole`. They have n
 
 Roles are granted, revoked, and renounced through the standard OZ AccessControl methods. The one departure: a sole `DEFAULT_ADMIN_ROLE` holder cannot use `renounceRole` (reverts with `LastAdminCannotRenounce`); they must use the dedicated `renounceLastAdmin()` to permanently transition the token to admin-less. Tokens that intend to launch admin-less from the start pass `initialAdmin == address(0)` at creation, which never grants the role and skips the `renounceLastAdmin` step entirely.
 
+After `renounceLastAdmin()` (or for tokens deployed with `initialAdmin == address(0)`), operations gated by `DEFAULT_ADMIN_ROLE` become permanently uncallable. Roles that were already granted to other addresses (`MINT_ROLE`, `BURN_ROLE`, `PAUSE_ROLE`, `UNPAUSE_ROLE`, `METADATA_ROLE`, etc.) continue to function independently.
+
 ## Policy integration
 
 B20 declares a fixed set of *policy scopes*. Each scope stores a `uint64` policy ID that points into the [PolicyRegistry](../PolicyRegistry/README.md); on every gated operation, B20 calls `isAuthorized` against the relevant scope and reverts (`PolicyForbids`) if the account isn't authorized.
@@ -46,6 +48,8 @@ Scope identifiers follow the `{ACTION}_{ACTOR}_POLICY` convention:
 | `TRANSFER_RECEIVER_POLICY` | The `to` of `transfer` / `transferFrom` |
 | `TRANSFER_EXECUTOR_POLICY` | The `msg.sender` of `transferFrom` (not consulted on `transfer`) |
 | `MINT_RECEIVER_POLICY` | The `to` of `mint` |
+
+`approve` itself is not policy-gated — only the actual movement of balance via `transfer` / `transferFrom` is checked. A blocked address can hold or receive allowances; the gate fires when balance moves.
 
 Because scopes are per-actor, send-side and receive-side rules can be configured independently. Common patterns include allowlisting receivers while leaving sends open (e.g. KYC-only deposits) and restricting `MINT_RECEIVER_POLICY` to a custodian set while leaving everyday transfers unrestricted.
 
@@ -91,7 +95,9 @@ B20 pauses are granular: the `PausableFeature` enum partitions the gated surface
 
 B20 implements [ERC-2612](https://eips.ethereum.org/EIPS/eip-2612) (signed approvals) using an [EIP-712](https://eips.ethereum.org/EIPS/eip-712) domain shaped as `(name, version, chainId, verifyingContract)`, with `version` fixed at `"1"` and `salt` unused. Because `name` is re-hashed into the domain on every signed call, `updateName` automatically rotates the domain separator; each successful `updateName` emits one `EIP712DomainChanged` event ([ERC-5267](https://eips.ethereum.org/EIPS/eip-5267)).
 
-`DOMAIN_SEPARATOR()` and `eip712Domain()` are exposed for callers that want to read the domain dynamically rather than reconstruct it. `nonces(owner)` is the per-account replay counter incremented on every `permit`. Smart-account signatures are accepted via the standard [ERC-1271](https://eips.ethereum.org/EIPS/eip-1271) path.
+`DOMAIN_SEPARATOR()` and `eip712Domain()` are exposed for callers that want to read the domain dynamically rather than reconstruct it. `nonces(owner)` is the per-account replay counter incremented on every `permit`.
+
+ERC-1271 contract signatures are deliberately NOT accepted — permit recovers via ECDSA from 65-byte signatures only. Smart-contract accounts should use call-batching or gasless flows. [Permit2](https://github.com/Uniswap/permit2) is usable as a periphery alternative.
 
 ## Contract URI (ERC-7572)
 
