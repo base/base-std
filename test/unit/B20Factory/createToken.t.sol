@@ -35,17 +35,18 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Verifies createToken rejects raw variant bytes outside the B20Variant enum range
-    /// @dev B20Variant has no "NONE" sentinel; typed callers cannot construct an out-of-range
-    ///      value. The ABI decoder rejects out-of-range enum bytes with a Panic(0x21) before the
-    ///      factory body's `else { revert InvalidVariant(); }` branch is ever reached, so the
-    ///      observable behavior from a raw-bytes caller is a decode-time panic rather than a
-    ///      typed factory revert.
+    ///         with the typed `InvalidVariant()` selector.
+    /// @dev The `variant` parameter is typed as `uint8` (not the enum), so any out-of-range
+    ///      byte reaches the factory body and is rejected by the entry-point guard with
+    ///      `InvalidVariant()`, matching the Rust precompile's selector exactly. Pinned via
+    ///      `vm.expectRevert(selector)` so a silent regression to a decode-time `Panic(0x21)`
+    ///      fails the test instead of passing under the bare-`vm.expectRevert()` "any revert"
+    ///      semantics.
     function test_createB20_revert_outOfRangeVariant(address caller, bytes32 salt, uint8 badVariant) public {
         _assumeValidCaller(caller);
         badVariant = uint8(bound(uint256(badVariant), uint256(type(IB20Factory.B20Variant).max) + 1, 255));
         vm.prank(caller);
-        // ABI decoder panic for out-of-range enum value.
-        vm.expectRevert();
+        vm.expectRevert(IB20Factory.InvalidVariant.selector);
         (bool ok,) = address(factory)
             .call(
                 abi.encodeWithSelector(
@@ -66,7 +67,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         vm.expectRevert(
             abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.DEFAULT)
         );
-        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the STABLECOIN variant
@@ -85,7 +86,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
                 IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.STABLECOIN
             )
         );
-        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.STABLECOIN), salt, abi.encode(p), new bytes[](0));
     }
 
     // STABLECOIN currency validation: every byte must be an uppercase ASCII letter (A-Z).
@@ -103,7 +104,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, code));
-        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.STABLECOIN), salt, abi.encode(p), new bytes[](0));
     }
 
     function _isValidFiatCode(string memory code) private pure returns (bool) {
@@ -129,7 +130,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         vm.expectRevert(
             abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.SECURITY)
         );
-        factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.SECURITY), salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies security createToken reverts when isin is the empty string
@@ -139,7 +140,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
         vm.prank(caller);
         vm.expectRevert(IB20Factory.MissingRequiredField.selector);
-        factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.SECURITY), salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies stablecoin createToken reverts when currency is the empty string
@@ -151,7 +152,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Stablecoin Test", "USD", admin, "");
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, ""));
-        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.STABLECOIN), salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts when (variant, sender, salt) collides
@@ -161,7 +162,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         address first = _createDefault(caller, salt, _b20Params(), new bytes[](0));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.TokenAlreadyExists.selector, first));
-        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(_b20Params()), new bytes[](0));
     }
 
     /// @notice Verifies a failing initCall bubbles the underlying revert reason (regression test for L-01)
@@ -177,7 +178,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+        factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies an empty-revert initCall is wrapped as InitCallFailed(index) (L-01 complement)
@@ -193,7 +194,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         initCalls[0] = abi.encodeWithSelector(bytes4(0xdeadbeef));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.InitCallFailed.selector, uint256(0)));
-        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+        factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies bubble + index for the SECOND init call (L-01 index correctness)
@@ -210,7 +211,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         initCalls[1] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(_b20Params()), initCalls);
+        factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(_b20Params()), initCalls);
     }
 
     /// @notice Verifies a failing initCall leaves the deterministic address empty
@@ -222,14 +223,14 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     function test_createB20_revert_initCallFailed_revertsWholeCreation(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20CreateParams memory p = _b20Params();
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
+        address predicted = factory.getB20Address(uint8(IB20Factory.B20Variant.DEFAULT), caller, salt);
 
         bytes[] memory initCalls = new bytes[](1);
         initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(0), uint256(1));
 
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(p), initCalls);
+        factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(p), initCalls);
 
         // After the failed creation, the predicted address has no code,
         // and a fresh creation with the same args succeeds.
@@ -247,7 +248,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     function test_createB20_success_defaultMatchesPrediction(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20CreateParams memory p = _b20Params("Test", "TST", admin);
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
+        address predicted = factory.getB20Address(uint8(IB20Factory.B20Variant.DEFAULT), caller, salt);
         address actual = _createDefault(caller, salt, p, new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
     }
@@ -256,7 +257,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @dev Address determinism: returned address must equal getTokenAddress(STABLECOIN, sender, salt)
     function test_createB20_success_stablecoinMatchesPrediction(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.STABLECOIN, caller, salt);
+        address predicted = factory.getB20Address(uint8(IB20Factory.B20Variant.STABLECOIN), caller, salt);
         address actual = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
     }
@@ -265,7 +266,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @dev Address determinism: returned address must equal getTokenAddress(SECURITY, sender, salt)
     function test_createB20_success_securityMatchesPrediction(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
+        address predicted = factory.getB20Address(uint8(IB20Factory.B20Variant.SECURITY), caller, salt);
         address actual = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
         assertEq(actual, predicted, "createToken address must match prediction");
     }
@@ -465,7 +466,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     function test_createB20_success_emitsB20Created(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20CreateParams memory p = _b20Params("MyToken", "MYT", admin);
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
+        address predicted = factory.getB20Address(uint8(IB20Factory.B20Variant.DEFAULT), caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
         emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.DEFAULT, "MyToken", "MYT", 18);
@@ -478,7 +479,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
+        address predicted = factory.getB20Address(uint8(IB20Factory.B20Variant.SECURITY), caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
         emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.SECURITY, "Security Test", "SEC", 6);
@@ -723,7 +724,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         uint160 expectedAddr = (uint160(0xB2) << 152) | (uint160(uint8(IB20Factory.B20Variant.DEFAULT)) << 72)
             | uint160(uint72(expectedTail));
 
-        address actual = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, sender, salt);
+        address actual = factory.getB20Address(uint8(IB20Factory.B20Variant.DEFAULT), sender, salt);
         assertEq(actual, address(expectedAddr), "factory must derive address via abi.encode of (sender, salt)");
     }
 
