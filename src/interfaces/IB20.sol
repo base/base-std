@@ -469,15 +469,18 @@ interface IB20 {
     /// @notice Allowance granted by `owner` to `spender`.
     function allowance(address owner, address spender) external view returns (uint256);
 
-    /// @notice Transfers `amount` from `msg.sender` to `to`. Reverts with:
-    ///         - `ContractPaused(TRANSFER)` if `TRANSFER` is paused.
-    ///         - `PolicyForbids(TRANSFER_SENDER_POLICY,   policyId)` if `msg.sender`
-    ///           is not authorized under the active `TRANSFER_SENDER_POLICY` policy.
-    ///         - `PolicyForbids(TRANSFER_RECEIVER_POLICY, policyId)` if `to` is not
-    ///           authorized under the active `TRANSFER_RECEIVER_POLICY` policy.
-    ///         - `InsufficientBalance(msg.sender, balance, amount)` if the
-    ///           caller does not have enough balance.
-    ///         - `InvalidReceiver(to)` if `to == address(0)`.
+    /// @notice Transfers `amount` from `msg.sender` to `to`. Preconditions
+    ///         evaluate in the order listed; when multiple are violated,
+    ///         the earliest-listed revert is the one that surfaces:
+    ///         1. `ContractPaused(TRANSFER)` if `TRANSFER` is paused.
+    ///         2. `InvalidReceiver(to)` if `to == address(0)`.
+    ///         3. `InvalidSender(msg.sender)` if `msg.sender == address(0)`.
+    ///         4. `PolicyForbids(TRANSFER_SENDER_POLICY, policyId)` if `msg.sender`
+    ///            is not authorized under the active `TRANSFER_SENDER_POLICY`.
+    ///         5. `PolicyForbids(TRANSFER_RECEIVER_POLICY, policyId)` if `to`
+    ///            is not authorized under the active `TRANSFER_RECEIVER_POLICY`.
+    ///         6. `InsufficientBalance(msg.sender, balance, amount)` if the
+    ///            caller does not have enough balance.
     /// @dev    Does NOT consult the `TRANSFER_EXECUTOR_POLICY` policy: on direct
     ///         `transfer` the executor IS the sender, and the sender
     ///         check already covers that address. When the token is
@@ -486,13 +489,23 @@ interface IB20 {
     function transfer(address to, uint256 amount) external returns (bool);
 
     /// @notice Transfers `amount` from `from` to `to` using `msg.sender`'s
-    ///         allowance. Reverts as `transfer` does, plus:
-    ///         - `InsufficientAllowance(msg.sender, allowance, amount)`
-    ///           if the caller does not have enough allowance from `from`.
-    ///         - `InvalidSender(from)` if `from == address(0)`.
-    ///         - `PolicyForbids(TRANSFER_EXECUTOR_POLICY, policyId)` if
-    ///           `msg.sender != from` and `msg.sender` is not authorized
-    ///           under the active `TRANSFER_EXECUTOR_POLICY` policy.
+    ///         allowance. Preconditions evaluate in the order listed;
+    ///         when multiple are violated, the earliest-listed revert is
+    ///         the one that surfaces:
+    ///         1. `ContractPaused(TRANSFER)` if `TRANSFER` is paused.
+    ///         2. `InvalidReceiver(to)` if `to == address(0)`.
+    ///         3. `InvalidSender(from)` if `from == address(0)`.
+    ///         4. `InsufficientAllowance(msg.sender, allowance, amount)`
+    ///            if the caller does not have enough allowance from `from`.
+    ///         5. `PolicyForbids(TRANSFER_EXECUTOR_POLICY, policyId)` if
+    ///            `msg.sender != from` and `msg.sender` is not authorized
+    ///            under the active `TRANSFER_EXECUTOR_POLICY`.
+    ///         6. `PolicyForbids(TRANSFER_SENDER_POLICY, policyId)` if `from`
+    ///            is not authorized under the active `TRANSFER_SENDER_POLICY`.
+    ///         7. `PolicyForbids(TRANSFER_RECEIVER_POLICY, policyId)` if `to`
+    ///            is not authorized under the active `TRANSFER_RECEIVER_POLICY`.
+    ///         8. `InsufficientBalance(from, balance, amount)` if `from`
+    ///            does not have enough balance.
     /// @dev    The sender-side check is performed against `from` (the
     ///         party whose balance moves), the receiver check against
     ///         `to`, and the executor check against `msg.sender` only
@@ -502,11 +515,12 @@ interface IB20 {
 
     /// @notice Sets `spender`'s allowance to `amount`. NOT gated by any
     ///         policy or by pause; only the act of MOVING balance is gated.
-    /// @dev    Reverts with `InvalidApprover(msg.sender)` if the
-    ///         caller is `address(0)` (theoretically unreachable for
-    ///         normal callers but enforced for parity with OZ ERC20),
-    ///         and `InvalidSpender(spender)` if
-    ///         `spender == address(0)`.
+    /// @dev    Reverts in the following canonical order (first violated
+    ///         check wins):
+    ///         1. `InvalidApprover(msg.sender)` if the caller is
+    ///            `address(0)` (theoretically unreachable for normal
+    ///            callers but enforced for parity with OZ ERC20).
+    ///         2. `InvalidSpender(spender)` if `spender == address(0)`.
     function approve(address spender, uint256 amount) external returns (bool);
 
     /*//////////////////////////////////////////////////////////////
@@ -558,12 +572,17 @@ interface IB20 {
                               MINT / BURN
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Mints `amount` to `to`. Requires `MINT_ROLE`. Subject to:
-    ///         1. `totalSupply + amount <= supplyCap` (else
-    ///            `SupplyCapExceeded`).
-    ///         2. `MINT` is not paused (else `ContractPaused(MINT)`).
-    ///         3. `to` is authorized under the active `MINT_RECEIVER_POLICY`
-    ///            policy (else `PolicyForbids(MINT_RECEIVER_POLICY, policyId)`).
+    /// @notice Mints `amount` to `to`. Preconditions evaluate in the
+    ///         order listed; when multiple are violated, the
+    ///         earliest-listed revert is the one that surfaces:
+    ///         1. `ContractPaused(MINT)` if `MINT` is paused.
+    ///         2. `AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE)`
+    ///            if the caller does not hold `MINT_ROLE`.
+    ///         3. `InvalidReceiver(to)` if `to == address(0)`.
+    ///         4. `PolicyForbids(MINT_RECEIVER_POLICY, policyId)` if `to`
+    ///            is not authorized under the active `MINT_RECEIVER_POLICY`.
+    ///         5. `SupplyCapExceeded(cap, totalSupply + amount)` if the
+    ///            mint would push `totalSupply` past `supplyCap`.
     /// @dev    Per-minter rate limiting is NOT enshrined at any level
     ///         (Default or variant). Minter quotas live in EVM
     ///         periphery contracts: a controller / wrapper that holds
@@ -578,12 +597,16 @@ interface IB20 {
     ///         after the standard `Transfer` event.
     function mintWithMemo(address to, uint256 amount, bytes32 memo) external;
 
-    /// @notice Burns `amount` from the caller's own balance. Requires
-    ///         `BURN_ROLE`. Subject to `BURN` not being paused (else
-    ///         `ContractPaused(BURN)`). NOT subject to any policy:
-    ///         burn destroys the caller's own supply with no recipient.
-    ///         Reverts with `InsufficientBalance(caller, balance, amount)`
-    ///         if the caller does not have enough balance.
+    /// @notice Burns `amount` from the caller's own balance. Preconditions
+    ///         evaluate in the order listed; when multiple are violated,
+    ///         the earliest-listed revert is the one that surfaces:
+    ///         1. `ContractPaused(BURN)` if `BURN` is paused.
+    ///         2. `AccessControlUnauthorizedAccount(msg.sender, BURN_ROLE)`
+    ///            if the caller does not hold `BURN_ROLE`.
+    ///         3. `InsufficientBalance(caller, balance, amount)` if the
+    ///            caller does not have enough balance.
+    ///         NOT subject to any policy: burn destroys the caller's own
+    ///         supply with no recipient.
     /// @dev    To destroy balance held by a third party (compliance
     ///         seizure from a policy-blocked address), use `burnBlocked`.
     ///         Emits `Transfer(caller, address(0), amount)`.
@@ -593,16 +616,18 @@ interface IB20 {
     ///         after the standard `Transfer` event.
     function burnWithMemo(uint256 amount, bytes32 memo) external;
 
-    /// @notice Destroys `amount` of `from`'s balance. Requires
-    ///         `BURN_BLOCKED_ROLE`. Subject to:
-    ///         1. `BURN` is not paused (else `ContractPaused(BURN)`).
-    ///         2. `from` is NOT authorized under the active
-    ///            `TRANSFER_SENDER_POLICY` policy (else `AccountNotBlocked(from)`).
-    ///            `burnBlocked` exists for seizure of policy-blocked
-    ///            balance; calling it against an authorized address is
-    ///            rejected by design.
-    ///         3. `amount <= balanceOf(from)` (else
-    ///            `InsufficientBalance(from, balance, amount)`).
+    /// @notice Destroys `amount` of `from`'s balance. Preconditions
+    ///         evaluate in the order listed; when multiple are violated,
+    ///         the earliest-listed revert is the one that surfaces:
+    ///         1. `ContractPaused(BURN)` if `BURN` is paused.
+    ///         2. `AccessControlUnauthorizedAccount(msg.sender, BURN_BLOCKED_ROLE)`
+    ///            if the caller does not hold `BURN_BLOCKED_ROLE`.
+    ///         3. `AccountNotBlocked(from)` if `from` IS authorized under
+    ///            the active `TRANSFER_SENDER_POLICY` policy. `burnBlocked`
+    ///            exists for seizure of policy-blocked balance; calling
+    ///            it against a non-blocked address is rejected by design.
+    ///         4. `InsufficientBalance(from, balance, amount)` if
+    ///            `amount > balanceOf(from)`.
     /// @dev    Designed for sanctions-seizure flows where compliance
     ///         requires destruction of balance held by a blocked
     ///         address. Tokens that follow a "freeze, never seize"
@@ -705,16 +730,22 @@ interface IB20 {
     /// @notice Pauses the `features` operations. Additive: features
     ///         already paused remain paused, and the listed features
     ///         become paused (duplicates within the call are idempotent).
-    ///         Requires `PAUSE_ROLE`. Reverts with `EmptyFeatureSet` if
-    ///         `features.length == 0`.
+    ///         Reverts in the following canonical order (first violated
+    ///         check wins):
+    ///         1. `AccessControlUnauthorizedAccount(msg.sender, PAUSE_ROLE)`
+    ///            if the caller does not hold `PAUSE_ROLE`.
+    ///         2. `EmptyFeatureSet()` if `features.length == 0`.
     function pause(PausableFeature[] calldata features) external;
 
     /// @notice Unpauses the `features` operations. Listed features
     ///         become unpaused; features not listed are unaffected
     ///         (duplicates are idempotent; unpausing a feature that is
     ///         not currently paused is a no-op for that feature).
-    ///         Requires `UNPAUSE_ROLE`. Reverts with `EmptyFeatureSet`
-    ///         if `features.length == 0`.
+    ///         Reverts in the following canonical order (first violated
+    ///         check wins):
+    ///         1. `AccessControlUnauthorizedAccount(msg.sender, UNPAUSE_ROLE)`
+    ///            if the caller does not hold `UNPAUSE_ROLE`.
+    ///         2. `EmptyFeatureSet()` if `features.length == 0`.
     function unpause(PausableFeature[] calldata features) external;
 
     /*//////////////////////////////////////////////////////////////

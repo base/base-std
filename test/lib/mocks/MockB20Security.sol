@@ -115,6 +115,19 @@ contract MockB20Security is MockB20, IB20Security {
         _;
     }
 
+    /// @dev Like the base `whenNotPaused` but without the factory
+    ///      bootstrap bypass: the pause check is unconditional, even
+    ///      for the factory in the init window. Reserved for variant
+    ///      paths that deliberately reject the bypass — currently just
+    ///      the `redeem` / `redeemWithMemo` family, which is
+    ///      holder-initiated and has no legitimate init-time use case
+    ///      (see this contract's natspec). Lives here, not on the
+    ///      base, because no base function needs the stricter gate.
+    modifier whenNotPausedStrict(PausableFeature feature) {
+        if (_isPaused(feature)) revert ContractPaused(feature);
+        _;
+    }
+
     // ============================================================
     //                        ANNOUNCEMENTS
     // ============================================================
@@ -173,31 +186,51 @@ contract MockB20Security is MockB20, IB20Security {
     //                  BATCHED ISSUANCE / CLAWBACK
     // ============================================================
 
-    function batchMint(address[] calldata recipients, uint256[] calldata amounts) external {
+    /// @dev `whenNotPaused(MINT)` + `onlyRole(MINT_ROLE)` modifiers run
+    ///      ONCE for the entire batch — the underlying `_mint` helper
+    ///      no longer carries its own pause/role gates (those were
+    ///      hoisted to per-entrypoint modifiers as part of the
+    ///      `pause → role → input → ...` canonical ordering). Length /
+    ///      empty-batch checks fire next inside the body. The
+    ///      per-element `validReceiver` guard is inlined in the loop
+    ///      because modifier parameters evaluate once at function
+    ///      entry, not per-iteration; this preserves the per-recipient
+    ///      `InvalidReceiver` revert that callers depend on.
+    function batchMint(address[] calldata recipients, uint256[] calldata amounts)
+        external
+        whenNotPaused(PausableFeature.MINT)
+        onlyRole(MINT_ROLE)
+    {
         if (recipients.length != amounts.length) revert LengthMismatch(recipients.length, amounts.length);
         if (recipients.length == 0) revert EmptyBatch();
-        // Per-element call into _mint: role / pause checks repeat (idempotent),
-        // but MINT_RECEIVER_POLICY policy and supply-cap accumulation are correctly
-        // applied per recipient. Cleaner than re-deriving the per-element body.
         for (uint256 i = 0; i < recipients.length; i++) {
+            // Per-element zero-receiver guard: `_mint` no longer checks
+            // input (modifier-only on the single-recipient `mint` /
+            // `mintWithMemo` entrypoints).
+            if (recipients[i] == address(0)) revert InvalidReceiver(recipients[i]);
             _mint(recipients[i], amounts[i]);
         }
     }
 
-    /// @dev `onlyRoleStrict` (not `onlyRole`): the factory bootstrap
+    /// @dev Modifier order: `pause → role` (canonical for the variant).
+    ///      `onlyRoleStrict` (not `onlyRole`): the factory bootstrap
     ///      bypass is deliberately NOT honored here, per the contract
     ///      natspec — clawback against existing balances has no init-time
     ///      use case, so granting the factory a bypass would only widen
-    ///      the attack surface.
+    ///      the attack surface. `whenNotPaused` retains the bypass; the
+    ///      practical effect is identical because the factory never
+    ///      reaches the body anyway (role-strict blocks it first), and
+    ///      mirroring the rest of the contract on the pause vector
+    ///      keeps the modifier set uniform.
     function batchBurn(address[] calldata accounts, uint256[] calldata amounts)
         external
+        whenNotPaused(PausableFeature.BURN)
         onlyRoleStrict(BURN_FROM_ROLE)
     {
         if (accounts.length != amounts.length) {
             revert LengthMismatch(accounts.length, amounts.length);
         }
         if (accounts.length == 0) revert EmptyBatch();
-        if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
         for (uint256 i = 0; i < accounts.length; i++) {
             // Zero amounts are allowed per ERC-20 conventions (`transfer(0)` is valid);
             // `_burnRaw` is a no-op for amount == 0 and emits `Transfer(account, 0, 0)`.
@@ -210,12 +243,12 @@ contract MockB20Security is MockB20, IB20Security {
     //                          REDEMPTION
     // ============================================================
 
-    function redeem(uint256 amount) external {
+    function redeem(uint256 amount) external whenNotPausedStrict(PausableFeature.REDEEM) {
         uint256 ratio = _redeemBurn(amount);
         emit Redeemed(msg.sender, amount, ratio);
     }
 
-    function redeemWithMemo(uint256 amount, bytes32 memo) external {
+    function redeemWithMemo(uint256 amount, bytes32 memo) external whenNotPausedStrict(PausableFeature.REDEEM) {
         uint256 ratio = _redeemBurn(amount);
         // Order matters: Transfer (in _redeemBurn), then Memo, then Redeemed.
         emit Memo(msg.sender, memo);

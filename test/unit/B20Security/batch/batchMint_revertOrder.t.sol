@@ -9,17 +9,20 @@ import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @title Differential check-order tests for `batchMint` (security variant).
 ///
-/// @notice **Canonical order (Solidity reference):**
-///         1. LENGTH_MISMATCH (`recipients.length != amounts.length`) → `LengthMismatch`
-///         2. EMPTY_BATCH (`recipients.length == 0`) → `EmptyBatch`
-///         3..N. Per-element `_mint` checks (see `mint_revertOrder.t.sol`):
-///               ROLE → ZERO-RECEIVER → PAUSE → POLICY → CAP
+/// @notice **Canonical order (Solidity reference — modifier-led):**
+///         1. PAUSE (`whenNotPaused(MINT)` modifier) → `ContractPaused`
+///         2. ROLE (`onlyRole(MINT_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
+///         3. LENGTH_MISMATCH (body, `recipients.length != amounts.length`) → `LengthMismatch`
+///         4. EMPTY_BATCH (body, `recipients.length == 0`) → `EmptyBatch`
+///         5. ZERO-RECEIVER (per-element inline guard) → `InvalidReceiver`
+///         6..N. Per-element `_mint` checks (see `mint_revertOrder.t.sol`):
+///               POLICY → CAP
 ///
 ///         The pairs within `_mint`'s body are already pinned by
-///         `mint_revertOrder.t.sol`. This file only pins the two batchMint-specific
-///         preconditions (LENGTH_MISMATCH, EMPTY_BATCH) against the first per-element
-///         check they encounter (ROLE), which transitively guarantees they fire
-///         before every `_mint` body check.
+///         `mint_revertOrder.t.sol`. This file pins the batch-level
+///         preconditions (PAUSE, ROLE, LENGTH_MISMATCH, EMPTY_BATCH)
+///         against each other and against the first per-element check
+///         they encounter.
 contract B20SecurityBatchMintRevertOrderTest is B20SecurityTest {
     address[] internal _emptyAddrs;
     uint256[] internal _emptyUints;
@@ -33,27 +36,87 @@ contract B20SecurityBatchMintRevertOrderTest is B20SecurityTest {
         _twoUints.push(1);
     }
 
-    /// @notice LENGTH_MISMATCH beats ROLE (and transitively everything inside `_mint`).
-    /// @dev Caller lacks MINT_ROLE; arrays have mismatched lengths. LENGTH check
-    ///      fires in `batchMint` body before `_mint` is invoked, so the role
-    ///      modifier on `_mint` never runs.
-    function test_batchMint_revertOrder_lengthMismatch_beats_mintBody(address caller) public {
+    // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
+
+    /// @notice PAUSE beats ROLE.
+    function test_batchMint_revertOrder_pause_beats_role(address caller) public {
+        _assumeValidCaller(caller);
+        vm.assume(caller != admin);
+        vm.assume(caller != minter);
+        _pause(IB20.PausableFeature.MINT);
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.MINT));
+        security().batchMint(_twoAddrs, _twoUints);
+    }
+
+    /// @notice PAUSE beats LENGTH_MISMATCH.
+    function test_batchMint_revertOrder_pause_beats_lengthMismatch() public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        _pause(IB20.PausableFeature.MINT);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.MINT));
+        security().batchMint(_twoAddrs, _twoUints);
+    }
+
+    /// @notice PAUSE beats EMPTY_BATCH.
+    function test_batchMint_revertOrder_pause_beats_emptyBatch() public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        _pause(IB20.PausableFeature.MINT);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.MINT));
+        security().batchMint(_emptyAddrs, _emptyUints);
+    }
+
+    // --- Pairs where ROLE wins (PAUSE not violated) ---
+
+    /// @notice ROLE beats LENGTH_MISMATCH.
+    /// @dev `onlyRole` modifier fires before the body's length check.
+    function test_batchMint_revertOrder_role_beats_lengthMismatch(address caller) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
         vm.assume(caller != minter);
 
         vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.MINT_ROLE)
+        );
+        security().batchMint(_twoAddrs, _twoUints);
+    }
+
+    /// @notice ROLE beats EMPTY_BATCH.
+    function test_batchMint_revertOrder_role_beats_emptyBatch(address caller) public {
+        _assumeValidCaller(caller);
+        vm.assume(caller != admin);
+        vm.assume(caller != minter);
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.MINT_ROLE)
+        );
+        security().batchMint(_emptyAddrs, _emptyUints);
+    }
+
+    // --- Pairs where LENGTH_MISMATCH / EMPTY_BATCH win (PAUSE + ROLE satisfied) ---
+
+    /// @notice LENGTH_MISMATCH beats per-element `_mint` body checks.
+    /// @dev With role granted and pause not set, the length check in batchMint's
+    ///      body fires before the per-element loop runs.
+    function test_batchMint_revertOrder_lengthMismatch_beats_mintBody() public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+
+        vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20Security.LengthMismatch.selector, uint256(2), uint256(1)));
         security().batchMint(_twoAddrs, _twoUints);
     }
 
-    /// @notice EMPTY_BATCH beats ROLE (and transitively everything inside `_mint`).
-    function test_batchMint_revertOrder_emptyBatch_beats_mintBody(address caller) public {
-        _assumeValidCaller(caller);
-        vm.assume(caller != admin);
-        vm.assume(caller != minter);
+    /// @notice EMPTY_BATCH beats per-element `_mint` body checks.
+    function test_batchMint_revertOrder_emptyBatch_beats_mintBody() public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
 
-        vm.prank(caller);
+        vm.prank(minter);
         vm.expectRevert(IB20Security.EmptyBatch.selector);
         security().batchMint(_emptyAddrs, _emptyUints);
     }
