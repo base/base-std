@@ -11,8 +11,9 @@ concurrency:
 
 env:
   BASE_REF: main
-  # Pinned to a specific commit so CI is reproducible and the branch can't disappear under us.
-  BASE_ANVIL_REF: 14a43909528eb7ff4bafab0e5fee9b3b651bcd50
+  # Branch to clone; SHA below is pinned for reproducibility and verified after clone.
+  BASE_ANVIL_BRANCH: base-anvil-fork
+  BASE_ANVIL_SHA: 14a43909528eb7ff4bafab0e5fee9b3b651bcd50
   CARGO_TERM_COLOR: always
 
 permissions:
@@ -70,13 +71,6 @@ jobs:
       - name: Setup sccache
         uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
-      - name: Rust cache
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
-        with:
-          cache-on-failure: true
-          shared-key: "base-std-fork-tests"
-          cache-targets: "false"
-
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@50d5a8956f2e319df19e6b57539d7e2acb9f8c1e # v1.5.0
         with:
@@ -93,8 +87,14 @@ jobs:
 
           git clone --depth 1 --single-branch --branch "$BASE_REF" \
             https://github.com/base/base.git "$workdir/base"
-          git clone --depth 1 --single-branch --branch "$BASE_ANVIL_REF" \
+
+          git clone --depth 1 --single-branch --branch "$BASE_ANVIL_BRANCH" \
             https://github.com/base/base-anvil.git "$workdir/base-anvil"
+
+          actual_sha=$(git -C "$workdir/base-anvil" rev-parse HEAD)
+          if [ "$actual_sha" != "$BASE_ANVIL_SHA" ]; then
+            echo "::warning::base-anvil HEAD ($actual_sha) differs from pinned SHA ($BASE_ANVIL_SHA) — update BASE_ANVIL_SHA in the workflow"
+          fi
 
           echo "BASE_DIR=$workdir/base" >> "$GITHUB_ENV"
           echo "BASE_ANVIL_DIR=$workdir/base-anvil" >> "$GITHUB_ENV"
