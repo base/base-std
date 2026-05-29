@@ -48,6 +48,22 @@ contract B20SecurityRedeemTest is B20SecurityTest {
         security().redeem(amount);
     }
 
+    /// @notice Verifies redeem treats amount == 0 as a valid no-op
+    /// @dev Mirrors ERC-20 conventions (transfer(0) is valid). The dust-prevention guard
+    ///      (`shares == 0 || shares < minimum`) only fires for amount > 0, so an explicit
+    ///      zero-amount redemption succeeds without burning or reverting. Emits the canonical
+    ///      `Transfer(caller, 0, 0)` (from `_burnRaw`) followed by `Redeemed(caller, 0, ratio)`.
+    function test_redeem_success_zeroAmountIsNoOp() public {
+        uint256 balanceBefore = token.balanceOf(alice);
+        uint256 supplyBefore = token.totalSupply();
+
+        vm.prank(alice);
+        security().redeem(0);
+
+        assertEq(token.balanceOf(alice), balanceBefore, "balance unchanged by zero-amount redeem");
+        assertEq(token.totalSupply(), supplyBefore, "totalSupply unchanged by zero-amount redeem");
+    }
+
     /// @notice Verifies redeem reverts when the resulting share count is below the configured floor
     /// @dev Error message reports the computed shares and the configured minimum. Test sets the
     ///      floor above the requested share count and checks BelowMinimumRedeemable(shares, minimum).

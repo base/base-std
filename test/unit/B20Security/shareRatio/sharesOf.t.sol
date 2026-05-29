@@ -38,4 +38,19 @@ contract B20SecuritySharesOfTest is B20SecurityTest {
             "sharesOf must apply balance * ratio / WAD"
         );
     }
+
+    /// @notice Verifies sharesOf applies the WAD fallback when the stored ratio is explicitly zero
+    /// @dev A stored `sharesToTokensRatio` of zero is documented to resolve as `WAD_PRECISION` on
+    ///      the read surface, both pre-write (fresh slot) and post-explicit-zero-write. Tests the
+    ///      latter at the derived-function level so a refactor that reads the slot directly here
+    ///      would fail. See test_sharesToTokensRatio_success_zeroRestoresWadFallback for the
+    ///      base-level fallback assertion.
+    function test_sharesOf_success_explicitZeroRatioFallsBackToWad(address account, uint256 amount) public {
+        _assumeValidActor(account);
+        amount = bound(amount, 0, type(uint128).max);
+        if (amount > 0) _mint(account, amount);
+        _updateShareRatio(5e18); // seed a non-zero value first
+        _updateShareRatio(0); // then explicitly clear back to zero
+        assertEq(security().sharesOf(account), amount, "stored zero ratio must produce identity (WAD fallback)");
+    }
 }

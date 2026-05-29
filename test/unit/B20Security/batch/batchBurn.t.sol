@@ -75,6 +75,31 @@ contract B20SecurityBatchBurnTest is B20SecurityTest {
         security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
     }
 
+    /// @notice Verifies batchBurn treats zero-amount elements as valid no-ops
+    /// @dev Mirrors ERC-20 conventions (transfer(0) is valid). A zero in any slot is a no-op:
+    ///      the balance for that element is unchanged, and `_burnRaw` emits the canonical
+    ///      `Transfer(account, 0, 0)` for it. Non-zero elements in the same batch are processed
+    ///      normally. The "all-or-nothing for non-zero failures" invariant is preserved by the
+    ///      InsufficientBalance check inside `_burnRaw`.
+    function test_batchBurn_success_zeroAmountElementsAreNoOps() public {
+        _grantBurnFrom();
+        _mint(alice, 100);
+        _mint(bob, 100);
+
+        address[] memory accounts = new address[](2);
+        accounts[0] = alice;
+        accounts[1] = bob;
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 50;
+        amounts[1] = 0; // zero is a valid no-op per ERC-20 conventions
+
+        vm.prank(burnFromActor);
+        security().batchBurn(accounts, amounts);
+
+        assertEq(token.balanceOf(alice), 50, "alice debited by 50");
+        assertEq(token.balanceOf(bob), 100, "bob balance unchanged by zero-amount element");
+    }
+
     /// @notice Verifies batchBurn surfaces per-element InsufficientBalance reverts
     /// @dev Per-element invariant: `_burnRaw` reverts InsufficientBalance(account, bal, amount)
     ///      if any element exceeds the account's balance. All-or-nothing atomicity.
