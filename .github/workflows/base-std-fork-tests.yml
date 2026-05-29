@@ -18,6 +18,7 @@ env:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   fork-tests:
@@ -159,6 +160,37 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Comment fork test results on PR
+        if: github.event_name == 'pull_request' && always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          output="$RUNNER_TEMP/fork-test-output.txt"
+          passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || echo 0)
+          failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || echo 0)
+
+          if [ "$failed" -eq 0 ]; then
+            body="### ✅ Fork tests: all ${passed} passed
+          base/base is fully in sync with the base-std spec."
+          else
+            failing=$(grep '\[FAIL' "$output" | sed 's/\x1B\[[0-9;]*m//g' | sed 's/\[FAIL[^]]*\] /- /' | cut -d'(' -f1 | sort -u || true)
+            body="### ⚠️ Fork tests: ${failed} failed, ${passed} passed
+
+          These failures indicate divergences where **base/base needs to catch up** to the base-std spec. This check is advisory and does not block merging.
+
+          <details>
+          <summary>Failing tests</summary>
+
+          ${failing}
+
+          </details>"
+          fi
+
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "$body"
 
       - name: Upload anvil log
         if: always()
