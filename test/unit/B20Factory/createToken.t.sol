@@ -475,7 +475,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @dev Event integrity: token, variant, name, symbol, decimals must match derived variant defaults.
     ///      Admin role assignment is announced via RoleGranted, not as a field on this event;
     ///      see test_createB20_success_emitsRoleGrantedForInitialAdmin for that. DEFAULT variant
-    ///      emits empty `eventParams` (no extra immutable identity fields beyond what's already
+    ///      emits empty `variantParams` (no extra immutable identity fields beyond what's already
     ///      in the event).
     function test_createB20_success_emitsB20Created(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
@@ -490,7 +490,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 the same
     ///      way the default emitter test pins decimals=18. SECURITY variant emits empty
-    ///      `eventParams` (its `isin` and `minimumRedeemable` are mutable and surfaced via
+    ///      `variantParams` (its `isin` and `minimumRedeemable` are mutable and surfaced via
     ///      their own update events).
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
@@ -503,8 +503,8 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     }
 
     /// @notice Verifies createToken emits B20Created with decimals=6 and a non-empty
-    ///         `eventParams` payload for the stablecoin variant
-    /// @dev    STABLECOIN-only behavior: the `eventParams` field carries
+    ///         `variantParams` payload for the stablecoin variant
+    /// @dev    STABLECOIN-only behavior: the `variantParams` field carries
     ///         `abi.encode(B20StablecoinEventParams { version, currency })` so stream-based
     ///         indexers can recover the immutable `currency` without an RPC
     ///         call to `currency()`.
@@ -527,7 +527,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         _createStablecoin(caller, salt, p, new bytes[](0));
     }
 
-    /// @notice Verifies the `eventParams` payload of `B20Created` for STABLECOIN decodes
+    /// @notice Verifies the `variantParams` payload of `B20Created` for STABLECOIN decodes
     ///         back to a `B20StablecoinEventParams` whose `currency` round-trips the value
     ///         passed at creation and whose `version` matches the canonical event-encoding
     ///         version constant.
@@ -554,18 +554,18 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         bytes32 selector = IB20Factory.B20Created.selector;
-        bytes memory eventParams;
+        bytes memory variantParams;
         for (uint256 i = 0; i < logs.length; ++i) {
             if (logs[i].topics.length > 0 && logs[i].topics[0] == selector) {
-                // B20Created data payload: (name, symbol, decimals, eventParams).
-                (,,, eventParams) = abi.decode(logs[i].data, (string, string, uint8, bytes));
+                // B20Created data payload: (name, symbol, decimals, variantParams).
+                (,,, variantParams) = abi.decode(logs[i].data, (string, string, uint8, bytes));
                 break;
             }
         }
-        assertGt(eventParams.length, 0, "STABLECOIN eventParams must be non-empty");
+        assertGt(variantParams.length, 0, "STABLECOIN variantParams must be non-empty");
 
         IB20Factory.B20StablecoinEventParams memory decoded =
-            abi.decode(eventParams, (IB20Factory.B20StablecoinEventParams));
+            abi.decode(variantParams, (IB20Factory.B20StablecoinEventParams));
         assertEq(
             decoded.version,
             B20FactoryLib.B20_STABLECOIN_EVENT_PARAMS_VERSION,
