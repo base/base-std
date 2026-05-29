@@ -2,194 +2,75 @@
 pragma solidity >=0.8.20 <0.9.0;
 
 /// @title IB20Factory
-/// @notice Singleton factory precompile for creating B-20 tokens of any
-///         variant. A single entry point `createB20` dispatches on a
-///         `B20Variant` discriminator; per-variant creation arguments
-///         are ABI-encoded into `params` and prefixed with a `version`
-///         byte so the encoding can evolve without breaking the factory's
-///         immutable surface. Creation is permissionless; the caller picks
-///         the initial admin.
 ///
-/// @dev    **Factory address.** The factory lives at the fixed address
-///         `0xB20F00000000000000000000000000000000000F`. The `0xB20F`
-///         prefix is deliberately distinct from the B-20 token prefix
-///         `0xB200` (byte `[1]` differs), so `isB20(factory)` returns
-///         false unambiguously.
-///
-///         **Token address schema (20 bytes).**
-///         - `[0:10]`  — `bytes10(0xB200000000000000000000)` shared
-///                       prefix identifying a factory-created B-20.
-///         - `[10]`    — `bytes1(variant)` (matches `B20Variant`).
-///         - `[11:20]` — `bytes9(keccak256(abi.encode(msg.sender, salt)))`.
-///
-///         **Variant evolution.** Adding new required fields to an
-///         existing variant after launch is NOT supported: the factory is
-///         an immutable precompile, and downstream protocols (e.g.
-///         Clanker-style launchers) depend on the surface. Schemas evolve
-///         in two ways:
-///         1. Bumping the `version` byte at the head of a variant's
-///            params struct and ABI-decoding accordingly. Old versions
-///            remain valid forever.
-///         2. Customizing per-token configuration via `initCalls` (see
-///            below) instead of growing the params struct.
-///
-///         **`initCalls`.** After the token is deployed and the bootstrap
-///         state is set, each entry in `initCalls` is invoked on the new
-///         token with `msg.sender == factory`. These calls are entirely
-///         privileged: every authorization gate the token would normally
-///         enforce against the caller (role checks, transfer-policy
-///         checks, capability gates) is bypassed for calls originating
-///         from the factory during the bootstrap window. The window
-///         closes the moment `createB20` returns; from that point
-///         forward every call is subject to the standard role and policy
-///         checks. The factory is NOT added to any role on the token;
-///         "privileged" means authorization is skipped for the bootstrap
-///         caller, not that the factory has been granted authority that
-///         persists. Invariants intrinsic to token correctness
-///         (supply-cap math, balance accounting, etc.) are still enforced.
-///
-///         This is the supported path for configuring optional
-///         post-creation state (initial mints, supply caps, policy slot
-///         assignments, contract URI, initial pause state, etc.)
-///         atomically in the same transaction as creation. The factory
-///         does not interpret the call data; any revert in an init call
-///         reverts the whole creation.
-///
-///         **Per-variant validation.** Variant-specific required-field
-///         checks (e.g. stablecoins must specify a non-empty `currency`)
-///         are applied at the end of the variant decode, after the
-///         common version check, so each variant owns its own invariants.
+/// @notice Singleton factory precompile for creating B-20 tokens of any variant. A single
+///         entry point `createB20` dispatches on a `B20Variant` discriminator; variant-specific
+///         arguments are ABI-encoded into `params` with a leading `version` byte.
 interface IB20Factory {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Variant of a B-20 token. Encoded in address byte `[10]`,
-    ///         so the variant of a B-20 address is a pure address-prefix
-    ///         read with no storage lookup. Whether an address is a
-    ///         factory-created B-20 in the first place is answered by
-    ///         `isB20` (a prefix check on bytes `[0:10]`); the variant
-    ///         byte itself does not need an "absent" sentinel.
+    /// @notice Variant of a B-20 token. Encoded in address byte `[10]`.
+    ///
+    /// @param DEFAULT    Default B-20 variant.
+    /// @param STABLECOIN Stablecoin variant (fixed `6` decimals, immutable `currency`).
+    /// @param SECURITY   Security variant (share ratio, announcements, redemptions).
     enum B20Variant {
         DEFAULT,
         STABLECOIN,
         SECURITY
     }
 
-    /// @notice Creation parameters for a Default-variant B-20 token.
-    ///         ABI-encoded into the `params` argument of `createB20`.
-    /// @param version       Encoding version. Currently `1`. Future
-    ///                      hardforks may introduce additional versions
-    ///                      with different field layouts; the leading
-    ///                      byte selects the decoder.
-    /// @param name          ERC-20 token name.
-    /// @param symbol        ERC-20 token symbol.
-    /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`. All
-    ///                      post-creation admin operations authorize
-    ///                      against this account (and any additional
-    ///                      admins it later grants). The bootstrap
-    ///                      `initCalls` are NOT subject to this check:
-    ///                      they execute with full privilege regardless
-    ///                      of role state, and the privileged window
-    ///                      closes the moment `createB20` returns.
-    ///                      May be `address(0)` for the "demonstrate no
-    ///                      owner" case (memecoins, credibly-neutral
-    ///                      tokens). When zero, no role is granted at
-    ///                      creation and the token has no admin: no
-    ///                      role grants, policy changes, or pauses are
-    ///                      ever possible post-creation. The
-    ///                      `renounceLastAdmin` path is the alternative
-    ///                      for tokens that need an admin during setup
-    ///                      and then want to evolve to admin-less.
+    /// @notice Creation parameters for a Default-variant B-20 token. ABI-encoded into `params`.
     struct B20CreateParams {
+        /// @dev Encoding version. Currently `1`.
         uint8 version;
+        /// @dev ERC-20 token name.
         string name;
+        /// @dev ERC-20 token symbol.
         string symbol;
+        /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
     }
 
-    /// @notice Creation parameters for a Stablecoin-variant B-20 token.
-    /// @param version       Encoding version. Currently `1`.
-    /// @param name          ERC-20 token name.
-    /// @param symbol        ERC-20 token symbol.
-    /// @param initialAdmin  Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param currency      Immutable self-declared currency
-    ///                      identifier — uppercase ASCII letters
-    ///                      (`A`–`Z`).
-    /// @dev    Decimals are fixed at `6`. There is no decimals field
-    ///         and no setter for `currency` — both are fixed for the
-    ///         token's lifetime at creation.
+    /// @notice Creation parameters for a Stablecoin-variant B-20 token. ABI-encoded into `params`.
     struct B20StablecoinCreateParams {
+        /// @dev Encoding version. Currently `1`.
         uint8 version;
+        /// @dev ERC-20 token name.
         string name;
+        /// @dev ERC-20 token symbol.
         string symbol;
+        /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
+        /// @dev Immutable self-declared currency identifier; uppercase ASCII `A`-`Z` only.
         string currency;
     }
 
-    /// @notice Creation parameters for a Security-variant B-20 token.
-    /// @param version            Encoding version. Currently `1`.
-    /// @param name               ERC-20 token name.
-    /// @param symbol             ERC-20 token symbol.
-    /// @param initialAdmin       Initial holder of `DEFAULT_ADMIN_ROLE`.
-    /// @param isin               International Securities Identification
-    ///                           Number. Required: empty string reverts.
-    ///                           Additional identifiers (CUSIP, FIGI,
-    ///                           SEDOL) can be attached post-creation
-    ///                           via `IB20Security.updateSecurityIdentifier`.
-    /// @param minimumRedeemable  Initial value of `minimumRedeemable`.
-    ///                           Use `0` to allow any non-zero redemption.
-    /// @dev    Decimals are fixed at `6`. Security tokens have no `initialSupply`
-    ///         parameter: all issuance flows through the inherited
-    ///         `IB20.mint` (single recipient) or `IB20Security.batchMint`
-    ///         (batched, wrapped in `announce(...)`) after deployment.
-    ///
-    ///         For the Security variant, the `REDEEM_SENDER_POLICY`
-    ///         slot defaults to the always-block built-in (policy ID
-    ///         `1`) rather than always-allow, so redemption is closed by
-    ///         default and an admin must opt-in by pointing the slot at
-    ///         an allowlist (or another policy) before any holder can
-    ///         call `redeem`. To open redemption at creation, override
-    ///         the slot atomically by including an
-    ///         `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` entry
-    ///         in `initCalls`.
+    /// @notice Creation parameters for a Security-variant B-20 token. ABI-encoded into `params`.
     struct B20SecurityCreateParams {
+        /// @dev Encoding version. Currently `1`.
         uint8 version;
+        /// @dev ERC-20 token name.
         string name;
+        /// @dev ERC-20 token symbol.
         string symbol;
+        /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
+        /// @dev International Securities Identification Number. Required; empty string reverts.
         string isin;
+        /// @dev Initial value of `minimumRedeemable`. Use `0` to allow any non-zero redemption.
         uint256 minimumRedeemable;
     }
 
-    /// @notice Event payload carried in the `variantEventParams` field of
-    ///         `B20Created` for STABLECOIN-variant tokens. ABI-encoded
-    ///         and emitted with a leading `version` byte so stream-based
-    ///         indexers can decode by `(variant, version)` without an
-    ///         RPC call to read storage.
-    /// @param  version   Event-encoding version. Currently `1`.
-    ///                   Independent of `B20StablecoinCreateParams.version`;
-    ///                   the event payload schema can evolve separately
-    ///                   from the create-call payload schema.
-    /// @param  currency  The immutable stablecoin currency identifier, same
-    ///                   value that was passed in
-    ///                   `B20StablecoinCreateParams.currency`. Surfaced here
-    ///                   because `currency` has no setter and no other
-    ///                   event ever emits it; indexers that cannot make
-    ///                   mid-handler view calls would
-    ///                   otherwise have no way to recover it from the
-    ///                   event stream.
-    /// @dev    DEFAULT and SECURITY variants currently emit an empty
-    ///         `variantEventParams` byte string: DEFAULT has no extra
-    ///         immutable identity fields beyond what's already in
-    ///         `B20Created`, and SECURITY's `isin` and
-    ///         `minimumRedeemable` are mutable and surfaced via their
-    ///         own `SecurityIdentifierUpdated` /
-    ///         `MinimumRedeemableUpdated` events. Either variant can
-    ///         promote from empty to a non-empty payload in a future
-    ///         version without re-issuing a new event type.
+    /// @notice Event payload carried in the `variantEventParams` field of `B20Created` for
+    ///         STABLECOIN-variant tokens. ABI-encoded and prefixed with a version byte.
     struct B20StablecoinEventParams {
+        /// @dev Event-encoding version. Currently `1`. Independent of `B20StablecoinCreateParams.version`.
         uint8 version;
+        /// @dev Stablecoin currency identifier, identical to the value passed in
+        ///      `B20StablecoinCreateParams.currency`.
         string currency;
     }
 
@@ -197,64 +78,38 @@ interface IB20Factory {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice A token already exists at the deterministic address
-    ///         derived from `(variant, msg.sender, salt)`.
-    ///         Caller must use a different salt.
+    /// @notice A token already exists at the deterministic address derived from
+    ///         `(variant, msg.sender, salt)`. Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
-    /// @notice `variant` is not a recognized `B20Variant`. Reached
-    ///         only when the factory is invoked with a raw variant byte
-    ///         outside the enum range (typed `createB20` callers are
-    ///         rejected by ABI decoding before this check fires).
+    /// @notice `variant` is not a recognized `B20Variant`.
     error InvalidVariant();
 
-    /// @notice The leading `version` byte in `params` does not match
-    ///         any known encoding for the requested variant.
+    /// @notice The leading `version` byte in `params` does not match any known encoding for the requested variant.
     error UnsupportedVersion(uint8 version, B20Variant variant);
 
     /// @notice A required string argument was the empty string.
-    /// @param field Name of the missing field (e.g. `"isin"`). Empty
-    ///        `currency` is rejected separately via `InvalidCurrency("")`.
+    ///
+    /// @param field Name of the missing field (e.g. `"isin"`).
     error MissingRequiredField(string field);
 
-    /// @notice The stablecoin `currency` contained a non-`A`–`Z` byte.
+    /// @notice The stablecoin `currency` contained a non-`A`-`Z` byte.
     error InvalidCurrency(string code);
 
-    /// @notice One of the `initCalls` reverted. The factory bubbles the
-    ///         underlying revert reason where the call returns one;
-    ///         this error wraps empty reverts.
+    /// @notice One of the `initCalls` reverted. The factory bubbles the underlying revert reason
+    ///         where the call returns one; this error wraps empty reverts.
     error InitCallFailed(uint256 index);
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted once per `createB20` invocation. The fields
-    ///         cover the universal token-identity surface only;
-    ///         variant-specific state changes (e.g. `currency`, `isin`,
-    ///         supply cap, policy slots) are observable via the
-    ///         token's own events as they're applied during `initCalls`.
-    /// @dev    The initial admin grant (when `initialAdmin != address(0)`)
-    ///         is announced via the standard `RoleGranted(DEFAULT_ADMIN_ROLE,
-    ///         admin, factory)` event emitted from the token's own
-    ///         context during the same transaction — NOT as a field on
-    ///         this event. Role state is always observable via the
-    ///         `RoleGranted` / `RoleRevoked` event stream from the token;
-    ///         `B20Created` is the token-identity signal only. The
-    ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
-    ///         skips the grant and emits no `RoleGranted` at bootstrap.
-    /// @param token         Address of the newly-created token.
-    /// @param variant       Which `B20Variant` was created.
-    /// @param name          ERC-20 token name.
-    /// @param symbol        ERC-20 token symbol.
-    /// @param decimals      ERC-20 decimals (fixed per variant).
-    /// @param variantEventParams ABI-encoded variant-specific immutable identity
-    ///                      fields, leading with a version byte. Empty
-    ///                      (`""`) for DEFAULT and SECURITY (no extra
-    ///                      immutable fields not already covered); for
-    ///                      STABLECOIN, carries `abi.encode(B20StablecoinEventParams)`
-    ///                      with `currency`. Indexers decode by
-    ///                      `(variant, leading version byte)`.
+    /// @notice Emitted once per `createB20` invocation, after the token's identity is sealed
+    ///         and before any `initCalls` are dispatched.
+    ///
+    /// @dev `variantEventParams` carries variant-specific immutable identity data, ABI-encoded
+    ///      and prefixed with a version byte. Empty for DEFAULT and SECURITY; for STABLECOIN,
+    ///      `abi.encode(B20StablecoinEventParams)` with `currency`.
     event B20Created(
         address indexed token,
         B20Variant indexed variant,
@@ -268,47 +123,23 @@ interface IB20Factory {
                                  CREATE
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Creates a B-20 token of the given `variant` at the
-    ///         deterministic address derived from `(variant, msg.sender, salt)`.
-    ///         `params` MUST be the ABI-encoded
-    ///         variant-specific struct (`B20CreateParams`,
-    ///         `B20StablecoinCreateParams`, or `B20SecurityCreateParams`),
-    ///         leading with a `version` byte the factory uses to select
-    ///         the decoder.
+    /// @notice Creates a B-20 token of the given `variant` at the deterministic address derived
+    ///         from `(variant, msg.sender, salt)`, then dispatches each entry in `initCalls` on
+    ///         the new token. Emits `B20Created`.
     ///
-    ///         After the token is constructed and its identity state
-    ///         (name, symbol, decimals, admin, variant-specific fields)
-    ///         is sealed, the factory invokes each entry in `initCalls`
-    ///         on the new token. These calls are entirely privileged:
-    ///         all authorization gates the token would normally enforce
-    ///         against the caller (role checks, transfer-policy checks,
-    ///         capability gates) are bypassed for calls from the factory
-    ///         during this bootstrap window. The factory is not added to
-    ///         any role; the bypass is bound to the call site, not to
-    ///         RBAC state. Once `createB20` returns, every subsequent
-    ///         call on the token is subject to the standard checks.
+    /// @dev Reverts with `InvalidVariant` when `variant` is outside the `B20Variant` range.
+    /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
+    /// @dev Reverts with `MissingRequiredField` when a required string field is empty.
+    /// @dev Reverts with `InvalidCurrency` when a stablecoin `currency` contains a non-`A`-`Z` byte.
+    /// @dev Reverts with `TokenAlreadyExists` when a token already exists at the derived address.
+    /// @dev Reverts with `InitCallFailed` (or the bubbled inner reason) when any entry in `initCalls` reverts.
     ///
-    ///         This is the supported path for configuring all optional
-    ///         post-creation state atomically: initial mints, supply
-    ///         caps, policy slot assignments, initial pause state,
-    ///         contract URI, etc. Any init-call revert reverts the
-    ///         entire creation.
+    /// @param variant   Which variant struct `params` decodes as.
+    /// @param salt      Caller-chosen salt for deterministic address derivation.
+    /// @param params    ABI-encoded variant-specific creation struct, leading with the version byte.
+    /// @param initCalls Bootstrap calls invoked on the new token after identity is sealed.
     ///
-    ///         Emits `B20Created` once the token's identity is sealed
-    ///         and before any `initCalls` are dispatched, so init-call
-    ///         effects appear strictly after the creation event in the
-    ///         log order.
-    /// @param variant    Which variant struct `params` decodes as.
-    /// @param salt       Caller-chosen salt for deterministic address
-    ///                   derivation.
-    /// @param params     ABI-encoded variant-specific creation struct,
-    ///                   leading with the version byte.
-    /// @param initCalls  Optional bootstrap calls invoked on the new
-    ///                   token after identity is sealed. Executed as
-    ///                   fully privileged calls from the factory: all
-    ///                   token-side authorization checks are bypassed
-    ///                   for this window only.
-    /// @return token     The address of the newly created token.
+    /// @return token The address of the newly created token.
     function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
         returns (address token);
@@ -317,25 +148,27 @@ interface IB20Factory {
                             ADDRESS QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Returns the deterministic address `createB20` would
-    ///         assign for `(variant, sender, salt)`. Address derivation
-    ///         depends only on these inputs; the remaining `params`
-    ///         fields (including decimals, which are fixed by variant)
-    ///         do not affect the address.
+    /// @notice Returns the deterministic address `createB20` would assign for `(variant, sender, salt)`. Never reverts.
+    ///
+    /// @param variant Variant of the token whose address is being predicted.
+    /// @param sender  Account that would call `createB20`.
+    /// @param salt    Caller-chosen salt.
+    ///
+    /// @return The deterministic token address.
     function getB20Address(B20Variant variant, address sender, bytes32 salt) external view returns (address);
 
-    /// @notice Whether `token` was created by this factory. Recovered
-    ///         from the address prefix (bytes `[0:10]`); no storage read.
+    /// @notice Returns whether `token` was created by this factory, recovered from the address prefix. Never reverts.
+    ///
+    /// @param token Address to check.
+    ///
+    /// @return Whether `token` matches the B-20 address prefix.
     function isB20(address token) external view returns (bool);
 
-    /// @notice Whether the token at `token` has been initialized by this
-    ///         factory (i.e. `createB20` ran to completion at that
-    ///         address). Returns `false` for B-20-prefixed addresses
-    ///         whose deterministic slot has not yet been claimed by a
-    ///         `createB20` call, and for any address that is not a
-    ///         B-20 at all. The bootstrap window (the `initCalls` loop
-    ///         inside `createB20`) is fully privileged but not yet
-    ///         initialized; this flag flips exactly once, at the moment
-    ///         `createB20` returns.
+    /// @notice Returns whether `createB20` has run to completion at `token`. Flips exactly once,
+    ///         the moment the creating `createB20` call returns. Never reverts.
+    ///
+    /// @param token Address to check.
+    ///
+    /// @return Whether `token` is an initialized B-20.
     function isB20Initialized(address token) external view returns (bool);
 }
