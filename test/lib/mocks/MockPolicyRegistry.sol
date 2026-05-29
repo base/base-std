@@ -244,12 +244,8 @@ contract MockPolicyRegistry is IPolicyRegistry {
         _writeBuiltins();
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         uint56 counter = $.nextCounter;
-        // Counter-exhaustion guard. At one policy per 2-second block, hitting the
-        // 56-bit space (~7.2e16 values) takes ~4.6 billion years — so this branch
-        // is methodologically required, not practically reachable. Without the
-        // guard, an exhausted counter would wrap to 0 on the next increment and
-        // the next `_makeId` for a BLOCKLIST would collide with `ALWAYS_ALLOW_ID`.
-        if (counter == type(uint56).max) revert CounterExhausted();
+        // No overflow guard: at one policy per 2-second block, exhausting the
+        // 56-bit counter space (~7.2e16 values) takes ~4.6 billion years.
         unchecked {
             $.nextCounter = counter + 1;
         }

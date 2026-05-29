@@ -102,14 +102,6 @@ interface IPolicyRegistry {
     ///         currently-staged pending admin.
     error NoPendingAdmin();
 
-    /// @notice The global 56-bit policy counter has reached its maximum
-    ///         value and cannot allocate any further `policyId`s without
-    ///         wrapping to `0` and colliding with `ALWAYS_ALLOW_ID`.
-    ///         Theoretical only — exhausting 2^56 values takes ~4.6 billion
-    ///         years at one policy per 2-second block — but the guard is
-    ///         the methodologically correct response to the audit finding.
-    error CounterExhausted();
-
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/

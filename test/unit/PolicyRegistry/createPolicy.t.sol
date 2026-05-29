@@ -125,22 +125,4 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         vm.prank(caller);
         policyRegistry.createPolicy(admin_, pt);
     }
-
-    /// @notice Verifies createPolicy reverts when the global 56-bit counter is exhausted
-    /// @dev Sets `nextCounter = type(uint56).max` via `vm.store`, then asserts the next
-    ///      `createPolicy` reverts with `CounterExhausted` before the counter would wrap
-    ///      to `0` and the next BLOCKLIST id would collide with `ALWAYS_ALLOW_ID`.
-    ///      Theoretical guard (~4.6B years at one policy per 2-second block) but
-    ///      methodologically required to close the audit finding.
-    function test_createPolicy_revert_counterExhausted(address caller, address admin_, uint8 typeIdx) public {
-        _assumeValidCaller(caller);
-        vm.assume(admin_ != address(0));
-        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
-        vm.store(
-            address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot(), bytes32(uint256(type(uint56).max))
-        );
-        vm.expectRevert(IPolicyRegistry.CounterExhausted.selector);
-        vm.prank(caller);
-        policyRegistry.createPolicy(admin_, pt);
-    }
 }
