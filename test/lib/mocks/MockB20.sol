@@ -161,8 +161,7 @@ contract MockB20 is IB20 {
     // ============================================================
 
     function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
-        if (to == address(0)) revert InvalidReceiver(to);
-        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
+        _requireNonZeroActors(msg.sender, to);
         _transfer(msg.sender, to, amount);
         return true;
     }
@@ -172,8 +171,7 @@ contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        if (to == address(0)) revert InvalidReceiver(to);
-        if (from == address(0)) revert InvalidSender(from);
+        _requireNonZeroActors(from, to);
         if (!_isPrivileged()) {
             // Allowance is consumed unconditionally outside the factory
             // bootstrap window. Matches OZ ERC20 and the Rust precompile,
@@ -211,8 +209,7 @@ contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        if (to == address(0)) revert InvalidReceiver(to);
-        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
+        _requireNonZeroActors(msg.sender, to);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -223,8 +220,7 @@ contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        if (to == address(0)) revert InvalidReceiver(to);
-        if (from == address(0)) revert InvalidSender(from);
+        _requireNonZeroActors(from, to);
         if (!_isPrivileged()) {
             _consumeAllowance(from, msg.sender, amount);
             if (msg.sender != from) {
@@ -664,6 +660,15 @@ contract MockB20 is IB20 {
                 MockB20Storage.layout().allowances[owner][spender] = current - amount;
             }
         }
+    }
+
+    /// @dev Receiver-then-sender zero-address check shared by every
+    ///      transfer-family entrypoint. Reverts `InvalidReceiver(to)`
+    ///      before `InvalidSender(from)` so the precedence between the
+    ///      two matches the canonical order.
+    function _requireNonZeroActors(address from, address to) internal pure {
+        if (to == address(0)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
     }
 
     /// @dev Pure mechanics: policy (with bootstrap bypass) + balance +
