@@ -151,4 +151,25 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         uint64 policyId = policyRegistry.createPolicyWithAccounts(admin_, pt, accounts);
         assertTrue(policyRegistry.policyExists(policyId));
     }
+
+    /// @notice Verifies `ZeroAddress` wins when both zero admin and oversized batch fail
+    /// @dev Pins the Rust precompile's check precedence (`validate_create_policy_inputs`
+    ///      → `require_account_batch_size`). Mirrors Rust test
+    ///      `create_policy_with_accounts_zero_admin_precedes_batch_size_revert` in
+    ///      `crates/common/precompiles/src/policy/storage.rs`. Regression guard for the
+    ///      BOP-207 hoist: if a later refactor reorders these two entry-point checks,
+    ///      this test fails.
+    function test_createPolicyWithAccounts_revert_zeroAdmin_precedes_batchSizeTooLarge(
+        address caller,
+        uint8 typeIdx,
+        uint8 overflow
+    ) public {
+        _assumeValidCaller(caller);
+        IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
+        uint256 n = MAX_BATCH_SIZE + 1 + (uint256(overflow) % 16);
+        address[] memory accounts = _makeAccounts(n);
+        vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
+        vm.prank(caller);
+        policyRegistry.createPolicyWithAccounts(address(0), pt, accounts);
+    }
 }

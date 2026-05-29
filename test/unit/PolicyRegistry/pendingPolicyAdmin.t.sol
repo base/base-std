@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
+import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
 contract PolicyRegistryPendingPolicyAdminTest is PolicyRegistryTest {
@@ -64,5 +66,28 @@ contract PolicyRegistryPendingPolicyAdminTest is PolicyRegistryTest {
     function test_pendingPolicyAdmin_success_zeroForMalformedId(uint64 seed) public view {
         uint64 policyId = _malformedPolicyId(seed);
         assertEq(policyRegistry.pendingPolicyAdmin(policyId), address(0));
+    }
+
+    /// @notice Verifies the built-in short-circuit holds even when the underlying
+    ///         `pendingAdmins[builtin]` storage slot is poisoned with a non-zero value
+    /// @dev    Defense-in-depth pin. Without the short-circuit in `pendingPolicyAdmin`,
+    ///         a corrupted built-in pending-admin slot would leak through the view. The
+    ///         function MUST return `address(0)` for built-in IDs regardless of storage
+    ///         state, matching the Rust precompile's gated read at
+    ///         `crates/common/precompiles/src/policy/storage.rs` (`pending_policy_admin`).
+    function test_pendingPolicyAdmin_success_zeroForBuiltinsEvenWithStoragePoison() public {
+        address poison = address(0xDEAD);
+        vm.store(
+            address(policyRegistry),
+            MockPolicyRegistryStorage.pendingAdminSlot(PolicyRegistryConstants.ALWAYS_ALLOW_ID),
+            bytes32(uint256(uint160(poison)))
+        );
+        vm.store(
+            address(policyRegistry),
+            MockPolicyRegistryStorage.pendingAdminSlot(PolicyRegistryConstants.ALWAYS_BLOCK_ID),
+            bytes32(uint256(uint160(poison)))
+        );
+        assertEq(policyRegistry.pendingPolicyAdmin(PolicyRegistryConstants.ALWAYS_ALLOW_ID), address(0));
+        assertEq(policyRegistry.pendingPolicyAdmin(PolicyRegistryConstants.ALWAYS_BLOCK_ID), address(0));
     }
 }
