@@ -93,7 +93,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Any non-empty string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
     ///      `vm.assume(!_isValidFiatCode)`. Empty input is covered by
-    ///      `test_createB20_revert_missingCurrency` (rejected with MissingRequiredField).
+    ///      `test_createB20_revert_emptyCurrency` (rejected with `InvalidCurrency("")`).
     function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
