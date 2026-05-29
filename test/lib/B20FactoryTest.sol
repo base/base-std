@@ -111,7 +111,7 @@ contract B20FactoryTest is BaseTest {
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(params), initCalls);
+        return factory.createB20(uint8(IB20Factory.B20Variant.DEFAULT), salt, abi.encode(params), initCalls);
     }
 
     /// @notice Create a default-variant token with defaults (alice creator, fresh salt, empty init calls).
@@ -127,7 +127,7 @@ contract B20FactoryTest is BaseTest {
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(params), initCalls);
+        return factory.createB20(uint8(IB20Factory.B20Variant.STABLECOIN), salt, abi.encode(params), initCalls);
     }
 
     /// @notice Create a stablecoin-variant token with defaults.
@@ -143,7 +143,7 @@ contract B20FactoryTest is BaseTest {
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(params), initCalls);
+        return factory.createB20(uint8(IB20Factory.B20Variant.ASSET), salt, abi.encode(params), initCalls);
     }
 
     /// @notice Create a security-variant token with defaults.

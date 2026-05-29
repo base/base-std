@@ -39,7 +39,7 @@ contract B20FactoryCreateB20RevertOrderTest is B20FactoryTest {
                 IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.STABLECOIN
             )
         );
-        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.STABLECOIN), salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice For the ASSET arm: VERSION beats MISSING-ISIN.
@@ -60,6 +60,6 @@ contract B20FactoryCreateB20RevertOrderTest is B20FactoryTest {
         vm.expectRevert(
             abi.encodeWithSelector(IB20Factory.UnsupportedVersion.selector, badVersion, IB20Factory.B20Variant.ASSET)
         );
-        factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(p), new bytes[](0));
+        factory.createB20(uint8(IB20Factory.B20Variant.ASSET), salt, abi.encode(p), new bytes[](0));
     }
 }

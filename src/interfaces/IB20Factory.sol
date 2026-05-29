@@ -171,10 +171,14 @@ interface IB20Factory {
     ///         Caller must use a different salt.
     error TokenAlreadyExists(address token);
 
-    /// @notice `variant` is not a recognized `B20Variant`. Reached
-    ///         only when the factory is invoked with a raw variant byte
-    ///         outside the enum range (typed `createToken` callers are
-    ///         rejected by ABI decoding before this check fires).
+    /// @notice `variant` is not a recognized `B20Variant`. Raised when
+    ///         the factory is invoked with a `variant` byte outside the
+    ///         enum range (`> uint8(type(B20Variant).max)`). The variant
+    ///         parameter is typed as `uint8` (not the enum) on both
+    ///         `createB20` and `getB20Address` so the factory body runs
+    ///         this check before any decode-time panic, matching the
+    ///         Rust precompile's `IB20Factory::InvalidVariant {}` revert
+    ///         selector for every caller path (typed or raw-calldata).
     error InvalidVariant();
 
     /// @notice The leading `version` byte in `params` does not match
@@ -248,6 +252,12 @@ interface IB20Factory {
     ///         effects appear strictly after the creation event in the
     ///         log order.
     /// @param variant    Which variant struct `params` decodes as.
+    ///                   Typed as `uint8` (not the `B20Variant` enum)
+    ///                   so the factory body — not the ABI decoder —
+    ///                   rejects out-of-range bytes with the typed
+    ///                   `InvalidVariant()` revert, matching the Rust
+    ///                   precompile's selector. Solidity callers MUST
+    ///                   pass `uint8(B20Variant.X)`.
     /// @param salt       Caller-chosen salt for deterministic address
     ///                   derivation.
     /// @param params     ABI-encoded variant-specific creation struct,
@@ -258,7 +268,7 @@ interface IB20Factory {
     ///                   token-side authorization checks are bypassed
     ///                   for this window only.
     /// @return token     The address of the newly created token.
-    function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
+    function createB20(uint8 variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
         returns (address token);
 
@@ -271,7 +281,12 @@ interface IB20Factory {
     ///         depends only on these inputs; the remaining `params`
     ///         fields (including decimals, which are fixed by variant)
     ///         do not affect the address.
-    function getB20Address(B20Variant variant, address sender, bytes32 salt) external view returns (address);
+    /// @dev    `variant` is typed as `uint8` (not the `B20Variant` enum)
+    ///         so out-of-range bytes revert with `InvalidVariant()`
+    ///         (matching the Rust precompile) rather than a decode-time
+    ///         `Panic(0x21)`. Solidity callers MUST pass
+    ///         `uint8(B20Variant.X)`.
+    function getB20Address(uint8 variant, address sender, bytes32 salt) external view returns (address);
 
     /// @notice Whether `token` was created by this factory. Recovered
     ///         from the address prefix (bytes `[0:10]`); no storage read.

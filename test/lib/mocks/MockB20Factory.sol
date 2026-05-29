@@ -94,10 +94,19 @@ contract MockB20Factory is IB20Factory {
     Vm internal constant vm = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// @inheritdoc IB20Factory
-    function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
+    /// @dev `variant` is taken as `uint8` (not the `B20Variant` enum) so the entry-point
+    ///      guard below — not the ABI decoder — rejects out-of-range bytes with the typed
+    ///      `InvalidVariant()` selector, matching the Rust precompile's
+    ///      `B20Variant::from_abi(call.variant).ok_or_else(... InvalidVariant {})` guard.
+    ///      The cast `B20Variant(variant)` is inlined at each usage site rather than bound
+    ///      to a local so this function stays under Solidity's stack-too-deep limit.
+    function createB20(uint8 variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
         returns (address token)
     {
+        // -- 0. Reject out-of-range variant bytes with the typed selector.
+        if (variant > uint8(type(B20Variant).max)) revert InvalidVariant();
+
         // -- 1. Decode + validate, get the common params --
         string memory name_;
         string memory symbol_;
@@ -107,17 +116,19 @@ contract MockB20Factory is IB20Factory {
         string memory isin_;
         uint256 minimumRedeemable_;
 
-        if (variant == B20Variant.DEFAULT) {
+        if (B20Variant(variant) == B20Variant.DEFAULT) {
             B20CreateParams memory p = abi.decode(params, (B20CreateParams));
-            if (p.version != B20FactoryLib.B20_CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
+            if (p.version != B20FactoryLib.B20_CREATE_PARAMS_VERSION) {
+                revert UnsupportedVersion(p.version, B20Variant(variant));
+            }
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 18;
-        } else if (variant == B20Variant.STABLECOIN) {
+        } else if (B20Variant(variant) == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
-                revert UnsupportedVersion(p.version, variant);
+                revert UnsupportedVersion(p.version, B20Variant(variant));
             }
             // Empty currency must be rejected explicitly: the format-check loop below has
             // no bytes to inspect on empty input and would vacuously succeed otherwise.
@@ -133,10 +144,10 @@ contract MockB20Factory is IB20Factory {
             admin = p.initialAdmin;
             decimals = 6;
             currency_ = p.currency;
-        } else if (variant == B20Variant.ASSET) {
+        } else if (B20Variant(variant) == B20Variant.ASSET) {
             B20AssetCreateParams memory p = abi.decode(params, (B20AssetCreateParams));
             if (p.version != B20FactoryLib.B20_ASSET_CREATE_PARAMS_VERSION) {
-                revert UnsupportedVersion(p.version, variant);
+                revert UnsupportedVersion(p.version, B20Variant(variant));
             }
             if (bytes(p.isin).length == 0) revert MissingRequiredField();
             name_ = p.name;
@@ -150,13 +161,13 @@ contract MockB20Factory is IB20Factory {
         }
 
         // -- 2-3. Compute address; refuse to overwrite --
-        token = _computeAddress(variant, msg.sender, salt);
+        token = _computeAddress(B20Variant(variant), msg.sender, salt);
         if (token.code.length != 0) revert TokenAlreadyExists(token);
 
         // -- 4. Etch the variant-appropriate runtime bytecode --
-        if (variant == B20Variant.DEFAULT) {
+        if (B20Variant(variant) == B20Variant.DEFAULT) {
             vm.etch(token, type(MockB20).runtimeCode);
-        } else if (variant == B20Variant.STABLECOIN) {
+        } else if (B20Variant(variant) == B20Variant.STABLECOIN) {
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
         } else {
             // ASSET (NONE / unknown variants already reverted above).
@@ -168,16 +179,16 @@ contract MockB20Factory is IB20Factory {
         //       canonical grantRole path in step 7 so RoleGranted fires
         //       from the token.
         _writeBaseStorage(token, name_, symbol_);
-        if (variant == B20Variant.STABLECOIN) {
+        if (B20Variant(variant) == B20Variant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
-        } else if (variant == B20Variant.ASSET) {
+        } else if (B20Variant(variant) == B20Variant.ASSET) {
             _writeSecurityStorage(token, isin_, minimumRedeemable_);
         }
 
         // -- 6. Emit B20Created. Identity-only signal; admin role
         //       assignment is announced via the standard RoleGranted
         //       event from step 7.
-        emit B20Created(token, variant, name_, symbol_, decimals);
+        emit B20Created(token, B20Variant(variant), name_, symbol_, decimals);
 
         // -- 7. Grant the initial admin role via the canonical path.
         //       msg.sender at the token is address(this) == factory,
@@ -225,8 +236,11 @@ contract MockB20Factory is IB20Factory {
     bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
 
     /// @inheritdoc IB20Factory
-    function getB20Address(B20Variant variant, address sender, bytes32 salt) external pure returns (address) {
-        return _computeAddress(variant, sender, salt);
+    function getB20Address(uint8 variant, address sender, bytes32 salt) external pure returns (address) {
+        // Mirror the Rust precompile: reject out-of-range variant bytes with the
+        // typed `InvalidVariant()` selector rather than a decode-time Panic(0x21).
+        if (variant > uint8(type(B20Variant).max)) revert InvalidVariant();
+        return _computeAddress(B20Variant(variant), sender, salt);
     }
 
     /// @inheritdoc IB20Factory

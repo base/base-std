@@ -6,18 +6,18 @@ import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryGetTokenAddressTest is B20FactoryTest {
-    /// @notice Wraps an arbitrary uint8 into a valid B20Variant ordinal.
-    /// @dev Bounds to the enum range (DEFAULT, STABLECOIN, ASSET). The address derivation
-    ///      is happy with the raw byte but Solidity reverts at function entry on an
-    ///      out-of-range enum input from a fuzzer.
-    function _boundVariant(uint8 variantInt) internal pure returns (IB20Factory.B20Variant) {
-        return IB20Factory.B20Variant(uint8(bound(uint256(variantInt), 0, uint256(type(IB20Factory.B20Variant).max))));
+    /// @notice Wraps an arbitrary uint8 into a valid B20Variant ordinal (as `uint8`).
+    /// @dev Bounds to the enum range (DEFAULT=0, STABLECOIN=1, ASSET=2). The factory
+    ///      takes `uint8` on the wire (matching the Rust precompile); this helper hands
+    ///      back a byte that is guaranteed to pass the entry-point range check.
+    function _boundVariant(uint8 variantInt) internal pure returns (uint8) {
+        return uint8(bound(uint256(variantInt), 0, uint256(type(IB20Factory.B20Variant).max)));
     }
 
     /// @notice Verifies getTokenAddress is deterministic for the same inputs
     /// @dev Pure view: repeated calls with identical args must return identical addresses
     function test_getB20Address_success_deterministic(uint8 variantInt, address sender, bytes32 salt) public view {
-        IB20Factory.B20Variant variant = _boundVariant(variantInt);
+        uint8 variant = _boundVariant(variantInt);
         address a = factory.getB20Address(variant, sender, salt);
         address b = factory.getB20Address(variant, sender, salt);
         assertEq(a, b, "address derivation must be deterministic");
@@ -26,9 +26,9 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     /// @notice Verifies different variants produce different addresses for the same (sender, salt)
     /// @dev Variant byte at position [10] is part of the address derivation
     function test_getB20Address_success_differentVariantDiffers(address sender, bytes32 salt) public view {
-        address asDefault = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, sender, salt);
-        address asStablecoin = factory.getB20Address(IB20Factory.B20Variant.STABLECOIN, sender, salt);
-        address asSecurity = factory.getB20Address(IB20Factory.B20Variant.ASSET, sender, salt);
+        address asDefault = factory.getB20Address(uint8(IB20Factory.B20Variant.DEFAULT), sender, salt);
+        address asStablecoin = factory.getB20Address(uint8(IB20Factory.B20Variant.STABLECOIN), sender, salt);
+        address asSecurity = factory.getB20Address(uint8(IB20Factory.B20Variant.ASSET), sender, salt);
         assertTrue(asDefault != asStablecoin, "DEFAULT vs STABLECOIN must differ");
         assertTrue(asDefault != asSecurity, "DEFAULT vs ASSET must differ");
         assertTrue(asStablecoin != asSecurity, "STABLECOIN vs ASSET must differ");
@@ -41,7 +41,7 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
         view
     {
         vm.assume(s1 != s2);
-        IB20Factory.B20Variant variant = _boundVariant(variantInt);
+        uint8 variant = _boundVariant(variantInt);
         address a = factory.getB20Address(variant, s1, salt);
         address b = factory.getB20Address(variant, s2, salt);
         assertTrue(a != b, "different senders must yield different addresses");
@@ -54,7 +54,7 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
         view
     {
         vm.assume(s1 != s2);
-        IB20Factory.B20Variant variant = _boundVariant(variantInt);
+        uint8 variant = _boundVariant(variantInt);
         address a = factory.getB20Address(variant, sender, s1);
         address b = factory.getB20Address(variant, sender, s2);
         assertTrue(a != b, "different salts must yield different addresses");
@@ -64,7 +64,7 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     /// @dev Address schema: bytes [0:10] are the shared 0xB200...000 prefix
     ///      (byte [0] = 0xB2, bytes [1:9] = 0x00)
     function test_getB20Address_success_prefixIsB20(uint8 variantInt, address sender, bytes32 salt) public view {
-        IB20Factory.B20Variant variant = _boundVariant(variantInt);
+        uint8 variant = _boundVariant(variantInt);
         address a = factory.getB20Address(variant, sender, salt);
 
         // Drop the bottom 10 bytes; what remains should be 0xB2 followed by 9 zero bytes.
@@ -79,13 +79,13 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
         public
         view
     {
-        IB20Factory.B20Variant variant = _boundVariant(variantInt);
+        uint8 variant = _boundVariant(variantInt);
         address a = factory.getB20Address(variant, sender, salt);
 
         // Byte [10] = bits [72..79]. Mask after shift.
         // forge-lint: disable-next-line(unsafe-typecast)
         uint8 byteAt10 = uint8(uint160(a) >> 72);
-        assertEq(byteAt10, uint8(variant), "address byte [10] must equal variant ordinal");
+        assertEq(byteAt10, variant, "address byte [10] must equal variant ordinal");
     }
 
     /// @notice Pins the absolute numeric ordinals of B20Variant
@@ -107,7 +107,7 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
         public
         view
     {
-        IB20Factory.B20Variant variant = _boundVariant(variantInt);
+        uint8 variant = _boundVariant(variantInt);
         address a = factory.getB20Address(variant, sender, salt);
 
         bytes9 tail = bytes9(keccak256(abi.encode(sender, salt)));
@@ -119,16 +119,15 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     }
 
     /// @notice Verifies getB20Address rejects raw variant bytes outside the B20Variant enum range
-    /// @dev Mirrors the createB20 raw-bytes test. B20Variant has no "NONE" sentinel; typed
-    ///      callers cannot construct an out-of-range value, so this path is only reachable via
-    ///      raw calldata. Solidity rejects via the ABI decoder with Panic(0x21); the Rust
-    ///      precompile rejects with the typed `InvalidVariant()` revert. The observable
-    ///      contract from a raw-bytes caller is "the call reverts" on both backends; the
-    ///      specific selector differs because Solidity has no opportunity to run a function
-    ///      body before the decoder rejects.
+    ///         with the typed `InvalidVariant()` selector.
+    /// @dev The `variant` parameter is typed as `uint8` (not the enum), so any out-of-range
+    ///      byte reaches the factory body and is rejected with `InvalidVariant()`, matching
+    ///      the Rust precompile's selector exactly. Pinned via `vm.expectRevert(selector)` so
+    ///      a silent regression to a decode-time `Panic(0x21)` fails the test instead of
+    ///      passing under the bare-`vm.expectRevert()` "any revert" semantics.
     function test_getB20Address_revert_outOfRangeVariant(address sender, bytes32 salt, uint8 badVariant) public {
         badVariant = uint8(bound(uint256(badVariant), uint256(type(IB20Factory.B20Variant).max) + 1, 255));
-        vm.expectRevert();
+        vm.expectRevert(IB20Factory.InvalidVariant.selector);
         (bool ok,) =
             address(factory).call(abi.encodeWithSelector(IB20Factory.getB20Address.selector, badVariant, sender, salt));
         ok; // silence unused warning; the revert is asserted via vm.expectRevert.
