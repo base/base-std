@@ -60,6 +60,14 @@ library B20FactoryLib {
     ///         Independent of the other variants' versions.
     uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
 
+    /// @notice Current encoding version for `B20StablecoinEventParams`,
+    ///         the payload carried in the `variantEventParams` field of the
+    ///         `B20Created` event for STABLECOIN-variant tokens.
+    ///         Independent of `B20_STABLECOIN_CREATE_PARAMS_VERSION` —
+    ///         the event payload schema can evolve separately from the
+    ///         create-call payload schema.
+    uint8 internal constant B20_STABLECOIN_EVENT_PARAMS_VERSION = 1;
+
     /// @notice Two parallel arrays passed to a `build*` helper had
     ///         different lengths.
     ///
@@ -214,6 +222,24 @@ library B20FactoryLib {
                 isin: isin,
                 minimumRedeemable: minimumRedeemable
             })
+        );
+    }
+
+    /// @notice Encodes a `B20StablecoinEventParams` as the `variantEventParams`
+    ///         blob the factory emits in the `B20Created` event when
+    ///         `variant == B20Variant.STABLECOIN`. The leading byte is
+    ///         `B20_STABLECOIN_EVENT_PARAMS_VERSION`. Indexers decode
+    ///         this blob by `(variant, leading version byte)` to recover
+    ///         the immutable `currency` without an RPC call.
+    ///
+    /// @param  currency  ISO 4217 fiat code this stablecoin tracks; same
+    ///                   value passed to `encodeStablecoinCreateParams`
+    ///                   at creation time.
+    ///
+    /// @return The ABI-encoded `B20StablecoinEventParams` blob.
+    function encodeStablecoinEventParams(string memory currency) internal pure returns (bytes memory) {
+        return abi.encode(
+            IB20Factory.B20StablecoinEventParams({version: B20_STABLECOIN_EVENT_PARAMS_VERSION, currency: currency})
         );
     }
 

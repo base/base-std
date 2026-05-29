@@ -7,6 +7,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
+import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
@@ -116,6 +117,18 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             if (b[i] < 0x41 || b[i] > 0x5A) return false;
         }
         return true;
+    }
+
+    /// @dev Deterministic seed → 3-letter uppercase ASCII fiat code, guaranteed
+    ///      to pass `_isValidFiatCode`. Use in success-path fuzz tests instead of
+    ///      `vm.assume(_isValidFiatCode(...))` over a raw `string` input, which
+    ///      would hit foundry's rejection-rate ceiling.
+    function _make3LetterUppercase(uint256 seed) private pure returns (string memory) {
+        bytes memory b = new bytes(3);
+        b[0] = bytes1(uint8(0x41 + (seed % 26)));
+        b[1] = bytes1(uint8(0x41 + ((seed >> 8) % 26)));
+        b[2] = bytes1(uint8(0x41 + ((seed >> 16) % 26)));
+        return string(b);
     }
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant
@@ -461,28 +474,104 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies createToken emits B20Created with the correct identity fields
     /// @dev Event integrity: token, variant, name, symbol, decimals must match derived variant defaults.
     ///      Admin role assignment is announced via RoleGranted, not as a field on this event;
-    ///      see test_createB20_success_emitsRoleGrantedForInitialAdmin for that.
+    ///      see test_createB20_success_emitsRoleGrantedForInitialAdmin for that. DEFAULT variant
+    ///      emits empty `variantEventParams` (no extra immutable identity fields beyond what's already
+    ///      in the event).
     function test_createB20_success_emitsB20Created(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20CreateParams memory p = _b20Params("MyToken", "MYT", admin);
         address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.DEFAULT, "MyToken", "MYT", 18);
+        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.DEFAULT, "MyToken", "MYT", 18, bytes(""));
         _createDefault(caller, salt, p, new bytes[](0));
     }
 
     /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 the same
-    ///      way the default emitter test pins decimals=18.
+    ///      way the default emitter test pins decimals=18. SECURITY variant emits empty
+    ///      `variantEventParams` (its `isin` and `minimumRedeemable` are mutable and surfaced via
+    ///      their own update events).
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
         address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));
-        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.SECURITY, "Security Test", "SEC", 6);
+        emit IB20Factory.B20Created(predicted, IB20Factory.B20Variant.SECURITY, "Security Test", "SEC", 6, bytes(""));
         _createSecurity(caller, salt, p, new bytes[](0));
+    }
+
+    /// @notice Verifies createToken emits B20Created with decimals=6 and a non-empty
+    ///         `variantEventParams` payload for the stablecoin variant
+    /// @dev    STABLECOIN-only behavior: the `variantEventParams` field carries
+    ///         `abi.encode(B20StablecoinEventParams { version, currency })` so stream-based
+    ///         indexers can recover the immutable `currency` without an RPC
+    ///         call to `currency()`.
+    function test_createB20_success_emitsB20Created_stablecoin(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        string memory currency = "USD";
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("USD Stable", "USDS", admin, currency);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.STABLECOIN, caller, salt);
+
+        bytes memory expectedVariantParams = abi.encode(
+            IB20Factory.B20StablecoinEventParams({
+                version: B20FactoryLib.B20_STABLECOIN_EVENT_PARAMS_VERSION, currency: currency
+            })
+        );
+
+        vm.expectEmit(true, true, false, true, address(factory));
+        emit IB20Factory.B20Created(
+            predicted, IB20Factory.B20Variant.STABLECOIN, "USD Stable", "USDS", 6, expectedVariantParams
+        );
+        _createStablecoin(caller, salt, p, new bytes[](0));
+    }
+
+    /// @notice Verifies the `variantEventParams` payload of `B20Created` for STABLECOIN decodes
+    ///         back to a `B20StablecoinEventParams` whose `currency` round-trips the value
+    ///         passed at creation and whose `version` matches the canonical event-encoding
+    ///         version constant.
+    /// @dev    Decode-level pin (complementary to `_emitsB20Created_stablecoin`'s
+    ///         expectEmit-level pin). Catches a future regression that emits a payload with
+    ///         the right SHAPE but wrong VERSION or CONTENT — for example, accidentally
+    ///         re-using `B20_STABLECOIN_CREATE_PARAMS_VERSION` instead of
+    ///         `B20_STABLECOIN_EVENT_PARAMS_VERSION`, or echoing the `name` field instead of
+    ///         the `currency` field. Recorded-logs replay so the assertion runs against the
+    ///         exact bytes the factory actually emitted, not a re-computed expectation.
+    function test_createB20_success_b20CreatedVariantParams_stablecoin_decodes(
+        address caller,
+        bytes32 salt,
+        uint256 currencySeed
+    ) public {
+        _assumeValidCaller(caller);
+        // Generate a guaranteed-valid 3-letter uppercase fiat code from the fuzz seed.
+        // Avoids vm.assume rejection-rate exhaustion that filtering random strings would hit.
+        string memory currency = _make3LetterUppercase(currencySeed);
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Stable", "STB", admin, currency);
+
+        vm.recordLogs();
+        _createStablecoin(caller, salt, p, new bytes[](0));
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 selector = IB20Factory.B20Created.selector;
+        bytes memory variantEventParams;
+        for (uint256 i = 0; i < logs.length; ++i) {
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == selector) {
+                // B20Created data payload: (name, symbol, decimals, variantEventParams).
+                (,,, variantEventParams) = abi.decode(logs[i].data, (string, string, uint8, bytes));
+                break;
+            }
+        }
+        assertGt(variantEventParams.length, 0, "STABLECOIN variantEventParams must be non-empty");
+
+        IB20Factory.B20StablecoinEventParams memory decoded =
+            abi.decode(variantEventParams, (IB20Factory.B20StablecoinEventParams));
+        assertEq(
+            decoded.version,
+            B20FactoryLib.B20_STABLECOIN_EVENT_PARAMS_VERSION,
+            "decoded version must equal B20_STABLECOIN_EVENT_PARAMS_VERSION"
+        );
+        assertEq(decoded.currency, currency, "decoded currency must round-trip the value passed at creation");
     }
 
     /// @notice Verifies createToken executes each entry in initCalls during the bootstrap window

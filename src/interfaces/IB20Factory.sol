@@ -162,6 +162,37 @@ interface IB20Factory {
         uint256 minimumRedeemable;
     }
 
+    /// @notice Event payload carried in the `variantEventParams` field of
+    ///         `B20Created` for STABLECOIN-variant tokens. ABI-encoded
+    ///         and emitted with a leading `version` byte so stream-based
+    ///         indexers can decode by `(variant, version)` without an
+    ///         RPC call to read storage.
+    /// @param  version   Event-encoding version. Currently `1`.
+    ///                   Independent of `B20StablecoinCreateParams.version`;
+    ///                   the event payload schema can evolve separately
+    ///                   from the create-call payload schema.
+    /// @param  currency  The immutable stablecoin currency identifier, same
+    ///                   value that was passed in
+    ///                   `B20StablecoinCreateParams.currency`. Surfaced here
+    ///                   because `currency` has no setter and no other
+    ///                   event ever emits it; indexers that cannot make
+    ///                   mid-handler view calls would
+    ///                   otherwise have no way to recover it from the
+    ///                   event stream.
+    /// @dev    DEFAULT and SECURITY variants currently emit an empty
+    ///         `variantEventParams` byte string: DEFAULT has no extra
+    ///         immutable identity fields beyond what's already in
+    ///         `B20Created`, and SECURITY's `isin` and
+    ///         `minimumRedeemable` are mutable and surfaced via their
+    ///         own `SecurityIdentifierUpdated` /
+    ///         `MinimumRedeemableUpdated` events. Either variant can
+    ///         promote from empty to a non-empty payload in a future
+    ///         version without re-issuing a new event type.
+    struct B20StablecoinEventParams {
+        uint8 version;
+        string currency;
+    }
+
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -212,7 +243,26 @@ interface IB20Factory {
     ///         `B20Created` is the token-identity signal only. The
     ///         "demonstrate no owner" path (`initialAdmin == address(0)`)
     ///         skips the grant and emits no `RoleGranted` at bootstrap.
-    event B20Created(address indexed token, B20Variant indexed variant, string name, string symbol, uint8 decimals);
+    /// @param token         Address of the newly-created token.
+    /// @param variant       Which `B20Variant` was created.
+    /// @param name          ERC-20 token name.
+    /// @param symbol        ERC-20 token symbol.
+    /// @param decimals      ERC-20 decimals (fixed per variant).
+    /// @param variantEventParams ABI-encoded variant-specific immutable identity
+    ///                      fields, leading with a version byte. Empty
+    ///                      (`""`) for DEFAULT and SECURITY (no extra
+    ///                      immutable fields not already covered); for
+    ///                      STABLECOIN, carries `abi.encode(B20StablecoinEventParams)`
+    ///                      with `currency`. Indexers decode by
+    ///                      `(variant, leading version byte)`.
+    event B20Created(
+        address indexed token,
+        B20Variant indexed variant,
+        string name,
+        string symbol,
+        uint8 decimals,
+        bytes variantEventParams
+    );
 
     /*//////////////////////////////////////////////////////////////
                                  CREATE

@@ -177,7 +177,20 @@ contract MockB20Factory is IB20Factory {
         // -- 6. Emit B20Created. Identity-only signal; admin role
         //       assignment is announced via the standard RoleGranted
         //       event from step 7.
-        emit B20Created(token, variant, name_, symbol_, decimals);
+        //
+        //       The `variantEventParams` field carries variant-specific
+        //       immutable identity that isn't already covered by the
+        //       fixed event fields. STABLECOIN emits an ABI-encoded
+        //       `B20StablecoinEventParams` so stream-based indexers
+        //       can recover the immutable `currency`
+        //       without an RPC call. DEFAULT and SECURITY emit empty
+        //       bytes (SECURITY's `isin` / `minimumRedeemable` are
+        //       mutable and surfaced via their own update events).
+        bytes memory variantEventParams;
+        if (variant == B20Variant.STABLECOIN) {
+            variantEventParams = B20FactoryLib.encodeStablecoinEventParams(currency_);
+        }
+        emit B20Created(token, variant, name_, symbol_, decimals, variantEventParams);
 
         // -- 7. Grant the initial admin role via the canonical path.
         //       msg.sender at the token is address(this) == factory,
