@@ -126,6 +126,16 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
     }
 
+    /// @notice Verifies stablecoin createToken reverts when currency is the empty string
+    /// @dev Per-variant required-field check; checks MissingRequiredField(string) error
+    function test_createB20_revert_missingCurrency(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Stable Test", "STB", admin, "");
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.MissingRequiredField.selector, "currency"));
+        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
+    }
+
     /// @notice Verifies security createToken reverts when isin is the empty string
     /// @dev Per-variant required-field check; checks MissingRequiredField(string) error
     function test_createB20_revert_missingIsin(address caller, bytes32 salt) public {
