@@ -8,7 +8,7 @@ Shares are a virtualized representation of an asset amount, computed by applying
 
 Read the current ratio with `sharesToTokensRatio()`; the value is in WAD precision (`1e18`, exposed as `WAD_PRECISION()`). `toShares(tokenAmount)` converts a token amount to shares at the current ratio, and `sharesOf(account)` is a convenience over ERC-20's `balanceOf` that returns the same account's balance expressed in shares.
 
-`updateShareRatio(newRatio)` updates the ratio and must be wrapped in an announcement (see [Announcements](#announcements)).
+`updateShareRatio(newRatio)` updates the ratio and should be wrapped in an announcement (see [Announcements](#announcements)).
 
 ## Announcements
 
@@ -37,7 +37,7 @@ IB20Security(token).announce({
 });
 ```
 
-The four corporate-actions setters must be wrapped in `announce()`:
+The four corporate-actions setters should be wrapped in `announce()`:
 
 - `updateShareRatio(...)`
 - `batchMint(...)`
@@ -48,16 +48,16 @@ Direct invocation by a role holder is permitted as an **emergency override** —
 
 ## Batch Mint/Burn
 
-`batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. `batchBurn(holders, amounts)` burns from many accounts in one call, gated by `BURN_FROM_ROLE`. Both must be wrapped in `announce()`, so the operator must also hold `SECURITY_OPERATOR_ROLE` (typically granted as a single bundle).
+`batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. `batchBurn(holders, amounts)` burns from many accounts in one call, gated by `BURN_FROM_ROLE`. Both should be wrapped in `announce()`, which additionally requires the operator to hold `SECURITY_OPERATOR_ROLE` (typically granted as a single bundle).
 
 ## Redemptions
 
-Redemptions let token holders initiate their own burn — typically the on-chain leg of a flow where the issuer post-processes the redemption off-chain (delivering underlying assets, crediting fiat, etc.). The Security variant exposes `redeem(amount)` and `redeemWithMemo(amount, memo)`, both of which burn the caller's token balance and emit `Redeemed(redeemer, tokenAmount, shareAmount)`.
+Redemptions let token holders initiate their own burn — typically the on-chain leg of a flow where the issuer post-processes the redemption off-chain (delivering underlying assets, crediting fiat, etc.). The Security variant exposes `redeem(amount)` and `redeemWithMemo(amount, memo)`, both of which burn the caller's token balance and emit `Redeemed(redeemer, tokenAmount, shareAmount)`. `redeemWithMemo` additionally emits `Memo` per the indexer-join convention (see [B20 README → Memos](README.md#memos)).
 
 Two gates apply on every call:
 
 - `REDEEM_SENDER_POLICY` — the caller must be authorized.
-- `minimumRedeemable` — admin-set floor (in shares); redemptions below this floor revert with `BelowMinimumRedeemable`. Read with `minimumRedeemable()`; update with `updateMinimumRedeemable(newMin)` (admin-gated; emits `MinimumRedeemableUpdated`).
+- `minimumRedeemable` — admin-set floor (in shares); redemptions below this floor revert with `BelowMinimumRedeemable`. Any redemption that resolves to zero shares (e.g. token dust against a large share ratio) is always rejected, even when `minimumRedeemable == 0`. Read with `minimumRedeemable()`; update with `updateMinimumRedeemable(newMin)` (admin-gated; emits `MinimumRedeemableUpdated`).
 
 > ⚠️ **`REDEEM_SENDER_POLICY` defaults to `ALWAYS_BLOCK` at token creation** — redemptions are closed until the admin explicitly opens them via `updatePolicy`. The conservative default reflects that redemption is irreversible and regulator-sensitive.
 
@@ -65,7 +65,7 @@ Two gates apply on every call:
 
 Each Security token can carry one or more standardized identifiers (ISIN, CUSIP, FIGI, SEDOL, etc.). Read with `securityIdentifier(type)`; the value is a `string`. ISIN is required at creation via `B20SecurityCreateParams.isin`; other identifiers are optional and added post-creation.
 
-`updateSecurityIdentifier(type, value)` adds or updates an identifier and must be wrapped in `announce()`. Passing an empty `value` removes the entry. Unknown identifier types revert with `InvalidIdentifierType`.
+`updateSecurityIdentifier(type, value)` adds or updates an identifier and should be wrapped in `announce()`. Passing an empty `value` removes the entry. Unknown identifier types revert with `InvalidIdentifierType`.
 
 ## Additional roles
 
