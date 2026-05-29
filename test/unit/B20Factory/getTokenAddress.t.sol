@@ -117,4 +117,20 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
         uint8 byteAt11 = uint8(uint160(a) >> 64);
         assertEq(byteAt11, expectedByte11, "address byte [11] must come from tail entropy");
     }
+
+    /// @notice Verifies getB20Address rejects raw variant bytes outside the B20Variant enum range
+    /// @dev Mirrors the createB20 raw-bytes test. B20Variant has no "NONE" sentinel; typed
+    ///      callers cannot construct an out-of-range value, so this path is only reachable via
+    ///      raw calldata. Solidity rejects via the ABI decoder with Panic(0x21); the Rust
+    ///      precompile rejects with the typed `InvalidVariant()` revert. The observable
+    ///      contract from a raw-bytes caller is "the call reverts" on both backends; the
+    ///      specific selector differs because Solidity has no opportunity to run a function
+    ///      body before the decoder rejects.
+    function test_getB20Address_revert_outOfRangeVariant(address sender, bytes32 salt, uint8 badVariant) public {
+        badVariant = uint8(bound(uint256(badVariant), uint256(type(IB20Factory.B20Variant).max) + 1, 255));
+        vm.expectRevert();
+        (bool ok,) =
+            address(factory).call(abi.encodeWithSelector(IB20Factory.getB20Address.selector, badVariant, sender, salt));
+        ok; // silence unused warning; the revert is asserted via vm.expectRevert.
+    }
 }

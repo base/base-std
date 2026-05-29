@@ -119,8 +119,12 @@ contract MockB20Factory is IB20Factory {
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
-            // Format check: every byte must be an uppercase ASCII letter (A-Z).
+            // Empty currency must be rejected explicitly: the format-check loop below has
+            // no bytes to inspect on empty input and would vacuously succeed otherwise.
+            // Reverts InvalidCurrency("") to match the Rust precompile's selector.
             bytes memory cb = bytes(p.currency);
+            if (cb.length == 0) revert InvalidCurrency(p.currency);
+            // Format check: every byte must be an uppercase ASCII letter (A-Z).
             for (uint256 i = 0; i < cb.length; ++i) {
                 if (cb[i] < 0x41 || cb[i] > 0x5A) revert InvalidCurrency(p.currency);
             }

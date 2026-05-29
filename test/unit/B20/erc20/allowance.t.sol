@@ -38,9 +38,11 @@ contract B20AllowanceTest is B20Test {
         // transferFrom only consumes allowance when msg.sender != from (see MockB20._transferFrom);
         // owner == spender skips the consumption path, so filter it out.
         vm.assume(owner != spender);
-        // Bound spendAmount to <= allowanceAmount, both above zero so the transfer is meaningful.
+        // allowanceAmount > 0 keeps the allowance setup meaningful; spendAmount includes 0
+        // so the assertion (allowance decreases by spendAmount) is exercised across the full
+        // valid input domain, including the no-op zero-spend case.
         allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
-        spendAmount = bound(spendAmount, 1, allowanceAmount);
+        spendAmount = bound(spendAmount, 0, allowanceAmount);
 
         _mint(owner, spendAmount);
         vm.prank(owner);

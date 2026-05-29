@@ -90,13 +90,15 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     // STABLECOIN currency validation: every byte must be an uppercase ASCII letter (A-Z).
 
-    /// @notice Any string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
+    /// @notice Any non-empty string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
-    ///      `vm.assume(!_isValidFiatCode)`. Length is unconstrained.
+    ///      `vm.assume(!_isValidFiatCode)`. Empty input is covered by
+    ///      `test_createB20_revert_missingCurrency` (rejected with MissingRequiredField).
     function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
         _assumeValidCaller(caller);
+        vm.assume(bytes(code).length > 0);
         vm.assume(!_isValidFiatCode(code));
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Test", "TST", admin, code);
         vm.prank(caller);
@@ -106,6 +108,10 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     function _isValidFiatCode(string memory code) private pure returns (bool) {
         bytes memory b = bytes(code);
+        // Empty is not a valid format. Returning true here would make every fuzz test
+        // that filters with `vm.assume(!_isValidFiatCode(code))` silently discard empty,
+        // hiding the missing-currency case from the suite.
+        if (b.length == 0) return false;
         for (uint256 i = 0; i < b.length; ++i) {
             if (b[i] < 0x41 || b[i] > 0x5A) return false;
         }
@@ -134,6 +140,18 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         vm.prank(caller);
         vm.expectRevert(IB20Factory.MissingRequiredField.selector);
         factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
+    }
+
+    /// @notice Verifies stablecoin createToken reverts when currency is the empty string
+    /// @dev The format-check loop on `currency` is vacuously safe on empty input (no bytes
+    ///      to inspect), so an explicit length check is required to reject empty up front.
+    ///      Checks InvalidCurrency("") error, matching the Rust precompile's selector.
+    function test_createB20_revert_emptyCurrency(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Stablecoin Test", "USD", admin, "");
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, ""));
+        factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 
     /// @notice Verifies createToken reverts when (variant, sender, salt) collides

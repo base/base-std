@@ -43,6 +43,28 @@ contract B20PermitTest is B20Test {
         token.permit(bob, spender, amount, deadline, v, r, s);
     }
 
+    /// @notice Verifies permit reverts for malformed (v, r, s) that causes recovery to fail
+    /// @dev Backend-parity test for the recovered == address(0) path. EVM's `ecrecover` returns
+    ///      `address(0)` on malformed signatures (invalid `v`, etc.); alloy in the Rust
+    ///      precompile returns `Err` from `recover_address_from_prehash` on the same input,
+    ///      which is mapped to `InvalidSigner(address(0), owner)`. Both backends therefore
+    ///      revert with the same selector on a malformed signature, but via different code
+    ///      paths. This test pins that parity so neither side can silently drift.
+    ///
+    ///      We pick v = 0 (only 27 and 28 are valid), so ecrecover deterministically returns
+    ///      `address(0)` regardless of r and s.
+    function test_permit_revert_malformedSignature(address spender, uint256 amount) public {
+        vm.assume(spender != address(0));
+        uint256 deadline = type(uint256).max;
+        address owner = alice;
+        uint8 v = 0; // invalid: only 27 and 28 produce a valid recovery
+        bytes32 r = bytes32(uint256(1));
+        bytes32 s = bytes32(uint256(2));
+
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSigner.selector, address(0), owner));
+        token.permit(owner, spender, amount, deadline, v, r, s);
+    }
+
     /// @notice Verifies permit reverts when the same signature is replayed
     /// @dev Nonce monotonicity guards replay: after the first call advances the nonce,
     ///      the second call's digest is computed against the OLD nonce, so ecrecover
