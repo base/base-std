@@ -4,7 +4,7 @@ The Stablecoin variant of B20. Everything in [B20/README.md](README.md) applies;
 
 ## Fixed Decimals (6)
 
-`decimals()` is hard-wired to `6` at the factory — `B20StablecoinCreateParams` has no `decimals` field, so a Stablecoin with `decimals != 6` cannot exist by construction. The convention matches USD-equivalent stablecoins (USDC, USDT-on-EVM) and means stablecoin tooling, accounting systems, and integrations can assume the same precision without per-token guards.
+`decimals()` is hard-wired to `6`. The choice matches existing popular stablecoins.
 
 ## Currency Codes
 
