@@ -36,7 +36,11 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 ///           writes `initialized = true` directly (also via `vm.store`)
 ///           once `initCalls` have run, closing the privileged window.
 ///           Token invariants (supply-cap math, balance accounting)
-///           are NOT bypassed during the window.
+///           are NOT bypassed during the window. Pause is also NOT
+///           bypassed: pause defaults to "nothing paused" at creation,
+///           and any pause state during bootstrap is explicitly opted
+///           into by the operator's initCalls, so start-paused
+///           configurations must sequence the `pause(...)` call last.
 ///         - Variant tokens (e.g. `MockB20Stablecoin`) extend by adding
 ///           a disjoint storage namespace; the factory writes the
 ///           variant-specific slots directly, no virtual hook needed.
@@ -95,15 +99,21 @@ contract MockB20 is IB20 {
     //                          MODIFIERS
     // ============================================================
 
-    /// @dev Reverts `ContractPaused(feature)` if `feature` is paused,
-    ///      unless the call is from the factory in the bootstrap window
-    ///      (see `_isPrivileged()`). Always listed FIRST in a gated
-    ///      function's modifier set so pause precedence reads off the
-    ///      signature directly (modifiers run left-to-right, body at
-    ///      `_`). Token invariants (balance, supply cap) are never
-    ///      bypassed and are enforced regardless.
+    /// @dev Reverts `ContractPaused(feature)` if `feature` is paused.
+    ///      Always listed FIRST in a gated function's modifier set so
+    ///      pause precedence reads off the signature directly (modifiers
+    ///      run left-to-right, body at `_`).
+    ///
+    ///      Unlike `onlyRole` and the policy checks, this guard does
+    ///      NOT honor the factory bootstrap bypass: pause defaults to
+    ///      "nothing paused" at creation, and any pause state during
+    ///      bootstrap is explicitly opted into by the operator's
+    ///      initCalls. There's no legitimate flow where the factory
+    ///      pauses a feature in initCall N and then needs to use that
+    ///      feature in initCall N+1 — start-paused configurations
+    ///      should sequence the `pause(...)` call last.
     modifier whenNotPaused(PausableFeature feature) {
-        if (!_isPrivileged() && _isPaused(feature)) revert ContractPaused(feature);
+        if (_isPaused(feature)) revert ContractPaused(feature);
         _;
     }
 

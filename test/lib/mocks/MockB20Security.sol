@@ -115,19 +115,6 @@ contract MockB20Security is MockB20, IB20Security {
         _;
     }
 
-    /// @dev Like the base `whenNotPaused` but without the factory
-    ///      bootstrap bypass: the pause check is unconditional, even
-    ///      for the factory in the init window. Reserved for variant
-    ///      paths that deliberately reject the bypass — currently just
-    ///      the `redeem` / `redeemWithMemo` family, which is
-    ///      holder-initiated and has no legitimate init-time use case
-    ///      (see this contract's natspec). Lives here, not on the
-    ///      base, because no base function needs the stricter gate.
-    modifier whenNotPausedStrict(PausableFeature feature) {
-        if (_isPaused(feature)) revert ContractPaused(feature);
-        _;
-    }
-
     // ============================================================
     //                        ANNOUNCEMENTS
     // ============================================================
@@ -229,12 +216,12 @@ contract MockB20Security is MockB20, IB20Security {
     //                          REDEMPTION
     // ============================================================
 
-    function redeem(uint256 amount) external whenNotPausedStrict(PausableFeature.REDEEM) {
+    function redeem(uint256 amount) external whenNotPaused(PausableFeature.REDEEM) {
         uint256 ratio = _redeemBurn(amount);
         emit Redeemed(msg.sender, amount, ratio);
     }
 
-    function redeemWithMemo(uint256 amount, bytes32 memo) external whenNotPausedStrict(PausableFeature.REDEEM) {
+    function redeemWithMemo(uint256 amount, bytes32 memo) external whenNotPaused(PausableFeature.REDEEM) {
         uint256 ratio = _redeemBurn(amount);
         // Order matters: Transfer (in _redeemBurn), then Memo, then Redeemed.
         emit Memo(msg.sender, memo);
