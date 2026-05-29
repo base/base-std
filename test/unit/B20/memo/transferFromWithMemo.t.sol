@@ -45,7 +45,9 @@ contract B20TransferFromWithMemoTest is B20Test {
         _assumeValidActor(to);
         vm.assume(caller != from);
         vm.assume(from != to);
-        amount = bound(amount, 1, type(uint128).max);
+        // Include amount = 0: the balance/allowance invariants must hold across the full
+        // valid input domain, including the no-op zero-transfer case.
+        amount = bound(amount, 0, type(uint128).max);
 
         _mint(from, amount);
         vm.prank(from);
