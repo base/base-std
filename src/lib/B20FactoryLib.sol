@@ -61,7 +61,7 @@ library B20FactoryLib {
     uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
 
     /// @notice Current encoding version for `B20StablecoinEventParams`,
-    ///         the payload carried in the `variantParams` field of the
+    ///         the payload carried in the `variantEventParams` field of the
     ///         `B20Created` event for STABLECOIN-variant tokens.
     ///         Independent of `B20_STABLECOIN_CREATE_PARAMS_VERSION` —
     ///         the event payload schema can evolve separately from the
@@ -225,7 +225,7 @@ library B20FactoryLib {
         );
     }
 
-    /// @notice Encodes a `B20StablecoinEventParams` as the `variantParams`
+    /// @notice Encodes a `B20StablecoinEventParams` as the `variantEventParams`
     ///         blob the factory emits in the `B20Created` event when
     ///         `variant == B20Variant.STABLECOIN`. The leading byte is
     ///         `B20_STABLECOIN_EVENT_PARAMS_VERSION`. Indexers decode
