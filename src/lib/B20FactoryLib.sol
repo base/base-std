@@ -60,6 +60,14 @@ library B20FactoryLib {
     ///         Independent of the other variants' versions.
     uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
 
+    /// @notice Current encoding version for `B20StablecoinEventParams`,
+    ///         the payload carried in the `variantParams` field of the
+    ///         `B20Created` event for STABLECOIN-variant tokens.
+    ///         Independent of `B20_STABLECOIN_CREATE_PARAMS_VERSION` —
+    ///         the event payload schema can evolve separately from the
+    ///         create-call payload schema.
+    uint8 internal constant B20_STABLECOIN_EVENT_PARAMS_VERSION = 1;
+
     /// @notice Two parallel arrays passed to a `build*` helper had
     ///         different lengths.
     ///
