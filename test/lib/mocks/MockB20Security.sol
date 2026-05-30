@@ -295,7 +295,6 @@ contract MockB20Security is MockB20, IB20Security {
     ///      path that the factory has no legitimate reason to invoke
     ///      during bootstrap, so the bypass is omitted by design.
     function _redeemBurn(uint256 amount) internal returns (uint256 ratio) {
-        if (_isPaused(PausableFeature.REDEEM)) revert ContractPaused(PausableFeature.REDEEM);
         MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
         uint64 REDEEMSenderPolicyId = $.redeemPolicyIds.sender;
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {
