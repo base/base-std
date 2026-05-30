@@ -9,31 +9,42 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 /// @title Differential check-order tests for `transfer`.
 ///
-/// @notice **Canonical order (Solidity reference `_transfer`):**
-///         1. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
-///         2. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
-///         3. PAUSE (`_isPaused(TRANSFER)`) → `ContractPaused`
-///         4. SENDER-POLICY (`isAuthorized(senderPolicyId, from)`) → `PolicyForbids(SENDER, ...)`
-///         5. RECEIVER-POLICY (`isAuthorized(receiverPolicyId, to)`) → `PolicyForbids(RECEIVER, ...)`
-///         6. BALANCE (`fromBalance < amount`) → `InsufficientBalance`
+/// @notice **Canonical order (Solidity reference):**
+///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
+///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
+///         4. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
+///         5. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
+///         6. BALANCE (`_transfer` body) → `InsufficientBalance`
 ///
 ///         The public `transfer(to, amount)` entry sets `from = msg.sender`, so
 ///         pairs involving ZERO-SENDER require pranking `address(0)`. C(6, 2) = 15 pairs.
 contract B20TransferRevertOrderTest is B20Test {
-    // --- Pairs where ZERO-RECEIVER wins ---
+    // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
-    function test_transfer_revertOrder_zeroReceiver_beats_zeroSender(uint256 amount) public {
-        // Both `to` and `from` are address(0) — receiver check fires first.
-        vm.prank(address(0));
-        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
-        token.transfer(address(0), amount);
-    }
-
-    function test_transfer_revertOrder_zeroReceiver_beats_pause(address from, uint256 amount) public {
+    function test_transfer_revertOrder_pause_beats_zeroReceiver(address from, uint256 amount) public {
         _assumeValidActor(from);
         _pause(IB20.PausableFeature.TRANSFER);
 
         vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
+        token.transfer(address(0), amount);
+    }
+
+    function test_transfer_revertOrder_pause_beats_zeroSender(address to, uint256 amount) public {
+        _assumeValidActor(to);
+        _pause(IB20.PausableFeature.TRANSFER);
+
+        vm.prank(address(0));
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
+        token.transfer(to, amount);
+    }
+
+    // --- Pairs where ZERO-RECEIVER wins (PAUSE not violated) ---
+
+    function test_transfer_revertOrder_zeroReceiver_beats_zeroSender(uint256 amount) public {
+        // Both `to` and `from` are address(0) — receiver check fires first.
+        vm.prank(address(0));
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.transfer(address(0), amount);
     }
@@ -66,16 +77,7 @@ contract B20TransferRevertOrderTest is B20Test {
         token.transfer(address(0), amount);
     }
 
-    // --- Pairs where ZERO-SENDER wins (requires pranking address(0)) ---
-
-    function test_transfer_revertOrder_zeroSender_beats_pause(address to, uint256 amount) public {
-        _assumeValidActor(to);
-        _pause(IB20.PausableFeature.TRANSFER);
-
-        vm.prank(address(0));
-        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
-        token.transfer(to, amount);
-    }
+    // --- Pairs where ZERO-SENDER wins (PAUSE not violated; requires pranking address(0)) ---
 
     function test_transfer_revertOrder_zeroSender_beats_senderPolicy(address to, uint256 amount) public {
         _assumeValidActor(to);

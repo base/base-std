@@ -173,13 +173,19 @@ contract MockB20Security is MockB20, IB20Security {
     //                  BATCHED ISSUANCE / CLAWBACK
     // ============================================================
 
-    function batchMint(address[] calldata recipients, uint256[] calldata amounts) external {
+    /// @dev Pause + role enforced ONCE for the entire batch via the
+    ///      entrypoint modifiers. Per-element zero-receiver guard is
+    ///      inlined in the loop since `_mint` no longer carries an
+    ///      input check.
+    function batchMint(address[] calldata recipients, uint256[] calldata amounts)
+        external
+        whenNotPaused(PausableFeature.MINT)
+        onlyRole(MINT_ROLE)
+    {
         if (recipients.length != amounts.length) revert LengthMismatch(recipients.length, amounts.length);
         if (recipients.length == 0) revert EmptyBatch();
-        // Per-element call into _mint: role / pause checks repeat (idempotent),
-        // but MINT_RECEIVER_POLICY policy and supply-cap accumulation are correctly
-        // applied per recipient. Cleaner than re-deriving the per-element body.
         for (uint256 i = 0; i < recipients.length; i++) {
+            if (recipients[i] == address(0)) revert InvalidReceiver(recipients[i]);
             _mint(recipients[i], amounts[i]);
         }
     }
@@ -191,13 +197,13 @@ contract MockB20Security is MockB20, IB20Security {
     ///      the attack surface.
     function batchBurn(address[] calldata accounts, uint256[] calldata amounts)
         external
+        whenNotPaused(PausableFeature.BURN)
         onlyRoleStrict(BURN_FROM_ROLE)
     {
         if (accounts.length != amounts.length) {
             revert LengthMismatch(accounts.length, amounts.length);
         }
         if (accounts.length == 0) revert EmptyBatch();
-        if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
         for (uint256 i = 0; i < accounts.length; i++) {
             // Zero amounts are allowed per ERC-20 conventions (`transfer(0)` is valid);
             // `_burnRaw` is a no-op for amount == 0 and emits `Transfer(account, 0, 0)`.
@@ -210,12 +216,12 @@ contract MockB20Security is MockB20, IB20Security {
     //                          REDEMPTION
     // ============================================================
 
-    function redeem(uint256 amount) external {
+    function redeem(uint256 amount) external whenNotPaused(PausableFeature.REDEEM) {
         uint256 ratio = _redeemBurn(amount);
         emit Redeemed(msg.sender, amount, ratio);
     }
 
-    function redeemWithMemo(uint256 amount, bytes32 memo) external {
+    function redeemWithMemo(uint256 amount, bytes32 memo) external whenNotPaused(PausableFeature.REDEEM) {
         uint256 ratio = _redeemBurn(amount);
         // Order matters: Transfer (in _redeemBurn), then Memo, then Redeemed.
         emit Memo(msg.sender, memo);
@@ -289,7 +295,6 @@ contract MockB20Security is MockB20, IB20Security {
     ///      path that the factory has no legitimate reason to invoke
     ///      during bootstrap, so the bypass is omitted by design.
     function _redeemBurn(uint256 amount) internal returns (uint256 ratio) {
-        if (_isPaused(PausableFeature.REDEEM)) revert ContractPaused(PausableFeature.REDEEM);
         MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
         uint64 REDEEMSenderPolicyId = $.redeemPolicyIds.sender;
         if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {

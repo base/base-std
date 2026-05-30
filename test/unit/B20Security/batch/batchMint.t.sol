@@ -11,29 +11,38 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPo
 
 contract B20SecurityBatchMintTest is B20SecurityTest {
     /// @notice Verifies batchMint reverts when recipients.length != amounts.length
-    /// @dev Length-mismatch guard fires before the empty-batch guard; checks
-    ///      LengthMismatch(recipients.length, amounts.length).
+    /// @dev Length-mismatch guard fires in batchMint's body, after the entrypoint
+    ///      modifiers (PAUSE + MINT_ROLE) and before the empty-batch guard.
+    ///      Caller is granted MINT_ROLE so the role modifier passes and the body
+    ///      reaches the length check.
     function test_batchMint_revert_lengthMismatch() public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+
         address[] memory recipients = _singletonAddresses(alice);
         uint256[] memory amounts = new uint256[](2);
         amounts[0] = 1;
         amounts[1] = 2;
 
+        vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20Security.LengthMismatch.selector, uint256(1), uint256(2)));
         security().batchMint(recipients, amounts);
     }
 
     /// @notice Verifies batchMint reverts when both arrays are empty
-    /// @dev EmptyBatch guard: no-op corp-actions transactions are rejected to keep the
-    ///      log stream meaningful.
+    /// @dev EmptyBatch guard fires in batchMint's body, after PAUSE + MINT_ROLE
+    ///      modifiers. Caller is granted MINT_ROLE so the role modifier passes.
     function test_batchMint_revert_emptyBatch() public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+
+        vm.prank(minter);
         vm.expectRevert(IB20Security.EmptyBatch.selector);
         security().batchMint(new address[](0), new uint256[](0));
     }
 
-    /// @notice Verifies batchMint surfaces _mint's role-check revert when caller lacks MINT_ROLE
-    /// @dev batchMint has no outer role check; per-element `_mint` enforces MINT_ROLE. Any
-    ///      non-minter caller hits the inner revert on element 0.
+    /// @notice Verifies batchMint reverts when caller lacks MINT_ROLE
+    /// @dev `onlyRole(MINT_ROLE)` is now an entrypoint modifier on batchMint
+    ///      itself (was per-element via `_mint` before the pause→role→input
+    ///      hoist). Any non-minter caller is rejected before the body runs.
     function test_batchMint_revert_unauthorized(address caller, address to, uint256 amount) public {
         _assumeValidCaller(caller);
         _assumeValidActor(to);

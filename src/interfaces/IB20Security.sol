@@ -374,18 +374,25 @@ interface IB20Security is IB20 {
     ///         allocations, secondary issuances, etc.) that need to
     ///         land many recipients in one transaction.
     ///
-    /// @dev    Requires `MINT_ROLE`. Subject to the `MINT_RECEIVER_POLICY`
-    ///         policy per recipient and to the `MINT` pause vector.
-    ///         Reverts with `LengthMismatch(recipients.length,
-    ///         amounts.length)` if the parallel arrays disagree, and
-    ///         with `EmptyBatch()` if either array is empty.
-    ///         All-or-nothing: if any element reverts (e.g.
-    ///         `SupplyCapExceeded` after a partial accumulation, or
-    ///         `PolicyForbids(MINT_RECEIVER_POLICY, ...)` for a
-    ///         policy-blocked recipient), the entire transaction
-    ///         reverts and no partial state is committed. Emits
-    ///         `Transfer(address(0), recipients[i], amounts[i])` per
-    ///         element. Standard usage is to invoke this through
+    /// @dev    Reverts in the following canonical order (first violated
+    ///         check wins):
+    ///         1. `ContractPaused(MINT)` if `MINT` is paused.
+    ///         2. `AccessControlUnauthorizedAccount(msg.sender, MINT_ROLE)`
+    ///            if the caller does not hold `MINT_ROLE`.
+    ///         3. `LengthMismatch(recipients.length, amounts.length)` if
+    ///            the parallel arrays disagree.
+    ///         4. `EmptyBatch()` if either array is empty.
+    ///         5..N. Per-element checks inside the loop: `InvalidReceiver`,
+    ///               `PolicyForbids(MINT_RECEIVER_POLICY, ...)`,
+    ///               `SupplyCapExceeded` — see `mint`'s natspec for the
+    ///               per-element precedence.
+    ///         The pause and role gates are evaluated ONCE for the
+    ///         whole batch; per-element gates fire per recipient inside
+    ///         the loop.
+    ///         All-or-nothing: if any element reverts, the entire
+    ///         transaction reverts and no partial state is committed.
+    ///         Emits `Transfer(address(0), recipients[i], amounts[i])`
+    ///         per element. Standard usage is to invoke this through
     ///         `announce(...)`'s `internalCalls`, which brackets the
     ///         issuance with a matching disclosure atomically (see
     ///         the contract-level "Announcement pairing" notes).
@@ -410,26 +417,32 @@ interface IB20Security is IB20 {
     ///         debits in one transaction without first arranging for
     ///         each account to be policy-blocked.
     ///
-    /// @dev    Requires `BURN_FROM_ROLE`. NOT gated by any policy:
-    ///         the corporate-actions desk is trusted to pick the right
-    ///         set of accounts off-chain, and the role grant is the
-    ///         on-chain authorization. Subject to the `BURN` pause
-    ///         vector. Reverts with `LengthMismatch(accounts.length,
-    ///         amounts.length)` if the parallel arrays disagree, and
-    ///         with `EmptyBatch()` if either array is empty.
-    ///         All-or-nothing: if any element reverts (e.g.
-    ///         `InsufficientBalance(accounts[k], balance, amounts[k])`),
-    ///         the entire transaction reverts and no partial state is
-    ///         committed. Emits `Transfer(accounts[i], address(0),
-    ///         amounts[i])` per element; does NOT emit `BurnedBlocked`
-    ///         (that event is reserved for `burnBlocked`'s sanctions
-    ///         semantics). Standard usage is to invoke this through
-    ///         `announce(...)`'s `internalCalls`, which brackets the
-    ///         clawback with a matching disclosure atomically (see the
-    ///         contract-level "Announcement pairing" notes). Direct
-    ///         invocation by a role holder remains permitted for
-    ///         emergency override but produces no `Announcement` /
-    ///         `EndAnnouncement` bracket.
+    /// @dev    `BURN_FROM_ROLE` is enforced WITHOUT the factory-bootstrap
+    ///         bypass — clawback against existing balances has no
+    ///         init-time use case, so the role check is unconditional.
+    ///         NOT gated by any policy: the corporate-actions desk is
+    ///         trusted to pick the right set of accounts off-chain, and
+    ///         the role grant is the on-chain authorization. Reverts in
+    ///         the following canonical order (first violated check wins):
+    ///         1. `ContractPaused(BURN)` if `BURN` is paused.
+    ///         2. `AccessControlUnauthorizedAccount(msg.sender, BURN_FROM_ROLE)`
+    ///            if the caller does not hold `BURN_FROM_ROLE`.
+    ///         3. `LengthMismatch(accounts.length, amounts.length)` if
+    ///            the parallel arrays disagree.
+    ///         4. `EmptyBatch()` if either array is empty.
+    ///         5. Per-element `InsufficientBalance(accounts[k], balance,
+    ///            amounts[k])` from `_burnRaw`.
+    ///         All-or-nothing: if any element reverts, the entire
+    ///         transaction reverts and no partial state is committed.
+    ///         Emits `Transfer(accounts[i], address(0), amounts[i])`
+    ///         per element; does NOT emit `BurnedBlocked` (that event
+    ///         is reserved for `burnBlocked`'s sanctions semantics).
+    ///         Standard usage is to invoke this through `announce(...)`'s
+    ///         `internalCalls`, which brackets the clawback with a
+    ///         matching disclosure atomically (see the contract-level
+    ///         "Announcement pairing" notes). Direct invocation by a
+    ///         role holder remains permitted for emergency override but
+    ///         produces no `Announcement` / `EndAnnouncement` bracket.
     ///
     /// @param  accounts Accounts whose balances will be debited.
     /// @param  amounts  Per-account amounts, parallel to `accounts`.
@@ -442,15 +455,24 @@ interface IB20Security is IB20 {
     /// @notice Burns `amount` tokens from the caller, recording intent
     ///         to settle off-chain.
     ///
-    /// @dev    Subject to the `REDEEM_SENDER_POLICY` policy and to the
-    ///         `REDEEM` pause vector. Reverts with
-    ///         `BelowMinimumRedeemable(shares, minimumRedeemable)` if
-    ///         the corresponding share amount (`amount *
-    ///         sharesToTokensRatio / WAD_PRECISION`) is zero OR is
-    ///         strictly less than `minimumRedeemable`. Zero-share
-    ///         redemptions are always rejected, regardless of
-    ///         `minimumRedeemable`'s configured value, so a holder
-    ///         cannot burn token dust that resolves to no shares.
+    /// @dev    Reverts in the following canonical order (first violated
+    ///         check wins):
+    ///         1. `ContractPaused(REDEEM)` if `REDEEM` is paused.
+    ///            Enforced WITHOUT the factory-bootstrap bypass — redeem
+    ///            is a holder-initiated path with no legitimate init-time
+    ///            use case.
+    ///         2. `PolicyForbids(REDEEM_SENDER_POLICY, policyId)` if
+    ///            `msg.sender` is not authorized under the active
+    ///            `REDEEM_SENDER_POLICY` policy.
+    ///         3. `BelowMinimumRedeemable(shares, minimumRedeemable)` if
+    ///            the corresponding share amount (`amount *
+    ///            sharesToTokensRatio / WAD_PRECISION`) is zero OR is
+    ///            strictly less than `minimumRedeemable`. Zero-share
+    ///            redemptions are always rejected, regardless of
+    ///            `minimumRedeemable`'s configured value, so a holder
+    ///            cannot burn token dust that resolves to no shares.
+    ///         4. `InsufficientBalance(caller, balance, amount)` if the
+    ///            caller does not have enough balance.
     ///         Emits `Transfer(caller, address(0), amount)` followed by
     ///         `Redeemed(caller, amount, sharesToTokensRatio)`.
     ///

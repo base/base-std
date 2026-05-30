@@ -10,8 +10,8 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 /// @title Differential check-order tests for `burnBlocked`.
 ///
 /// @notice **Canonical order (Solidity reference):**
-///         1. ROLE (`onlyRole(BURN_BLOCKED_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         2. PAUSE (`_isPaused(BURN)`) → `ContractPaused`
+///         1. PAUSE (`whenNotPaused(BURN)` modifier) → `ContractPaused`
+///         2. ROLE (`onlyRole(BURN_BLOCKED_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///         3. BLOCKED (`isAuthorized(senderPolicyId, from) == true` reverts) → `AccountNotBlocked`
 ///         4. BALANCE (`fromBalance < amount` in `_burnRaw`) → `InsufficientBalance`
 ///
@@ -21,24 +21,23 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 ///         violation by setting the policy to `ALWAYS_ALLOW` so every account is
 ///         authorized, which makes the function revert `AccountNotBlocked`.
 contract B20BurnBlockedRevertOrderTest is B20Test {
-    // --- Pairs where ROLE wins ---
+    // --- Pair where PAUSE wins (PAUSE is canonical first) ---
 
-    /// @notice ROLE beats PAUSE.
-    function test_burnBlocked_revertOrder_role_beats_pause(address caller, address from, uint256 amount) public {
+    /// @notice PAUSE beats ROLE.
+    /// @dev Pause modifier is listed before the role modifier; fires first.
+    function test_burnBlocked_revertOrder_pause_beats_role(address caller, address from, uint256 amount) public {
         _assumeValidCaller(caller);
         _assumeValidActor(from);
         vm.assume(caller != admin);
         _pause(IB20.PausableFeature.BURN);
-        // No BURN_BLOCKED_ROLE granted.
+        // No BURN_BLOCKED_ROLE granted AND BURN is paused — pause fires first.
 
         vm.prank(caller);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_BLOCKED_ROLE
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
         token.burnBlocked(from, amount);
     }
+
+    // --- Pairs where ROLE wins (PAUSE not violated) ---
 
     /// @notice ROLE beats BLOCKED.
     function test_burnBlocked_revertOrder_role_beats_blocked(address caller, address from, uint256 amount) public {

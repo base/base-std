@@ -9,10 +9,10 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 /// @title Differential check-order tests for `batchBurn` (security variant).
 ///
 /// @notice **Canonical order (Solidity reference):**
-///         1. ROLE (`onlyRoleStrict(BURN_FROM_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         2. LENGTH_MISMATCH (`accounts.length != amounts.length`) → `LengthMismatch`
-///         3. EMPTY_BATCH (`accounts.length == 0`) → `EmptyBatch`
-///         4. PAUSE (`_isPaused(BURN)`) → `ContractPaused`
+///         1. PAUSE (`whenNotPaused(BURN)` modifier) → `ContractPaused`
+///         2. ROLE (`onlyRoleStrict(BURN_FROM_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
+///         3. LENGTH_MISMATCH (`accounts.length != amounts.length`) → `LengthMismatch`
+///         4. EMPTY_BATCH (`accounts.length == 0`) → `EmptyBatch`
 ///         5. BALANCE (per-element `_burnRaw`) → `InsufficientBalance`
 ///
 ///         Some pairs are not reachable because the violations are mutually
@@ -33,7 +33,54 @@ contract B20SecurityBatchBurnRevertOrderTest is B20SecurityTest {
         _twoUints.push(1);
     }
 
-    // --- Pairs where ROLE wins (via modifier, before any body check) ---
+    // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
+
+    /// @notice PAUSE beats ROLE.
+    /// @dev Pause modifier is listed before the role-strict modifier; fires first.
+    function test_batchBurn_revertOrder_pause_beats_role(address caller, uint256 amount) public {
+        _assumeValidCaller(caller);
+        vm.assume(caller != admin);
+        vm.assume(caller != burnFromActor);
+        _pause(IB20.PausableFeature.BURN);
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
+    }
+
+    /// @notice PAUSE beats LENGTH_MISMATCH.
+    function test_batchBurn_revertOrder_pause_beats_lengthMismatch() public {
+        _grantBurnFrom();
+        _pause(IB20.PausableFeature.BURN);
+
+        vm.prank(burnFromActor);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        security().batchBurn(_twoAddrs, _twoUints);
+    }
+
+    /// @notice PAUSE beats EMPTY_BATCH.
+    function test_batchBurn_revertOrder_pause_beats_emptyBatch() public {
+        _grantBurnFrom();
+        _pause(IB20.PausableFeature.BURN);
+
+        vm.prank(burnFromActor);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        security().batchBurn(_emptyAddrs, _emptyUints);
+    }
+
+    /// @notice PAUSE beats BALANCE.
+    function test_batchBurn_revertOrder_pause_beats_balance(uint256 amount) public {
+        amount = bound(amount, 1, type(uint128).max);
+        _grantBurnFrom();
+        _pause(IB20.PausableFeature.BURN);
+        // alice has zero balance → BALANCE would fire if PAUSE didn't.
+
+        vm.prank(burnFromActor);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
+    }
+
+    // --- Pairs where ROLE wins (PAUSE not violated) ---
     //
     // Note: BURN_FROM_ROLE() is resolved before vm.prank because the view call
     // would otherwise consume the prank intended for batchBurn (same pattern as
@@ -62,18 +109,6 @@ contract B20SecurityBatchBurnRevertOrderTest is B20SecurityTest {
         security().batchBurn(_emptyAddrs, _emptyUints);
     }
 
-    function test_batchBurn_revertOrder_role_beats_pause(address caller, uint256 amount) public {
-        _assumeValidCaller(caller);
-        vm.assume(caller != admin);
-        vm.assume(caller != burnFromActor);
-        _pause(IB20.PausableFeature.BURN);
-        bytes32 role = security().BURN_FROM_ROLE();
-
-        vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, role));
-        security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
-    }
-
     function test_batchBurn_revertOrder_role_beats_balance(address caller, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
@@ -84,41 +119,6 @@ contract B20SecurityBatchBurnRevertOrderTest is B20SecurityTest {
 
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, role));
-        security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
-    }
-
-    // --- Pairs where LENGTH_MISMATCH wins ---
-
-    function test_batchBurn_revertOrder_lengthMismatch_beats_pause() public {
-        _grantBurnFrom();
-        _pause(IB20.PausableFeature.BURN);
-
-        vm.prank(burnFromActor);
-        vm.expectRevert(abi.encodeWithSelector(IB20Security.LengthMismatch.selector, uint256(2), uint256(1)));
-        security().batchBurn(_twoAddrs, _twoUints);
-    }
-
-    // --- Pairs where EMPTY_BATCH wins ---
-
-    function test_batchBurn_revertOrder_emptyBatch_beats_pause() public {
-        _grantBurnFrom();
-        _pause(IB20.PausableFeature.BURN);
-
-        vm.prank(burnFromActor);
-        vm.expectRevert(IB20Security.EmptyBatch.selector);
-        security().batchBurn(_emptyAddrs, _emptyUints);
-    }
-
-    // --- Pair where PAUSE wins ---
-
-    function test_batchBurn_revertOrder_pause_beats_balance(uint256 amount) public {
-        amount = bound(amount, 1, type(uint128).max);
-        _grantBurnFrom();
-        _pause(IB20.PausableFeature.BURN);
-        // alice has zero balance → BALANCE would fire if PAUSE didn't.
-
-        vm.prank(burnFromActor);
-        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
         security().batchBurn(_singletonAddresses(alice), _singletonUints(amount));
     }
 }

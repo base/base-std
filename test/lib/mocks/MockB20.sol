@@ -36,7 +36,11 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 ///           writes `initialized = true` directly (also via `vm.store`)
 ///           once `initCalls` have run, closing the privileged window.
 ///           Token invariants (supply-cap math, balance accounting)
-///           are NOT bypassed during the window.
+///           are NOT bypassed during the window. Pause is also NOT
+///           bypassed: pause defaults to "nothing paused" at creation,
+///           and any pause state during bootstrap is explicitly opted
+///           into by the operator's initCalls, so start-paused
+///           configurations must sequence the `pause(...)` call last.
 ///         - Variant tokens (e.g. `MockB20Stablecoin`) extend by adding
 ///           a disjoint storage namespace; the factory writes the
 ///           variant-specific slots directly, no virtual hook needed.
@@ -94,6 +98,24 @@ contract MockB20 is IB20 {
     // ============================================================
     //                          MODIFIERS
     // ============================================================
+
+    /// @dev Reverts `ContractPaused(feature)` if `feature` is paused.
+    ///      Always listed FIRST in a gated function's modifier set so
+    ///      pause precedence reads off the signature directly (modifiers
+    ///      run left-to-right, body at `_`).
+    ///
+    ///      Unlike `onlyRole` and the policy checks, this guard does
+    ///      NOT honor the factory bootstrap bypass: pause defaults to
+    ///      "nothing paused" at creation, and any pause state during
+    ///      bootstrap is explicitly opted into by the operator's
+    ///      initCalls. There's no legitimate flow where the factory
+    ///      pauses a feature in initCall N and then needs to use that
+    ///      feature in initCall N+1 — start-paused configurations
+    ///      should sequence the `pause(...)` call last.
+    modifier whenNotPaused(PausableFeature feature) {
+        if (_isPaused(feature)) revert ContractPaused(feature);
+        _;
+    }
 
     /// @dev Gates a function on `msg.sender` holding `role`. Reverts
     ///      `AccessControlUnauthorizedAccount` if not. The factory
@@ -160,12 +182,18 @@ contract MockB20 is IB20 {
     //                       ERC-20: MUTATIONS
     // ============================================================
 
-    function transfer(address to, uint256 amount) external returns (bool) {
+    function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
+        _requireNonZeroActors(msg.sender, to);
         _transfer(msg.sender, to, amount);
         return true;
     }
 
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
+    function transferFrom(address from, address to, uint256 amount)
+        external
+        whenNotPaused(PausableFeature.TRANSFER)
+        returns (bool)
+    {
+        _requireNonZeroActors(from, to);
         if (!_isPrivileged()) {
             // Allowance is consumed unconditionally outside the factory
             // bootstrap window. Matches OZ ERC20 and the Rust precompile,
@@ -198,13 +226,23 @@ contract MockB20 is IB20 {
     //                       MEMO TRANSFER VARIANTS
     // ============================================================
 
-    function transferWithMemo(address to, uint256 amount, bytes32 memo) external returns (bool) {
+    function transferWithMemo(address to, uint256 amount, bytes32 memo)
+        external
+        whenNotPaused(PausableFeature.TRANSFER)
+        returns (bool)
+    {
+        _requireNonZeroActors(msg.sender, to);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
     }
 
-    function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool) {
+    function transferFromWithMemo(address from, address to, uint256 amount, bytes32 memo)
+        external
+        whenNotPaused(PausableFeature.TRANSFER)
+        returns (bool)
+    {
+        _requireNonZeroActors(from, to);
         if (!_isPrivileged()) {
             _consumeAllowance(from, msg.sender, amount);
             if (msg.sender != from) {
@@ -238,27 +276,40 @@ contract MockB20 is IB20 {
     //                          MINT / BURN
     // ============================================================
 
-    function mint(address to, uint256 amount) external {
+    function mint(address to, uint256 amount) external whenNotPaused(PausableFeature.MINT) onlyRole(MINT_ROLE) {
+        if (to == address(0)) revert InvalidReceiver(to);
         _mint(to, amount);
     }
 
-    function mintWithMemo(address to, uint256 amount, bytes32 memo) external {
+    function mintWithMemo(address to, uint256 amount, bytes32 memo)
+        external
+        whenNotPaused(PausableFeature.MINT)
+        onlyRole(MINT_ROLE)
+    {
+        if (to == address(0)) revert InvalidReceiver(to);
         _mint(to, amount);
         emit Memo(msg.sender, memo);
     }
 
-    function burn(uint256 amount) external {
-        _burnSelf(msg.sender, amount);
+    function burn(uint256 amount) external whenNotPaused(PausableFeature.BURN) onlyRole(BURN_ROLE) {
+        _burnRaw(msg.sender, amount);
     }
 
-    function burnWithMemo(uint256 amount, bytes32 memo) external {
-        _burnSelf(msg.sender, amount);
+    function burnWithMemo(uint256 amount, bytes32 memo)
+        external
+        whenNotPaused(PausableFeature.BURN)
+        onlyRole(BURN_ROLE)
+    {
+        _burnRaw(msg.sender, amount);
         emit Memo(msg.sender, memo);
     }
 
-    function burnBlocked(address from, uint256 amount) external onlyRole(BURN_BLOCKED_ROLE) {
+    function burnBlocked(address from, uint256 amount)
+        external
+        whenNotPaused(PausableFeature.BURN)
+        onlyRole(BURN_BLOCKED_ROLE)
+    {
         if (!_isPrivileged()) {
-            if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
             // The point of burnBlocked is to seize from policy-blocked
             // accounts. Read the transfer-sender policy ID out of the
             // transfer-side packed slot and reject if the target is
@@ -633,12 +684,26 @@ contract MockB20 is IB20 {
         }
     }
 
-    function _transfer(address from, address to, uint256 amount) internal {
+    /// @dev Receiver-then-sender zero-address check shared by every
+    ///      transfer-family entrypoint. Reverts `InvalidReceiver(to)`
+    ///      before `InvalidSender(from)` so the precedence between the
+    ///      two matches the canonical order.
+    function _requireNonZeroActors(address from, address to) internal pure {
         if (to == address(0)) revert InvalidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
+    }
 
+    /// @dev Pure mechanics: policy (with bootstrap bypass) + balance +
+    ///      effects. Pause + input validation are enforced upstream by
+    ///      every external caller (`transfer`, `transferFrom`,
+    ///      `transferWithMemo`, `transferFromWithMemo`) before reaching
+    ///      this helper. `transferFrom` / `transferFromWithMemo`
+    ///      additionally consume allowance and check the executor
+    ///      policy in their bodies before calling here; both of those
+    ///      checks ALSO honor the bootstrap bypass, consistent with
+    ///      the policy bypass below.
+    function _transfer(address from, address to, uint256 amount) internal {
         if (!_isPrivileged()) {
-            if (_isPaused(PausableFeature.TRANSFER)) revert ContractPaused(PausableFeature.TRANSFER);
             // One SLOAD pulls both policy IDs we need for the transfer
             // check (and was already warmed if we came in via transferFrom,
             // which reads the executor lane of the same slot first).
@@ -663,11 +728,14 @@ contract MockB20 is IB20 {
         emit Transfer(from, to, amount);
     }
 
-    function _mint(address to, uint256 amount) internal onlyRole(MINT_ROLE) {
-        if (to == address(0)) revert InvalidReceiver(to);
-
+    /// @dev Pure mechanics: policy (with bootstrap bypass) + supply cap
+    ///      + effects. Pause, role, and the zero-receiver check are
+    ///      enforced upstream by `mint` / `mintWithMemo`. The security
+    ///      variant's `batchMint` carries the same `whenNotPaused` +
+    ///      `onlyRole` modifiers ONCE for the whole batch and validates
+    ///      per-element receivers inline before invoking this helper.
+    function _mint(address to, uint256 amount) internal {
         if (!_isPrivileged()) {
-            if (_isPaused(PausableFeature.MINT)) revert ContractPaused(PausableFeature.MINT);
             uint64 mintReceiverPolicyId = MockB20Storage.layout().mintPolicyIds.receiver;
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
                 revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);
@@ -684,13 +752,13 @@ contract MockB20 is IB20 {
         emit Transfer(address(0), to, amount);
     }
 
-    function _burnSelf(address from, uint256 amount) internal onlyRole(BURN_ROLE) {
-        if (!_isPrivileged()) {
-            if (_isPaused(PausableFeature.BURN)) revert ContractPaused(PausableFeature.BURN);
-        }
-        _burnRaw(from, amount);
-    }
-
+    /// @dev Pure mechanics: balance + effects. Pause and role gates are
+    ///      enforced by entrypoint modifiers (`whenNotPaused`,
+    ///      `onlyRole`) on every caller (`burn`, `burnWithMemo`,
+    ///      `burnBlocked`, and `MockB20Security`'s `batchBurn` /
+    ///      `_redeemBurn`); see those functions for the per-caller
+    ///      authorization surface. This helper never authorizes the
+    ///      destruction on its own.
     function _burnRaw(address from, uint256 amount) internal {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 fromBalance = $.balances[from];
