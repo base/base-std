@@ -55,12 +55,12 @@ jobs:
           version: stable
 
       - name: Generate lcov report
-        run: forge coverage --no-match-coverage "^test/" --report lcov
+        run: forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" --report lcov
 
       - name: Capture coverage summary
         id: summary
         run: |
-          output=$(forge coverage --no-match-coverage "^test/" 2>/dev/null | grep "^|" || echo "| (no coverage data) |")
+          output=$(forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" 2>/dev/null | grep "^|" || echo "| (no coverage data) |")
           {
             echo "output<<__EOF__"
             echo "$output"
