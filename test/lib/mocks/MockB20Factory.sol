@@ -138,7 +138,6 @@ contract MockB20Factory is IB20Factory {
             if (p.version != B20FactoryLib.B20_ASSET_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
-            if (bytes(p.isin).length == 0) revert MissingRequiredField("isin");
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;

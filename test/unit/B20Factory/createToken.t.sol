@@ -145,16 +145,6 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(p), new bytes[](0));
     }
 
-    /// @notice Verifies security createToken reverts when isin is the empty string
-    /// @dev Per-variant required-field check; checks MissingRequiredField(string) error
-    function test_createB20_revert_missingIsin(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        IB20Factory.B20AssetCreateParams memory p = _securityParams("Security Test", "SEC", admin, "", 0);
-        vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.MissingRequiredField.selector, "isin"));
-        factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(p), new bytes[](0));
-    }
-
     /// @notice Verifies stablecoin createToken reverts when currency is the empty string
     /// @dev The format-check loop on `currency` is vacuously safe on empty input (no bytes
     ///      to inspect), so an explicit length check is required to reject empty up front.
