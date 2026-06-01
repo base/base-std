@@ -5,21 +5,35 @@ import {IB20} from "src/interfaces/IB20.sol";
 
 import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 
-/// @title Differential check-order tests for `updateShareRatio`.
+/// @title Sequential revert-order test for `updateShareRatio`.
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(SECURITY_OPERATOR_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///
-///         Single revert condition — no ordering pairs. One test pins the guard itself.
+///         A single test verifies the guard fires for an unauthorized caller and then
+///         confirms the call succeeds once the role is granted.
 contract B20SecurityUpdateShareRatioRevertOrderTest is B20SecurityTest {
-    function test_updateShareRatio_revertOrder_unauthorized(address caller, uint256 newRatio) public {
+    function test_updateShareRatio_revertOrder(address caller, uint256 newRatio) public {
+        // Exclude precompiles (which can distort msg.sender) and admin (needed
+        // internally by _grantRole to approve the role grant).
+        _assumeValidCaller(caller);
         vm.assume(caller != admin);
+
+        // Resolve the role identifier before setting the prank; an external view
+        // call inside abi.encodeWithSelector would otherwise consume vm.prank
+        // before the state-changing call, sending it as address(this) instead.
+        bytes32 operatorRole = security().SECURITY_OPERATOR_ROLE();
+
+        // 1. ROLE fires.
         vm.prank(caller);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IB20.AccessControlUnauthorizedAccount.selector, caller, security().SECURITY_OPERATOR_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, operatorRole));
+        security().updateShareRatio(newRatio);
+
+        // Fix: grant SECURITY_OPERATOR_ROLE to caller.
+        _grantRole(operatorRole, caller);
+
+        // Success: all conditions resolved.
+        vm.prank(caller);
         security().updateShareRatio(newRatio);
     }
 }
