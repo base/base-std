@@ -40,9 +40,7 @@ contract PolicyRegistryUpdateAllowlistRevertOrderTest is PolicyRegistryTest {
     /// @dev policyId encodes as ALLOWLIST (so IncompatiblePolicyType does not apply)
     ///      AND has never been created (PolicyNotFound fires), AND caller is non-zero
     ///      (Unauthorized would fire if policyId existed as ALLOWLIST).
-    function test_updateAllowlist_revertOrder_policyNotFound_beats_unauthorized(address caller, uint56 counter)
-        public
-    {
+    function test_updateAllowlist_revertOrder_policyNotFound_beats_unauthorized(address caller, uint56 counter) public {
         _assumeValidCaller(caller);
         counter = uint56(bound(uint256(counter), 2, type(uint56).max));
         // top byte 1 = ALLOWLIST; IncompatiblePolicyType would not apply if the policy existed.
