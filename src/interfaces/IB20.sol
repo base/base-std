@@ -440,7 +440,7 @@ interface IB20 {
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the admin role for `role`,
     ///      or when the token has been transitioned to admin-less via `renounceLastAdmin`.
-    /// @dev Reverts with `LastAdminCannotRenounce` when `role == DEFAULT_ADMIN_ROLE` and `account` is the sole admin.
+    /// @dev Reverts with `LastAdminCannotRenounce` when `role == DEFAULT_ADMIN_ROLE` and `account` is the last default admin.
     ///      Use `renounceLastAdmin` to clear the final admin.
     ///
     /// @param role    Role to revoke.
@@ -450,7 +450,7 @@ interface IB20 {
     /// @notice Caller renounces `role` for themselves. Emits `RoleRevoked`.
     ///
     /// @dev Reverts with `AccessControlBadConfirmation` when `callerConfirmation != msg.sender`.
-    /// @dev Reverts with `LastAdminCannotRenounce` when `role == DEFAULT_ADMIN_ROLE` and the caller is the sole admin.
+    /// @dev Reverts with `LastAdminCannotRenounce` when `role == DEFAULT_ADMIN_ROLE` and the caller is the last default admin.
     ///
     /// @param role               Role to renounce.
     /// @param callerConfirmation MUST equal `msg.sender`.
