@@ -60,7 +60,7 @@ jobs:
       - name: Capture coverage summary
         id: summary
         run: |
-          output=$(forge coverage --no-match-coverage "^test/" 2>/dev/null | grep -E "^(\||File|Total)" || echo "No coverage data")
+          output=$(forge coverage --no-match-coverage "^test/" 2>/dev/null || echo "No coverage data")
           {
             echo "output<<__EOF__"
             echo "$output"
