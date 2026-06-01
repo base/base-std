@@ -75,7 +75,12 @@ contract PolicyRegistryPendingPolicyAdminTest is PolicyRegistryTest {
     ///         function MUST return `address(0)` for built-in IDs regardless of storage
     ///         state, matching the Rust precompile's gated read at
     ///         `crates/common/precompiles/src/policy/storage.rs` (`pending_policy_admin`).
+    ///
+    ///         Mock-only: `vm.store` cannot write to native precompile addresses, so this
+    ///         test is skipped when running against live precompiles.
     function test_pendingPolicyAdmin_success_zeroForBuiltinsEvenWithStoragePoison() public {
+        // Skip when running against live precompiles — vm.store cannot target native precompiles.
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         address poison = address(0xDEAD);
         vm.store(
             address(policyRegistry),
