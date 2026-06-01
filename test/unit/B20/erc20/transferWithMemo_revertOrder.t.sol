@@ -28,11 +28,9 @@ import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 contract B20TransferWithMemoRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
-    function test_transferWithMemo_revertOrder_pause_beats_zeroReceiver(
-        address from,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_transferWithMemo_revertOrder_pause_beats_zeroReceiver(address from, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidActor(from);
         _pause(IB20.PausableFeature.TRANSFER);
 
@@ -41,9 +39,7 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         token.transferWithMemo(address(0), amount, memo);
     }
 
-    function test_transferWithMemo_revertOrder_pause_beats_zeroSender(address to, uint256 amount, bytes32 memo)
-        public
-    {
+    function test_transferWithMemo_revertOrder_pause_beats_zeroSender(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
         _pause(IB20.PausableFeature.TRANSFER);
 
@@ -135,11 +131,9 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         token.transferWithMemo(address(0), amount, memo);
     }
 
-    function test_transferWithMemo_revertOrder_zeroReceiver_beats_balance(
-        address from,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_transferWithMemo_revertOrder_zeroReceiver_beats_balance(address from, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidActor(from);
         amount = bound(amount, 1, type(uint128).max);
         // `from` has zero balance → balance check WOULD fail if zero-receiver didn't fire first.
@@ -151,11 +145,9 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
 
     // --- Pairs where ZERO-SENDER wins (PAUSE not violated; requires pranking address(0)) ---
 
-    function test_transferWithMemo_revertOrder_zeroSender_beats_senderPolicy(
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_transferWithMemo_revertOrder_zeroSender_beats_senderPolicy(address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidActor(to);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
@@ -164,11 +156,9 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         token.transferWithMemo(to, amount, memo);
     }
 
-    function test_transferWithMemo_revertOrder_zeroSender_beats_receiverPolicy(
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_transferWithMemo_revertOrder_zeroSender_beats_receiverPolicy(address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidActor(to);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 

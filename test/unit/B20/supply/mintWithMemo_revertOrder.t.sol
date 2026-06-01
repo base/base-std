@@ -26,12 +26,9 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
     /// @notice With both PAUSE and ROLE violated, PAUSE fires first.
-    function test_mintWithMemo_revertOrder_pause_beats_role(
-        address caller,
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_mintWithMemo_revertOrder_pause_beats_role(address caller, address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidCaller(caller);
         _assumeValidActor(to);
         vm.assume(caller != admin);
@@ -98,12 +95,9 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
     }
 
     /// @notice With both ROLE and POLICY violated, ROLE fires first.
-    function test_mintWithMemo_revertOrder_role_beats_policy(
-        address caller,
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_mintWithMemo_revertOrder_role_beats_policy(address caller, address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidCaller(caller);
         _assumeValidActor(to);
         vm.assume(caller != admin);
@@ -118,12 +112,9 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
     }
 
     /// @notice With both ROLE and CAP violated, ROLE fires first.
-    function test_mintWithMemo_revertOrder_role_beats_cap(
-        address caller,
-        address to,
-        uint256 amount,
-        bytes32 memo
-    ) public {
+    function test_mintWithMemo_revertOrder_role_beats_cap(address caller, address to, uint256 amount, bytes32 memo)
+        public
+    {
         _assumeValidCaller(caller);
         _assumeValidActor(to);
         vm.assume(caller != admin);
