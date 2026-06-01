@@ -39,6 +39,31 @@ jobs:
       - name: Run tests
         run: forge test -v
 
+  coverage:
+    name: Forge Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Generate coverage report
+        run: forge coverage --no-match-coverage "^test/" --report lcov
+
+      - name: Upload lcov report
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+
+      - name: Print coverage summary
+        run: |
+          forge coverage --no-match-coverage "^test/" 2>/dev/null | grep -E "^(File|Total)" || true
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
