@@ -99,6 +99,15 @@ jobs:
 
             Full report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To browse locally: `make coverage` (runs forge coverage + genhtml + opens the HTML report).
 
+  coverage:
+    name: Interface Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check interface coverage
+        run: python3 scripts/check-coverage.py
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
