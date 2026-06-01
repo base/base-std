@@ -2,13 +2,12 @@
 
 B20 is an ERC-20 superset designed for Base. All B20s are deployed via the singleton `IB20Factory` precompile (see [Factory](Factory.md)).
 
-B20 supports several variants:
+B20 supports two variants:
 
-- **Default** — covered on this page
 - **[Stablecoin](Stablecoin.md)** — fixed-decimals fiat-backed variant
 - **[Security](Security.md)** — corporate-actions / share-class variant
 
-This document covers the Default B20 variant and everything shared across the variant family.
+This document covers the behavior shared across the variant family.
 
 ## ERC-20
 
@@ -114,6 +113,5 @@ ERC-1271 contract signatures are deliberately NOT accepted — permit recovers v
 
 | Variant | Decimals | What it adds |
 |---|---|---|
-| Default | 18 (fixed) | — |
 | [Stablecoin](Stablecoin.md) | 6 (fixed) | currency ISO code |
 | [Security](Security.md) | 6 (fixed) | share-ratio, announcements, identifiers, redemptions |

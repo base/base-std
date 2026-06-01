@@ -47,20 +47,6 @@ contract B20FactoryTest is BaseTest {
 
     // -- Param builders --
 
-    /// @notice Build a `B20CreateParams` with explicit fields.
-    function _b20Params(string memory name_, string memory symbol_, address initialAdmin_)
-        internal
-        pure
-        returns (IB20Factory.B20CreateParams memory)
-    {
-        return IB20Factory.B20CreateParams({version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_});
-    }
-
-    /// @notice Build a default `B20CreateParams` (`Test`/`TST`, admin).
-    function _b20Params() internal view returns (IB20Factory.B20CreateParams memory) {
-        return _b20Params("Test", "TST", admin);
-    }
-
     /// @notice Build a `B20StablecoinCreateParams` with explicit fields.
     function _stablecoinParams(
         string memory name_,
@@ -102,22 +88,6 @@ contract B20FactoryTest is BaseTest {
     }
 
     // -- Action wrappers --
-
-    /// @notice Create a default-variant token with explicit caller, salt, params, and init calls.
-    function _createDefault(
-        address caller,
-        bytes32 salt,
-        IB20Factory.B20CreateParams memory params,
-        bytes[] memory initCalls
-    ) internal returns (address token) {
-        vm.prank(caller);
-        return factory.createB20(IB20Factory.B20Variant.DEFAULT, salt, abi.encode(params), initCalls);
-    }
-
-    /// @notice Create a default-variant token with defaults (alice creator, fresh salt, empty init calls).
-    function _createDefault() internal returns (address token) {
-        return _createDefault(alice, keccak256("default-salt"), _b20Params(), new bytes[](0));
-    }
 
     /// @notice Create a stablecoin-variant token with explicit caller, salt, params, and init calls.
     function _createStablecoin(

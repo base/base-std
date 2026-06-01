@@ -6,9 +6,9 @@ import {Vm} from "forge-std/Vm.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 
-import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
+import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {
     MockB20Storage,
@@ -107,14 +107,7 @@ contract MockB20Factory is IB20Factory {
         string memory isin_;
         uint256 minimumRedeemable_;
 
-        if (variant == B20Variant.DEFAULT) {
-            B20CreateParams memory p = abi.decode(params, (B20CreateParams));
-            if (p.version != B20FactoryLib.B20_CREATE_PARAMS_VERSION) revert UnsupportedVersion(p.version, variant);
-            name_ = p.name;
-            symbol_ = p.symbol;
-            admin = p.initialAdmin;
-            decimals = 18;
-        } else if (variant == B20Variant.STABLECOIN) {
+        if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
@@ -153,12 +146,10 @@ contract MockB20Factory is IB20Factory {
         if (token.code.length != 0) revert TokenAlreadyExists(token);
 
         // -- 4. Etch the variant-appropriate runtime bytecode --
-        if (variant == B20Variant.DEFAULT) {
-            vm.etch(token, type(MockB20).runtimeCode);
-        } else if (variant == B20Variant.STABLECOIN) {
+        if (variant == B20Variant.STABLECOIN) {
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
         } else {
-            // SECURITY (NONE / unknown variants already reverted above).
+            // SECURITY (unknown variants already reverted above).
             vm.etch(token, type(MockB20Security).runtimeCode);
         }
 
@@ -182,9 +173,9 @@ contract MockB20Factory is IB20Factory {
         //       fixed event fields. STABLECOIN emits an ABI-encoded
         //       `B20StablecoinEventParams` so stream-based indexers
         //       can recover the immutable `currency`
-        //       without an RPC call. DEFAULT and SECURITY emit empty
-        //       bytes (SECURITY's `isin` / `minimumRedeemable` are
-        //       mutable and surfaced via their own update events).
+        //       without an RPC call. SECURITY emits empty bytes
+        //       (`isin` / `minimumRedeemable` are mutable and surfaced
+        //       via their own update events).
         bytes memory variantEventParams;
         if (variant == B20Variant.STABLECOIN) {
             variantEventParams = B20FactoryLib.encodeStablecoinEventParams(currency_);

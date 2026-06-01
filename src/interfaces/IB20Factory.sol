@@ -13,25 +13,11 @@ interface IB20Factory {
 
     /// @notice Variant of a B-20 token. Encoded in address byte `[10]`.
     ///
-    /// @param DEFAULT    Default B-20 variant.
     /// @param STABLECOIN Stablecoin variant (fixed `6` decimals, immutable `currency`).
     /// @param SECURITY   Security variant (share ratio, announcements, redemptions).
     enum B20Variant {
-        DEFAULT,
         STABLECOIN,
         SECURITY
-    }
-
-    /// @notice Creation parameters for a Default-variant B-20 token. ABI-encoded into `params`.
-    struct B20CreateParams {
-        /// @dev Encoding version. Currently `1`.
-        uint8 version;
-        /// @dev ERC-20 token name.
-        string name;
-        /// @dev ERC-20 token symbol.
-        string symbol;
-        /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
-        address initialAdmin;
     }
 
     /// @notice Creation parameters for a Stablecoin-variant B-20 token. ABI-encoded into `params`.
@@ -108,7 +94,7 @@ interface IB20Factory {
     ///         and before any `initCalls` are dispatched.
     ///
     /// @dev `variantEventParams` carries variant-specific immutable identity data, ABI-encoded
-    ///      and prefixed with a version byte. Empty for DEFAULT and SECURITY; for STABLECOIN,
+    ///      and prefixed with a version byte. Empty for SECURITY; for STABLECOIN,
     ///      `abi.encode(B20StablecoinEventParams)` with `currency`.
     event B20Created(
         address indexed token,

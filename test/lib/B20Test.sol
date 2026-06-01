@@ -2,18 +2,17 @@
 pragma solidity ^0.8.20;
 
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
 
 import {IB20} from "src/interfaces/IB20.sol";
 
-import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
+import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @notice Base test contract for `IB20` unit tests.
 ///
 /// Extends `B20FactoryTest` because an IB20 token cannot exist
 /// without the factory: `setUp` calls `super.setUp()` to etch every
 /// precompile mock (via `BaseTest`) and pick up the factory create
-/// helpers, then deploys a default-variant token here so the token's
+/// helpers, then deploys a stablecoin-variant token here so the token's
 /// identity byte (variant at address `[10]`) matches the real address
 /// schema. In live mode under
 /// `--fork-url`, the same flow hits the real precompile factory.
@@ -41,7 +40,7 @@ contract B20Test is B20FactoryTest {
     address internal burnBlocker = makeAddr("burnBlocker");
 
     // -- Token under test --
-    /// @notice Default-variant `IB20` token deployed in `setUp`.
+    /// @notice Stablecoin-variant `IB20` token deployed in `setUp`.
     IB20 internal token;
 
     // -- Setup --
@@ -58,18 +57,18 @@ contract B20Test is B20FactoryTest {
         vm.label(address(token), "token");
     }
 
-    /// @notice Token-deployment hook. Default impl deploys a default-variant
+    /// @notice Token-deployment hook. Default impl deploys a stablecoin-variant
     ///         token via the factory mock; variant-specific bases (e.g.
-    ///         `B20StablecoinTest`) override to deploy their variant while
+    ///         `B20SecurityTest`) override to deploy their variant while
     ///         reusing every other piece of `B20Test`.
-    /// @dev    `MockB20Factory.createToken` etches `MockB20` runtime
+    /// @dev    `MockB20Factory.createToken` etches `MockB20Stablecoin` runtime
     ///         bytecode at the computed address, writes initial state
     ///         directly via vm.store (no init function on the token),
     ///         runs initCalls, then closes the bootstrap window. Calls
     ///         against the returned `token` (transfer, mint, ...) execute
     ///         against a live mock token with the initial admin granted.
     function _deployToken() internal virtual returns (IB20) {
-        return IB20(_createDefault());
+        return IB20(_createStablecoin());
     }
 
     /// @notice Wraps a single `PausableFeature` in a length-1 array for
