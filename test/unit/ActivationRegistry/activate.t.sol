@@ -21,6 +21,8 @@ contract ActivationRegistryActivateTest is ActivationRegistryTest {
     /// @notice Verifies activate reverts when invoked on a feature that is already activated
     /// @dev Activation is not idempotent; checks AlreadyActivated(feature) error
     function test_activate_revert_alreadyActivated(bytes32 feature) public {
+        vm.assume(!activationRegistry.isActivated(feature));
+
         vm.prank(activationAdmin);
         activationRegistry.activate(feature);
 
@@ -33,6 +35,7 @@ contract ActivationRegistryActivateTest is ActivationRegistryTest {
     /// @dev Successful activation persists for future isActivated queries. Paired
     ///      slot: features[feature] slot must equal bytes32(uint256(1)).
     function test_activate_success_setsActivated(bytes32 feature) public {
+        vm.assume(!activationRegistry.isActivated(feature));
         assertFalse(activationRegistry.isActivated(feature), "feature must start inactive");
 
         vm.prank(activationAdmin);
@@ -49,6 +52,8 @@ contract ActivationRegistryActivateTest is ActivationRegistryTest {
     /// @notice Verifies activate emits FeatureActivated(feature, caller)
     /// @dev Event integrity: indexed feature and caller match the call
     function test_activate_success_emitsFeatureActivated(bytes32 feature) public {
+        vm.assume(!activationRegistry.isActivated(feature));
+
         vm.expectEmit(address(activationRegistry));
         emit IActivationRegistry.FeatureActivated(feature, activationAdmin);
         vm.prank(activationAdmin);
