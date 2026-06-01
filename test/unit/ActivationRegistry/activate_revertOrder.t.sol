@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
+
 import {ActivationRegistryTest} from "test/lib/ActivationRegistryTest.sol";
 
 contract ActivationRegistryActivateRevertOrderTest is ActivationRegistryTest {
@@ -10,6 +12,18 @@ contract ActivationRegistryActivateRevertOrderTest is ActivationRegistryTest {
     ///      never reaches the AlreadyActivated guard regardless of feature state.
     ///      Fuzz: any caller that is not the activationAdmin, any feature id.
     function test_activate_revertOrder_unauthorized_beats_alreadyActivated(address caller, bytes32 feature) public {
-        // unimplemented
+        _assumeValidCaller(caller);
+        vm.assume(caller != activationAdmin);
+
+        // Activate the feature as admin so it is already activated, establishing
+        // the precondition that AlreadyActivated *could* fire for an admin caller.
+        vm.prank(activationAdmin);
+        activationRegistry.activate(feature);
+
+        // A non-admin caller must see Unauthorized, not AlreadyActivated,
+        // because the access-control check in activate fires first.
+        vm.expectRevert(abi.encodeWithSelector(IActivationRegistry.Unauthorized.selector, caller));
+        vm.prank(caller);
+        activationRegistry.activate(feature);
     }
 }
