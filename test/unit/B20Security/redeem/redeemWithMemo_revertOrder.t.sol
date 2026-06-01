@@ -58,11 +58,9 @@ contract B20SecurityRedeemWithMemoRevertOrderTest is B20SecurityTest {
 
     // --- Pairs where POLICY wins ---
 
-    function test_redeemWithMemo_revertOrder_policy_beats_belowMinimum(
-        uint256 amount,
-        uint256 minimum,
-        bytes32 memo
-    ) public {
+    function test_redeemWithMemo_revertOrder_policy_beats_belowMinimum(uint256 amount, uint256 minimum, bytes32 memo)
+        public
+    {
         amount = bound(amount, 1, type(uint64).max);
         minimum = bound(minimum, amount + 1, type(uint256).max);
         _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_BLOCK_ID);
@@ -93,11 +91,9 @@ contract B20SecurityRedeemWithMemoRevertOrderTest is B20SecurityTest {
 
     // --- Pair where BELOW-MIN wins ---
 
-    function test_redeemWithMemo_revertOrder_belowMinimum_beats_balance(
-        uint256 amount,
-        uint256 minimum,
-        bytes32 memo
-    ) public {
+    function test_redeemWithMemo_revertOrder_belowMinimum_beats_balance(uint256 amount, uint256 minimum, bytes32 memo)
+        public
+    {
         amount = bound(amount, 1, type(uint64).max);
         minimum = bound(minimum, amount + 1, type(uint256).max);
         _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_ALLOW_ID);
