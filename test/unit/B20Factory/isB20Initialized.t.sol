@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
+import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
@@ -9,7 +10,7 @@ contract B20FactoryIsB20InitializedTest is B20FactoryTest {
     /// @notice Verifies isB20Initialized returns false for any address lacking the B-20 prefix
     /// @dev Non-B20-prefixed addresses are rejected before any storage read; covers zero address.
     function test_isB20Initialized_success_falseForNonB20Address(address addr) public view {
-        vm.assume((uint160(addr) >> 80) != (uint160(0xB2) << 72));
+        vm.assume(!StdPrecompiles.B20_FACTORY.isB20(addr));
         assertFalse(factory.isB20Initialized(addr), "non-B20 address must not be initialized");
     }
 
@@ -27,6 +28,7 @@ contract B20FactoryIsB20InitializedTest is B20FactoryTest {
         view
     {
         address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, sender, salt);
+        vm.assume(predicted.code.length == 0);
         assertFalse(factory.isB20Initialized(predicted), "B-20-prefixed but uncreated address must not be initialized");
     }
 
