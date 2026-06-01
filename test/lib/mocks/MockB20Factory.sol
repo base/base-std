@@ -107,7 +107,18 @@ contract MockB20Factory is IB20Factory {
         string memory isin_;
         uint256 minimumRedeemable_;
 
-        if (variant == B20Variant.STABLECOIN) {
+        if (variant == B20Variant.SECURITY) {
+            B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
+            if (p.version != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION) {
+                revert UnsupportedVersion(p.version, variant);
+            }
+            name_ = p.name;
+            symbol_ = p.symbol;
+            admin = p.initialAdmin;
+            decimals = 6;
+            isin_ = p.isin;
+            minimumRedeemable_ = p.minimumRedeemable;
+        } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
@@ -126,17 +137,6 @@ contract MockB20Factory is IB20Factory {
             admin = p.initialAdmin;
             decimals = 6;
             currency_ = p.currency;
-        } else if (variant == B20Variant.SECURITY) {
-            B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
-            if (p.version != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION) {
-                revert UnsupportedVersion(p.version, variant);
-            }
-            name_ = p.name;
-            symbol_ = p.symbol;
-            admin = p.initialAdmin;
-            decimals = 6;
-            isin_ = p.isin;
-            minimumRedeemable_ = p.minimumRedeemable;
         } else {
             revert InvalidVariant();
         }
@@ -146,11 +146,11 @@ contract MockB20Factory is IB20Factory {
         if (token.code.length != 0) revert TokenAlreadyExists(token);
 
         // -- 4. Etch the variant-appropriate runtime bytecode --
-        if (variant == B20Variant.STABLECOIN) {
-            vm.etch(token, type(MockB20Stablecoin).runtimeCode);
-        } else {
-            // SECURITY (unknown variants already reverted above).
+        if (variant == B20Variant.SECURITY) {
             vm.etch(token, type(MockB20Security).runtimeCode);
+        } else {
+            // STABLECOIN (unknown variants already reverted above).
+            vm.etch(token, type(MockB20Stablecoin).runtimeCode);
         }
 
         // -- 5. Write initial identity / supply-cap state via vm.store.

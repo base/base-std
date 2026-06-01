@@ -7,7 +7,7 @@ import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     /// @notice Wraps an arbitrary uint8 into a valid B20Variant ordinal.
-    /// @dev Bounds to the enum range (STABLECOIN, SECURITY). The address derivation
+    /// @dev Bounds to the enum range (SECURITY, STABLECOIN). The address derivation
     ///      is happy with the raw byte but Solidity reverts at function entry on an
     ///      out-of-range enum input from a fuzzer.
     function _boundVariant(uint8 variantInt) internal pure returns (IB20Factory.B20Variant) {
@@ -94,8 +94,8 @@ contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     ///      variant between existing ones) fails loudly instead of
     ///      silently shifting every deployed address.
     function test_tokenVariant_success_ordinalsPinned() public pure {
-        assertEq(uint8(IB20Factory.B20Variant.STABLECOIN), 0, "STABLECOIN ordinal must be 0");
-        assertEq(uint8(IB20Factory.B20Variant.SECURITY), 1, "SECURITY ordinal must be 1");
+        assertEq(uint8(IB20Factory.B20Variant.SECURITY), 0, "SECURITY ordinal must be 0");
+        assertEq(uint8(IB20Factory.B20Variant.STABLECOIN), 1, "STABLECOIN ordinal must be 1");
     }
 
     /// @notice Verifies byte [11] comes from the hash tail entropy

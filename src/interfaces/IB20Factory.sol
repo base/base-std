@@ -13,11 +13,11 @@ interface IB20Factory {
 
     /// @notice Variant of a B-20 token. Encoded in address byte `[10]`.
     ///
-    /// @param STABLECOIN Stablecoin variant (fixed `6` decimals, immutable `currency`).
     /// @param SECURITY   Security variant (share ratio, announcements, redemptions).
+    /// @param STABLECOIN Stablecoin variant (fixed `6` decimals, immutable `currency`).
     enum B20Variant {
-        STABLECOIN,
-        SECURITY
+        SECURITY,
+        STABLECOIN
     }
 
     /// @notice Creation parameters for a Stablecoin-variant B-20 token. ABI-encoded into `params`.
