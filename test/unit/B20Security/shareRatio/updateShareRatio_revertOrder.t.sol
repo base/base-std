@@ -10,8 +10,16 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(SECURITY_OPERATOR_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///
-///         C(1, 2) = 0 pairs. `updateShareRatio` has a single revert condition
-///         (role check via modifier) and accepts any `uint256` without further
-///         validation, so there are no ordering pairs to pin. This file is present
-///         for completeness and to document that the single guard is the only revert path.
-contract B20SecurityUpdateShareRatioRevertOrderTest is B20SecurityTest {}
+///         Single revert condition — no ordering pairs. One test pins the guard itself.
+contract B20SecurityUpdateShareRatioRevertOrderTest is B20SecurityTest {
+    function test_updateShareRatio_revertOrder_unauthorized(address caller, uint256 newRatio) public {
+        vm.assume(caller != admin);
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, security().SECURITY_OPERATOR_ROLE()
+            )
+        );
+        security().updateShareRatio(newRatio);
+    }
+}

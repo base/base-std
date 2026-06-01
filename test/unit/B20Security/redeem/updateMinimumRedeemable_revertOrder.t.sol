@@ -12,8 +12,16 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(DEFAULT_ADMIN_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///
-///         C(1, 2) = 0 pairs. `updateMinimumRedeemable` has a single revert condition
-///         (role check via modifier) and accepts any `uint256` without further
-///         validation, so there are no ordering pairs to pin. This file is present
-///         for completeness and to document that the single guard is the only revert path.
-contract B20SecurityUpdateMinimumRedeemableRevertOrderTest is B20SecurityTest {}
+///         Single revert condition — no ordering pairs. One test pins the guard itself.
+contract B20SecurityUpdateMinimumRedeemableRevertOrderTest is B20SecurityTest {
+    function test_updateMinimumRedeemable_revertOrder_unauthorized(address caller, uint256 newMinimum) public {
+        vm.assume(caller != admin);
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.DEFAULT_ADMIN_ROLE
+            )
+        );
+        security().updateMinimumRedeemable(newMinimum);
+    }
+}
