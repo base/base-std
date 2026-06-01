@@ -78,7 +78,7 @@ interface IPolicyRegistry {
 
     /// @notice Creates a new policy seeded with `accounts` as initial members. Permissionless.
     ///
-    /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
+    /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. Takes precedence over `BatchSizeTooLarge`.
     /// @dev Reverts with `BatchSizeTooLarge` when `accounts.length` exceeds the registry limit.
     ///
     /// @param admin      Initial admin authorized to modify membership and transfer or renounce administration.

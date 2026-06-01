@@ -429,7 +429,8 @@ interface IB20 {
 
     /// @notice Grants `role` to `account`. Emits `RoleGranted`.
     ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the admin role for `role`.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the admin role for `role`,
+    ///      or when the token has been transitioned to admin-less via `renounceLastAdmin` (admin-resurrection guard).
     ///
     /// @param role    Role to grant.
     /// @param account Recipient.
@@ -437,7 +438,10 @@ interface IB20 {
 
     /// @notice Revokes `role` from `account`. Emits `RoleRevoked`.
     ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the admin role for `role`.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the admin role for `role`,
+    ///      or when the token has been transitioned to admin-less via `renounceLastAdmin`.
+    /// @dev Reverts with `LastAdminCannotRenounce` when `role == DEFAULT_ADMIN_ROLE` and `account` is the sole admin.
+    ///      Use `renounceLastAdmin` to clear the final admin.
     ///
     /// @param role    Role to revoke.
     /// @param account Account to revoke from.
@@ -462,7 +466,8 @@ interface IB20 {
 
     /// @notice Sets the admin role for `role`. Emits `RoleAdminChanged`.
     ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the current admin role for `role`.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold the current admin role for `role`,
+    ///      or when the token has been transitioned to admin-less via `renounceLastAdmin`.
     ///
     /// @param role         Role whose admin is being updated.
     /// @param newAdminRole New admin role identifier.
