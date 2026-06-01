@@ -8,68 +8,22 @@ import {IB20Security} from "../interfaces/IB20Security.sol";
 
 /// @title  B20FactoryLib
 /// @author Coinbase
-/// @notice Helpers for constructing the calldata an integrator passes
-///         to `StdPrecompiles.B20_FACTORY.createB20(...)`. Two layers:
-///
-///         1. `encode*CreateParams` helpers that produce the per-variant
-///            `params` blob (a leading version byte plus the
-///            variant-specific struct fields, ABI-encoded). The factory
-///            decodes the blob via
-///            `abi.decode(params, (<Variant>CreateParams))`; the library
-///            and the factory share the struct layouts from
-///            `IB20Factory`.
-///
-///         2. `encode*` helpers that produce a single bootstrap
-///            `initCall` (an ABI-encoded call against `IB20` or
-///            `IB20Security`), plus `build*` helpers that assemble
-///            common multi-entry init-call arrays. Role-grant bundles
-///            are typed per variant — `B20RoleHolders` for default and
-///            stablecoin, `B20SecurityRoleHolders` for security — so
-///            the compiler rejects wrong-shape inputs at the call site;
-///            a parallel-arrays `buildRoleGrants(bytes32[], address[])`
-///            overload is the escape hatch for custom role sets. The
-///            `bytes[] initCalls` argument to `createB20` is the
-///            concatenation of however many of these the integrator
-///            needs; `concat` stitches typed bundles together with
-///            caller-supplied extras.
-///
-/// @dev    Pure encoder library: no precompile dispatch, no storage
-///         reads, no role/policy checks. Authorization happens inside
-///         the factory's bootstrap window (see `IB20Factory`) when the
-///         resulting calldata is actually invoked. The library deals
-///         in `bytes` and `bytes[]` only.
-///
-///         Init-call shape: each entry in `initCalls` is the
-///         ABI-encoded function call (selector + args) that the factory
-///         invokes on the freshly-deployed token during the privileged
-///         bootstrap window. Every `encode*` helper here produces
-///         exactly one such entry; `build*` helpers produce zero or
-///         more, in struct-field order.
+/// @notice Pure encoder helpers for the `params` blob and `initCalls` array consumed by
+///         `IB20Factory.createB20`. No precompile dispatch, no storage reads, no auth checks.
 library B20FactoryLib {
-    /// @notice Current encoding version for `B20CreateParams`. Carried
-    ///         as the leading `version` field so the factory can route
-    ///         between encodings as this variant's schema evolves
-    ///         independently of the others.
+    /// @notice Encoding version carried as the leading byte of a `B20CreateParams` blob.
     uint8 internal constant B20_CREATE_PARAMS_VERSION = 1;
 
-    /// @notice Current encoding version for `B20StablecoinCreateParams`.
-    ///         Independent of the other variants' versions.
+    /// @notice Encoding version carried as the leading byte of a `B20StablecoinCreateParams` blob.
     uint8 internal constant B20_STABLECOIN_CREATE_PARAMS_VERSION = 1;
 
-    /// @notice Current encoding version for `B20SecurityCreateParams`.
-    ///         Independent of the other variants' versions.
+    /// @notice Encoding version carried as the leading byte of a `B20SecurityCreateParams` blob.
     uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
 
-    /// @notice Current encoding version for `B20StablecoinEventParams`,
-    ///         the payload carried in the `variantEventParams` field of the
-    ///         `B20Created` event for STABLECOIN-variant tokens.
-    ///         Independent of `B20_STABLECOIN_CREATE_PARAMS_VERSION` —
-    ///         the event payload schema can evolve separately from the
-    ///         create-call payload schema.
+    /// @notice Encoding version carried as the leading byte of a `B20StablecoinEventParams` blob.
     uint8 internal constant B20_STABLECOIN_EVENT_PARAMS_VERSION = 1;
 
-    /// @notice Two parallel arrays passed to a `build*` helper had
-    ///         different lengths.
+    /// @notice Two parallel arrays passed to a `build*` helper had different lengths.
     ///
     /// @param  leftLen  Length of the first array argument.
     /// @param  rightLen Length of the second array argument.
@@ -79,16 +33,10 @@ library B20FactoryLib {
                           ROLE-HOLDER BUNDLES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Bootstrap role-grant bundle for `B20Variant.DEFAULT` and
-    ///         `B20Variant.STABLECOIN` tokens. Each field maps to one
-    ///         named role on `IB20`; `address(0)` skips that role at
-    ///         bootstrap so callers can leave it unassigned and grant
-    ///         it later.
+    /// @notice Bootstrap role-grant bundle for `B20Variant.DEFAULT` and `B20Variant.STABLECOIN`.
+    ///         `address(0)` fields are skipped at bootstrap.
     ///
-    /// @dev    `DEFAULT_ADMIN_ROLE` is intentionally omitted: it is set
-    ///         via the `*CreateParams.initialAdmin` field, NOT through
-    ///         this struct. Security-only roles (`BURN_FROM_ROLE`,
-    ///         `SECURITY_OPERATOR_ROLE`) are in `B20SecurityRoleHolders`.
+    /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `*CreateParams.initialAdmin`, not this struct.
     struct B20RoleHolders {
         /// @dev Account granted `MINT_ROLE`.
         address minter;
@@ -104,14 +52,10 @@ library B20FactoryLib {
         address metadataAdmin;
     }
 
-    /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`
-    ///         tokens. Superset of `B20RoleHolders`: adds the
-    ///         `BURN_FROM_ROLE` and `SECURITY_OPERATOR_ROLE` slots that
-    ///         only exist on `IB20Security`.
+    /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`. Superset of `B20RoleHolders`
+    ///         with `BURN_FROM_ROLE` and `SECURITY_OPERATOR_ROLE` slots.
     ///
-    /// @dev    `DEFAULT_ADMIN_ROLE` is intentionally omitted: it is set
-    ///         via `B20SecurityCreateParams.initialAdmin`, NOT through
-    ///         this struct.
+    /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20SecurityCreateParams.initialAdmin`, not this struct.
     struct B20SecurityRoleHolders {
         /// @dev Account granted `MINT_ROLE`.
         address minter;
@@ -135,18 +79,11 @@ library B20FactoryLib {
                           CREATE-PARAMS ENCODERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Encodes a `B20CreateParams` (default variant) as the
-    ///         `params` blob expected by `IB20Factory.createB20` when
-    ///         `variant == B20Variant.DEFAULT`. The leading byte is
-    ///         `B20_CREATE_PARAMS_VERSION`.
+    /// @notice Encodes a `B20CreateParams` blob (default variant) tagged with `B20_CREATE_PARAMS_VERSION`.
     ///
-    /// @param  name         ERC-20 token name.
-    /// @param  symbol       ERC-20 token symbol.
-    /// @param  initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or
-    ///                      `address(0)` for the demonstrate-no-owner
-    ///                      path.
-    ///
-    /// @return The ABI-encoded `B20CreateParams` blob.
+    /// @param name         ERC-20 token name.
+    /// @param symbol       ERC-20 token symbol.
+    /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
     function encodeDefaultCreateParams(string memory name, string memory symbol, address initialAdmin)
         internal
         pure
@@ -159,20 +96,13 @@ library B20FactoryLib {
         );
     }
 
-    /// @notice Encodes a `B20StablecoinCreateParams` as the `params`
-    ///         blob expected by `IB20Factory.createB20` when
-    ///         `variant == B20Variant.STABLECOIN`. The leading byte is
+    /// @notice Same as `encodeDefaultCreateParams`, plus the stablecoin `currency`. Tagged with
     ///         `B20_STABLECOIN_CREATE_PARAMS_VERSION`.
     ///
-    /// @param  name         ERC-20 token name.
-    /// @param  symbol       ERC-20 token symbol.
-    /// @param  initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or
-    ///                      `address(0)`.
-    /// @param  currency     ISO 4217 fiat code this stablecoin tracks.
-    ///                      Validated against `ISO4217.sol` by the
-    ///                      factory.
-    ///
-    /// @return The ABI-encoded `B20StablecoinCreateParams` blob.
+    /// @param name         ERC-20 token name.
+    /// @param symbol       ERC-20 token symbol.
+    /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)`.
+    /// @param currency     Self-declared currency identifier (uppercase ASCII).
     function encodeStablecoinCreateParams(
         string memory name,
         string memory symbol,
@@ -190,22 +120,14 @@ library B20FactoryLib {
         );
     }
 
-    /// @notice Encodes a `B20SecurityCreateParams` as the `params` blob
-    ///         expected by `IB20Factory.createB20` when
-    ///         `variant == B20Variant.SECURITY`. The leading byte is
-    ///         `B20_SECURITY_CREATE_PARAMS_VERSION`.
+    /// @notice Same as `encodeDefaultCreateParams`, plus security `isin` and `minimumRedeemable`.
+    ///         Tagged with `B20_SECURITY_CREATE_PARAMS_VERSION`.
     ///
-    /// @param  name              ERC-20 token name.
-    /// @param  symbol            ERC-20 token symbol.
-    /// @param  initialAdmin      Initial holder of `DEFAULT_ADMIN_ROLE`,
-    ///                           or `address(0)`.
-    /// @param  isin              International Securities Identification
-    ///                           Number; required. Empty string is
-    ///                           rejected by the factory with
-    ///                           `MissingRequiredField`.
-    /// @param  minimumRedeemable Initial `minimumRedeemable` (shares).
-    ///
-    /// @return The ABI-encoded `B20SecurityCreateParams` blob.
+    /// @param name              ERC-20 token name.
+    /// @param symbol            ERC-20 token symbol.
+    /// @param initialAdmin      Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)`.
+    /// @param isin              International Securities Identification Number. Required; empty string reverts at the factory.
+    /// @param minimumRedeemable Initial `minimumRedeemable` (shares).
     function encodeSecurityCreateParams(
         string memory name,
         string memory symbol,
@@ -225,18 +147,10 @@ library B20FactoryLib {
         );
     }
 
-    /// @notice Encodes a `B20StablecoinEventParams` as the `variantEventParams`
-    ///         blob the factory emits in the `B20Created` event when
-    ///         `variant == B20Variant.STABLECOIN`. The leading byte is
-    ///         `B20_STABLECOIN_EVENT_PARAMS_VERSION`. Indexers decode
-    ///         this blob by `(variant, leading version byte)` to recover
-    ///         the immutable `currency` without an RPC call.
+    /// @notice Encodes a `B20StablecoinEventParams` as the `variantEventParams` blob the factory
+    ///         emits in the `B20Created` event for `B20Variant.STABLECOIN`.
     ///
-    /// @param  currency  ISO 4217 fiat code this stablecoin tracks; same
-    ///                   value passed to `encodeStablecoinCreateParams`
-    ///                   at creation time.
-    ///
-    /// @return The ABI-encoded `B20StablecoinEventParams` blob.
+    /// @param currency ISO 4217 fiat code this stablecoin tracks.
     function encodeStablecoinEventParams(string memory currency) internal pure returns (bytes memory) {
         return abi.encode(
             IB20Factory.B20StablecoinEventParams({version: B20_STABLECOIN_EVENT_PARAMS_VERSION, currency: currency})
@@ -247,103 +161,60 @@ library B20FactoryLib {
                         INIT-CALL SETTER ENCODERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Encodes a call to `IB20.updateSupplyCap(newSupplyCap)`
-    ///         as a bootstrap initCall.
-    ///
-    /// @param  newSupplyCap New supply cap (use `type(uint256).max` for
-    ///                      no cap).
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @notice Encodes a bootstrap initCall to `IB20.updateSupplyCap`.
+    /// @param newSupplyCap New supply cap (`type(uint256).max` for no cap).
     function encodeUpdateSupplyCap(uint256 newSupplyCap) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updateSupplyCap, (newSupplyCap));
     }
 
-    /// @notice Encodes a call to `IB20.updateContractURI(newURI)` as a
-    ///         bootstrap initCall.
-    ///
-    /// @param  newURI New contract URI (ERC-7572).
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @notice Encodes a bootstrap initCall to `IB20.updateContractURI`.
+    /// @param newURI New contract URI (ERC-7572).
     function encodeUpdateContractURI(string memory newURI) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updateContractURI, (newURI));
     }
 
-    /// @notice Encodes a call to `IB20.updateName(newName)` as a
-    ///         bootstrap initCall.
-    ///
-    /// @param  newName New ERC-20 token name. Also updates the EIP-712
-    ///                 domain separator's `name` field.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @notice Encodes a bootstrap initCall to `IB20.updateName`.
+    /// @param newName New ERC-20 token name.
     function encodeUpdateName(string memory newName) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updateName, (newName));
     }
 
-    /// @notice Encodes a call to
-    ///         `IB20.updatePolicy(policyScope, newPolicyId)` as a
-    ///         bootstrap initCall. Use the policy-scope constants from
-    ///         `B20Constants` (`TRANSFER_SENDER_POLICY`,
-    ///         `TRANSFER_RECEIVER_POLICY`, `TRANSFER_EXECUTOR_POLICY`,
-    ///         `MINT_RECEIVER_POLICY`) and from `IB20Security`
-    ///         (`REDEEM_SENDER_POLICY()`).
+    /// @notice Encodes a bootstrap initCall to `IB20.updatePolicy`.
     ///
-    /// @param  policyScope The policy-slot identifier.
-    /// @param  newPolicyId The new policy registry ID (`0` for
-    ///                     always-allow, `1` for always-reject).
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @param policyScope The policy-slot identifier.
+    /// @param newPolicyId The new policy registry ID.
     function encodeUpdatePolicy(bytes32 policyScope, uint64 newPolicyId) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updatePolicy, (policyScope, newPolicyId));
     }
 
-    /// @notice Encodes a call to `IB20.grantRole(role, account)` as a
-    ///         bootstrap initCall. Use the role constants from
-    ///         `B20Constants` (`MINT_ROLE`, `BURN_ROLE`,
-    ///         `BURN_BLOCKED_ROLE`, `BURN_FROM_ROLE`, `PAUSE_ROLE`,
-    ///         `UNPAUSE_ROLE`, `METADATA_ROLE`,
-    ///         `SECURITY_OPERATOR_ROLE`).
+    /// @notice Encodes a bootstrap initCall to `IB20.grantRole`.
     ///
-    /// @param  role    The role identifier.
-    /// @param  account The account to grant the role to.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @param role    Role to grant.
+    /// @param account Account to grant the role to.
     function encodeGrantRole(bytes32 role, address account) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.grantRole, (role, account));
     }
 
-    /// @notice Encodes a call to `IB20.revokeRole(role, account)` as a
-    ///         bootstrap initCall. Rare during bootstrap; useful when
-    ///         pairing with `setRoleAdmin` to lock down a role.
+    /// @notice Encodes a bootstrap initCall to `IB20.revokeRole`.
     ///
-    /// @param  role    The role identifier.
-    /// @param  account The account to revoke the role from.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @param role    Role to revoke.
+    /// @param account Account to revoke the role from.
     function encodeRevokeRole(bytes32 role, address account) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.revokeRole, (role, account));
     }
 
-    /// @notice Encodes a call to `IB20.setRoleAdmin(role, newAdminRole)`
-    ///         as a bootstrap initCall.
+    /// @notice Encodes a bootstrap initCall to `IB20.setRoleAdmin`.
     ///
-    /// @param  role         The role whose admin is being changed.
-    /// @param  newAdminRole The new admin role for `role`.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @param role         Role whose admin is being changed.
+    /// @param newAdminRole New admin role for `role`.
     function encodeSetRoleAdmin(bytes32 role, bytes32 newAdminRole) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.setRoleAdmin, (role, newAdminRole));
     }
 
-    /// @notice Encodes a call to
-    ///         `IB20Security.batchMint(recipients, amounts)` as a
-    ///         bootstrap initCall. Parallel-array semantics; the
-    ///         token reverts on malformed inputs.
+    /// @notice Encodes a bootstrap initCall to `IB20Security.batchMint`.
     ///
-    /// @param  recipients Accounts receiving the minted tokens.
-    /// @param  amounts    Per-recipient amounts, parallel to
-    ///                    `recipients`.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @param recipients Accounts receiving the minted tokens.
+    /// @param amounts    Per-recipient amounts, parallel to `recipients`.
     function encodeBatchMint(address[] memory recipients, uint256[] memory amounts)
         internal
         pure
@@ -352,17 +223,10 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Security.batchMint, (recipients, amounts));
     }
 
-    /// @notice Encodes a call to
-    ///         `IB20Security.updateSecurityIdentifier(identifierType, value)`
-    ///         as a bootstrap initCall. Use to attach additional
-    ///         identifiers (CUSIP, FIGI, SEDOL, etc.) alongside the
-    ///         ISIN set via `B20SecurityCreateParams`.
+    /// @notice Encodes a bootstrap initCall to `IB20Security.updateSecurityIdentifier`.
     ///
-    /// @param  identifierType Identifier category (e.g. `"CUSIP"`).
-    ///                        Empty string is rejected by the token.
-    /// @param  value          New value, or empty string to remove.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @param identifierType Identifier category (e.g. `"CUSIP"`).
+    /// @param value          New value, or empty string to remove.
     function encodeUpdateSecurityIdentifier(string memory identifierType, string memory value)
         internal
         pure
@@ -371,12 +235,8 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Security.updateSecurityIdentifier, (identifierType, value));
     }
 
-    /// @notice Encodes a call to `IB20Security.updateShareRatio(newShareRatio)`
-    ///         as a bootstrap initCall.
-    ///
-    /// @param  newShareRatio New share ratio.
-    ///
-    /// @return The ABI-encoded initCall blob.
+    /// @notice Encodes a bootstrap initCall to `IB20Security.updateShareRatio`.
+    /// @param newShareRatio New shares-to-tokens ratio, scaled to `WAD_PRECISION`.
     function encodeUpdateShareRatio(uint256 newShareRatio) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20Security.updateShareRatio, (newShareRatio));
     }
@@ -385,19 +245,11 @@ library B20FactoryLib {
                        INIT-CALL ARRAY BUILDERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Builds the `grantRole` initCalls implied by a
-    ///         `B20RoleHolders` bundle. Use for `B20Variant.DEFAULT`
-    ///         and `B20Variant.STABLECOIN` tokens. Each non-zero
-    ///         address in `holders` produces one `encodeGrantRole`
-    ///         entry in struct-field order: mint, burn, burn-blocked,
-    ///         pause, unpause, metadata. Zero-address fields are
-    ///         skipped so callers can leave a role unassigned at
-    ///         bootstrap. The returned array is sized exactly to the
-    ///         number of grants (no trailing empty slots).
+    /// @notice Builds the `grantRole` initCalls implied by a `B20RoleHolders` bundle, in struct-field
+    ///         order. `address(0)` fields are skipped; the result is sized exactly to the kept entries.
     ///
-    /// @param  holders The IB20 role-holder bundle.
-    ///
-    /// @return initCalls The ABI-encoded `grantRole` initCalls.
+    /// @param holders Role-holder bundle.
+    /// @return initCalls ABI-encoded `grantRole` initCalls.
     function buildRoleGrants(B20RoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
         bytes32[] memory roles = new bytes32[](6);
         roles[0] = B20Constants.MINT_ROLE;
@@ -418,20 +270,10 @@ library B20FactoryLib {
         return buildRoleGrants(roles, accounts);
     }
 
-    /// @notice Builds the `grantRole` initCalls implied by a
-    ///         `B20SecurityRoleHolders` bundle. Use for
-    ///         `B20Variant.SECURITY` tokens. Each non-zero address in
-    ///         `holders` produces one `encodeGrantRole` entry in
-    ///         struct-field order: mint, burn, burn-blocked, burn-from,
-    ///         pause, unpause, metadata, security-operator.
-    ///         Zero-address fields are skipped so callers can leave a
-    ///         role unassigned at bootstrap. The returned array is
-    ///         sized exactly to the number of grants (no trailing
-    ///         empty slots).
+    /// @notice Same as `buildRoleGrants(B20RoleHolders)`, but for the security role set.
     ///
-    /// @param  holders The security role-holder bundle.
-    ///
-    /// @return initCalls The ABI-encoded `grantRole` initCalls.
+    /// @param holders Security role-holder bundle.
+    /// @return initCalls ABI-encoded `grantRole` initCalls.
     function buildRoleGrants(B20SecurityRoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
         bytes32[] memory roles = new bytes32[](8);
         roles[0] = B20Constants.MINT_ROLE;
@@ -456,32 +298,15 @@ library B20FactoryLib {
         return buildRoleGrants(roles, accounts);
     }
 
-    /// @notice Builds the `grantRole` initCalls implied by parallel
-    ///         `roles` / `accounts` arrays. The general primitive
-    ///         that the typed-bundle overloads above delegate to; use
-    ///         this directly when your factory bundles roles in a
-    ///         shape that doesn't match `B20RoleHolders` /
-    ///         `B20SecurityRoleHolders` (e.g. a custom config struct
-    ///         that already encodes the parallel arrays inline, or a
-    ///         role set that includes integrator-defined roles).
+    /// @notice Builds the `grantRole` initCalls implied by parallel `roles` / `accounts` arrays.
+    ///         Entries where `accounts[k] == address(0)` are skipped; the result preserves input order
+    ///         and is sized exactly to the kept entries.
     ///
-    ///         Entry `k` produces `encodeGrantRole(roles[k], accounts[k])`;
-    ///         entries whose `accounts[k] == address(0)` are skipped
-    ///         so callers can leave a role unassigned at bootstrap.
-    ///         Output ordering matches input ordering for the kept
-    ///         entries; the returned array is sized exactly to the
-    ///         number of grants (no trailing empty slots).
+    /// @dev Reverts with `LengthMismatch` when `roles.length != accounts.length`.
     ///
-    /// @dev    Reverts with `LengthMismatch` if `roles` and `accounts`
-    ///         differ in length. The typed overloads above bypass
-    ///         this check by construction (their array allocations
-    ///         are paired in this library).
-    ///
-    /// @param  roles    Role identifiers; parallel to `accounts`.
-    /// @param  accounts Role holders; parallel to `roles`. `address(0)`
-    ///                  entries are skipped.
-    ///
-    /// @return initCalls The ABI-encoded `grantRole` initCalls.
+    /// @param roles    Role identifiers, parallel to `accounts`.
+    /// @param accounts Role holders, parallel to `roles`.
+    /// @return initCalls ABI-encoded `grantRole` initCalls.
     function buildRoleGrants(bytes32[] memory roles, address[] memory accounts)
         internal
         pure
@@ -503,22 +328,14 @@ library B20FactoryLib {
         }
     }
 
-    /// @notice Builds the `updateSecurityIdentifier` initCalls implied
-    ///         by parallel `identifierTypes` / `identifierValues`
-    ///         arrays. Entry `k` produces
-    ///         `encodeUpdateSecurityIdentifier(identifierTypes[k], identifierValues[k])`
-    ///         in array order. All entries are emitted; empty types or
-    ///         values are passed through to the token, which validates
-    ///         them at runtime.
+    /// @notice Builds the `updateSecurityIdentifier` initCalls implied by parallel
+    ///         `identifierTypes` / `identifierValues` arrays. All entries are emitted in input order.
     ///
-    /// @dev    Reverts with `LengthMismatch` if `identifierTypes` and
-    ///         `identifierValues` differ in length.
+    /// @dev Reverts with `LengthMismatch` when `identifierTypes.length != identifierValues.length`.
     ///
-    /// @param  identifierTypes  Identifier categories (e.g. `"CUSIP"`).
-    /// @param  identifierValues Values parallel to `identifierTypes`.
-    ///
-    /// @return initCalls The ABI-encoded `updateSecurityIdentifier`
-    ///                   initCalls.
+    /// @param identifierTypes  Identifier categories (e.g. `"CUSIP"`).
+    /// @param identifierValues Values parallel to `identifierTypes`.
+    /// @return initCalls ABI-encoded `updateSecurityIdentifier` initCalls.
     function buildSecurityIdentifierUpdates(string[] memory identifierTypes, string[] memory identifierValues)
         internal
         pure
@@ -534,17 +351,11 @@ library B20FactoryLib {
         }
     }
 
-    /// @notice Concatenates two init-call arrays into a single array,
-    ///         preserving order. Useful for stitching a typed-core
-    ///         initCall bundle (e.g. the output of `buildRoleGrants`)
-    ///         together with a caller-supplied tail of bespoke entries
-    ///         before passing the combined array to `createB20`.
+    /// @notice Concatenates `head` and `tail` into a single init-call array, preserving order.
     ///
-    /// @param  head Init calls to place at the start of the result.
-    /// @param  tail Init calls to place after `head`. May be empty.
-    ///
-    /// @return initCalls The concatenated array (`head` then `tail`),
-    ///                   sized exactly to `head.length + tail.length`.
+    /// @param head Init calls placed first.
+    /// @param tail Init calls placed after `head`. May be empty.
+    /// @return initCalls Concatenated array, sized `head.length + tail.length`.
     function concat(bytes[] memory head, bytes[] memory tail) internal pure returns (bytes[] memory initCalls) {
         initCalls = new bytes[](head.length + tail.length);
         uint256 i;

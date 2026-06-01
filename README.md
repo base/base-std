@@ -12,26 +12,49 @@
 
 A collection of Solidity interfaces, libraries, and mock implementations for Base precompiles.
 
-## Installation
+## Products
+
+- [**ActivationRegistry**](docs/ActivationRegistry/README.md) — Feature flags controlled by Base team to activate/deactivate features.
+- [**PolicyRegistry**](docs/PolicyRegistry/README.md) — Membership sets controlled by custom admins, initially providing allow and block lists for B20 token operations.
+- [**B20**](docs/B20/README.md) — Standard ERC-20 implementation with extensions for roles, policies, memos, pausing, ERC-2612 permits, and a variant system.
+
+## Source Integration
+
+These source files are imported by production contracts to interact with Base precompiles.
 
 ```bash
 forge install base/base-std
 ```
 
-## Standard Precompiles
-
 <pre>
 src
-├── <a href="./src/StdPrecompiles.sol">StdPrecompiles.sol</a>: Collection of precompiles and their interfaces
-└── interfaces
-    ├── <a href="./src/interfaces/IB20.sol">IB20.sol</a>: Core Token Standard
-    ├── <a href="./src/interfaces/IB20Stablecoin.sol">IB20Stablecoin.sol</a>: Stablecoin variant of B20
-    ├── <a href="./src/interfaces/IB20Security.sol">IB20Security.sol</a>: Security variant of B20
-    ├── <a href="./src/interfaces/IPolicyRegistry.sol">IPolicyRegistry.sol</a>: Policy registry shared across B20s
-    └── <a href="./src/interfaces/ITokenFactory.sol">ITokenFactory.sol</a>: B20 factory contract
+├── <a href="./src/StdPrecompiles.sol">StdPrecompiles.sol</a>: Precompile addresses with interface wrapper handles
+├── interfaces
+│   ├── <a href="./src/interfaces/IB20.sol">IB20.sol</a>: Core token standard
+│   ├── <a href="./src/interfaces/IB20Stablecoin.sol">IB20Stablecoin.sol</a>: Stablecoin variant of B20
+│   ├── <a href="./src/interfaces/IB20Security.sol">IB20Security.sol</a>: Security variant of B20
+│   ├── <a href="./src/interfaces/IB20Factory.sol">IB20Factory.sol</a>: B20 factory precompile
+│   ├── <a href="./src/interfaces/IPolicyRegistry.sol">IPolicyRegistry.sol</a>: Policy registry precompile
+│   └── <a href="./src/interfaces/IActivationRegistry.sol">IActivationRegistry.sol</a>: Activation registry precompile
+└── lib
+    ├── <a href="./src/lib/B20Constants.sol">B20Constants.sol</a>: B20 role and policy-type identifier constants
+    └── <a href="./src/lib/B20FactoryLib.sol">B20FactoryLib.sol</a>: Pure encoders for B20 factory params and initCalls
 </pre>
 
-## Development
+## Test Integration
+
+These mock contracts replace the live precompiles in unit tests, allowing tests to run without a fork.
+
+<pre>
+test/lib/mocks
+├── <a href="./test/lib/mocks/MockActivationRegistry.sol">MockActivationRegistry.sol</a>: Mock implementation of the activation registry precompile
+├── <a href="./test/lib/mocks/MockPolicyRegistry.sol">MockPolicyRegistry.sol</a>: Mock implementation of the policy registry precompile
+└── <a href="./test/lib/mocks/MockB20Factory.sol">MockB20Factory.sol</a>: Mock implementation of the B20 factory precompile
+</pre>
+
+## Contributing
+
+### Development
 
 ```bash
 forge build
@@ -42,7 +65,7 @@ Solidity version: `0.8.30` for reference implementations. Interfaces are
 written for broader compatibility (`>=0.8.20 <0.9.0`) so consumers can
 import them without forcing a specific compiler.
 
-## Fork testing against live precompiles
+### Fork testing against live precompiles
 
 The unit suite can run against a chain hosting the live Rust precompile
 implementations to verify the Rust impls match the Solidity reference's
