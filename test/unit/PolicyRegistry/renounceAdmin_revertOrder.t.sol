@@ -5,26 +5,37 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
-/// @title Differential check-order tests for `renounceAdmin`.
+/// @title Sequential revert-order test for `renounceAdmin`.
 ///
-/// @notice **Canonical order (Solidity reference):**
+/// @notice **Canonical order:**
 ///         1. POLICY-NOT-FOUND (`policies[policyId] == 0`) → `PolicyNotFound`
 ///         2. UNAUTHORIZED (`_decodeAdmin(packed) != msg.sender`) → `Unauthorized`
 ///
-///         C(2, 2) = 1 pair.
+///         Walks from all conditions broken to success, fixing one per step.
 contract PolicyRegistryRenounceAdminRevertOrderTest is PolicyRegistryTest {
-    /// @notice POLICY-NOT-FOUND beats UNAUTHORIZED.
-    /// @dev policyId does not exist (packed == 0) AND caller is not the policy admin.
-    ///      PolicyNotFound fires before the admin comparison runs.
-    function test_renounceAdmin_revertOrder_policyNotFound_beats_unauthorized(address caller, uint64 seed) public {
-        _assumeValidCaller(caller);
-        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
+    /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
+    function test_renounceAdmin_revertOrder() public {
+        // ghostId is a well-formed policyId that has never been created.
+        uint64 ghostId = _wellFormedUncreatedPolicyId(type(uint64).max);
 
-        // Both conditions apply independently:
-        // - PolicyNotFound: policyId has never been created (policies[policyId] == 0).
-        // - Unauthorized: _decodeAdmin(0) == address(0) != caller (caller is non-zero).
-        vm.prank(caller);
+        // 1. POLICY-NOT-FOUND: policyId has never been created AND attacker is not the
+        //    policy admin (Unauthorized would also apply if the policy existed).
+        vm.prank(attacker);
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
+        policyRegistry.renounceAdmin(ghostId);
+
+        // Fix: create an allowlist policy with alice as admin.
+        uint64 policyId = policyRegistry.createPolicy(alice, IPolicyRegistry.PolicyType.ALLOWLIST);
+
+        // 2. UNAUTHORIZED: attacker is not the policy admin (alice).
+        vm.prank(attacker);
+        vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
+        policyRegistry.renounceAdmin(policyId);
+
+        // Fix: call as alice (the policy admin).
+
+        // Success
+        vm.prank(alice);
         policyRegistry.renounceAdmin(policyId);
     }
 }
