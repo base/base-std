@@ -80,10 +80,9 @@ LOG_FILE="${ANVIL_LOG:-/tmp/anvil.log}"
 # If a new feature is added there, append its ID here.
 FEATURE_IDS=(
     0x78751e29c8bcc0d609ab18e9fbc4158e73f7db25ae2ee095dad42e2578b1e800  # B20_FACTORY
-    0x47a1afe8d3d691b87e090ee972d223a11f4da971ff5416c04985bb2393aca752  # B20_TOKEN
     0xb582ebae03f16fee49a6763f78df482fb11ae73f103ed0d330bbe556aa90a43f  # POLICY_REGISTRY
-    0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601  # B20_STABLECOIN (added base/base#2806)
-    0x83d32fab502ae0e8bc4352a117767262cb5e47cc8d67a744008ed4ff03fcf5e6  # B20_SECURITY (added base/base#2813)
+    0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601  # B20_STABLECOIN
+    0xcdcc772fe4cbdb1029f822861176d09e646db96723d4c1e82ddfdeb8163ef54c  # B20_ASSET (renamed from base.b20_security, BOP-257)
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
