@@ -130,6 +130,10 @@ interface IB20Factory {
     /// @dev Reverts with `InvalidDecimals` when an asset `decimals` is outside `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`.
     /// @dev Reverts with `TokenAlreadyExists` when a token already exists at the derived address.
     /// @dev Reverts with `InitCallFailed` (or the bubbled inner reason) when any entry in `initCalls` reverts.
+    /// @dev Each `initCall` executes on the new token within the creation (bootstrap) window, during which the
+    ///      token's role / policy / pause authorization gates are bypassed for factory-originated calls — so
+    ///      admin-gated setup (e.g. `grantRole`, `updatePolicy`, `updateSupplyCap`) succeeds without the factory
+    ///      holding any role. The window closes when `createB20` returns; the factory retains no persisted access.
     ///
     /// @param variant   Which variant struct `params` decodes as.
     /// @param salt      Caller-chosen salt for deterministic address derivation.
