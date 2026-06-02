@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
 import {BaseTest} from "test/lib/BaseTest.sol";
 
 import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
@@ -28,5 +29,15 @@ contract ActivationRegistryTest is BaseTest {
 
         activationAdmin = activationRegistry.admin();
         vm.label(activationAdmin, "activationAdmin");
+    }
+
+    /// @notice Filters out feature ids that `BaseTest.setUp` pre-activates.
+    /// @dev    Tests that fuzz over arbitrary `bytes32` features and assume
+    ///         the feature starts inactive (or that activation is fresh) must
+    ///         exclude these so the fuzzer doesn't trip on the bootstrap state.
+    function _assumeFreshFeature(bytes32 feature) internal pure {
+        vm.assume(feature != ActivationRegistryFeatureList.B20_ASSET);
+        vm.assume(feature != ActivationRegistryFeatureList.B20_STABLECOIN);
+        vm.assume(feature != ActivationRegistryFeatureList.POLICY_REGISTRY);
     }
 }

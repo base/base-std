@@ -17,30 +17,12 @@ import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFe
 ///         surfaces here before it can desync against the Rust source of
 ///         truth.
 contract ActivationRegistryFeatureListTest is Test {
-    /// @notice `B20_SECURITY` equals `keccak256("base.b20_security")`.
-    function test_B20_SECURITY_pinnedToKeccak() public pure {
+    /// @notice `B20_ASSET` equals `keccak256("base.b20_asset")`.
+    function test_B20_ASSET_pinnedToKeccak() public pure {
         assertEq(
-            ActivationRegistryFeatureList.B20_SECURITY,
-            keccak256("base.b20_security"),
-            "B20_SECURITY must equal keccak256(\"base.b20_security\")"
-        );
-    }
-
-    /// @notice `B20_TOKEN` equals `keccak256("base.b20_token")`.
-    function test_B20_TOKEN_pinnedToKeccak() public pure {
-        assertEq(
-            ActivationRegistryFeatureList.B20_TOKEN,
-            keccak256("base.b20_token"),
-            "B20_TOKEN must equal keccak256(\"base.b20_token\")"
-        );
-    }
-
-    /// @notice `B20_FACTORY` equals `keccak256("base.b20_factory")`.
-    function test_B20_FACTORY_pinnedToKeccak() public pure {
-        assertEq(
-            ActivationRegistryFeatureList.B20_FACTORY,
-            keccak256("base.b20_factory"),
-            "B20_FACTORY must equal keccak256(\"base.b20_factory\")"
+            ActivationRegistryFeatureList.B20_ASSET,
+            keccak256("base.b20_asset"),
+            "B20_ASSET must equal keccak256(\"base.b20_asset\")"
         );
     }
 

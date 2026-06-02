@@ -5,6 +5,9 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
+import {StdPrecompiles} from "src/StdPrecompiles.sol";
+
+import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
 
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
@@ -98,6 +101,16 @@ contract MockB20Factory is IB20Factory {
         external
         returns (address token)
     {
+        // -- 0. Activation gates.
+        //       Per-variant features gate which variants can be created at
+        //       any moment. Variant-feature mapping:
+        //         STABLECOIN → B20_STABLECOIN
+        //         SECURITY / DEFAULT → B20_ASSET
+        //       (DEFAULT is folded under `B20_ASSET` until BOP-253 removes
+        //       the variant; the dedicated `B20_TOKEN` feature was retired
+        //       by BOP-257.)
+        _enforceActivationGates(variant);
+
         // -- 1. Decode + validate, get the common params --
         string memory name_;
         string memory symbol_;
@@ -244,6 +257,22 @@ contract MockB20Factory is IB20Factory {
         // (MockB20Storage.INITIALIZED_OFFSET). The slot holds nothing
         // else, so any non-zero word means initialized=true.
         return uint256(vm.load(token, MockB20Storage.initializedSlot())) != 0;
+    }
+
+    // ============================================================
+    //                     ACTIVATION GATING
+    // ============================================================
+
+    /// @dev Reverts with `IActivationRegistry.FeatureNotActivated(feature)` if
+    ///      the variant-specific gate (`B20_ASSET` for SECURITY / DEFAULT,
+    ///      `B20_STABLECOIN` for STABLECOIN) is not currently activated in
+    ///      the registry. Factored out of `createB20` to keep the dispatcher
+    ///      body under the EVM stack-depth limit.
+    function _enforceActivationGates(B20Variant variant) internal view {
+        bytes32 variantFeature = variant == B20Variant.STABLECOIN
+            ? ActivationRegistryFeatureList.B20_STABLECOIN
+            : ActivationRegistryFeatureList.B20_ASSET;
+        StdPrecompiles.ACTIVATION_REGISTRY.checkActivated(variantFeature);
     }
 
     // ============================================================

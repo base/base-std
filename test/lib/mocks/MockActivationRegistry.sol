@@ -62,6 +62,11 @@ contract MockActivationRegistry is IActivationRegistry {
         return MockActivationRegistryStorage.layout().features[feature];
     }
 
+    /// @inheritdoc IActivationRegistry
+    function checkActivated(bytes32 feature) external view {
+        if (!MockActivationRegistryStorage.layout().features[feature]) revert FeatureNotActivated(feature);
+    }
+
     // ============================================================
     //                     ACTIVATION CONTROL
     // ============================================================

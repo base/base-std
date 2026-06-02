@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 
+import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
 import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol";
 import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {MockB20Factory} from "test/lib/mocks/MockB20Factory.sol";
@@ -98,6 +99,18 @@ abstract contract BaseTest is Test {
             vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
             vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
         }
+
+        // Activate every B-20 feature so the bulk of the suite — which
+        // exercises behaviors orthogonal to the activation gate — doesn't
+        // have to repeat the bootstrap. Tests that pin the gating
+        // behavior itself (`B20Factory/activation.t.sol`) deactivate the
+        // specific feature under test before exercising it.
+        address activationAdmin = StdPrecompiles.ACTIVATION_REGISTRY.admin();
+        vm.startPrank(activationAdmin);
+        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_ASSET);
+        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_STABLECOIN);
+        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.POLICY_REGISTRY);
+        vm.stopPrank();
     }
 
     /// @notice Filters out addresses that are unsafe to use as a fuzzed

@@ -113,6 +113,7 @@ interface IB20Factory {
     ///         from `(variant, msg.sender, salt)`, then dispatches each entry in `initCalls` on
     ///         the new token. Emits `B20Created`.
     ///
+    /// @dev Reverts with IActivationRegistry.FeatureNotActivated when the variant feature is not activated.
     /// @dev Reverts with `InvalidVariant` when `variant` is outside the `B20Variant` range.
     /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
     /// @dev Reverts with `MissingRequiredField` when a required string field is empty.

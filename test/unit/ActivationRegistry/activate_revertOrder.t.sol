@@ -14,6 +14,7 @@ contract ActivationRegistryActivateRevertOrderTest is ActivationRegistryTest {
     function test_activate_revertOrder_unauthorized_beats_alreadyActivated(address caller, bytes32 feature) public {
         _assumeValidCaller(caller);
         vm.assume(caller != activationAdmin);
+        _assumeFreshFeature(feature);
 
         // Activate the feature as admin so it is already activated, establishing
         // the precondition that AlreadyActivated *could* fire for an admin caller.

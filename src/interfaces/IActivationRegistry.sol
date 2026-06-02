@@ -48,6 +48,14 @@ interface IActivationRegistry {
     /// @return Whether `feature` is activated.
     function isActivated(bytes32 feature) external view returns (bool);
 
+    /// @notice Reverts with `FeatureNotActivated(feature)` if `feature` is not currently activated.
+    ///         A pure assertion entry point so callers don't have to redefine the error.
+    ///
+    /// @dev Reverts with `FeatureNotActivated` when `feature` is not activated.
+    ///
+    /// @param feature Feature to assert is active.
+    function checkActivated(bytes32 feature) external view;
+
     /// @notice The address authorized to call `activate` and `deactivate`.
     /// @return Current activation admin.
     function admin() external view returns (address);

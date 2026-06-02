@@ -13,6 +13,7 @@ contract MockActivationRegistrySlotHelpersTest is ActivationRegistryTest {
     /// @notice Verifies `featureSlot(feature)` locates the bool flag set by activate.
     /// @dev    Activate a feature, then read the derived slot — must equal bytes32(uint256(1)).
     function test_featureSlot_success_locatesActivationBit(bytes32 feature) public {
+        _assumeFreshFeature(feature);
         vm.prank(activationAdmin);
         activationRegistry.activate(feature);
 
@@ -26,7 +27,8 @@ contract MockActivationRegistrySlotHelpersTest is ActivationRegistryTest {
     /// @notice Verifies `featureSlot(feature)` is zero for an unactivated feature.
     /// @dev    The default-zero slot value is what backs `isActivated → false`
     ///         for features that were never activated.
-    function test_featureSlot_success_zeroForUnactivatedFeature(bytes32 feature) public view {
+    function test_featureSlot_success_zeroForUnactivatedFeature(bytes32 feature) public {
+        _assumeFreshFeature(feature);
         assertEq(
             vm.load(address(activationRegistry), MockActivationRegistryStorage.featureSlot(feature)),
             bytes32(0),
@@ -39,6 +41,7 @@ contract MockActivationRegistrySlotHelpersTest is ActivationRegistryTest {
     ///         back to 0 — the Rust impl must reproduce the same clear-on-deactivate
     ///         storage semantics so subsequent SLOADs read the default value.
     function test_featureSlot_success_zeroAfterDeactivate(bytes32 feature) public {
+        _assumeFreshFeature(feature);
         vm.prank(activationAdmin);
         activationRegistry.activate(feature);
         vm.prank(activationAdmin);
