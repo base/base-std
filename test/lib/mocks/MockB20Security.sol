@@ -68,11 +68,15 @@ contract MockB20Security is MockB20, IB20Security {
     //                           DECIMALS
     // ============================================================
 
-    /// @notice Security-variant decimals are fixed at 6. Overrides the
+    /// @notice Security-variant decimals are chosen at creation from
+    ///         `B20SecurityCreateParams.decimals` (validated to
+    ///         `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`
+    ///         by the factory) and stored at
+    ///         `MockB20SecurityStorage.decimalsSlot()`. Overrides the
     ///         base `MockB20.decimals()` (which returns 18 for the
     ///         default variant) per the `IB20Security` convention.
-    function decimals() external pure override(MockB20, IB20) returns (uint8) {
-        return 6;
+    function decimals() external view override(MockB20, IB20) returns (uint8) {
+        return MockB20SecurityStorage.layout().decimals;
     }
 
     // ============================================================

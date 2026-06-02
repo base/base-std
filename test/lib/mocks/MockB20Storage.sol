@@ -342,6 +342,14 @@ library MockB20Storage {
 ///           default value during bootstrap. `updateMultiplier` writes
 ///           the new multiplier verbatim; subsequent reads return the
 ///           stored value as-is.
+///         - `decimals` is the per-token ERC-20 decimals value, chosen
+///           at creation by the factory from `B20SecurityCreateParams`
+///           and immutable thereafter. Validated to the range
+///           `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`
+///           by the factory. Solidity packs `uint8` into its own slot
+///           (it does not back-pack with the preceding `uint256`);
+///           future small variant-immutable fields can pack into the
+///           remaining 31 bytes of this slot.
 ///         - `usedAnnouncementIds` keys directly on the raw `string id`
 ///           that callers pass to `announce` / `isAnnouncementIdUsed`,
 ///           not on a hash, so the on-chain query mirrors the API.
@@ -354,6 +362,12 @@ library MockB20SecurityStorage {
         // Scaled by WAD_PRECISION (1e18). Stored value of 0 is
         // interpreted as WAD by the read surface.
         uint256 multiplier;
+        // ---------- Decimals ----------
+        // Per-token ERC-20 `decimals`. Written by the factory at
+        // creation from the `B20SecurityCreateParams.decimals` field
+        // (validated to [MIN_ASSET_DECIMALS, MAX_ASSET_DECIMALS]) and
+        // never mutated afterwards.
+        uint8 decimals;
         // ---------- Announcements ----------
         // Tracks consumed announcement IDs; flips to true on first
         // `announce` for a given id, and remains true forever.
@@ -376,8 +390,13 @@ library MockB20SecurityStorage {
     // deriving member slots via `keccak256(abi.encode(key, baseSlot))`.
 
     uint256 internal constant MULTIPLIER_OFFSET = 0;
-    uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 1;
-    uint256 internal constant IDENTIFIERS_OFFSET = 2;
+    // `decimals` (a `uint8`) cannot back-pack with the preceding
+    // `uint256`, so Solidity allocates it a fresh slot. It occupies
+    // only the low byte; the remaining 31 bytes are reserved for
+    // future small variant-immutable fields.
+    uint256 internal constant DECIMALS_OFFSET = 1;
+    uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 2;
+    uint256 internal constant IDENTIFIERS_OFFSET = 3;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {
@@ -403,6 +422,7 @@ library MockB20SecurityStorage {
 
     // forgefmt: disable-start
     function multiplierSlot() internal pure returns (bytes32) { return slotOf(MULTIPLIER_OFFSET); }
+    function decimalsSlot() internal pure returns (bytes32) { return slotOf(DECIMALS_OFFSET); }
     function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
     function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }
 

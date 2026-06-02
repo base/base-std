@@ -14,9 +14,10 @@ contract B20FactoryLibEncodeSecurityCreateParamsTest is B20FactoryLibTest {
     function test_encodeSecurityCreateParams_success_roundTripsThroughDecode(
         string memory name,
         string memory symbol,
-        address initialAdmin
+        address initialAdmin,
+        uint8 decimals
     ) public pure {
-        bytes memory blob = B20FactoryLib.encodeSecurityCreateParams(name, symbol, initialAdmin);
+        bytes memory blob = B20FactoryLib.encodeSecurityCreateParams(name, symbol, initialAdmin, decimals);
         IB20Factory.B20SecurityCreateParams memory decoded = abi.decode(blob, (IB20Factory.B20SecurityCreateParams));
 
         assertEq(
@@ -27,6 +28,7 @@ contract B20FactoryLibEncodeSecurityCreateParamsTest is B20FactoryLibTest {
         assertEq(decoded.name, name, "name must round-trip");
         assertEq(decoded.symbol, symbol, "symbol must round-trip");
         assertEq(decoded.initialAdmin, initialAdmin, "initialAdmin must round-trip");
+        assertEq(decoded.decimals, decimals, "decimals must round-trip");
     }
 
     /// @notice Verifies the encoded blob is byte-identical to a hand-encoded
@@ -36,17 +38,25 @@ contract B20FactoryLibEncodeSecurityCreateParamsTest is B20FactoryLibTest {
     function test_encodeSecurityCreateParams_success_matchesHandEncodedStruct(
         string memory name,
         string memory symbol,
-        address initialAdmin
+        address initialAdmin,
+        uint8 decimals
     ) public pure {
         bytes memory expected = abi.encode(
             IB20Factory.B20SecurityCreateParams({
                 version: B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION,
                 name: name,
                 symbol: symbol,
-                initialAdmin: initialAdmin
+                initialAdmin: initialAdmin,
+                decimals: decimals
             })
         );
-        bytes memory actual = B20FactoryLib.encodeSecurityCreateParams(name, symbol, initialAdmin);
+        bytes memory actual = B20FactoryLib.encodeSecurityCreateParams(name, symbol, initialAdmin, decimals);
         assertEq(actual, expected, "encoded blob must match hand-encoded struct byte-for-byte");
+    }
+
+    /// @notice Verifies the library's current security create-params version is `2`.
+    /// @dev    Pins the constant so a future bump is intentional and visible in diff.
+    function test_b20SecurityCreateParamsVersion_pinned() public pure {
+        assertEq(uint256(B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION), 2, "version must be 2");
     }
 }

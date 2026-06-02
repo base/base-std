@@ -161,8 +161,12 @@ abstract contract MockB20 is IB20 {
         return MockB20Storage.layout().symbol;
     }
 
-    /// @notice Default-variant decimals are fixed at 18.
-    function decimals() external pure virtual returns (uint8) {
+    /// @notice Default-variant decimals are fixed at 18. The security variant
+    ///         overrides this to read its per-token configured decimals from
+    ///         `MockB20SecurityStorage`, which requires `view` (not `pure`)
+    ///         mutability — so the base declares `view` to keep the override
+    ///         legal under Solidity's tightening rules.
+    function decimals() external view virtual returns (uint8) {
         return 18;
     }
 

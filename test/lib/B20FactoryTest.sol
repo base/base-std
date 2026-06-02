@@ -4,6 +4,8 @@ pragma solidity ^0.8.20;
 import {BaseTest} from "test/lib/BaseTest.sol";
 import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
 
+import {B20Constants} from "src/lib/B20Constants.sol";
+import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
 
@@ -29,7 +31,11 @@ contract B20FactoryTest is BaseTest {
         string memory currency_
     ) internal pure returns (IB20Factory.B20StablecoinCreateParams memory) {
         return IB20Factory.B20StablecoinCreateParams({
-            version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_, currency: currency_
+            version: B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION,
+            name: name_,
+            symbol: symbol_,
+            initialAdmin: initialAdmin_,
+            currency: currency_
         });
     }
 
@@ -39,17 +45,34 @@ contract B20FactoryTest is BaseTest {
     }
 
     /// @notice Build a `B20SecurityCreateParams` with explicit fields.
-    function _securityParams(string memory name_, string memory symbol_, address initialAdmin_)
+    /// @dev    Tests that don't care about `decimals` should call the
+    ///         no-arg overload (which pins `decimals = MIN_ASSET_DECIMALS`
+    ///         to match historical behavior). Tests that DO care thread the
+    ///         explicit value through here.
+    function _securityParams(string memory name_, string memory symbol_, address initialAdmin_, uint8 decimals_)
         internal
         pure
         returns (IB20Factory.B20SecurityCreateParams memory)
     {
         return IB20Factory.B20SecurityCreateParams({
-            version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_
+            version: B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION,
+            name: name_,
+            symbol: symbol_,
+            initialAdmin: initialAdmin_,
+            decimals: decimals_
         });
     }
 
-    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin).
+    /// @notice Build a `B20SecurityCreateParams` with the default decimals (`MIN_ASSET_DECIMALS`).
+    function _securityParams(string memory name_, string memory symbol_, address initialAdmin_)
+        internal
+        pure
+        returns (IB20Factory.B20SecurityCreateParams memory)
+    {
+        return _securityParams(name_, symbol_, initialAdmin_, B20Constants.MIN_ASSET_DECIMALS);
+    }
+
+    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin, `MIN_ASSET_DECIMALS`).
     function _securityParams() internal view returns (IB20Factory.B20SecurityCreateParams memory) {
         return _securityParams("Security Test", "SEC", admin);
     }

@@ -114,4 +114,4 @@ ERC-1271 contract signatures are deliberately NOT accepted — permit recovers v
 | Variant | Decimals | What it adds |
 |---|---|---|
 | [Stablecoin](Stablecoin.md) | 6 (fixed) | currency ISO code |
-| [Security](Security.md) | 6 (fixed) | multiplier, announcements, identifiers, redemptions |
+| [Security](Security.md) | 6-18 (configurable per token) | multiplier, announcements, identifiers, redemptions |
