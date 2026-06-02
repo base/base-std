@@ -27,15 +27,9 @@ contract B20FactoryIsB20InitializedTest is B20FactoryTest {
         public
         view
     {
-        address predicted = factory.getB20Address(IB20Factory.B20Variant.DEFAULT, sender, salt);
+        address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, sender, salt);
         vm.assume(predicted.code.length == 0);
         assertFalse(factory.isB20Initialized(predicted), "B-20-prefixed but uncreated address must not be initialized");
-    }
-
-    /// @notice Verifies isB20Initialized returns true for a freshly-created DEFAULT-variant token
-    function test_isB20Initialized_success_trueForDefaultToken(bytes32 salt) public {
-        address token = _createDefault(alice, salt, _b20Params(), new bytes[](0));
-        assertTrue(factory.isB20Initialized(token), "DEFAULT token must be recognized as initialized");
     }
 
     /// @notice Verifies isB20Initialized returns true for a freshly-created STABLECOIN-variant token
