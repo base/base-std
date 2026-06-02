@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hand-rolled mutation testing for MockB20 / MockTokenFactory.
+"""Hand-rolled mutation testing for MockB20 / MockB20Factory.
 
 For each mutation: back up the file, apply a single substitution, run forge test,
 record pass/fail, restore the backup. A mutation that "survives" (all tests pass
