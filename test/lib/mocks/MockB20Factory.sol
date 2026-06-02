@@ -101,8 +101,6 @@ contract MockB20Factory is IB20Factory {
         //       any moment. Variant-feature mapping:
         //         STABLECOIN → B20_STABLECOIN
         //         ASSET      → B20_ASSET
-        //       (The dedicated `B20_TOKEN` feature was retired by BOP-257
-        //       and the `DEFAULT` variant by BOP-253.)
         _enforceActivationGates(variant);
 
         // -- 1. Decode + validate, get the common params --
