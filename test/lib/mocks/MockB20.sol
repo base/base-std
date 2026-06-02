@@ -755,10 +755,9 @@ abstract contract MockB20 is IB20 {
     /// @dev Pure mechanics: balance + effects. Pause and role gates are
     ///      enforced by entrypoint modifiers (`whenNotPaused`,
     ///      `onlyRole`) on every caller (`burn`, `burnWithMemo`,
-    ///      `burnBlocked`, and `MockB20Security`'s `_redeemBurn`);
-    ///      see those functions for the per-caller authorization
-    ///      surface. This helper never authorizes the destruction on
-    ///      its own.
+    ///      `burnBlocked`); see those functions for the per-caller
+    ///      authorization surface. This helper never authorizes the
+    ///      destruction on its own.
     function _burnRaw(address from, uint256 amount) internal {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 fromBalance = $.balances[from];

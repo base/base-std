@@ -217,7 +217,7 @@ abstract contract BaseTest is Test {
     ///         assert presence and `assertLt(headerIdx, footerIdx, "...")`
     ///         to assert ordering, both as plain integer comparisons.
     ///         Tests that need to pin down emission ORDER (header before
-    ///         footer, Transfer before Memo before Redeemed, etc.) call
+    ///         footer, Transfer before Memo, etc.) call
     ///         this once per signature on a `vm.recordLogs()` capture
     ///         and compare the indices. Tests that just need to assert
     ///         a specific event was emitted should prefer

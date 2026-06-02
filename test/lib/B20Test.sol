@@ -131,8 +131,8 @@ contract B20Test is B20FactoryTest {
     ///         must fuzz over the supported set; reads and writes to an
     ///         unsupported `bytes32` revert `UnsupportedPolicyType`.
     /// @dev    Variant tests can wrap this with their own indexer that
-    ///         extends the codomain (e.g. a Security test that also
-    ///         covers `REDEEM_SENDER_POLICY`).
+    ///         extends the codomain when they add variant-specific
+    ///         policy slots.
     function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
         uint8 i = idx % 4;
         if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;

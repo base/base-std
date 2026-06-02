@@ -64,8 +64,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     uint64 public constant ALWAYS_ALLOW_ID = PolicyRegistryConstants.ALWAYS_ALLOW_ID;
 
     /// @notice Built-in policy ID that always rejects any account.
-    /// @dev    Useful as an explicit hard-deny on a slot (e.g. disabling
-    ///         redemption by pointing `REDEEM_SENDER_POLICY` here).
+    /// @dev    Useful as an explicit hard-deny on a slot.
     uint64 public constant ALWAYS_BLOCK_ID = PolicyRegistryConstants.ALWAYS_BLOCK_ID;
 
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.

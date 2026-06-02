@@ -11,15 +11,10 @@ import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {MockB20Storage, MockB20StablecoinStorage, MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryCreateB20Test is B20FactoryTest {
-    /// @dev Compile-time constant of the security-variant's REDEEM_SENDER_POLICY scope.
-    ///      Mirrors the `bytes32 public constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY")`
-    ///      on `MockB20Security` so tests can reference the scope without a token instance.
-    bytes32 internal constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
-
     // Role identifiers are accessed as `MINT_ROLE` etc. — these are
     // compile-time constants on the contract type, so they don't require an
     // instantiated token (relevant during createToken setup where the token
@@ -242,39 +237,11 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertEq(actual, predicted, "createToken address must match prediction");
     }
 
-    /// @notice Verifies security createToken defaults REDEEM_SENDER_POLICY to ALWAYS_BLOCK_ID
-    /// @dev Unlike the four base policy slots (which inherit the EVM zero default == ALWAYS_ALLOW_ID),
-    ///      the security variant's factory writes ALWAYS_BLOCK_ID into the REDEEM_SENDER_POLICY lane
-    ///      at creation time so redemption is closed by default. Admins must explicitly point the
-    ///      slot at an allowlist (or another policy) before any holder can call `redeem`. Paired
-    ///      slot assertion pins both the public surface (`policyId()`) and the underlying packed
-    ///      storage slot.
-    function test_createB20_success_securityDefaultsRedeemPolicyToBlock(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
-
-        assertEq(
-            IB20Security(token).policyId(REDEEM_SENDER_POLICY),
-            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "REDEEM_SENDER_POLICY must default to ALWAYS_BLOCK_ID via the public surface"
-        );
-        // The packed slot's bottom 64 bits hold REDEEM_SENDER_POLICY; the three reserved
-        // lanes above stay zero on a fresh token.
-        uint256 packed = uint256(vm.load(token, MockB20RedeemStorage.redeemPolicyIdsSlot()));
-        assertEq(
-            uint64(packed),
-            PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "redeemPolicyIds slot lane 0 must hold ALWAYS_BLOCK_ID"
-        );
-        assertEq(packed >> 64, uint256(0), "redeemPolicyIds slot reserved lanes must be zero on a fresh token");
-    }
-
-    /// @notice Verifies the security REDEEM_SENDER_POLICY default does NOT leak into other
-    ///         policy slots — the four base scopes still default to ALWAYS_ALLOW_ID.
-    /// @dev Storage isolation: the factory's REDEEM_SENDER_POLICY write targets the redeem
-    ///      namespace (`base.b20.redeem`); the base packed policy slots (`transferPolicyIds`,
-    ///      `mintPolicyIds` in the base `base.b20` namespace) must remain at their EVM zero
-    ///      defaults so the four base scopes still read as ALWAYS_ALLOW_ID.
+    /// @notice Verifies security createToken leaves all base policy slots at their
+    ///         EVM zero defaults (ALWAYS_ALLOW_ID).
+    /// @dev The security variant adds no extra policy slot of its own, and the factory does not
+    ///      override any of the base defaults at creation. Paired surface + slot assertions pin
+    ///      both the public read path and the underlying packed slot bytes.
     function test_createB20_success_securityOtherPolicySlotsDefaultToAllow(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
@@ -309,28 +276,6 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
             vm.load(token, MockB20Storage.mintPolicyIdsSlot()),
             bytes32(0),
             "mintPolicyIds slot must be zero (default state)"
-        );
-    }
-
-    /// @notice Verifies an `updatePolicy(REDEEM_SENDER_POLICY, ...)` initCall overrides the default
-    /// @dev Per `IB20Factory.B20SecurityCreateParams` natspec, admins can open redemption at
-    ///      creation time by including an `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` entry
-    ///      in `initCalls`. The privileged-window bypass on the token means the factory-originated
-    ///      call succeeds without the role check. Post-creation the slot reflects the overridden
-    ///      value, NOT the factory-seeded default.
-    function test_createB20_success_securityRedeemPolicyOverridableViaInitCall(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        bytes[] memory initCalls = new bytes[](1);
-        initCalls[0] = abi.encodeWithSelector(
-            IB20.updatePolicy.selector, REDEEM_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID
-        );
-
-        address token = _createSecurity(caller, salt, _securityParams(), initCalls);
-
-        assertEq(
-            IB20Security(token).policyId(REDEEM_SENDER_POLICY),
-            PolicyRegistryConstants.ALWAYS_ALLOW_ID,
-            "REDEEM_SENDER_POLICY must reflect the initCall override, not the factory default"
         );
     }
 
@@ -388,8 +333,8 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 and asserts
     ///      empty `variantEventParams` (SECURITY has no variant-specific immutable identity
-    ///      fields beyond the base set; identifiers and redemption configuration are mutable
-    ///      and surfaced via their own update events).
+    ///      fields beyond the base set; identifiers are mutable and surfaced via their own
+    ///      update events).
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin);
