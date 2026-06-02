@@ -126,20 +126,19 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         policyRegistry.createPolicy(admin_, pt);
     }
 
-    /// @notice Verifies createPolicy reverts with CounterOverflow when the counter is at uint56 max.
+    /// @notice Verifies createPolicy panics with arithmetic overflow when the counter is at uint56 max.
     /// @dev    Slot-writes nextCounter to type(uint56).max to avoid iterating 2^56 times.
+    ///         Matches the Rust precompile which reverts with Panic(UnderOverflow) = Panic(0x11).
     function test_createPolicy_revert_counterOverflow(address caller, address admin_, uint8 typeIdx) public {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
 
         vm.store(
-            address(policyRegistry),
-            MockPolicyRegistryStorage.nextCounterSlot(),
-            bytes32(uint256(type(uint56).max))
+            address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot(), bytes32(uint256(type(uint56).max))
         );
 
-        vm.expectRevert(IPolicyRegistry.CounterOverflow.selector);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         vm.prank(caller);
         policyRegistry.createPolicy(admin_, pt);
     }

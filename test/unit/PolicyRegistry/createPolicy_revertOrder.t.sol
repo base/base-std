@@ -10,7 +10,7 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///
 /// @notice **Canonical order:**
 ///         1. ZERO-ADMIN (`admin == address(0)`) → `ZeroAddress`
-///         2. COUNTER-OVERFLOW (nextCounter == type(uint56).max) → `CounterOverflow`
+///         2. COUNTER-OVERFLOW (nextCounter == type(uint56).max) → `Panic(0x11)`
 ///
 ///         Walks from the first failing condition to success.
 contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
@@ -22,9 +22,7 @@ contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
 
         // 1. ZERO-ADMIN: admin == address(0) → ZeroAddress
         vm.store(
-            address(policyRegistry),
-            MockPolicyRegistryStorage.nextCounterSlot(),
-            bytes32(uint256(type(uint56).max))
+            address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot(), bytes32(uint256(type(uint56).max))
         );
         vm.prank(caller);
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
@@ -32,9 +30,9 @@ contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
 
         // Fix: use a non-zero admin.
 
-        // 2. COUNTER-OVERFLOW: nextCounter == type(uint56).max → CounterOverflow
+        // 2. COUNTER-OVERFLOW: nextCounter == type(uint56).max → Panic(0x11)
         vm.prank(caller);
-        vm.expectRevert(IPolicyRegistry.CounterOverflow.selector);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         policyRegistry.createPolicy(admin_, pt);
 
         // Fix: reset counter to a valid value.
