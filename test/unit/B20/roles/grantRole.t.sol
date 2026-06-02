@@ -67,8 +67,8 @@ contract B20GrantRoleTest is B20Test {
 
     /// @notice Verifies grantRole reverts on an admin-less token even when the caller holds a
     ///         custom-admin role that would otherwise authorize the grant.
-    /// @dev Admin-role-resurrection guard — mirrors base/base PR #2961
-    ///      (`ensure_role_admin_mutations_available`). Without this guard a custom-admin
+    /// @dev Admin-role-resurrection guard — mirrors the Rust precompile's
+    ///      `ensure_role_admin_mutations_available`. Without this guard a custom-admin
     ///      role chain set up while an admin existed (e.g. setRoleAdmin(MINT_ROLE, BURN_ROLE)
     ///      + grantRole(BURN_ROLE, alice)) survives `renounceLastAdmin()` and lets BURN_ROLE
     ///      holders keep mutating the role graph on a token that has no admin. The shared

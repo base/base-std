@@ -123,7 +123,7 @@ MUTATIONS: list[Mutation] = [
         "            // mint receiver policy check elided\n            if (false) revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);",
         "_mint: drop MINT_RECEIVER_POLICY policy check entirely",
     ),
-    # === MockB20: lastAdmin guard off-by-one (post-#40 inline conjunction) ===
+    # === MockB20: lastAdmin guard off-by-one (inline conjunction) ===
     Mutation(
         MOCK_B20,
         "if (role == DEFAULT_ADMIN_ROLE && $.roles[DEFAULT_ADMIN_ROLE][msg.sender] && $.adminCount == 1) {",

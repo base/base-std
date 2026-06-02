@@ -74,7 +74,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///         `updateAllowlist`, and `updateBlocklist` revert with
     ///         `BatchSizeTooLarge(MAX_BATCH_SIZE)` when `accounts.length`
     ///         exceeds this value. Mirrors the Rust PolicyRegistry
-    ///         precompile (base/base#2876).
+    ///         precompile.
     uint256 internal constant MAX_BATCH_SIZE = 64;
 
     // ============================================================

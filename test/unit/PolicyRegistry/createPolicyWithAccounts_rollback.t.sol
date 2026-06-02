@@ -11,8 +11,8 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         registry state.
 ///
 /// @dev    Sibling of `PolicyRegistryCreatePolicyWithAccountsTest` (happy
-///         path + revert reasons). Distinct from BOP-176 (Rust-side unit
-///         tests of `precompile-storage`): this exercises the precompile
+///         path + revert reasons). Distinct from the Rust-side unit
+///         tests of `precompile-storage`: this exercises the precompile
 ///         in a real EVM execution context to verify the JournaledState
 ///         integration rolls back any partial writes — or, in the case
 ///         of an impl that validates before creating, that no writes
@@ -22,8 +22,7 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         different paths:
 ///         - The Solidity mock advances `nextCounter` and writes the
 ///           policy slot before checking the batch size, then relies on
-///           revm's journal to roll back on revert (BOP-207 tracks the
-///           reorder).
+///           revm's journal to roll back on revert.
 ///         - The Rust precompile validates batch size first and never
 ///           writes.
 ///         End state is identical in both: counter unchanged, predicted

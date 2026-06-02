@@ -11,8 +11,7 @@ import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20AssetStorage} from "test/lib/mocks/MockB20Storage.sol";
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
-/// @notice Coverage for the asset variant's configurable `decimals` field
-///         introduced in BOP-252 / BOP-255 (storage) and BOP-259 (tests).
+/// @notice Coverage for the asset variant's configurable `decimals` field.
 ///
 /// @dev Asserts the boundary values, the out-of-range revert with the new
 ///      `InvalidDecimals(uint8)` error, fuzz coverage over the full
@@ -213,7 +212,7 @@ contract B20FactoryCreateB20AssetDecimalsTest is B20FactoryTest {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Verifies the stablecoin variant still hardcodes `decimals() == 6`.
-    ///         BOP-255 is an asset-only change; the stablecoin path must be untouched.
+    /// @dev Configurable decimals is an asset-only change; the stablecoin path must be untouched.
     function test_createB20_success_stablecoin_decimalsStillHardcoded(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address token = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));

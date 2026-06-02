@@ -121,7 +121,7 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies createPolicyWithAccounts reverts when the batch exceeds MAX_BATCH_SIZE
-    /// @dev Mirrors the Rust precompile's batch limit (base/base#2876); checks
+    /// @dev Mirrors the Rust precompile's batch limit; checks
     ///      BatchSizeTooLarge(maxBatchSize). Fuzz drives `overflow` so the test exercises
     ///      arbitrary over-the-limit sizes, not just the immediate neighbor.
     function test_createPolicyWithAccounts_revert_batchSizeTooLarge(
@@ -156,9 +156,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @dev Pins the Rust precompile's check precedence (`validate_create_policy_inputs`
     ///      → `require_account_batch_size`). Mirrors Rust test
     ///      `create_policy_with_accounts_zero_admin_precedes_batch_size_revert` in
-    ///      `crates/common/precompiles/src/policy/storage.rs`. Regression guard for the
-    ///      BOP-207 hoist: if a later refactor reorders these two entry-point checks,
-    ///      this test fails.
+    ///      `crates/common/precompiles/src/policy/storage.rs`. Guards the entry-point check
+    ///      order: if a later refactor reorders these two checks, this test fails.
     function test_createPolicyWithAccounts_revert_zeroAdmin_precedes_batchSizeTooLarge(
         address caller,
         uint8 typeIdx,

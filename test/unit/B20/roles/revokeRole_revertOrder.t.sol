@@ -8,14 +8,13 @@ import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
 /// @title Differential check-order tests for `revokeRole`.
 ///
-/// @notice **Canonical order (Solidity reference, post-BOP-196):**
+/// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRoleAdmin(role)` modifier) → `AccessControlUnauthorizedAccount`
 ///         2. LAST-ADMIN (`role == DEFAULT_ADMIN && account holds it && adminCount == 1`)
 ///            → `LastAdminCannotRenounce`
 ///
-///         C(2, 2) = 1 pair. The LAST-ADMIN guard was added in
-///         [PR #91 (BOP-196)](https://github.com/base/base-std/pull/91); before that fix
-///         `revokeRole` would silently brick the token by removing the sole admin.
+///         C(2, 2) = 1 pair. Without the LAST-ADMIN guard, `revokeRole` would silently
+///         brick the token by removing the sole admin.
 contract B20RevokeRoleRevertOrderTest is B20Test {
     /// @notice ROLE beats LAST-ADMIN.
     /// @dev Caller lacks the role-admin role AND the target is the sole DEFAULT_ADMIN_ROLE holder.

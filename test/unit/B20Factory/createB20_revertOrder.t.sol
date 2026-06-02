@@ -12,7 +12,7 @@ import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 ///         ordering: VERSION beats each field-validation check inside an arm.
 ///         The cross-arm UNSUPPORTED-VARIANT-beats-arm-body ordering is pinned by
 ///         `test_createB20_revert_outOfRangeVariant` in `getTokenAddress.t.sol`
-///         (raw-bytes ABI-decoder panic; see audit-response PR #89).
+///         (raw-bytes ABI-decoder panic).
 ///
 ///         **Canonical order per variant arm (Solidity reference):**
 ///         - STABLECOIN: VERSION → INVALID-CURRENCY (format check on each byte)
