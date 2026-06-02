@@ -5,8 +5,9 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 
 contract B20SecurityPrecisionConstantsTest is B20SecurityTest {
     /// @notice Verifies WAD_PRECISION equals 1e18
-    /// @dev DeFi convention check: `toShares` and `sharesOf` divide by this after multiplying
-    ///      by the stored ratio; any drift silently rescales every holder's share count.
+    /// @dev DeFi convention check: `toScaledBalance` and `scaledBalanceOf` divide by this after
+    ///      multiplying by the stored multiplier (and `toRawBalance` multiplies by this before
+    ///      dividing); any drift silently rescales every holder's scaled balance.
     function test_wadPrecision_success_equalsOneWad() public view {
         assertEq(security().WAD_PRECISION(), 1e18, "WAD_PRECISION must equal 1e18");
     }
