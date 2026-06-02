@@ -5,69 +5,49 @@ import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
 
-/// @title Differential check-order tests for `finalizeUpdateAdmin`.
+/// @title Sequential revert-order test for `finalizeUpdateAdmin`.
 ///
-/// @notice **Canonical order (Solidity reference):**
+/// @notice **Canonical order:**
 ///         1. POLICY-NOT-FOUND (`policies[policyId] == 0`) → `PolicyNotFound`
 ///         2. NO-PENDING-ADMIN (`pendingAdmins[policyId] == address(0)`) → `NoPendingAdmin`
 ///         3. UNAUTHORIZED (`pendingAdmins[policyId] != msg.sender`) → `Unauthorized`
 ///
-///         C(3, 2) = 3 pairs.
+///         Walks from all conditions broken to success, fixing one per step.
 contract PolicyRegistryFinalizeUpdateAdminRevertOrderTest is PolicyRegistryTest {
-    // ---------------------------------------------------------------
-    // Pairs where POLICY-NOT-FOUND wins
-    // ---------------------------------------------------------------
+    /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
+    function test_finalizeUpdateAdmin_revertOrder() public {
+        // ghostId is a well-formed policyId that has never been created.
+        uint64 ghostId = _wellFormedUncreatedPolicyId(type(uint64).max);
 
-    /// @notice POLICY-NOT-FOUND beats NO-PENDING-ADMIN.
-    /// @dev policyId does not exist (packed == 0) AND no pending admin is staged.
-    ///      PolicyNotFound fires before the pending-admin slot is read.
-    function test_finalizeUpdateAdmin_revertOrder_policyNotFound_beats_noPendingAdmin(uint64 seed) public {
-        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
-
-        // Both conditions apply independently:
-        // - PolicyNotFound: policyId has never been created.
-        // - NoPendingAdmin: pendingAdmins[policyId] == address(0) (zero storage).
+        // 1. POLICY-NOT-FOUND: policyId has never been created AND no pending admin is
+        //    staged (NoPendingAdmin and Unauthorized would also apply once a policy exists).
+        vm.prank(attacker);
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
-        policyRegistry.finalizeUpdateAdmin(policyId);
-    }
+        policyRegistry.finalizeUpdateAdmin(ghostId);
 
-    /// @notice POLICY-NOT-FOUND beats UNAUTHORIZED.
-    /// @dev policyId does not exist AND caller is not address(0), so the pending-admin
-    ///      comparison (address(0) != caller) would trigger Unauthorized if reached.
-    ///      PolicyNotFound fires before the pending-admin slot or caller comparison runs.
-    function test_finalizeUpdateAdmin_revertOrder_policyNotFound_beats_unauthorized(address caller, uint64 seed)
-        public
-    {
-        _assumeValidCaller(caller);
-        uint64 policyId = _wellFormedUncreatedPolicyId(seed);
+        // Fix: create an allowlist policy with alice as admin.
+        uint64 policyId = policyRegistry.createPolicy(alice, IPolicyRegistry.PolicyType.ALLOWLIST);
 
-        // Both conditions apply independently:
-        // - PolicyNotFound: policyId has never been created (packed == 0).
-        // - Unauthorized: pendingAdmins[policyId] == address(0) != caller.
-        //   (NoPendingAdmin also applies; it would fire second if PolicyNotFound didn't.)
-        vm.prank(caller);
-        vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
-        policyRegistry.finalizeUpdateAdmin(policyId);
-    }
-
-    // ---------------------------------------------------------------
-    // Pairs where NO-PENDING-ADMIN wins
-    // ---------------------------------------------------------------
-
-    /// @notice NO-PENDING-ADMIN beats UNAUTHORIZED.
-    /// @dev Policy exists but has no pending admin staged. Caller is a non-zero address,
-    ///      so `pendingAdmins[policyId] (== address(0)) != caller` would trigger
-    ///      Unauthorized if the NoPendingAdmin guard were absent.
-    function test_finalizeUpdateAdmin_revertOrder_noPendingAdmin_beats_unauthorized(address caller) public {
-        _assumeValidCaller(caller);
-        // Create a policy; no stageUpdateAdmin call follows, so pending == address(0).
-        uint64 policyId = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
-
-        // Both conditions apply independently:
-        // - NoPendingAdmin: pendingAdmins[policyId] == address(0).
-        // - Unauthorized: address(0) != caller (caller is non-zero).
-        vm.prank(caller);
+        // 2. NO-PENDING-ADMIN: policy exists but no pending admin has been staged.
+        //    (Unauthorized would also fire if NoPendingAdmin were absent, since
+        //    pendingAdmins[policyId] == address(0) != attacker.)
+        vm.prank(attacker);
         vm.expectRevert(IPolicyRegistry.NoPendingAdmin.selector);
+        policyRegistry.finalizeUpdateAdmin(policyId);
+
+        // Fix: stage bob as the pending admin.
+        vm.prank(alice);
+        policyRegistry.stageUpdateAdmin(policyId, bob);
+
+        // 3. UNAUTHORIZED: bob is the staged pending admin, but attacker is calling.
+        vm.prank(attacker);
+        vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
+        policyRegistry.finalizeUpdateAdmin(policyId);
+
+        // Fix: call as bob (the staged pending admin).
+
+        // Success
+        vm.prank(bob);
         policyRegistry.finalizeUpdateAdmin(policyId);
     }
 }
