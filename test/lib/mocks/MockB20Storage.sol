@@ -392,9 +392,6 @@ library MockB20SecurityStorage {
     // unrelated locations); the factory uses these as base slots when
     // deriving member slots via `keccak256(abi.encode(key, baseSlot))`.
 
-    // `decimals` (a `uint8`) sits alone in slot 0; the remaining 31
-    // bytes are reserved for future small variant-immutable fields
-    // that can pack into the same slot.
     uint256 internal constant DECIMALS_OFFSET = 0;
     uint256 internal constant MULTIPLIER_OFFSET = 1;
     uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 2;
