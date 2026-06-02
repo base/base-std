@@ -30,14 +30,12 @@ contract B20PauseRevertOrderTest is B20Test {
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.PAUSE_ROLE)
         );
         token.pause(empty);
-        // Fix: grant PAUSE_ROLE to caller.
         _grantRole(B20Constants.PAUSE_ROLE, caller);
 
         // 2. EMPTY-SET fires (role cleared; features still empty).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.EmptyFeatureSet.selector));
         token.pause(empty);
-        // Fix: use a non-empty feature set.
 
         // Success — all conditions satisfied.
         vm.prank(caller);

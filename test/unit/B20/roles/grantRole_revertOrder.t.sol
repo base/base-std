@@ -31,7 +31,6 @@ contract B20GrantRoleRevertOrderTest is B20Test {
             )
         );
         token.grantRole(role, account);
-        // Fix: grant DEFAULT_ADMIN_ROLE to caller.
         _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, caller);
 
         // Success — caller now holds the role admin.

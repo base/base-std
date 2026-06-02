@@ -49,7 +49,6 @@ contract B20TransferFromWithMemoRevertOrderTest is B20Test {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
         token.transferFromWithMemo(address(0), address(0), amount, memo);
-        // Fix: unpause TRANSFER.
         _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         vm.prank(unpauser);
         token.unpause(_singleFeature(IB20.PausableFeature.TRANSFER));
@@ -59,20 +58,17 @@ contract B20TransferFromWithMemoRevertOrderTest is B20Test {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.transferFromWithMemo(address(0), address(0), amount, memo);
-        // Fix: use a valid `to` address.
 
         // 3. ZERO-SENDER fires (pause+zero-receiver cleared; from=address(0), to=valid).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
         token.transferFromWithMemo(address(0), to, amount, memo);
-        // Fix: use valid `from` (no allowance yet).
 
         // 4. ALLOWANCE fires (pause+zero-addr cleared; from=valid, to=valid, no allowance,
         //    executor and sender policies still block).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, caller, 0, amount));
         token.transferFromWithMemo(from, to, amount, memo);
-        // Fix: approve sufficient allowance.
         vm.prank(from);
         token.approve(caller, amount);
 
@@ -87,7 +83,6 @@ contract B20TransferFromWithMemoRevertOrderTest is B20Test {
             )
         );
         token.transferFromWithMemo(from, to, amount, memo);
-        // Fix: reset executor policy to ALWAYS_ALLOW.
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
         // 6. SENDER-POLICY fires (all earlier cleared; sender policy still blocks,
@@ -101,7 +96,6 @@ contract B20TransferFromWithMemoRevertOrderTest is B20Test {
             )
         );
         token.transferFromWithMemo(from, to, amount, memo);
-        // Fix: reset sender policy and mint balance to `from`.
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
         _mint(from, amount);
 

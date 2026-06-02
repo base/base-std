@@ -24,7 +24,6 @@ contract B20UpdateNameRevertOrderTest is B20Test {
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.METADATA_ROLE)
         );
         token.updateName(newName);
-        // Fix: grant METADATA_ROLE to caller.
         _grantRole(B20Constants.METADATA_ROLE, caller);
 
         // Success — caller now holds METADATA_ROLE.

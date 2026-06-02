@@ -30,7 +30,6 @@ contract B20SetRoleAdminRevertOrderTest is B20Test {
             )
         );
         token.setRoleAdmin(role, newAdminRole);
-        // Fix: grant DEFAULT_ADMIN_ROLE to caller.
         _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, caller);
 
         // Success — caller now holds DEFAULT_ADMIN_ROLE.

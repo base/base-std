@@ -33,7 +33,6 @@ contract B20BurnWithMemoRevertOrderTest is B20Test {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
         token.burnWithMemo(amount, memo);
-        // Fix: unpause BURN.
         _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         vm.prank(unpauser);
         token.unpause(_singleFeature(IB20.PausableFeature.BURN));
@@ -44,14 +43,12 @@ contract B20BurnWithMemoRevertOrderTest is B20Test {
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.BURN_ROLE)
         );
         token.burnWithMemo(amount, memo);
-        // Fix: grant BURN_ROLE to caller.
         _grantRole(B20Constants.BURN_ROLE, caller);
 
         // 3. BALANCE fires (pause+role cleared; caller has zero balance, amount>0).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientBalance.selector, caller, 0, amount));
         token.burnWithMemo(amount, memo);
-        // Fix: mint tokens to caller.
         _mint(caller, amount);
 
         // Success — all conditions satisfied.

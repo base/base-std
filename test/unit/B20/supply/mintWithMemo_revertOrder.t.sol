@@ -40,7 +40,6 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.MINT));
         token.mintWithMemo(address(0), amount, memo);
-        // Fix: unpause MINT.
         _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         vm.prank(unpauser);
         token.unpause(_singleFeature(IB20.PausableFeature.MINT));
@@ -51,14 +50,12 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.MINT_ROLE)
         );
         token.mintWithMemo(address(0), amount, memo);
-        // Fix: grant MINT_ROLE to caller.
         _grantRole(B20Constants.MINT_ROLE, caller);
 
         // 3. ZERO-RECEIVER fires (pause+role cleared; address(0) receiver, policy blocks, cap=0).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.mintWithMemo(address(0), amount, memo);
-        // Fix: switch to a valid receiver (`to`).
 
         // 4. POLICY fires (all earlier cleared; valid receiver, policy blocks, cap=0).
         vm.prank(caller);
@@ -68,14 +65,12 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
             )
         );
         token.mintWithMemo(to, amount, memo);
-        // Fix: reset receiver policy to ALWAYS_ALLOW.
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
         // 5. CAP fires (all earlier cleared; cap=0, amount>0).
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.SupplyCapExceeded.selector, 0, amount));
         token.mintWithMemo(to, amount, memo);
-        // Fix: raise supply cap.
         vm.prank(admin);
         token.updateSupplyCap(type(uint256).max);
 

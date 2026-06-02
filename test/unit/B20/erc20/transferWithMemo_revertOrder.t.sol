@@ -41,7 +41,6 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         vm.prank(address(0));
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
         token.transferWithMemo(address(0), amount, memo);
-        // Fix: unpause TRANSFER.
         _grantRole(B20Constants.UNPAUSE_ROLE, unpauser);
         vm.prank(unpauser);
         token.unpause(_singleFeature(IB20.PausableFeature.TRANSFER));
@@ -51,13 +50,11 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         vm.prank(address(0));
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.transferWithMemo(address(0), amount, memo);
-        // Fix: switch to a valid receiver (`to`).
 
         // 3. ZERO-SENDER fires (pause+zero-receiver cleared; from=address(0), to=valid).
         vm.prank(address(0));
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
         token.transferWithMemo(to, amount, memo);
-        // Fix: prank as valid `from`.
 
         // 4. SENDER-POLICY fires (all earlier cleared; sender policy blocks, receiver also blocks).
         vm.prank(from);
@@ -69,7 +66,6 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
             )
         );
         token.transferWithMemo(to, amount, memo);
-        // Fix: reset sender policy to ALWAYS_ALLOW.
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
         // 5. RECEIVER-POLICY fires (all earlier cleared; receiver policy still blocks).
@@ -82,14 +78,12 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
             )
         );
         token.transferWithMemo(to, amount, memo);
-        // Fix: reset receiver policy to ALWAYS_ALLOW.
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
         // 6. BALANCE fires (all earlier cleared; from has zero balance, amount>0).
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientBalance.selector, from, 0, amount));
         token.transferWithMemo(to, amount, memo);
-        // Fix: mint tokens to `from`.
         _mint(from, amount);
 
         // Success — all conditions satisfied.
