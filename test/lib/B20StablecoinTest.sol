@@ -18,7 +18,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 /// variant-only method (`currency()`) cast inline:
 ///   `IB20Stablecoin(address(token)).currency()`
 contract B20StablecoinTest is B20Test {
-    /// @notice The currency identifier baked into the bootstrap-default
+    /// @notice The currency code baked into the bootstrap-default
     ///         `_stablecoinParams()` and therefore the value
     ///         `IB20Stablecoin(address(token)).currency()` returns
     ///         after `_deployToken`. Tests reference this constant

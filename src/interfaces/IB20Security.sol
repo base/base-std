@@ -17,8 +17,8 @@ interface IB20Security is IB20 {
     /// @notice `announce` was called with an `id` that has already been consumed.
     error AnnouncementIdAlreadyUsed(string id);
 
-    /// @notice `updateCustomMetadata` was called with an empty `identifierType`.
-    error InvalidIdentifierType();
+    /// @notice `updateCustomMetadata` was called with an empty `key`.
+    error InvalidMetadataKey();
 
     /// @notice A batched function was called with parallel arrays of differing lengths.
     ///
@@ -50,7 +50,7 @@ interface IB20Security is IB20 {
     event MultiplierUpdated(uint256 multiplier);
 
     /// @notice Emitted by `updateCustomMetadata`. An empty `value` indicates removal.
-    event CustomMetadataUpdated(string identifierType, string value);
+    event CustomMetadataUpdated(string key, string value);
 
     /// @notice Emitted by `announce` to open an announcement bracket.
     event Announcement(address indexed caller, string id, string description, string uri);
@@ -59,13 +59,13 @@ interface IB20Security is IB20 {
     event EndAnnouncement(string id);
 
     /*//////////////////////////////////////////////////////////////
-                            ROLE IDENTIFIERS
+                              ROLE CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Required to call `announce` and `updateMultiplier`. The metadata setters
     ///         (`updateName`, `updateSymbol`, `updateCustomMetadata`) are gated by the
     ///         inherited `METADATA_ROLE` instead.
-    /// @return Role identifier.
+    /// @return Role constant.
     function OPERATOR_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
@@ -92,7 +92,7 @@ interface IB20Security is IB20 {
     /// @dev Reverts with `InternalCallFailed` when an entry in `internalCalls` reverts during the inner `delegatecall`.
     ///
     /// @param internalCalls ABI-encoded calldata blobs executed in order via self-`delegatecall`; may be empty.
-    /// @param id            Caller-chosen announcement identifier; single-use over the token's lifetime.
+    /// @param id            Caller-chosen announcement id; single-use over the token's lifetime.
     /// @param description   Human-readable summary of the announcement.
     /// @param uri           Off-chain URI containing the full announcement contents.
     function announce(
@@ -104,7 +104,7 @@ interface IB20Security is IB20 {
 
     /// @notice Whether `id` has previously been consumed by `announce`.
     ///
-    /// @param id Announcement identifier to query.
+    /// @param id Announcement id to query.
     ///
     /// @return Whether `id` is used.
     function isAnnouncementIdUsed(string calldata id) external view returns (bool);
@@ -181,18 +181,18 @@ interface IB20Security is IB20 {
     ///         variant-agnostic key/value store; the issuer chooses the key namespace
     ///         (e.g. `"category"`, `"region"`, `"reference"`).
     ///
-    /// @param identifierType Metadata entry key.
+    /// @param key Metadata entry key.
     ///
     /// @return Current value, or the empty string.
-    function customMetadata(string calldata identifierType) external view returns (string memory);
+    function customMetadata(string calldata key) external view returns (string memory);
 
     /// @notice Sets, updates, or removes a custom-metadata entry. An empty `value` removes the
     ///         entry. Emits `CustomMetadataUpdated`.
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `METADATA_ROLE`.
-    /// @dev Reverts with `InvalidIdentifierType` when `identifierType` is the empty string.
+    /// @dev Reverts with `InvalidMetadataKey` when `key` is the empty string.
     ///
-    /// @param identifierType Metadata entry key (e.g. `"category"`).
-    /// @param value          New value, or empty string to remove.
-    function updateCustomMetadata(string calldata identifierType, string calldata value) external;
+    /// @param key   Metadata entry key (e.g. `"category"`).
+    /// @param value New value, or empty string to remove.
+    function updateCustomMetadata(string calldata key, string calldata value) external;
 }

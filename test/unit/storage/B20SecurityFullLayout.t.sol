@@ -33,9 +33,8 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///         - 0: decimals (factory-written at creation)
     ///         - 1: multiplier
     ///         - 2: usedAnnouncementIds[id]
-    ///         - 3: identifiers[identifierType]  (`reference` mutated; the
-    ///              field name preserves the ERC-7201 slot layout across
-    ///              the public-surface rename to `customMetadata`)
+    ///         - 3: customMetadata[key]  (one example key mutated; the other
+    ///              left empty to confirm the factory seeds no entries)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -67,19 +66,19 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
             "security slot 2: usedAnnouncementIds[id] must be true after announce"
         );
 
-        // ---------- identifiers[identifierType] (slot 3, hashed by type) ----------
+        // ---------- customMetadata[key] (slot 3, hashed by key) ----------
         // The factory does not seed any entry at creation, so a fresh token's
-        // `category` slot is empty. The post-creation `reference` write is
-        // pinned to the canonical string-field encoding at its derived slot.
+        // unwritten key reads as empty. The post-creation write is pinned to
+        // the canonical string-field encoding at its derived slot.
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(METADATA_CATEGORY)),
+            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(METADATA_EXAMPLE_1)),
             bytes32(0),
-            "security slot 3: identifiers[category] must remain zero (factory seeds no entries)"
+            "security slot 3: customMetadata[example_1] must remain zero (factory seeds no entries)"
         );
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(METADATA_REFERENCE)),
+            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(METADATA_EXAMPLE_3)),
             _expectedStringFieldSlot(REFERENCE_VALUE),
-            "security slot 3: identifiers[reference] must hold the post-creation short-string encoding"
+            "security slot 3: customMetadata[example_3] must hold the post-creation short-string encoding"
         );
     }
 
@@ -90,12 +89,12 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     function _populate() internal {
         // multiplier: write the non-WAD marker via the public surface.
         _updateMultiplier(MULTIPLIER_MARKER);
-        // identifiers[reference]: post-creation metadata-admin write. The
+        // customMetadata[example_3]: post-creation metadata-admin write. The
         // factory does not seed any entry at creation; every other key
-        // (category, region, ...) defaults to empty.
+        // defaults to empty.
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        security().updateCustomMetadata(METADATA_REFERENCE, REFERENCE_VALUE);
+        security().updateCustomMetadata(METADATA_EXAMPLE_3, REFERENCE_VALUE);
         // usedAnnouncementIds[ANNOUNCEMENT_ID]: flip via announce.
         _announce(ANNOUNCEMENT_ID);
     }

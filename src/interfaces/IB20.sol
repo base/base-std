@@ -86,7 +86,7 @@ interface IB20 {
 
     /// @notice A policy slot denied the operation.
     ///
-    /// @param policyScope Identifier of the slot that denied (e.g. `TRANSFER_SENDER_POLICY`).
+    /// @param policyScope Scope of the slot that denied (e.g. `TRANSFER_SENDER_POLICY`).
     /// @param policyId    Policy ID currently configured in that slot.
     error PolicyForbids(bytes32 policyScope, uint64 policyId);
 
@@ -176,57 +176,57 @@ interface IB20 {
     event EIP712DomainChanged();
 
     /*//////////////////////////////////////////////////////////////
-                            ROLE IDENTIFIERS
+                              ROLE CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The default top-level admin role (`bytes32(0)`). Required to call `grantRole`, `revokeRole`,
     ///         `setRoleAdmin`, `updatePolicy`, and `updateSupplyCap`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `mint` and `mintWithMemo`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function MINT_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `burn` and `burnWithMemo`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function BURN_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `burnBlocked`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function BURN_BLOCKED_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `pause`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function PAUSE_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `unpause`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function UNPAUSE_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `updateName`, `updateSymbol`, and `updateContractURI`.
-    /// @return Role identifier.
+    /// @return Role constant.
     function METADATA_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
-                          POLICY TYPE IDENTIFIERS
+                          POLICY TYPE CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Policy slot consulted against `from` on every transfer (including `transferFrom`).
-    /// @return Policy scope identifier.
+    /// @return Policy scope constant.
     function TRANSFER_SENDER_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `to` on every transfer.
-    /// @return Policy scope identifier.
+    /// @return Policy scope constant.
     function TRANSFER_RECEIVER_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `msg.sender` on `transferFrom` when distinct from `from`.
     ///         Not consulted on `transfer`.
-    /// @return Policy scope identifier.
+    /// @return Policy scope constant.
     function TRANSFER_EXECUTOR_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `to` on every mint.
-    /// @return Policy scope identifier.
+    /// @return Policy scope constant.
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
@@ -411,7 +411,7 @@ interface IB20 {
     /// @notice Whether `account` is a member of `role`. User-defined roles are supported and have no
     ///         built-in effect on the token's own functions.
     ///
-    /// @param role    Role identifier.
+    /// @param role    Role to check.
     /// @param account Account to check.
     ///
     /// @return Whether `account` holds `role`.
@@ -422,7 +422,7 @@ interface IB20 {
     ///
     /// @param role Role whose admin is being queried.
     ///
-    /// @return Admin role identifier.
+    /// @return Admin role.
     function getRoleAdmin(bytes32 role) external view returns (bytes32);
 
     /// @notice Grants `role` to `account`. Emits `RoleGranted`.
@@ -468,7 +468,7 @@ interface IB20 {
     ///      or when the token has been transitioned to admin-less via `renounceLastAdmin`.
     ///
     /// @param role         Role whose admin is being updated.
-    /// @param newAdminRole New admin role identifier.
+    /// @param newAdminRole New admin role.
     function setRoleAdmin(bytes32 role, bytes32 newAdminRole) external;
 
     /*//////////////////////////////////////////////////////////////
@@ -514,7 +514,7 @@ interface IB20 {
     ///
     /// @dev Reverts with `UnsupportedPolicyType` when `policyScope` is not recognized by this token.
     ///
-    /// @param policyScope Policy slot identifier.
+    /// @param policyScope Policy slot scope.
     ///
     /// @return Configured policy ID.
     function policyId(bytes32 policyScope) external view returns (uint64);
@@ -526,7 +526,7 @@ interface IB20 {
     /// @dev Reverts with `UnsupportedPolicyType` when `policyScope` is not recognized by this token.
     /// @dev Reverts with `PolicyNotFound` when `newPolicyId` is not a built-in sentinel and does not exist in the registry.
     ///
-    /// @param policyScope Policy slot identifier.
+    /// @param policyScope Policy slot scope.
     /// @param newPolicyId Policy ID to assign to the slot.
     function updatePolicy(bytes32 policyScope, uint64 newPolicyId) external;
 

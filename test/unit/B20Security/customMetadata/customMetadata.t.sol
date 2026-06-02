@@ -11,9 +11,9 @@ contract B20SecurityCustomMetadataTest is B20SecurityTest {
     ///      unset and explicitly-empty both read back as "". The factory does not seed any
     ///      entry at creation, so every key reads as empty on a fresh token.
     function test_customMetadata_success_emptyForUnset() public view {
-        assertEq(security().customMetadata(METADATA_CATEGORY), "", "unset entry must read as empty string");
-        assertEq(security().customMetadata(METADATA_REGION), "", "unset entry must read as empty string");
-        assertEq(security().customMetadata(METADATA_REFERENCE), "", "unset entry must read as empty string");
+        assertEq(security().customMetadata(METADATA_EXAMPLE_1), "", "unset entry must read as empty string");
+        assertEq(security().customMetadata(METADATA_EXAMPLE_2), "", "unset entry must read as empty string");
+        assertEq(security().customMetadata(METADATA_EXAMPLE_3), "", "unset entry must read as empty string");
     }
 
     /// @notice Verifies customMetadata reads back any value written via updateCustomMetadata
@@ -22,7 +22,7 @@ contract B20SecurityCustomMetadataTest is B20SecurityTest {
         vm.assume(bytes(value).length > 0);
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        security().updateCustomMetadata(METADATA_CATEGORY, value);
-        assertEq(security().customMetadata(METADATA_CATEGORY), value, "getter must return the last written value");
+        security().updateCustomMetadata(METADATA_EXAMPLE_1, value);
+        assertEq(security().customMetadata(METADATA_EXAMPLE_1), value, "getter must return the last written value");
     }
 }

@@ -162,17 +162,14 @@ contract MockB20Security is MockB20, IB20Security {
     //                       CUSTOM METADATA
     // ============================================================
 
-    function customMetadata(string calldata identifierType) external view returns (string memory) {
-        return MockB20SecurityStorage.layout().identifiers[identifierType];
+    function customMetadata(string calldata key) external view returns (string memory) {
+        return MockB20SecurityStorage.layout().customMetadata[key];
     }
 
-    function updateCustomMetadata(string calldata identifierType, string calldata value)
-        external
-        onlyRole(METADATA_ROLE)
-    {
-        if (bytes(identifierType).length == 0) revert InvalidIdentifierType();
-        MockB20SecurityStorage.layout().identifiers[identifierType] = value;
-        emit CustomMetadataUpdated(identifierType, value);
+    function updateCustomMetadata(string calldata key, string calldata value) external onlyRole(METADATA_ROLE) {
+        if (bytes(key).length == 0) revert InvalidMetadataKey();
+        MockB20SecurityStorage.layout().customMetadata[key] = value;
+        emit CustomMetadataUpdated(key, value);
     }
 
     // ============================================================

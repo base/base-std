@@ -52,7 +52,7 @@ Direct invocation by a role holder is permitted as an **emergency override** —
 
 Each Security token can carry an arbitrary set of named metadata entries — a general-purpose key/value store the issuer is free to use however they want (e.g. `"category"` → `"electronics"`, `"region"` → `"north-america"`, `"reference"` → `"REF-2024-001"`). Read with `customMetadata(key)`; the value is a `string`. All entries are optional and added post-creation — the factory does not seed any entry at token creation.
 
-`updateCustomMetadata(key, value)` adds, updates, or removes an entry, gated by `METADATA_ROLE` (the same role that gates `updateName` / `updateSymbol`). It does NOT require `OPERATOR_ROLE` and is NOT a corporate action — it can be invoked directly without an `announce()` wrapper. Passing an empty `value` removes the entry. An empty `key` reverts with `InvalidIdentifierType`.
+`updateCustomMetadata(key, value)` adds, updates, or removes an entry, gated by `METADATA_ROLE` (the same role that gates `updateName` / `updateSymbol`). It does NOT require `OPERATOR_ROLE` and is NOT a corporate action — it can be invoked directly without an `announce()` wrapper. Passing an empty `value` removes the entry. An empty `key` reverts with `InvalidMetadataKey`.
 
 ## Additional roles
 

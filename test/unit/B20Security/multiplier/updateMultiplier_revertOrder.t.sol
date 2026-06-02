@@ -19,7 +19,7 @@ contract B20SecurityUpdateMultiplierRevertOrderTest is B20SecurityTest {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
 
-        // Resolve the role identifier before setting the prank; an external view
+        // Resolve the role constant before setting the prank; an external view
         // call inside abi.encodeWithSelector would otherwise consume vm.prank
         // before the state-changing call, sending it as address(this) instead.
         bytes32 operatorRole = security().OPERATOR_ROLE();

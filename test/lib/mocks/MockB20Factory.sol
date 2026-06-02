@@ -183,8 +183,8 @@ contract MockB20Factory is IB20Factory {
         //       `B20StablecoinEventParams` so stream-based indexers
         //       can recover the immutable `currency`
         //       (SECURITY has no variant-specific immutable identity
-        //       fields beyond the base set; identifiers are mutable and
-        //       surfaced via their own update events).
+        //       fields beyond the base set; custom-metadata entries are
+        //       mutable and surfaced via their own update events).
         bytes memory variantEventParams;
         if (variant == B20Variant.STABLECOIN) {
             variantEventParams = B20FactoryLib.encodeStablecoinEventParams(currency_);

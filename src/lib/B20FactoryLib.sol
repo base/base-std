@@ -79,7 +79,7 @@ library B20FactoryLib {
     /// @param name         ERC-20 token name.
     /// @param symbol       ERC-20 token symbol.
     /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
-    /// @param currency     Self-declared currency identifier (uppercase ASCII).
+    /// @param currency     Self-declared currency code (uppercase ASCII).
     function encodeStablecoinCreateParams(
         string memory name,
         string memory symbol,
@@ -154,7 +154,7 @@ library B20FactoryLib {
 
     /// @notice Encodes a bootstrap initCall to `IB20.updatePolicy`.
     ///
-    /// @param policyScope The policy-slot identifier.
+    /// @param policyScope The policy-slot scope.
     /// @param newPolicyId The new policy registry ID.
     function encodeUpdatePolicy(bytes32 policyScope, uint64 newPolicyId) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updatePolicy, (policyScope, newPolicyId));
@@ -198,14 +198,10 @@ library B20FactoryLib {
 
     /// @notice Encodes a bootstrap initCall to `IB20Security.updateCustomMetadata`.
     ///
-    /// @param identifierType Metadata entry key (e.g. `"category"`).
-    /// @param value          New value, or empty string to remove.
-    function encodeUpdateCustomMetadata(string memory identifierType, string memory value)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodeCall(IB20Security.updateCustomMetadata, (identifierType, value));
+    /// @param key   Metadata entry key (e.g. `"category"`).
+    /// @param value New value, or empty string to remove.
+    function encodeUpdateCustomMetadata(string memory key, string memory value) internal pure returns (bytes memory) {
+        return abi.encodeCall(IB20Security.updateCustomMetadata, (key, value));
     }
 
     /// @notice Encodes a bootstrap initCall to `IB20Security.updateMultiplier`.
@@ -275,7 +271,7 @@ library B20FactoryLib {
     ///
     /// @dev Reverts with `LengthMismatch` when `roles.length != accounts.length`.
     ///
-    /// @param roles    Role identifiers, parallel to `accounts`.
+    /// @param roles    Roles to grant, parallel to `accounts`.
     /// @param accounts Role holders, parallel to `roles`.
     /// @return initCalls ABI-encoded `grantRole` initCalls.
     function buildRoleGrants(bytes32[] memory roles, address[] memory accounts)

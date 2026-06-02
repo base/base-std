@@ -12,7 +12,7 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 /// `_mint` / `_pause` action wrappers, and the security-variant token
 /// deployed by `_deployToken`). Adds the variant-specific role holder
 /// (`operator`) plus helpers for the announcement, multiplier,
-/// and identifier surfaces.
+/// and custom-metadata surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
 /// variant-only surface (`announce`, `batchMint`, etc.) cast inline via
@@ -31,14 +31,16 @@ contract B20SecurityTest is B20Test {
     // additions exercised only by the variant tests; the factory does
     // not seed any entry at bootstrap.
 
-    /// @notice Generic metadata-entry key for the asset's category.
-    string internal constant METADATA_CATEGORY = "category";
+    /// @notice Example metadata-entry key #1. String value chosen for readability;
+    ///         the constant name stays generic so tests don't encode any
+    ///         variant-specific assumption about what keys mean.
+    string internal constant METADATA_EXAMPLE_1 = "category";
 
-    /// @notice Generic metadata-entry key for the asset's region.
-    string internal constant METADATA_REGION = "region";
+    /// @notice Example metadata-entry key #2.
+    string internal constant METADATA_EXAMPLE_2 = "region";
 
-    /// @notice Generic metadata-entry key for a free-form reference code.
-    string internal constant METADATA_REFERENCE = "reference";
+    /// @notice Example metadata-entry key #3.
+    string internal constant METADATA_EXAMPLE_3 = "reference";
 
     // -- Setup --
     function setUp() public virtual override {

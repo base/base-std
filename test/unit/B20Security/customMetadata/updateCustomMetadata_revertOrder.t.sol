@@ -12,7 +12,7 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(METADATA_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         2. INVALID-IDENTIFIER-TYPE (`bytes(identifierType).length == 0`) → `InvalidIdentifierType`
+///         2. INVALID-METADATA-KEY (`bytes(key).length == 0`) → `InvalidMetadataKey`
 ///
 ///         Walks from all conditions broken to success, fixing one per step.
 contract B20SecurityUpdateCustomMetadataRevertOrderTest is B20SecurityTest {
@@ -24,8 +24,8 @@ contract B20SecurityUpdateCustomMetadataRevertOrderTest is B20SecurityTest {
         vm.assume(caller != admin);
         vm.assume(!token.hasRole(B20Constants.METADATA_ROLE, caller));
 
-        // 1. ROLE fires: caller lacks METADATA_ROLE AND identifierType is empty.
-        //    The role modifier runs before the body's empty-type check.
+        // 1. ROLE fires: caller lacks METADATA_ROLE AND key is empty.
+        //    The role modifier runs before the body's empty-key check.
         vm.prank(caller);
         vm.expectRevert(
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.METADATA_ROLE)
@@ -35,16 +35,15 @@ contract B20SecurityUpdateCustomMetadataRevertOrderTest is B20SecurityTest {
         // Fix: grant METADATA_ROLE to caller.
         _grantRole(B20Constants.METADATA_ROLE, caller);
 
-        // 2. INVALID-IDENTIFIER-TYPE fires: caller now holds the role, but
-        //    identifierType is still empty.
+        // 2. INVALID-METADATA-KEY fires: caller now holds the role, but key is still empty.
         vm.prank(caller);
-        vm.expectRevert(IB20Security.InvalidIdentifierType.selector);
+        vm.expectRevert(IB20Security.InvalidMetadataKey.selector);
         security().updateCustomMetadata("", value);
 
-        // Fix: pass a non-empty identifierType.
+        // Fix: pass a non-empty key.
 
         // Success: all conditions resolved.
         vm.prank(caller);
-        security().updateCustomMetadata(METADATA_CATEGORY, value);
+        security().updateCustomMetadata(METADATA_EXAMPLE_1, value);
     }
 }

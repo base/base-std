@@ -15,7 +15,7 @@ import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20St
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryCreateB20Test is B20FactoryTest {
-    // Role identifiers are accessed as `MINT_ROLE` etc. — these are
+    // Role constants are accessed as `MINT_ROLE` etc. — these are
     // compile-time constants on the contract type, so they don't require an
     // instantiated token (relevant during createToken setup where the token
     // doesn't yet exist).
@@ -335,8 +335,8 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 and asserts
     ///      empty `variantEventParams` (SECURITY has no variant-specific immutable identity
-    ///      fields beyond the base set; identifiers are mutable and surfaced via their own
-    ///      update events).
+    ///      fields beyond the base set; custom-metadata entries are mutable and surfaced via
+    ///      their own update events).
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin);

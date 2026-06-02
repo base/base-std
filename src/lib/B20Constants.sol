@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /// @title B20Constants
-/// @notice Canonical B-20 role and policy-type identifier constants, exposed for compile-time use.
+/// @notice Canonical B-20 role and policy-type constants, exposed for compile-time use.
 library B20Constants {
     bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
     bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");

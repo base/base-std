@@ -12,12 +12,12 @@ contract B20FactoryLibEncodeUpdateCustomMetadataTest is B20FactoryLibTest {
     /// @dev    Pins the selector binding on `IB20Security` and the
     ///         (string, string) argument order across short- and
     ///         long-string fuzz inputs.
-    function test_encodeUpdateCustomMetadata_success_matchesAbiEncodeCall(
-        string memory identifierType,
-        string memory value
-    ) public pure {
-        bytes memory expected = abi.encodeCall(IB20Security.updateCustomMetadata, (identifierType, value));
-        bytes memory actual = B20FactoryLib.encodeUpdateCustomMetadata(identifierType, value);
+    function test_encodeUpdateCustomMetadata_success_matchesAbiEncodeCall(string memory key, string memory value)
+        public
+        pure
+    {
+        bytes memory expected = abi.encodeCall(IB20Security.updateCustomMetadata, (key, value));
+        bytes memory actual = B20FactoryLib.encodeUpdateCustomMetadata(key, value);
         assertEq(actual, expected, "init-call must match abi.encodeCall(IB20Security.updateCustomMetadata, ...)");
     }
 }
