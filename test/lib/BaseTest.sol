@@ -6,6 +6,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
 import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol";
+import {MockActivationRegistryStorage} from "test/lib/mocks/MockActivationRegistryStorage.sol";
 import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
 import {MockB20Factory} from "test/lib/mocks/MockB20Factory.sol";
 
@@ -98,6 +99,26 @@ abstract contract BaseTest is Test {
             vm.etch(StdPrecompiles.B20_FACTORY_ADDRESS, type(MockB20Factory).runtimeCode);
             vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
             vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
+
+            // Clear any stale activation-registry storage from prior test runs.
+            // `vm.etch` only replaces code, not storage, so feature flags may
+            // persist across test contracts in some forge versions. Explicitly
+            // zeroing these slots before `activate()` ensures a clean slate.
+            vm.store(
+                StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS,
+                MockActivationRegistryStorage.featureSlot(ActivationRegistryFeatureList.B20_ASSET),
+                bytes32(0)
+            );
+            vm.store(
+                StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS,
+                MockActivationRegistryStorage.featureSlot(ActivationRegistryFeatureList.B20_STABLECOIN),
+                bytes32(0)
+            );
+            vm.store(
+                StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS,
+                MockActivationRegistryStorage.featureSlot(ActivationRegistryFeatureList.POLICY_REGISTRY),
+                bytes32(0)
+            );
         }
 
         // Activate every B-20 feature so the bulk of the suite — which
