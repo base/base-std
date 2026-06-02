@@ -149,7 +149,7 @@ jobs:
             <!-- interface-coverage -->
             ### Interface Coverage
 
-            ${{ steps.check.outputs.exit_code == '0' && '✅ All mock functions have test coverage.' || '❌ Mock functions with no test coverage found.' }}
+            ${{ steps.check.outputs.exit_code == '0' && '✅ All interface functions have test coverage.' || '❌ Interface functions with no test coverage found.' }}
 
             ```
             ${{ steps.check.outputs.output }}
