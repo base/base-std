@@ -107,7 +107,6 @@ abstract contract BaseTest is Test {
         // specific feature under test before exercising it.
         address activationAdmin = StdPrecompiles.ACTIVATION_REGISTRY.admin();
         vm.startPrank(activationAdmin);
-        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_FACTORY);
         StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_ASSET);
         StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_STABLECOIN);
         StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.POLICY_REGISTRY);

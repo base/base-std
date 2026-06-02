@@ -26,15 +26,6 @@ contract ActivationRegistryFeatureListTest is Test {
         );
     }
 
-    /// @notice `B20_FACTORY` equals `keccak256("base.b20_factory")`.
-    function test_B20_FACTORY_pinnedToKeccak() public pure {
-        assertEq(
-            ActivationRegistryFeatureList.B20_FACTORY,
-            keccak256("base.b20_factory"),
-            "B20_FACTORY must equal keccak256(\"base.b20_factory\")"
-        );
-    }
-
     /// @notice `POLICY_REGISTRY` equals `keccak256("base.policy_registry")`.
     function test_POLICY_REGISTRY_pinnedToKeccak() public pure {
         assertEq(

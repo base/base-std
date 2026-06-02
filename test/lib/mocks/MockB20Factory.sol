@@ -3,7 +3,6 @@ pragma solidity ^0.8.20;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
@@ -103,8 +102,7 @@ contract MockB20Factory is IB20Factory {
         returns (address token)
     {
         // -- 0. Activation gates.
-        //       The global `B20_FACTORY` feature gates the factory itself;
-        //       per-variant features gate which variants can be created at
+        //       Per-variant features gate which variants can be created at
         //       any moment. Variant-feature mapping:
         //         STABLECOIN → B20_STABLECOIN
         //         SECURITY / DEFAULT → B20_ASSET
@@ -265,21 +263,16 @@ contract MockB20Factory is IB20Factory {
     //                     ACTIVATION GATING
     // ============================================================
 
-    /// @dev Reverts with `FeatureNotActivated(feature)` if the global
-    ///      `B20_FACTORY` gate or the variant-specific gate
-    ///      (`B20_ASSET` for SECURITY / DEFAULT, `B20_STABLECOIN` for
-    ///      STABLECOIN) is not currently activated in the registry.
-    ///      Factored out of `createB20` to keep the dispatcher body
-    ///      under the EVM stack-depth limit.
+    /// @dev Reverts with `IActivationRegistry.FeatureNotActivated(feature)` if
+    ///      the variant-specific gate (`B20_ASSET` for SECURITY / DEFAULT,
+    ///      `B20_STABLECOIN` for STABLECOIN) is not currently activated in
+    ///      the registry. Factored out of `createB20` to keep the dispatcher
+    ///      body under the EVM stack-depth limit.
     function _enforceActivationGates(B20Variant variant) internal view {
-        IActivationRegistry registry = StdPrecompiles.ACTIVATION_REGISTRY;
-        if (!registry.isActivated(ActivationRegistryFeatureList.B20_FACTORY)) {
-            revert FeatureNotActivated(ActivationRegistryFeatureList.B20_FACTORY);
-        }
         bytes32 variantFeature = variant == B20Variant.STABLECOIN
             ? ActivationRegistryFeatureList.B20_STABLECOIN
             : ActivationRegistryFeatureList.B20_ASSET;
-        if (!registry.isActivated(variantFeature)) revert FeatureNotActivated(variantFeature);
+        StdPrecompiles.ACTIVATION_REGISTRY.checkActivated(variantFeature);
     }
 
     // ============================================================

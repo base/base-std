@@ -36,7 +36,6 @@ contract ActivationRegistryTest is BaseTest {
     ///         the feature starts inactive (or that activation is fresh) must
     ///         exclude these so the fuzzer doesn't trip on the bootstrap state.
     function _assumeFreshFeature(bytes32 feature) internal pure {
-        vm.assume(feature != ActivationRegistryFeatureList.B20_FACTORY);
         vm.assume(feature != ActivationRegistryFeatureList.B20_ASSET);
         vm.assume(feature != ActivationRegistryFeatureList.B20_STABLECOIN);
         vm.assume(feature != ActivationRegistryFeatureList.POLICY_REGISTRY);
