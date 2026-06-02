@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {IB20} from "src/interfaces/IB20.sol";
+import {IB20Asset} from "src/interfaces/IB20Asset.sol";
+import {B20Constants} from "src/lib/B20Constants.sol";
+
+import {B20AssetTest} from "test/lib/B20AssetTest.sol";
+import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
+
+/// @title  B20 rename regression suite
+///
+/// @notice Locks in the *renames* from the B-20 asset rework: the
+///         operator role (`SECURITY_OPERATOR_ROLE` → `OPERATOR_ROLE`,
+///         BOP-248), share-ratio scaling (`sharesToTokensRatio`/`toShares`/
+///         `sharesOf`/`updateShareRatio` → `multiplier`/`toScaledBalance`/
+///         `scaledBalanceOf`/`updateMultiplier`, BOP-249), and the
+///         activation feature namespace (`base.b20_security` → `base.b20_asset`,
+///         `base.b20_token` removed, BOP-257). Each test asserts the new
+///         surface is present and correct AND the old surface is gone, so the
+///         rename cannot silently regress in either the Solidity reference or
+///         the `base/base` Rust precompile (under fork mode).
+///
+/// @dev    Old-selector absence is checked with low-level calls (the token
+///         carries no fallback, so a retired selector cannot resolve). New
+///         surface is checked with typed calls that only compile against the
+///         current interface.
+contract B20RenamesTest is B20AssetTest {
+    /// @dev Asserts a removed selector no longer resolves on the token surface.
+    function _assertSelectorRemoved(bytes memory callData, string memory err) internal {
+        (bool ok,) = address(token).call(callData);
+        assertFalse(ok, err);
+    }
+
+    // ============================================================
+    //              OPERATOR ROLE (BOP-248 rename)
+    // ============================================================
+
+    /// @notice Verifies the operator role is exposed as `OPERATOR_ROLE` and the legacy
+    ///         `SECURITY_OPERATOR_ROLE` selector is gone
+    /// @dev BOP-248 renamed `SECURITY_OPERATOR_ROLE` → `OPERATOR_ROLE`; the wire value
+    ///      (`keccak256("OPERATOR_ROLE")`) and library source-of-truth must agree, and the old
+    ///      getter must not resolve.
+    function test_operatorRole_success_renamedFromSecurityOperator() public {
+        assertEq(asset().OPERATOR_ROLE(), keccak256("OPERATOR_ROLE"), "OPERATOR_ROLE must equal its keccak preimage");
+        assertEq(asset().OPERATOR_ROLE(), B20Constants.OPERATOR_ROLE, "OPERATOR_ROLE must match B20Constants");
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("SECURITY_OPERATOR_ROLE()"),
+            "SECURITY_OPERATOR_ROLE() must not resolve (renamed to OPERATOR_ROLE in BOP-248)"
+        );
+    }
+
+    // ============================================================
+    //              MULTIPLIER (BOP-249 rename)
+    // ============================================================
+
+    /// @notice Verifies share-ratio scaling is exposed under the `multiplier` names and the legacy
+    ///         share-ratio selectors are gone
+    /// @dev BOP-249 renamed the share-ratio surface to multiplier scaling. The new getters resolve
+    ///      (a fresh token reports a WAD multiplier), and every legacy selector must not resolve.
+    function test_multiplier_success_renamedFromShareRatio(uint256 rawBalance) public {
+        rawBalance = bound(rawBalance, 0, type(uint128).max);
+
+        // New surface resolves and behaves (1:1 at the WAD default).
+        assertEq(asset().multiplier(), asset().WAD_PRECISION(), "fresh multiplier must default to WAD");
+        assertEq(asset().toScaledBalance(rawBalance), rawBalance, "toScaledBalance is identity at WAD");
+        assertEq(asset().toRawBalance(rawBalance), rawBalance, "toRawBalance is identity at WAD");
+
+        // Legacy share-ratio surface is gone.
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("sharesToTokensRatio()"),
+            "sharesToTokensRatio() must not resolve (renamed to multiplier() in BOP-249)"
+        );
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("toShares(uint256)", rawBalance),
+            "toShares(uint256) must not resolve (renamed to toScaledBalance in BOP-249)"
+        );
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("sharesOf(address)", alice),
+            "sharesOf(address) must not resolve (renamed to scaledBalanceOf in BOP-249)"
+        );
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("updateShareRatio(uint256)", rawBalance),
+            "updateShareRatio(uint256) must not resolve (renamed to updateMultiplier in BOP-249)"
+        );
+    }
+
+    // ============================================================
+    //          METADATA vs OPERATOR GATING (BOP-248)
+    // ============================================================
+    // BOP-248 split the asset variant's authority: the metadata
+    // setters (updateName / updateSymbol / updateContractURI /
+    // updateExtraMetadata) are gated by METADATA_ROLE, while the
+    // operator actions (announce / updateMultiplier) are gated by
+    // OPERATOR_ROLE. The two tests below pin that split from both sides.
+
+    /// @notice Verifies `updateExtraMetadata` is gated by METADATA_ROLE, not OPERATOR_ROLE
+    /// @dev An OPERATOR_ROLE-only holder is rejected with the METADATA_ROLE selector; a
+    ///      METADATA_ROLE holder succeeds. Locks the BOP-248 gating split for metadata writes.
+    function test_updateExtraMetadata_success_gatedByMetadataRole(string calldata value) public {
+        // Operator (OPERATOR_ROLE only) cannot write metadata.
+        _grantOperator();
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, operator, B20Constants.METADATA_ROLE)
+        );
+        asset().updateExtraMetadata(METADATA_EXAMPLE_1, value);
+
+        // METADATA_ROLE holder can.
+        _grantRole(B20Constants.METADATA_ROLE, bob);
+        vm.prank(bob);
+        asset().updateExtraMetadata(METADATA_EXAMPLE_1, value);
+        assertEq(asset().extraMetadata(METADATA_EXAMPLE_1), value, "metadata write by METADATA_ROLE must persist");
+    }
+
+    /// @notice Verifies `updateMultiplier` is gated by OPERATOR_ROLE, not METADATA_ROLE
+    /// @dev A METADATA_ROLE-only holder is rejected with the OPERATOR_ROLE selector — the inverse
+    ///      of the metadata-gating test, confirming the two authorities are genuinely distinct.
+    function test_updateMultiplier_revert_metadataRoleInsufficient(uint256 newMultiplier) public {
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
+        _grantRole(B20Constants.METADATA_ROLE, bob);
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, bob, B20Constants.OPERATOR_ROLE)
+        );
+        asset().updateMultiplier(newMultiplier);
+    }
+
+    /// @notice Verifies METADATA_ROLE is administered by DEFAULT_ADMIN_ROLE on a freshly created token
+    /// @dev Pins the role-admin wiring: the asset variant does not set a custom admin for METADATA_ROLE,
+    ///      so it defaults to DEFAULT_ADMIN_ROLE (the default admin grants/revokes METADATA_ROLE).
+    ///      Authority over metadata *operations* is separate and split per the two tests above
+    ///      (writes need METADATA_ROLE; operator actions need OPERATOR_ROLE).
+    function test_metadataRole_success_administeredByDefaultAdmin() public view {
+        assertEq(
+            token.getRoleAdmin(B20Constants.METADATA_ROLE),
+            B20Constants.DEFAULT_ADMIN_ROLE,
+            "METADATA_ROLE admin must default to DEFAULT_ADMIN_ROLE"
+        );
+    }
+
+    // ============================================================
+    //        ACTIVATION FEATURE NAMESPACE (BOP-257 rename)
+    // ============================================================
+
+    /// @notice Verifies the asset activation feature is keyed on the `base.b20_asset` namespace
+    /// @dev BOP-257 renamed `base.b20_security` → `base.b20_asset`. This is the cross-language
+    ///      contract with the Rust `ActivationFeature` enum; a preimage drift desyncs the gate.
+    function test_b20Asset_success_keyedOnAssetNamespace() public pure {
+        assertEq(
+            ActivationRegistryFeatureList.B20_ASSET,
+            keccak256("base.b20_asset"),
+            "B20_ASSET must equal keccak256(\"base.b20_asset\")"
+        );
+    }
+
+    /// @notice Verifies the asset feature is not keyed on either retired namespace
+    /// @dev BOP-257 renamed `base.b20_security` and removed `base.b20_token`. Asserting the asset
+    ///      id differs from both retired preimages locks against an accidental revert to the old
+    ///      namespace string.
+    function test_b20Asset_success_notKeyedOnLegacyNamespaces() public pure {
+        assertTrue(
+            ActivationRegistryFeatureList.B20_ASSET != keccak256("base.b20_security"),
+            "B20_ASSET must not use the retired base.b20_security namespace (renamed BOP-257)"
+        );
+        assertTrue(
+            ActivationRegistryFeatureList.B20_ASSET != keccak256("base.b20_token"),
+            "B20_ASSET must not use the retired base.b20_token namespace (removed BOP-257)"
+        );
+    }
+}
