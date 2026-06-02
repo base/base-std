@@ -97,7 +97,7 @@ jobs:
             ${{ steps.summary.outputs.output }}
             ```
 
-            Full lcov report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To view locally: `genhtml lcov.info --branch-coverage -o coverage && open coverage/index.html`
+            Full report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To browse locally: `make coverage` (runs forge coverage + genhtml + opens the HTML report).
 
   fmt:
     name: Format
