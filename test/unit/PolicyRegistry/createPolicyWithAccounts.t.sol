@@ -156,9 +156,8 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @dev Pins the Rust precompile's check precedence (`validate_create_policy_inputs`
     ///      → `require_account_batch_size`). Mirrors Rust test
     ///      `create_policy_with_accounts_zero_admin_precedes_batch_size_revert` in
-    ///      `crates/common/precompiles/src/policy/storage.rs`. Regression guard for the
-    ///      BOP-207 hoist: if a later refactor reorders these two entry-point checks,
-    ///      this test fails.
+    ///      `crates/common/precompiles/src/policy/storage.rs`. Guards the entry-point check
+    ///      order: if a later refactor reorders these two checks, this test fails. Regression: BOP-207.
     function test_createPolicyWithAccounts_revert_zeroAdmin_precedes_batchSizeTooLarge(
         address caller,
         uint8 typeIdx,

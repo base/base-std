@@ -24,13 +24,13 @@ contract B20RevokeRoleTest is B20Test {
     }
 
     /// @notice Verifies revokeRole reverts when the call would remove the sole DEFAULT_ADMIN_ROLE holder
-    /// @dev BOP-196 regression. Without this guard, `revokeRole(DEFAULT_ADMIN_ROLE, soleAdmin)` would
+    /// @dev Without this guard, `revokeRole(DEFAULT_ADMIN_ROLE, soleAdmin)` would
     ///      succeed silently, bricking the token: admin operations become unreachable, and no
     ///      `LastAdminRenounced` event is emitted to signal the terminal state. The dedicated
     ///      `renounceLastAdmin()` path remains the only legitimate way to remove the final admin.
     ///      Reverts with `LastAdminCannotRenounce` (reused from the renounceRole guard — same
     ///      invariant: the last admin can only be removed via the explicit
-    ///      `renounceLastAdmin` path).
+    ///      `renounceLastAdmin` path). Regression: BOP-196.
     function test_revokeRole_revert_lastAdmin() public {
         assertEq(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), true, "precondition: admin is the sole admin");
 
@@ -42,7 +42,7 @@ contract B20RevokeRoleTest is B20Test {
     /// @notice Verifies revokeRole sets hasRole(role, account) to false
     /// @dev Read-after-write; canonical hasRole readback test lives in hasRole.t.sol.
     ///      Skips revoking DEFAULT_ADMIN_ROLE from the sole bootstrap admin
-    ///      (would revert with LastAdminCannotRenounce per the BOP-196 guard;
+    ///      (would revert with LastAdminCannotRenounce per the last-admin guard;
     ///      see test_revokeRole_revert_lastAdmin and renounceLastAdmin.t.sol
     ///      for the terminal-admin removal path).
     ///      Paired slot assertion: the `roles[role][account]` slot

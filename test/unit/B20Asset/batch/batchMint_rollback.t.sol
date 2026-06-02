@@ -21,7 +21,7 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 ///         signal is in fork mode against the real Rust precompile,
 ///         where any break in the `precompile-storage` journal hookup
 ///         would leave the earlier writes persisted across the revert.
-///         Companion to BOP-176 (Rust-side unit tests).
+///         Companion to the Rust-side unit tests.
 contract B20AssetBatchMintRollbackTest is B20AssetTest {
     /// @notice batchMint that reverts on element 1 via supply-cap leaves balances + supply unchanged
     /// @dev    Element 0 mints under the cap (writes alice's balance and
