@@ -64,7 +64,7 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///         `base.b20.security` (slots 0..2):
     ///         - 0: sharesToTokensRatio
     ///         - 1: usedAnnouncementIds[id]
-    ///         - 2: identifiers[identifierType]  (ISIN seeded + FIGI mutated)
+    ///         - 2: identifiers[identifierType]  (FIGI mutated)
     ///
     ///         `base.b20.redeem` (slots 0..1):
     ///         - 0: minimumRedeemable
@@ -97,13 +97,13 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
         );
 
         // ---------- identifiers[identifierType] (slot 2, hashed by type) ----------
-        // Both the seeded ISIN (DEFAULT_ISIN from _securityParams() bootstrap)
-        // and the post-creation FIGI write are independently pinned to the
-        // canonical string-field encoding at their derived slots.
+        // The factory does not seed any identifier at creation, so a fresh token's
+        // ISIN slot is empty. The post-creation FIGI write is pinned to the
+        // canonical string-field encoding at its derived slot.
         assertEq(
             vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_ISIN)),
-            _expectedStringFieldSlot(DEFAULT_ISIN),
-            "security slot 2: identifiers[ISIN] must hold the bootstrap-seeded short-string encoding"
+            bytes32(0),
+            "security slot 2: identifiers[ISIN] must remain zero (factory seeds no identifiers)"
         );
         assertEq(
             vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_FIGI)),
@@ -181,8 +181,8 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
         // ---------- base.b20.security ----------
         // sharesToTokensRatio: write the non-WAD marker via the public surface.
         _updateShareRatio(SHARE_RATIO_MARKER);
-        // identifiers[FIGI]: post-creation operator write. ISIN was seeded
-        // at creation (DEFAULT_ISIN via _securityParams() bootstrap).
+        // identifiers[FIGI]: post-creation operator write. The factory does not
+        // seed any identifier at creation; ISIN, CUSIP, etc. all default to empty.
         _grantOperator();
         vm.prank(operator);
         security().updateSecurityIdentifier(IDENTIFIER_FIGI, FIGI_VALUE);

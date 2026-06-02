@@ -19,32 +19,6 @@ contract B20FactoryTest is BaseTest {
     // -- Precompile handle --
     IB20Factory internal factory = StdPrecompiles.B20_FACTORY;
 
-    // ============================================================
-    //                  SECURITY-VARIANT FIXTURES
-    // ============================================================
-    // Shared across every test that constructs `B20SecurityCreateParams`
-    // (the factory-side `createToken` tests and the variant-side
-    // `B20Security/*` tests). Lives on `B20FactoryTest` because it's
-    // the deepest common base of both. Production code (the factory
-    // mock and the Rust precompile) hardcodes the `"ISIN"` key the
-    // same way; that's intentional and not test-fixture data.
-
-    /// @notice Identifier-type key for the ISIN entry. The factory
-    ///         writes this key as part of `createToken`'s SECURITY
-    ///         seeding; subsequent reads via `securityIdentifier(...)`
-    ///         match against the same key.
-    string internal constant IDENTIFIER_ISIN = "ISIN";
-
-    /// @notice Placeholder ISIN used as the default in `_securityParams()`.
-    ///         All-zero so it's visually distinct from a real-world
-    ///         ISIN in test output.
-    string internal constant DEFAULT_ISIN = "US0000000000";
-
-    /// @notice Apple Inc.'s real ISIN. Used as the alternate-value
-    ///         fixture in tests that need to prove the seeded value
-    ///         actually traverses the factory's write path.
-    string internal constant APPLE_ISIN = "US0378331005";
-
     // -- Param builders --
 
     /// @notice Build a `B20StablecoinCreateParams` with explicit fields.
@@ -65,26 +39,19 @@ contract B20FactoryTest is BaseTest {
     }
 
     /// @notice Build a `B20SecurityCreateParams` with explicit fields.
-    function _securityParams(
-        string memory name_,
-        string memory symbol_,
-        address initialAdmin_,
-        string memory isin_,
-        uint256 minimumRedeemable_
-    ) internal pure returns (IB20Factory.B20SecurityCreateParams memory) {
+    function _securityParams(string memory name_, string memory symbol_, address initialAdmin_)
+        internal
+        pure
+        returns (IB20Factory.B20SecurityCreateParams memory)
+    {
         return IB20Factory.B20SecurityCreateParams({
-            version: 1,
-            name: name_,
-            symbol: symbol_,
-            initialAdmin: initialAdmin_,
-            isin: isin_,
-            minimumRedeemable: minimumRedeemable_
+            version: 1, name: name_, symbol: symbol_, initialAdmin: initialAdmin_
         });
     }
 
-    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin, `DEFAULT_ISIN`).
+    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin).
     function _securityParams() internal view returns (IB20Factory.B20SecurityCreateParams memory) {
-        return _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
+        return _securityParams("Security Test", "SEC", admin);
     }
 
     // -- Action wrappers --

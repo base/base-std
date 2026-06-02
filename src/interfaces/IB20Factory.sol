@@ -44,10 +44,6 @@ interface IB20Factory {
         string symbol;
         /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
-        /// @dev International Securities Identification Number. Required; empty string reverts.
-        string isin;
-        /// @dev Initial value of `minimumRedeemable`. Use `0` to allow any non-zero redemption.
-        uint256 minimumRedeemable;
     }
 
     /// @notice Event payload carried in the `variantEventParams` field of `B20Created` for
@@ -76,7 +72,7 @@ interface IB20Factory {
 
     /// @notice A required string argument was the empty string.
     ///
-    /// @param field Name of the missing field (e.g. `"isin"`).
+    /// @param field Name of the missing field (e.g. `"currency"`).
     error MissingRequiredField(string field);
 
     /// @notice The stablecoin `currency` contained a non-`A`-`Z` byte.

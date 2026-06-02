@@ -10,14 +10,8 @@ import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
-import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {
-    MockB20Storage,
-    MockB20StablecoinStorage,
-    MockB20SecurityStorage,
-    MockB20RedeemStorage
-} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Storage, MockB20StablecoinStorage, MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 
 contract B20FactoryCreateB20Test is B20FactoryTest {
@@ -248,31 +242,6 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertEq(actual, predicted, "createToken address must match prediction");
     }
 
-    /// @notice Verifies security createToken seeds the initial ISIN identifier and minimumRedeemable
-    /// @dev Variant-specific initial state: `identifiers["ISIN"]` is written at the
-    ///      `base.b20.security` namespace and `minimumRedeemable` at the
-    ///      `base.b20.redeem` namespace. Paired slot assertions confirm both fields
-    ///      land at the expected slots with the correct encodings.
-    function test_createB20_success_securitySeedsInitialState(address caller, bytes32 salt, uint256 minRedeem) public {
-        _assumeValidCaller(caller);
-        IB20Factory.B20SecurityCreateParams memory p =
-            _securityParams("Security Test", "SEC", admin, APPLE_ISIN, minRedeem);
-        address token = _createSecurity(caller, salt, p, new bytes[](0));
-
-        assertEq(IB20Security(token).securityIdentifier(IDENTIFIER_ISIN), APPLE_ISIN, "ISIN must be seeded at creation");
-        assertEq(IB20Security(token).minimumRedeemable(), minRedeem, "minimumRedeemable must be seeded at creation");
-        assertEq(
-            vm.load(token, MockB20SecurityStorage.identifierSlot(IDENTIFIER_ISIN)),
-            _expectedStringFieldSlot(APPLE_ISIN),
-            "identifiers[ISIN] slot must hold the short-string encoding"
-        );
-        assertEq(
-            uint256(vm.load(token, MockB20RedeemStorage.minimumRedeemableSlot())),
-            minRedeem,
-            "minimumRedeemable slot must reflect the seeded value"
-        );
-    }
-
     /// @notice Verifies security createToken defaults REDEEM_SENDER_POLICY to ALWAYS_BLOCK_ID
     /// @dev Unlike the four base policy slots (which inherit the EVM zero default == ALWAYS_ALLOW_ID),
     ///      the security variant's factory writes ALWAYS_BLOCK_ID into the REDEEM_SENDER_POLICY lane
@@ -365,36 +334,16 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         );
     }
 
-    /// @notice Verifies security createToken does NOT emit SecurityIdentifierUpdated for the seeded ISIN
-    /// @dev Creation-time initial state is written directly via vm.store and emits no event,
-    ///      paralleling how stablecoin currency is seeded. Post-creation
-    ///      `updateSecurityIdentifier` calls DO emit the event; that's covered separately.
-    function test_createB20_success_securitySeededIsinEmitsNoEvent(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        vm.recordLogs();
-        _createSecurity(caller, salt, _securityParams(), new bytes[](0));
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-
-        assertEq(
-            _firstLogIndex(logs, IB20Security.SecurityIdentifierUpdated.selector),
-            -1,
-            "no SecurityIdentifierUpdated at creation"
-        );
-    }
-
     /// @notice Verifies security createToken executes with admin == address(0)
     /// @dev Same zero-admin success behavior on the security variant. Paired slot assertions
-    ///      cross-check both the base namespace (adminCount=0, initialized=true) and the variant
-    ///      namespace (ISIN identifier present, minimumRedeemable set).
+    ///      cross-check the base namespace (adminCount=0, initialized=true).
     function test_createB20_success_zeroAdminGrantsNoRole_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        IB20Factory.B20SecurityCreateParams memory p =
-            _securityParams("NoOwner Security", "NOSEC", address(0), DEFAULT_ISIN, 0);
+        IB20Factory.B20SecurityCreateParams memory p = _securityParams("NoOwner Security", "NOSEC", address(0));
         address token = _createSecurity(caller, salt, p, new bytes[](0));
 
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, address(0)), "zero must not hold admin");
         assertFalse(MockB20(token).hasRole(B20Constants.DEFAULT_ADMIN_ROLE, caller), "caller must not hold admin");
-        assertEq(IB20Security(token).securityIdentifier(IDENTIFIER_ISIN), DEFAULT_ISIN, "ISIN must still be set");
 
         assertEq(uint256(vm.load(token, MockB20Storage.adminCountSlot())), 0, "adminCount must be 0 on zero-admin path");
         _assertInitialized(token, "initialized must still be set on zero-admin path");
@@ -438,11 +387,12 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 and asserts
-    ///      empty `variantEventParams` (its `isin` and `minimumRedeemable` are mutable and surfaced
-    ///      via their own update events).
+    ///      empty `variantEventParams` (SECURITY has no variant-specific immutable identity
+    ///      fields beyond the base set; identifiers and redemption configuration are mutable
+    ///      and surfaced via their own update events).
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
-        IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin, DEFAULT_ISIN, 0);
+        IB20Factory.B20SecurityCreateParams memory p = _securityParams("Security Test", "SEC", admin);
         address predicted = factory.getB20Address(IB20Factory.B20Variant.SECURITY, caller, salt);
 
         vm.expectEmit(true, true, false, true, address(factory));

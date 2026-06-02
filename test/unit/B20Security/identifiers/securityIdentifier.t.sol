@@ -6,18 +6,12 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 contract B20SecuritySecurityIdentifierTest is B20SecurityTest {
     /// @notice Verifies securityIdentifier returns the empty string for an unset identifier
     /// @dev Default for any unset mapping entry is the empty string; the API contract is that
-    ///      unset and explicitly-empty both read back as "".
+    ///      unset and explicitly-empty both read back as "". The factory does not seed any
+    ///      identifier at creation, so ISIN reads as empty too on a fresh token.
     function test_securityIdentifier_success_emptyForUnset() public view {
+        assertEq(security().securityIdentifier(IDENTIFIER_ISIN), "", "unset identifier must read as empty string");
         assertEq(security().securityIdentifier(IDENTIFIER_CUSIP), "", "unset identifier must read as empty string");
         assertEq(security().securityIdentifier(IDENTIFIER_FIGI), "", "unset identifier must read as empty string");
-    }
-
-    /// @notice Verifies the ISIN seeded at creation is readable via securityIdentifier
-    /// @dev `_securityParams()` seeds `DEFAULT_ISIN` at creation; readback must match.
-    function test_securityIdentifier_success_returnsIsinSeededAtCreation() public view {
-        assertEq(
-            security().securityIdentifier(IDENTIFIER_ISIN), DEFAULT_ISIN, "ISIN must match the value seeded at creation"
-        );
     }
 
     /// @notice Verifies securityIdentifier reads back any value written via updateSecurityIdentifier
