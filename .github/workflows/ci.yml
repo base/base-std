@@ -99,6 +99,66 @@ jobs:
 
             Full report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To browse locally: `make coverage` (runs forge coverage + genhtml + opens the HTML report).
 
+  interface-coverage:
+    name: Interface Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+
+      - name: Run interface coverage check
+        id: check
+        run: |
+          set +e
+          output=$(python3 scripts/check-coverage.py 2>&1)
+          exit_code=$?
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          {
+            echo "output<<__EOF__"
+            echo "$output"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+          exit $exit_code
+        continue-on-error: true
+
+      - name: Find existing comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: <!-- interface-coverage -->
+
+      - name: Post or update PR comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- interface-coverage -->
+            ### Interface Coverage
+
+            ${{ steps.check.outputs.exit_code == '0' && '✅ All interface functions have test coverage.' || '❌ Interface functions with no test coverage found.' }}
+
+            ```
+            ${{ steps.check.outputs.output }}
+            ```
+
+      - name: Fail if gaps found
+        if: steps.check.outputs.exit_code != '0'
+        run: exit 1
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
