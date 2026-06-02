@@ -35,7 +35,7 @@ pragma solidity ^0.8.20;
 ///         Identity state (`name`, `symbol`) is kept in this struct rather
 ///         than encoded into the address because mutability is required
 ///         (`updateName` / `updateSymbol` on the IB20 surface). `decimals` is
-///         variant-fixed (`18` for default, `6` for stablecoin/security)
+///         variant-fixed (`18` for default, `6` for stablecoin/asset)
 ///         and read from code, not storage.
 library MockB20Storage {
     // ============================================================
@@ -321,20 +321,20 @@ library MockB20Storage {
     }
 }
 
-/// @title MockB20SecurityStorage
-/// @notice Slot-layout library for the `MockB20Security` variant's
+/// @title MockB20AssetStorage
+/// @notice Slot-layout library for the `MockB20Asset` variant's
 ///         variant-specific state. Disjoint namespace from
 ///         `MockB20Storage` so the variant composes additively
 ///         without touching the base token's slot layout, mirroring
 ///         how `MockB20StablecoinStorage` adds `currency` for the
 ///         stablecoin variant.
 ///
-/// @dev    **Namespace:** `base.b20.security`. The ERC-7201 location
-///         is `keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))`.
+/// @dev    **Namespace:** `base.b20.asset`. The ERC-7201 location
+///         is `keccak256(abi.encode(uint256(keccak256("base.b20.asset")) - 1)) & ~bytes32(uint256(0xff))`.
 ///
 ///         **Storage notes.**
 ///         - `decimals` is the per-token ERC-20 decimals value, chosen
-///           at creation by the factory from `B20SecurityCreateParams`
+///           at creation by the factory from `B20AssetCreateParams`
 ///           and immutable thereafter. Validated to the range
 ///           `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`
 ///           by the factory. Pinned to slot 0 (ahead of `multiplier`)
@@ -357,12 +357,12 @@ library MockB20Storage {
 ///           `extraMetadata` / `updateExtraMetadata` surface) keys
 ///           directly on the raw `key` string (e.g. `"category"`);
 ///           empty value means unset/removed.
-library MockB20SecurityStorage {
-    /// @custom:storage-location erc7201:base.b20.security
+library MockB20AssetStorage {
+    /// @custom:storage-location erc7201:base.b20.asset
     struct Layout {
         // ---------- Decimals ----------
         // Per-token ERC-20 `decimals`. Written by the factory at
-        // creation from the `B20SecurityCreateParams.decimals` field
+        // creation from the `B20AssetCreateParams.decimals` field
         // (validated to [MIN_ASSET_DECIMALS, MAX_ASSET_DECIMALS]) and
         // never mutated afterwards. Pinned to slot 0 so future
         // small variant-immutable scalars can pack into the same
@@ -384,9 +384,9 @@ library MockB20SecurityStorage {
         mapping(string key => string value) extraMetadata;
     }
 
-    // keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))
+    // keccak256(abi.encode(uint256(keccak256("base.b20.asset")) - 1)) & ~bytes32(uint256(0xff))
     // Verified against the computation in derivedLocation() below.
-    bytes32 internal constant STORAGE_LOCATION = 0x4a21e1b7f963e21baf0daffe6bab858a1e5fecef1144f3aca3c0c4534c7ac600;
+    bytes32 internal constant STORAGE_LOCATION = 0xfdc6d4552d1286ade4d9facdbf0fb50d2ec9b89a90e104f26fd277585e374b00;
 
     // ============================================================
     //                     SLOT OFFSETS WITHIN LAYOUT
@@ -416,7 +416,7 @@ library MockB20SecurityStorage {
     ///         from the namespace string. Used in tests to assert the
     ///         hardcoded `STORAGE_LOCATION` constant matches the formula.
     function derivedLocation() internal pure returns (bytes32) {
-        return keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff));
+        return keccak256(abi.encode(uint256(keccak256("base.b20.asset")) - 1)) & ~bytes32(uint256(0xff));
     }
 
     // ============================================================

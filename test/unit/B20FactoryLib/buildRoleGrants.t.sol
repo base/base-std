@@ -213,23 +213,23 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
     }
 
     /*//////////////////////////////////////////////////////////////
-        SUCCESS — buildRoleGrants(B20SecurityRoleHolders memory)
+        SUCCESS — buildRoleGrants(B20AssetRoleHolders memory)
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice An all-zero `B20SecurityRoleHolders` bundle produces an empty result.
-    /// @dev    Pins the zero-skip semantics for the security typed overload.
-    function test_buildRoleGrants_securityBundle_success_allZeroProducesEmpty() public pure {
-        B20FactoryLib.B20SecurityRoleHolders memory holders;
+    /// @notice An all-zero `B20AssetRoleHolders` bundle produces an empty result.
+    /// @dev    Pins the zero-skip semantics for the asset typed overload.
+    function test_buildRoleGrants_assetBundle_success_allZeroProducesEmpty() public pure {
+        B20FactoryLib.B20AssetRoleHolders memory holders;
         bytes[] memory result = B20FactoryLib.buildRoleGrants(holders);
         assertEq(result.length, 0, "zeroed bundle must produce no grants");
     }
 
-    /// @notice A fully-populated `B20SecurityRoleHolders` bundle emits the
+    /// @notice A fully-populated `B20AssetRoleHolders` bundle emits the
     ///         seven grants in struct-field order.
     /// @dev    Same field-to-role pinning as the IB20 bundle, extended to
-    ///         the security-only `operator` slot. Catches any swap
+    ///         the asset-only `operator` slot. Catches any swap
     ///         among the seven role IDs.
-    function test_buildRoleGrants_securityBundle_success_emitsAllSevenInStructOrder(
+    function test_buildRoleGrants_assetBundle_success_emitsAllSevenInStructOrder(
         address minter_,
         address burner_,
         address burnBlocker_,
@@ -246,7 +246,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         vm.assume(metadataAdmin_ != address(0));
         vm.assume(operator_ != address(0));
 
-        B20FactoryLib.B20SecurityRoleHolders memory holders = B20FactoryLib.B20SecurityRoleHolders({
+        B20FactoryLib.B20AssetRoleHolders memory holders = B20FactoryLib.B20AssetRoleHolders({
             minter: minter_,
             burner: burner_,
             burnBlocker: burnBlocker_,
@@ -258,7 +258,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
 
         bytes[] memory result = B20FactoryLib.buildRoleGrants(holders);
 
-        assertEq(result.length, 7, "fully-populated security bundle must emit seven grants");
+        assertEq(result.length, 7, "fully-populated asset bundle must emit seven grants");
         assertEq(result[0], abi.encodeCall(IB20.grantRole, (B20Constants.MINT_ROLE, minter_)), "0: MINT_ROLE");
         assertEq(result[1], abi.encodeCall(IB20.grantRole, (B20Constants.BURN_ROLE, burner_)), "1: BURN_ROLE");
         assertEq(
@@ -274,15 +274,15 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         assertEq(result[6], abi.encodeCall(IB20.grantRole, (B20Constants.OPERATOR_ROLE, operator_)), "6: OPERATOR_ROLE");
     }
 
-    /// @notice A `B20SecurityRoleHolders` bundle with only the
-    ///         security-only slot populated emits exactly that one
+    /// @notice A `B20AssetRoleHolders` bundle with only the
+    ///         asset-only slot populated emits exactly that one
     ///         grant.
     /// @dev    Pins that `OPERATOR_ROLE` picks up its slot position
     ///         and the IB20 slots are skipped when zero.
-    function test_buildRoleGrants_securityBundle_success_emitsOnlySecurityOnlySlot(address operator_) public pure {
+    function test_buildRoleGrants_assetBundle_success_emitsOnlyAssetOnlySlot(address operator_) public pure {
         vm.assume(operator_ != address(0));
 
-        B20FactoryLib.B20SecurityRoleHolders memory holders = B20FactoryLib.B20SecurityRoleHolders({
+        B20FactoryLib.B20AssetRoleHolders memory holders = B20FactoryLib.B20AssetRoleHolders({
             minter: address(0),
             burner: address(0),
             burnBlocker: address(0),
@@ -294,7 +294,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
 
         bytes[] memory result = B20FactoryLib.buildRoleGrants(holders);
 
-        assertEq(result.length, 1, "exactly the security-only entry must survive");
+        assertEq(result.length, 1, "exactly the asset-only entry must survive");
         assertEq(result[0], abi.encodeCall(IB20.grantRole, (B20Constants.OPERATOR_ROLE, operator_)), "operator only");
     }
 }

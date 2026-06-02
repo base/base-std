@@ -21,12 +21,12 @@ library B20Constants {
     /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN).
     uint8 internal constant ALL_FEATURES_PAUSED = 7;
 
-    /// @notice Inclusive lower bound for `B20SecurityCreateParams.decimals`. `6` is the
+    /// @notice Inclusive lower bound for `B20AssetCreateParams.decimals`. `6` is the
     ///         floor most stablecoin-grade integrations expect; values below it lose
-    ///         meaningful unit precision for tokenized-security workflows.
+    ///         meaningful unit precision for asset workflows.
     uint8 internal constant MIN_ASSET_DECIMALS = 6;
 
-    /// @notice Inclusive upper bound for `B20SecurityCreateParams.decimals`. `18` is the
+    /// @notice Inclusive upper bound for `B20AssetCreateParams.decimals`. `18` is the
     ///         ERC-20 community ceiling — every common wallet and indexer renders up to
     ///         18 decimals correctly; going higher risks integration breakage.
     uint8 internal constant MAX_ASSET_DECIMALS = 18;

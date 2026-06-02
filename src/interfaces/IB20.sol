@@ -4,7 +4,7 @@ pragma solidity >=0.8.20 <0.9.0;
 /// @title IB20
 ///
 /// @notice The base Solidity surface every Base-native token (B-20) implements. Variants
-///         (Stablecoin, Security, ...) extend this interface; nothing on this surface is
+///         (Asset, Stablecoin) extend this interface; nothing on this surface is
 ///         variant-specific.
 interface IB20 {
     /*//////////////////////////////////////////////////////////////

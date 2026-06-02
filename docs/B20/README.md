@@ -4,8 +4,8 @@ B20 is an ERC-20 superset designed for Base. All B20s are deployed via the singl
 
 B20 supports two variants:
 
-- **[Stablecoin](Stablecoin.md)** — fixed-decimals fiat-backed variant
-- **[Security](Security.md)** — corporate-actions / share-class variant
+- **[Asset](Asset.md)** — the general-purpose variant for assets of all kinds
+- **[Stablecoin](Stablecoin.md)** — the fixed-decimals, fiat-backed carveout
 
 This document covers the behavior shared across the variant family.
 
@@ -113,5 +113,5 @@ ERC-1271 contract signatures are deliberately NOT accepted — permit recovers v
 
 | Variant | Decimals | What it adds |
 |---|---|---|
+| [Asset](Asset.md) | 6-18 (configurable per token) | multiplier, announcements, extra metadata, batched issuance |
 | [Stablecoin](Stablecoin.md) | 6 (fixed) | currency ISO code |
-| [Security](Security.md) | 6-18 (configurable per token) | multiplier, announcements, extra metadata, redemptions |

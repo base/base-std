@@ -18,4 +18,5 @@ import {BaseTest} from "test/lib/BaseTest.sol";
 /// the rest of the suite. No `setUp` extension is needed.
 contract B20FactoryLibTest is BaseTest {
     // No additional state; `BaseTest`'s actor labels and helpers are sufficient.
-}
+
+    }

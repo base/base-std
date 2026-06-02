@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {B20Constants} from "./B20Constants.sol";
 import {IB20} from "../interfaces/IB20.sol";
+import {IB20Asset} from "../interfaces/IB20Asset.sol";
 import {IB20Factory} from "../interfaces/IB20Factory.sol";
-import {IB20Security} from "../interfaces/IB20Security.sol";
 
 /// @title  B20FactoryLib
 /// @author Coinbase
@@ -14,8 +14,8 @@ library B20FactoryLib {
     /// @notice Encoding version carried as the leading byte of a `B20StablecoinCreateParams` blob.
     uint8 internal constant B20_STABLECOIN_CREATE_PARAMS_VERSION = 1;
 
-    /// @notice Encoding version carried as the leading byte of a `B20SecurityCreateParams` blob.
-    uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
+    /// @notice Encoding version carried as the leading byte of a `B20AssetCreateParams` blob.
+    uint8 internal constant B20_ASSET_CREATE_PARAMS_VERSION = 1;
 
     /// @notice Encoding version carried as the leading byte of a `B20StablecoinEventParams` blob.
     uint8 internal constant B20_STABLECOIN_EVENT_PARAMS_VERSION = 1;
@@ -49,11 +49,11 @@ library B20FactoryLib {
         address metadataAdmin;
     }
 
-    /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`. Superset of `B20RoleHolders`
+    /// @notice Bootstrap role-grant bundle for `B20Variant.ASSET`. Superset of `B20RoleHolders`
     ///         with an `OPERATOR_ROLE` slot.
     ///
-    /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20SecurityCreateParams.initialAdmin`, not this struct.
-    struct B20SecurityRoleHolders {
+    /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20AssetCreateParams.initialAdmin`, not this struct.
+    struct B20AssetRoleHolders {
         /// @dev Account granted `MINT_ROLE`.
         address minter;
         /// @dev Account granted `BURN_ROLE`.
@@ -97,21 +97,21 @@ library B20FactoryLib {
         );
     }
 
-    /// @notice Encodes a `B20SecurityCreateParams` blob tagged with `B20_SECURITY_CREATE_PARAMS_VERSION`.
+    /// @notice Encodes a `B20AssetCreateParams` blob tagged with `B20_ASSET_CREATE_PARAMS_VERSION`.
     ///
     /// @param name         ERC-20 token name.
     /// @param symbol       ERC-20 token symbol.
     /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
     /// @param decimals     ERC-20 `decimals` value. Must be in `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`;
     ///                     out-of-range values cause the factory to revert with `InvalidDecimals`.
-    function encodeSecurityCreateParams(string memory name, string memory symbol, address initialAdmin, uint8 decimals)
+    function encodeAssetCreateParams(string memory name, string memory symbol, address initialAdmin, uint8 decimals)
         internal
         pure
         returns (bytes memory)
     {
         return abi.encode(
-            IB20Factory.B20SecurityCreateParams({
-                version: B20_SECURITY_CREATE_PARAMS_VERSION,
+            IB20Factory.B20AssetCreateParams({
+                version: B20_ASSET_CREATE_PARAMS_VERSION,
                 name: name,
                 symbol: symbol,
                 initialAdmin: initialAdmin,
@@ -184,7 +184,7 @@ library B20FactoryLib {
         return abi.encodeCall(IB20.setRoleAdmin, (role, newAdminRole));
     }
 
-    /// @notice Encodes a bootstrap initCall to `IB20Security.batchMint`.
+    /// @notice Encodes a bootstrap initCall to `IB20Asset.batchMint`.
     ///
     /// @param recipients Accounts receiving the minted tokens.
     /// @param amounts    Per-recipient amounts, parallel to `recipients`.
@@ -193,21 +193,21 @@ library B20FactoryLib {
         pure
         returns (bytes memory)
     {
-        return abi.encodeCall(IB20Security.batchMint, (recipients, amounts));
+        return abi.encodeCall(IB20Asset.batchMint, (recipients, amounts));
     }
 
-    /// @notice Encodes a bootstrap initCall to `IB20Security.updateExtraMetadata`.
+    /// @notice Encodes a bootstrap initCall to `IB20Asset.updateExtraMetadata`.
     ///
     /// @param key   Metadata entry key (e.g. `"category"`).
     /// @param value New value, or empty string to remove.
     function encodeUpdateExtraMetadata(string memory key, string memory value) internal pure returns (bytes memory) {
-        return abi.encodeCall(IB20Security.updateExtraMetadata, (key, value));
+        return abi.encodeCall(IB20Asset.updateExtraMetadata, (key, value));
     }
 
-    /// @notice Encodes a bootstrap initCall to `IB20Security.updateMultiplier`.
+    /// @notice Encodes a bootstrap initCall to `IB20Asset.updateMultiplier`.
     /// @param newMultiplier New multiplier, scaled to `WAD_PRECISION`.
     function encodeUpdateMultiplier(uint256 newMultiplier) internal pure returns (bytes memory) {
-        return abi.encodeCall(IB20Security.updateMultiplier, (newMultiplier));
+        return abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -239,11 +239,11 @@ library B20FactoryLib {
         return buildRoleGrants(roles, accounts);
     }
 
-    /// @notice Same as `buildRoleGrants(B20RoleHolders)`, but for the security role set.
+    /// @notice Same as `buildRoleGrants(B20RoleHolders)`, but for the asset role set.
     ///
-    /// @param holders Security role-holder bundle.
+    /// @param holders Asset role-holder bundle.
     /// @return initCalls ABI-encoded `grantRole` initCalls.
-    function buildRoleGrants(B20SecurityRoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
+    function buildRoleGrants(B20AssetRoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
         bytes32[] memory roles = new bytes32[](7);
         roles[0] = B20Constants.MINT_ROLE;
         roles[1] = B20Constants.BURN_ROLE;

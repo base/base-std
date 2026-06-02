@@ -11,9 +11,9 @@ import {StdPrecompiles} from "src/StdPrecompiles.sol";
 import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
 
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
-import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
+import {MockB20Asset} from "test/lib/mocks/MockB20Asset.sol";
 import {MockB20} from "test/lib/mocks/MockB20.sol";
-import {MockB20Storage, MockB20SecurityStorage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Storage, MockB20AssetStorage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Factory
 /// @notice Reference implementation of the `IB20Factory` precompile
@@ -100,7 +100,7 @@ contract MockB20Factory is IB20Factory {
         //       Per-variant features gate which variants can be created at
         //       any moment. Variant-feature mapping:
         //         STABLECOIN → B20_STABLECOIN
-        //         SECURITY / DEFAULT → B20_ASSET
+        //         ASSET / DEFAULT → B20_ASSET
         //       (DEFAULT is folded under `B20_ASSET` until BOP-253 removes
         //       the variant; the dedicated `B20_TOKEN` feature was retired
         //       by BOP-257.)
@@ -113,9 +113,9 @@ contract MockB20Factory is IB20Factory {
         uint8 decimals;
         string memory currency_;
 
-        if (variant == B20Variant.SECURITY) {
-            B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
-            if (p.version != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION) {
+        if (variant == B20Variant.ASSET) {
+            B20AssetCreateParams memory p = abi.decode(params, (B20AssetCreateParams));
+            if (p.version != B20FactoryLib.B20_ASSET_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
             // Configurable per-token decimals; bounded so wallets, indexers, and
@@ -155,8 +155,8 @@ contract MockB20Factory is IB20Factory {
         if (token.code.length != 0) revert TokenAlreadyExists(token);
 
         // -- 4. Etch the variant-appropriate runtime bytecode --
-        if (variant == B20Variant.SECURITY) {
-            vm.etch(token, type(MockB20Security).runtimeCode);
+        if (variant == B20Variant.ASSET) {
+            vm.etch(token, type(MockB20Asset).runtimeCode);
         } else {
             // STABLECOIN (unknown variants already reverted above).
             vm.etch(token, type(MockB20Stablecoin).runtimeCode);
@@ -167,8 +167,8 @@ contract MockB20Factory is IB20Factory {
         //       canonical grantRole path in step 7 so RoleGranted fires
         //       from the token.
         _writeBaseStorage(token, name_, symbol_);
-        if (variant == B20Variant.SECURITY) {
-            _writeSecurityStorage(token, decimals);
+        if (variant == B20Variant.ASSET) {
+            _writeAssetStorage(token, decimals);
         } else if (variant == B20Variant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
         }
@@ -182,7 +182,7 @@ contract MockB20Factory is IB20Factory {
         //       fixed event fields. STABLECOIN emits an ABI-encoded
         //       `B20StablecoinEventParams` so stream-based indexers
         //       can recover the immutable `currency`
-        //       (SECURITY has no variant-specific immutable identity
+        //       (ASSET has no variant-specific immutable identity
         //       fields beyond the base set; extra-metadata entries are
         //       mutable and surfaced via their own update events).
         bytes memory variantEventParams;
@@ -260,7 +260,7 @@ contract MockB20Factory is IB20Factory {
     // ============================================================
 
     /// @dev Reverts with `IActivationRegistry.FeatureNotActivated(feature)` if
-    ///      the variant-specific gate (`B20_ASSET` for SECURITY / DEFAULT,
+    ///      the variant-specific gate (`B20_ASSET` for ASSET / DEFAULT,
     ///      `B20_STABLECOIN` for STABLECOIN) is not currently activated in
     ///      the registry. Factored out of `createB20` to keep the dispatcher
     ///      body under the EVM stack-depth limit.
@@ -316,17 +316,17 @@ contract MockB20Factory is IB20Factory {
         // after initCalls have run.
     }
 
-    /// @dev Writes the security variant's per-token immutable state at its
-    ///      disjoint ERC-7201 namespace (`base.b20.security`). Today that
+    /// @dev Writes the asset variant's per-token immutable state at its
+    ///      disjoint ERC-7201 namespace (`base.b20.asset`). Today that
     ///      is just `decimals`; `multiplier` defaults to zero
     ///      (interpreted by the read surface as WAD), and announcement /
     ///      identifier maps are empty by default.
-    function _writeSecurityStorage(address token, uint8 decimals) internal {
+    function _writeAssetStorage(address token, uint8 decimals) internal {
         // `decimals` is a `uint8` packed in the low byte of its own slot.
         // Writing the whole slot is safe because the slot is otherwise
         // unused today (future small variant-immutable fields packed into
         // this slot would need this writer to mask instead).
-        _writeUint(token, MockB20SecurityStorage.decimalsSlot(), uint256(decimals));
+        _writeUint(token, MockB20AssetStorage.decimalsSlot(), uint256(decimals));
     }
 
     /// @dev Writes the stablecoin variant's `currency` field at its

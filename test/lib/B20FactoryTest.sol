@@ -44,18 +44,18 @@ contract B20FactoryTest is BaseTest {
         return _stablecoinParams("USD Test", "USDT", admin, "USD");
     }
 
-    /// @notice Build a `B20SecurityCreateParams` with explicit fields.
+    /// @notice Build a `B20AssetCreateParams` with explicit fields.
     /// @dev    Tests that don't care about `decimals` should call the
     ///         no-arg overload (which pins `decimals = MIN_ASSET_DECIMALS`
     ///         to match historical behavior). Tests that DO care thread the
     ///         explicit value through here.
-    function _securityParams(string memory name_, string memory symbol_, address initialAdmin_, uint8 decimals_)
+    function _assetParams(string memory name_, string memory symbol_, address initialAdmin_, uint8 decimals_)
         internal
         pure
-        returns (IB20Factory.B20SecurityCreateParams memory)
+        returns (IB20Factory.B20AssetCreateParams memory)
     {
-        return IB20Factory.B20SecurityCreateParams({
-            version: B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION,
+        return IB20Factory.B20AssetCreateParams({
+            version: B20FactoryLib.B20_ASSET_CREATE_PARAMS_VERSION,
             name: name_,
             symbol: symbol_,
             initialAdmin: initialAdmin_,
@@ -63,18 +63,18 @@ contract B20FactoryTest is BaseTest {
         });
     }
 
-    /// @notice Build a `B20SecurityCreateParams` with the default decimals (`MIN_ASSET_DECIMALS`).
-    function _securityParams(string memory name_, string memory symbol_, address initialAdmin_)
+    /// @notice Build a `B20AssetCreateParams` with the default decimals (`MIN_ASSET_DECIMALS`).
+    function _assetParams(string memory name_, string memory symbol_, address initialAdmin_)
         internal
         pure
-        returns (IB20Factory.B20SecurityCreateParams memory)
+        returns (IB20Factory.B20AssetCreateParams memory)
     {
-        return _securityParams(name_, symbol_, initialAdmin_, B20Constants.MIN_ASSET_DECIMALS);
+        return _assetParams(name_, symbol_, initialAdmin_, B20Constants.MIN_ASSET_DECIMALS);
     }
 
-    /// @notice Build a default `B20SecurityCreateParams` (`Security Test`/`SEC`, admin, `MIN_ASSET_DECIMALS`).
-    function _securityParams() internal view returns (IB20Factory.B20SecurityCreateParams memory) {
-        return _securityParams("Security Test", "SEC", admin);
+    /// @notice Build a default `B20AssetCreateParams` (`Asset Test`/`SEC`, admin, `MIN_ASSET_DECIMALS`).
+    function _assetParams() internal view returns (IB20Factory.B20AssetCreateParams memory) {
+        return _assetParams("Asset Test", "AST", admin);
     }
 
     // -- Action wrappers --
@@ -95,20 +95,20 @@ contract B20FactoryTest is BaseTest {
         return _createStablecoin(alice, keccak256("stablecoin-salt"), _stablecoinParams(), new bytes[](0));
     }
 
-    /// @notice Create a security-variant token with explicit caller, salt, params, and init calls.
-    function _createSecurity(
+    /// @notice Create a asset-variant token with explicit caller, salt, params, and init calls.
+    function _createAsset(
         address caller,
         bytes32 salt,
-        IB20Factory.B20SecurityCreateParams memory params,
+        IB20Factory.B20AssetCreateParams memory params,
         bytes[] memory initCalls
     ) internal returns (address token) {
         vm.prank(caller);
-        return factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(params), initCalls);
+        return factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(params), initCalls);
     }
 
-    /// @notice Create a security-variant token with defaults.
-    function _createSecurity() internal returns (address token) {
-        return _createSecurity(alice, keccak256("security-salt"), _securityParams(), new bytes[](0));
+    /// @notice Create a asset-variant token with defaults.
+    function _createAsset() internal returns (address token) {
+        return _createAsset(alice, keccak256("asset-salt"), _assetParams(), new bytes[](0));
     }
 
     // ============================================================

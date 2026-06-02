@@ -31,8 +31,8 @@ src
 ├── <a href="./src/StdPrecompiles.sol">StdPrecompiles.sol</a>: Precompile addresses with interface wrapper handles
 ├── interfaces
 │   ├── <a href="./src/interfaces/IB20.sol">IB20.sol</a>: Core token standard
+│   ├── <a href="./src/interfaces/IB20Asset.sol">IB20Asset.sol</a>: Asset variant of B20
 │   ├── <a href="./src/interfaces/IB20Stablecoin.sol">IB20Stablecoin.sol</a>: Stablecoin variant of B20
-│   ├── <a href="./src/interfaces/IB20Security.sol">IB20Security.sol</a>: Security variant of B20
 │   ├── <a href="./src/interfaces/IB20Factory.sol">IB20Factory.sol</a>: B20 factory precompile
 │   ├── <a href="./src/interfaces/IPolicyRegistry.sol">IPolicyRegistry.sol</a>: Policy registry precompile
 │   └── <a href="./src/interfaces/IActivationRegistry.sol">IActivationRegistry.sol</a>: Activation registry precompile
