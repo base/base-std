@@ -198,7 +198,7 @@ library B20FactoryLib {
 
     /// @notice Encodes a bootstrap initCall to `IB20Security.updateCustomMetadata`.
     ///
-    /// @param identifierType Metadata entry name (e.g. `"CUSIP"`).
+    /// @param identifierType Metadata entry key (e.g. `"category"`).
     /// @param value          New value, or empty string to remove.
     function encodeUpdateCustomMetadata(string memory identifierType, string memory value)
         internal
@@ -300,25 +300,25 @@ library B20FactoryLib {
     }
 
     /// @notice Builds the `updateCustomMetadata` initCalls implied by parallel
-    ///         `identifierTypes` / `identifierValues` arrays. All entries are emitted in input order.
+    ///         `keys` / `values` arrays. All entries are emitted in input order.
     ///
-    /// @dev Reverts with `LengthMismatch` when `identifierTypes.length != identifierValues.length`.
+    /// @dev Reverts with `LengthMismatch` when `keys.length != values.length`.
     ///
-    /// @param identifierTypes  Metadata entry names (e.g. `"CUSIP"`).
-    /// @param identifierValues Values parallel to `identifierTypes`.
+    /// @param keys   Metadata entry keys (e.g. `"category"`).
+    /// @param values Values parallel to `keys`.
     /// @return initCalls ABI-encoded `updateCustomMetadata` initCalls.
-    function buildCustomMetadataUpdates(string[] memory identifierTypes, string[] memory identifierValues)
+    function buildCustomMetadataUpdates(string[] memory keys, string[] memory values)
         internal
         pure
         returns (bytes[] memory initCalls)
     {
-        if (identifierTypes.length != identifierValues.length) {
-            revert LengthMismatch(identifierTypes.length, identifierValues.length);
+        if (keys.length != values.length) {
+            revert LengthMismatch(keys.length, values.length);
         }
 
-        initCalls = new bytes[](identifierTypes.length);
-        for (uint256 k = 0; k < identifierTypes.length; k++) {
-            initCalls[k] = encodeUpdateCustomMetadata(identifierTypes[k], identifierValues[k]);
+        initCalls = new bytes[](keys.length);
+        for (uint256 k = 0; k < keys.length; k++) {
+            initCalls[k] = encodeUpdateCustomMetadata(keys[k], values[k]);
         }
     }
 

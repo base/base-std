@@ -21,11 +21,11 @@ contract B20SecurityUpdateCustomMetadataTest is B20SecurityTest {
         vm.expectRevert(
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.METADATA_ROLE)
         );
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, value);
+        security().updateCustomMetadata(METADATA_CATEGORY, value);
     }
 
     /// @notice Verifies updateCustomMetadata reverts when identifierType is empty
-    /// @dev Per IB20Security: the entry name is always required; pass empty `value` to
+    /// @dev Per IB20Security: the entry key is always required; pass empty `value` to
     ///      remove an entry instead. Checks the InvalidIdentifierType selector.
     function test_updateCustomMetadata_revert_emptyIdentifierType(string calldata value) public {
         _grantRole(B20Constants.METADATA_ROLE, admin);
@@ -40,8 +40,8 @@ contract B20SecurityUpdateCustomMetadataTest is B20SecurityTest {
         vm.assume(bytes(value).length > 0);
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, value);
-        assertEq(security().customMetadata(IDENTIFIER_CUSIP), value, "getter must reflect the write");
+        security().updateCustomMetadata(METADATA_CATEGORY, value);
+        assertEq(security().customMetadata(METADATA_CATEGORY), value, "getter must reflect the write");
     }
 
     /// @notice Verifies an empty value removes the entry (subsequent read returns empty string)
@@ -50,12 +50,12 @@ contract B20SecurityUpdateCustomMetadataTest is B20SecurityTest {
         vm.assume(bytes(value).length > 0);
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, value);
-        assertEq(security().customMetadata(IDENTIFIER_CUSIP), value, "test setup: entry must be set");
+        security().updateCustomMetadata(METADATA_CATEGORY, value);
+        assertEq(security().customMetadata(METADATA_CATEGORY), value, "test setup: entry must be set");
 
         vm.prank(admin);
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, "");
-        assertEq(security().customMetadata(IDENTIFIER_CUSIP), "", "empty value must remove the entry");
+        security().updateCustomMetadata(METADATA_CATEGORY, "");
+        assertEq(security().customMetadata(METADATA_CATEGORY), "", "empty value must remove the entry");
     }
 
     /// @notice Verifies a subsequent write overwrites the previous value
@@ -67,10 +67,10 @@ contract B20SecurityUpdateCustomMetadataTest is B20SecurityTest {
 
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, first);
+        security().updateCustomMetadata(METADATA_CATEGORY, first);
         vm.prank(admin);
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, second);
-        assertEq(security().customMetadata(IDENTIFIER_CUSIP), second, "overwrite must replace prior value");
+        security().updateCustomMetadata(METADATA_CATEGORY, second);
+        assertEq(security().customMetadata(METADATA_CATEGORY), second, "overwrite must replace prior value");
     }
 
     /// @notice Verifies updateCustomMetadata emits CustomMetadataUpdated(identifierType, value)
@@ -80,8 +80,8 @@ contract B20SecurityUpdateCustomMetadataTest is B20SecurityTest {
         vm.assume(bytes(value).length > 0);
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.expectEmit(false, false, false, true, address(token));
-        emit IB20Security.CustomMetadataUpdated(IDENTIFIER_CUSIP, value);
+        emit IB20Security.CustomMetadataUpdated(METADATA_CATEGORY, value);
         vm.prank(admin);
-        security().updateCustomMetadata(IDENTIFIER_CUSIP, value);
+        security().updateCustomMetadata(METADATA_CATEGORY, value);
     }
 }

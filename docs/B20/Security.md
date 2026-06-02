@@ -12,7 +12,7 @@ Read the current multiplier with `multiplier()`; the value is in WAD precision (
 
 ## Announcements
 
-Announcements are publicly viewable notifications posted by a token operator. They can represent anything the operator wants to create a record of and can be coupled with actual state changes on the token (updating the multiplier, batched mints/burns, updating identifiers, and so on).
+Announcements are publicly viewable notifications posted by a token operator. They can represent anything the operator wants to create a record of and can be coupled with actual state changes on the token (updating the multiplier, batched mints/burns, and so on).
 
 ### Event Topology
 
@@ -50,9 +50,9 @@ Direct invocation by a role holder is permitted as an **emergency override** —
 
 ## Custom Metadata
 
-Each Security token can carry one or more named metadata entries — standardized securities identifiers (ISIN, CUSIP, FIGI, SEDOL, etc.) are the canonical use case, but the surface is general-purpose. Read with `customMetadata(name)`; the value is a `string`. All entries are optional and added post-creation — the factory does not seed any entry at token creation.
+Each Security token can carry an arbitrary set of named metadata entries — a general-purpose key/value store the issuer is free to use however they want (e.g. `"category"` → `"electronics"`, `"region"` → `"north-america"`, `"reference"` → `"REF-2024-001"`). Read with `customMetadata(key)`; the value is a `string`. All entries are optional and added post-creation — the factory does not seed any entry at token creation.
 
-`updateCustomMetadata(name, value)` adds, updates, or removes an entry, gated by `METADATA_ROLE` (the same role that gates `updateName` / `updateSymbol`). It does NOT require `OPERATOR_ROLE` and is NOT a corporate action — it can be invoked directly without an `announce()` wrapper. Passing an empty `value` removes the entry. An empty `name` reverts with `InvalidIdentifierType`.
+`updateCustomMetadata(key, value)` adds, updates, or removes an entry, gated by `METADATA_ROLE` (the same role that gates `updateName` / `updateSymbol`). It does NOT require `OPERATOR_ROLE` and is NOT a corporate action — it can be invoked directly without an `announce()` wrapper. Passing an empty `value` removes the entry. An empty `key` reverts with `InvalidIdentifierType`.
 
 ## Additional roles
 

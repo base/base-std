@@ -356,7 +356,7 @@ library MockB20Storage {
 ///         - `identifiers` (the storage field backing the public
 ///           `customMetadata` / `updateCustomMetadata` surface) keys
 ///           directly on the raw `identifierType` string (e.g.
-///           `"ISIN"`); empty value means unset/removed. The field name
+///           `"category"`); empty value means unset/removed. The field name
 ///           is retained to keep the ERC-7201 slot layout stable.
 library MockB20SecurityStorage {
     /// @custom:storage-location erc7201:base.b20.security
@@ -379,8 +379,9 @@ library MockB20SecurityStorage {
         // `announce` for a given id, and remains true forever.
         mapping(string id => bool used) usedAnnouncementIds;
         // ---------- Custom metadata ----------
-        // Named string entries (ISIN, CUSIP, FIGI, etc.). Empty string
-        // means unset/removed. Field name retained for storage-layout
+        // Named string entries — a variant-agnostic key/value store
+        // (e.g. `category`, `region`, `reference`). Empty string means
+        // unset/removed. Field name retained for storage-layout
         // stability across the rename of the public surface to
         // `customMetadata` / `updateCustomMetadata`.
         mapping(string identifierType => string value) identifiers;

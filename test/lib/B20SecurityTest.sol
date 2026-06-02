@@ -24,24 +24,21 @@ contract B20SecurityTest is B20Test {
     // ============================================================
     //          SECURITY-VARIANT CUSTOM-METADATA FIXTURES
     // ============================================================
-    // Test-only metadata-entry names (`ISIN`, `CUSIP`, `FIGI`). All
-    // three are post-creation additions exercised only by the variant
-    // tests; the factory no longer seeds any entry at bootstrap. The
-    // constants are kept under their `IDENTIFIER_*` names because
-    // callers still pass these as real-world identifier strings to
-    // `updateCustomMetadata`.
+    // Test-only metadata-entry keys. The `customMetadata` surface is
+    // a variant-agnostic key/value store; these three keys form a
+    // coherent generic example so tests don't accidentally encode a
+    // securities-specific assumption. All entries are post-creation
+    // additions exercised only by the variant tests; the factory does
+    // not seed any entry at bootstrap.
 
-    /// @notice Metadata-entry name for the ISIN entry (International
-    ///         Securities Identification Number). Test-fixture only.
-    string internal constant IDENTIFIER_ISIN = "ISIN";
+    /// @notice Generic metadata-entry key for the asset's category.
+    string internal constant METADATA_CATEGORY = "category";
 
-    /// @notice Metadata-entry name for the CUSIP entry (US/Canada
-    ///         securities identifier). Test-fixture only.
-    string internal constant IDENTIFIER_CUSIP = "CUSIP";
+    /// @notice Generic metadata-entry key for the asset's region.
+    string internal constant METADATA_REGION = "region";
 
-    /// @notice Metadata-entry name for the FIGI entry (Bloomberg's
-    ///         financial-instrument global identifier). Test-fixture only.
-    string internal constant IDENTIFIER_FIGI = "FIGI";
+    /// @notice Generic metadata-entry key for a free-form reference code.
+    string internal constant METADATA_REFERENCE = "reference";
 
     // -- Setup --
     function setUp() public virtual override {

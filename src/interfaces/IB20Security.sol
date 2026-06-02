@@ -177,10 +177,11 @@ interface IB20Security is IB20 {
                             CUSTOM METADATA
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The value of the named metadata entry (e.g. ISIN, CUSIP, FIGI), or the empty
-    ///         string if not set.
+    /// @notice The value of the named metadata entry, or the empty string if not set. A
+    ///         variant-agnostic key/value store; the issuer chooses the key namespace
+    ///         (e.g. `"category"`, `"region"`, `"reference"`).
     ///
-    /// @param identifierType Metadata entry name.
+    /// @param identifierType Metadata entry key.
     ///
     /// @return Current value, or the empty string.
     function customMetadata(string calldata identifierType) external view returns (string memory);
@@ -191,7 +192,7 @@ interface IB20Security is IB20 {
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `METADATA_ROLE`.
     /// @dev Reverts with `InvalidIdentifierType` when `identifierType` is the empty string.
     ///
-    /// @param identifierType Metadata entry name (e.g. "ISIN").
+    /// @param identifierType Metadata entry key (e.g. `"category"`).
     /// @param value          New value, or empty string to remove.
     function updateCustomMetadata(string calldata identifierType, string calldata value) external;
 }

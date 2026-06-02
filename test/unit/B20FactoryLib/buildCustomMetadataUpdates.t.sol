@@ -13,31 +13,30 @@ contract B20FactoryLibBuildCustomMetadataUpdatesTest is B20FactoryLibTest {
     ///         `vm.expectRevert` requires the revert one CALL frame
     ///         deeper, so revert tests must dispatch through an external
     ///         entry point via `this.callBuildCustomMetadataUpdates`.
-    function callBuildCustomMetadataUpdates(string[] memory types, string[] memory values)
+    function callBuildCustomMetadataUpdates(string[] memory keys, string[] memory values)
         external
         pure
         returns (bytes[] memory)
     {
-        return B20FactoryLib.buildCustomMetadataUpdates(types, values);
+        return B20FactoryLib.buildCustomMetadataUpdates(keys, values);
     }
 
     /*//////////////////////////////////////////////////////////////
                                 REVERTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Verifies the helper reverts when `identifierTypes` and
-    ///         `identifierValues` differ in length.
+    /// @notice Verifies the helper reverts when `keys` and `values` differ in length.
     /// @dev    Mirrors the length-check semantics of
     ///         `buildRoleGrants(bytes32[], address[])`.
-    function test_buildCustomMetadataUpdates_revert_lengthMismatch(uint8 typesLenSeed, uint8 valuesLenSeed) public {
-        uint256 typesLen = bound(uint256(typesLenSeed), 0, 16);
+    function test_buildCustomMetadataUpdates_revert_lengthMismatch(uint8 keysLenSeed, uint8 valuesLenSeed) public {
+        uint256 keysLen = bound(uint256(keysLenSeed), 0, 16);
         uint256 valuesLen = bound(uint256(valuesLenSeed), 0, 16);
-        vm.assume(typesLen != valuesLen);
-        string[] memory types = new string[](typesLen);
+        vm.assume(keysLen != valuesLen);
+        string[] memory keys = new string[](keysLen);
         string[] memory values = new string[](valuesLen);
 
-        vm.expectRevert(abi.encodeWithSelector(B20FactoryLib.LengthMismatch.selector, typesLen, valuesLen));
-        this.callBuildCustomMetadataUpdates(types, values);
+        vm.expectRevert(abi.encodeWithSelector(B20FactoryLib.LengthMismatch.selector, keysLen, valuesLen));
+        this.callBuildCustomMetadataUpdates(keys, values);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -53,27 +52,27 @@ contract B20FactoryLibBuildCustomMetadataUpdatesTest is B20FactoryLibTest {
     }
 
     /// @notice Every input pair produces one
-    ///         `updateCustomMetadata(type, value)` init call, in
+    ///         `updateCustomMetadata(key, value)` init call, in
     ///         input order, with no entries elided.
     /// @dev    Pins ordering and the no-skip semantics; even empty
     ///         strings are passed through (the token, not this helper,
     ///         validates).
     function test_buildCustomMetadataUpdates_success_emitsAllPairsInOrder(uint8 lenSeed) public pure {
         uint256 len = bound(uint256(lenSeed), 1, 8);
-        string[] memory types = new string[](len);
+        string[] memory keys = new string[](len);
         string[] memory values = new string[](len);
         for (uint256 i = 0; i < len; i++) {
-            types[i] = string(abi.encodePacked("TYPE", _toAscii(i)));
+            keys[i] = string(abi.encodePacked("KEY", _toAscii(i)));
             values[i] = string(abi.encodePacked("VAL", _toAscii(i)));
         }
 
-        bytes[] memory result = B20FactoryLib.buildCustomMetadataUpdates(types, values);
+        bytes[] memory result = B20FactoryLib.buildCustomMetadataUpdates(keys, values);
 
         assertEq(result.length, len, "every pair must produce one init call");
         for (uint256 i = 0; i < len; i++) {
             assertEq(
                 result[i],
-                abi.encodeCall(IB20Security.updateCustomMetadata, (types[i], values[i])),
+                abi.encodeCall(IB20Security.updateCustomMetadata, (keys[i], values[i])),
                 "ordering must follow input"
             );
         }
@@ -84,31 +83,31 @@ contract B20FactoryLibBuildCustomMetadataUpdatesTest is B20FactoryLibTest {
     ///         on the token. This pins that behavior against a future
     ///         "skip empty pairs" mis-edit.
     function test_buildCustomMetadataUpdates_success_emptyStringsArePassedThrough() public pure {
-        string[] memory types = new string[](3);
+        string[] memory keys = new string[](3);
         string[] memory values = new string[](3);
-        types[0] = "ISIN";
+        keys[0] = "category";
         values[0] = "";
-        types[1] = "";
-        values[1] = "us-cusip";
-        types[2] = "FIGI";
-        values[2] = "BBG000B9XRY4";
+        keys[1] = "";
+        values[1] = "north-america";
+        keys[2] = "reference";
+        values[2] = "REF-2024-001";
 
-        bytes[] memory result = B20FactoryLib.buildCustomMetadataUpdates(types, values);
+        bytes[] memory result = B20FactoryLib.buildCustomMetadataUpdates(keys, values);
 
         assertEq(result.length, 3, "no entry may be elided");
         assertEq(
             result[0],
-            abi.encodeCall(IB20Security.updateCustomMetadata, (types[0], values[0])),
+            abi.encodeCall(IB20Security.updateCustomMetadata, (keys[0], values[0])),
             "empty value passed through"
         );
         assertEq(
             result[1],
-            abi.encodeCall(IB20Security.updateCustomMetadata, (types[1], values[1])),
-            "empty type passed through"
+            abi.encodeCall(IB20Security.updateCustomMetadata, (keys[1], values[1])),
+            "empty key passed through"
         );
         assertEq(
             result[2],
-            abi.encodeCall(IB20Security.updateCustomMetadata, (types[2], values[2])),
+            abi.encodeCall(IB20Security.updateCustomMetadata, (keys[2], values[2])),
             "fully populated pair preserved"
         );
     }
