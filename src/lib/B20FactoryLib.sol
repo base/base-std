@@ -50,7 +50,7 @@ library B20FactoryLib {
     }
 
     /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`. Superset of `B20RoleHolders`
-    ///         with `BURN_FROM_ROLE` and `SECURITY_OPERATOR_ROLE` slots.
+    ///         with a `SECURITY_OPERATOR_ROLE` slot.
     ///
     /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20SecurityCreateParams.initialAdmin`, not this struct.
     struct B20SecurityRoleHolders {
@@ -60,8 +60,6 @@ library B20FactoryLib {
         address burner;
         /// @dev Account granted `BURN_BLOCKED_ROLE`.
         address burnBlocker;
-        /// @dev Account granted `BURN_FROM_ROLE`.
-        address burnFromOperator;
         /// @dev Account granted `PAUSE_ROLE`.
         address pauser;
         /// @dev Account granted `UNPAUSE_ROLE`.
@@ -253,25 +251,23 @@ library B20FactoryLib {
     /// @param holders Security role-holder bundle.
     /// @return initCalls ABI-encoded `grantRole` initCalls.
     function buildRoleGrants(B20SecurityRoleHolders memory holders) internal pure returns (bytes[] memory initCalls) {
-        bytes32[] memory roles = new bytes32[](8);
+        bytes32[] memory roles = new bytes32[](7);
         roles[0] = B20Constants.MINT_ROLE;
         roles[1] = B20Constants.BURN_ROLE;
         roles[2] = B20Constants.BURN_BLOCKED_ROLE;
-        roles[3] = B20Constants.BURN_FROM_ROLE;
-        roles[4] = B20Constants.PAUSE_ROLE;
-        roles[5] = B20Constants.UNPAUSE_ROLE;
-        roles[6] = B20Constants.METADATA_ROLE;
-        roles[7] = B20Constants.SECURITY_OPERATOR_ROLE;
+        roles[3] = B20Constants.PAUSE_ROLE;
+        roles[4] = B20Constants.UNPAUSE_ROLE;
+        roles[5] = B20Constants.METADATA_ROLE;
+        roles[6] = B20Constants.SECURITY_OPERATOR_ROLE;
 
-        address[] memory accounts = new address[](8);
+        address[] memory accounts = new address[](7);
         accounts[0] = holders.minter;
         accounts[1] = holders.burner;
         accounts[2] = holders.burnBlocker;
-        accounts[3] = holders.burnFromOperator;
-        accounts[4] = holders.pauser;
-        accounts[5] = holders.unpauser;
-        accounts[6] = holders.metadataAdmin;
-        accounts[7] = holders.securityOperator;
+        accounts[3] = holders.pauser;
+        accounts[4] = holders.unpauser;
+        accounts[5] = holders.metadataAdmin;
+        accounts[6] = holders.securityOperator;
 
         return buildRoleGrants(roles, accounts);
     }

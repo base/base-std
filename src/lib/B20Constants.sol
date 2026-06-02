@@ -8,7 +8,6 @@ library B20Constants {
     bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 internal constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 internal constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
-    bytes32 internal constant BURN_FROM_ROLE = keccak256("BURN_FROM_ROLE");
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
     bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");

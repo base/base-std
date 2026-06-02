@@ -59,13 +59,12 @@ import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 ///         `_isPrivileged()` so the factory can stage initial
 ///         announcements, batched issuance, ratios, identifiers, and
 ///         minimum-redeemable values during the bootstrap window
-///         without first granting itself roles. The two paths that
-///         the factory will never legitimately call during bootstrap
-///         (`redeem` / `redeemWithMemo`, which are holder-initiated,
-///         and `batchBurn`, which is a corporate-actions clawback
-///         against existing balances) deliberately do NOT bypass
-///         their authorization checks: there is no init-time use case
-///         for them, so the bypass would be dead code that widens the
+///         without first granting itself roles. `redeem` /
+///         `redeemWithMemo` are the only paths the factory will never
+///         legitimately call during bootstrap (they are
+///         holder-initiated) and deliberately do NOT bypass their
+///         authorization checks: there is no init-time use case for
+///         them, so the bypass would be dead code that widens the
 ///         attack surface without buying anything. Token invariants
 ///         (supply-cap math, balance accounting, share-amount floor
 ///         on `redeem`) are NOT bypassed anywhere.
@@ -75,7 +74,6 @@ contract MockB20Security is MockB20, IB20Security {
     // ============================================================
 
     bytes32 public constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
-    bytes32 public constant BURN_FROM_ROLE = keccak256("BURN_FROM_ROLE");
 
     bytes32 public constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
 
@@ -94,25 +92,6 @@ contract MockB20Security is MockB20, IB20Security {
     ///         default variant) per the `IB20Security` convention.
     function decimals() external pure override(MockB20, IB20) returns (uint8) {
         return 6;
-    }
-
-    // ============================================================
-    //                          MODIFIERS
-    // ============================================================
-
-    /// @dev Like the base `onlyRole` but without the factory bootstrap
-    ///      bypass: the role check is unconditional, even for the
-    ///      factory in the init window. Reserved for variant paths
-    ///      that deliberately reject the bypass — currently just
-    ///      `batchBurn`, the corporate-actions clawback that has no
-    ///      init-time use case (see this contract's natspec). Lives
-    ///      here, not on the base, because no base function needs the
-    ///      stricter gate.
-    modifier onlyRoleStrict(bytes32 role) {
-        if (!hasRole(role, msg.sender)) {
-            revert AccessControlUnauthorizedAccount(msg.sender, role);
-        }
-        _;
     }
 
     // ============================================================
@@ -170,7 +149,7 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
-    //                  BATCHED ISSUANCE / CLAWBACK
+    //                       BATCHED ISSUANCE
     // ============================================================
 
     /// @dev Pause + role enforced ONCE for the entire batch via the
@@ -187,28 +166,6 @@ contract MockB20Security is MockB20, IB20Security {
         for (uint256 i = 0; i < recipients.length; i++) {
             if (recipients[i] == address(0)) revert InvalidReceiver(recipients[i]);
             _mint(recipients[i], amounts[i]);
-        }
-    }
-
-    /// @dev `onlyRoleStrict` (not `onlyRole`): the factory bootstrap
-    ///      bypass is deliberately NOT honored here, per the contract
-    ///      natspec — clawback against existing balances has no init-time
-    ///      use case, so granting the factory a bypass would only widen
-    ///      the attack surface.
-    function batchBurn(address[] calldata accounts, uint256[] calldata amounts)
-        external
-        whenNotPaused(PausableFeature.BURN)
-        onlyRoleStrict(BURN_FROM_ROLE)
-    {
-        if (accounts.length != amounts.length) {
-            revert LengthMismatch(accounts.length, amounts.length);
-        }
-        if (accounts.length == 0) revert EmptyBatch();
-        for (uint256 i = 0; i < accounts.length; i++) {
-            // Zero amounts are allowed per ERC-20 conventions (`transfer(0)` is valid);
-            // `_burnRaw` is a no-op for amount == 0 and emits `Transfer(account, 0, 0)`.
-            // Callers that want all-non-zero semantics can validate upstream.
-            _burnRaw(accounts[i], amounts[i]);
         }
     }
 
