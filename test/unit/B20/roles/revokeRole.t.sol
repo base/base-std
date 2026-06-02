@@ -30,7 +30,7 @@ contract B20RevokeRoleTest is B20Test {
     ///      `renounceLastAdmin()` path remains the only legitimate way to remove the final admin.
     ///      Reverts with `LastAdminCannotRenounce` (reused from the renounceRole guard — same
     ///      invariant: the last admin can only be removed via the explicit
-    ///      `renounceLastAdmin` path). Regression: BOP-196.
+    ///      `renounceLastAdmin` path).
     function test_revokeRole_revert_lastAdmin() public {
         assertEq(token.hasRole(B20Constants.DEFAULT_ADMIN_ROLE, admin), true, "precondition: admin is the sole admin");
 

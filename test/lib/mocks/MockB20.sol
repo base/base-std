@@ -140,7 +140,7 @@ abstract contract MockB20 is IB20 {
             // authorize them, because allowing such mutations would let a custom-admin
             // chain (e.g. setRoleAdmin(MINT_ROLE, BURN_ROLE) → grantRole(BURN_ROLE, X))
             // re-establish admin power on a token that has explicitly relinquished it.
-            // Mirrors base/base#2961 (`ensure_role_admin_mutations_available`).
+            // Mirrors the Rust precompile's `ensure_role_admin_mutations_available`.
             if (MockB20Storage.layout().adminCount == 0) {
                 revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);
             }

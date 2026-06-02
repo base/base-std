@@ -16,7 +16,7 @@ import {MockActivationRegistryStorage} from "test/lib/mocks/MockActivationRegist
 ///         ERC-7201-namespaced root; see that library for the layout.
 ///
 ///         **Admin model.** `admin()` returns a hardcoded constant
-///         (`0xCB00…0000` per base/base#2733) — the production
+///         (`0xCB00…0000`) — the production
 ///         precompile and this mock both expose the same fixed admin
 ///         identity. There is no storage-backed admin slot and no
 ///         admin-rotation surface; replacing the admin requires a
@@ -39,7 +39,7 @@ contract MockActivationRegistry is IActivationRegistry {
     // ============================================================
 
     /// @notice The activation admin address. Hardcoded to the same value the
-    ///         live Rust precompile returns (`0xCB00…0000`, per base/base#2733),
+    ///         live Rust precompile returns (`0xCB00…0000`),
     ///         so tests and consumers can pin the admin identity without
     ///         depending on per-environment configuration.
     address internal constant ADMIN = 0xCB00000000000000000000000000000000000000;

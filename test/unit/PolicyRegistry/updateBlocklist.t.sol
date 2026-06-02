@@ -129,7 +129,7 @@ contract PolicyRegistryUpdateBlocklistTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies updateBlocklist reverts when the batch exceeds MAX_BATCH_SIZE
-    /// @dev Mirrors the Rust precompile's batch limit (base/base#2876); checks
+    /// @dev Mirrors the Rust precompile's batch limit; checks
     ///      BatchSizeTooLarge(maxBatchSize). Fuzz drives `overflow` so the test exercises
     ///      arbitrary over-the-limit sizes.
     function test_updateBlocklist_revert_batchSizeTooLarge(address currentAdmin, bool blocked, uint8 overflow) public {

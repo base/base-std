@@ -26,7 +26,7 @@
 #   PORT             local RPC port for anvil (default: 8546)
 #   ACTIVATION_ADMIN address authorized to activate features
 #                    (default: 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc, the
-#                    canonical local-dev admin codified in base/base#2811)
+#                    canonical local-dev admin)
 #   ANVIL_LOG        anvil stdout/stderr log path (default: /tmp/anvil.log)
 #
 # Exit codes:
@@ -82,8 +82,8 @@ FEATURE_IDS=(
     0x78751e29c8bcc0d609ab18e9fbc4158e73f7db25ae2ee095dad42e2578b1e800  # B20_FACTORY
     0x47a1afe8d3d691b87e090ee972d223a11f4da971ff5416c04985bb2393aca752  # B20_TOKEN
     0xb582ebae03f16fee49a6763f78df482fb11ae73f103ed0d330bbe556aa90a43f  # POLICY_REGISTRY
-    0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601  # B20_STABLECOIN (added base/base#2806)
-    0x83d32fab502ae0e8bc4352a117767262cb5e47cc8d67a744008ed4ff03fcf5e6  # B20_SECURITY (added base/base#2813)
+    0xecfa0def2c10020caaf65e6155aa69c84b24892aaef76eeac52e0e2b3a0b8601  # B20_STABLECOIN
+    0x83d32fab502ae0e8bc4352a117767262cb5e47cc8d67a744008ed4ff03fcf5e6  # B20_SECURITY
 )
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

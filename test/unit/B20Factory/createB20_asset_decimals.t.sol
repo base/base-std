@@ -212,7 +212,7 @@ contract B20FactoryCreateB20AssetDecimalsTest is B20FactoryTest {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Verifies the stablecoin variant still hardcodes `decimals() == 6`.
-    /// @dev Configurable decimals is an asset-only change; the stablecoin path must be untouched. Regression: BOP-255.
+    /// @dev Configurable decimals is an asset-only change; the stablecoin path must be untouched.
     function test_createB20_success_stablecoin_decimalsStillHardcoded(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         address token = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));

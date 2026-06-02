@@ -7,7 +7,7 @@
 ## What this does
 
 Runs base-std's existing unit test suite (~346 tests with paired
-`vm.load`-based slot assertions, from PR #43) against a **local node that
+`vm.load`-based slot assertions) against a **local node that
 hosts Base's Rust precompiles** (the patched `anvil` from the base-anvil
 fork). Forge dispatches calls to those precompiles instead of to base-std's
 Solidity mocks; the suite's slot-level assertions then surface any
@@ -216,7 +216,7 @@ matching `FEATURE_*` constant).
 
 **Build fails with `error[E0599]: no variant or associated item named B20_STABLECOIN`
 in `b20_stablecoin/dispatch.rs`** — you bumped past base/base commit
-`d7662c05e` (PR #2834, "replace feature id constants with ActivationFeature
+`d7662c05e` ("replace feature id constants with ActivationFeature
 enum"). That refactor removed `ActivationRegistryStorage::B20_STABLECOIN`
 but the call site in `dispatch.rs` still references it. Until upstream
 fixes this, either pin the dep back to a pre-d7662c05e commit (e.g.
@@ -249,7 +249,7 @@ If this returns garbage / fails, the fork's build is broken or out of date.
 | The test runner script | `script/run-fork-tests.sh` | bash; takes forge args through `$@` |
 | Forge profile config | `foundry.toml`, `[profile.fork]` | `base = true` enables Rust precompile dispatch |
 | Skip-etch logic | `test/lib/BaseTest.sol` | guarded by `LIVE_PRECOMPILES` env var |
-| Slot assertions | `test/unit/**/*.t.sol`, `test/lib/mocks/Mock*Storage.sol` | shipped in base-std PR #43 |
+| Slot assertions | `test/unit/**/*.t.sol`, `test/lib/mocks/Mock*Storage.sol` | `vm.load`-based slot-layout assertions paired with surface tests |
 | Storage helpers | `test/lib/mocks/MockB20Storage.sol`, `MockPolicyRegistryStorage.sol` | the slot-derivation library every assertion uses |
 | Patched forge + anvil | `~/code/base-anvil/target/.../{forge,anvil}` | built by `cargo build -p forge -p anvil` |
 | `--base` flag implementation | `~/code/base-anvil/crates/evm/networks/src/lib.rs` | edit here when precompile set changes |
@@ -257,7 +257,7 @@ If this returns garbage / fails, the fork's build is broken or out of date.
 | Local-iteration override | `~/code/base-anvil/Cargo.toml` | commented `[patch."https://github.com/base/base.git"]` block |
 | Rust precompile source | `github.com/base/base`, pinned commit | fetched by cargo on build; optional local clone for [patch] |
 | Feature IDs | `base/crates/common/precompiles/src/activation/storage.rs` (on github) | `FEATURE_*` consts |
-| ActivationRegistry default admin | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | codified in base/base PR #2811 |
+| ActivationRegistry default admin | `0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc` | the canonical local-dev admin |
 | Vibenet chainid | 84538453 | auto-enables `--base` |
 
 ## What's NOT in scope
