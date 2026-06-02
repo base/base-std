@@ -16,7 +16,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Build
         run: forge build
@@ -34,7 +34,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Run tests
         run: forge test -v
@@ -52,7 +52,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Generate lcov report
         run: forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" --report lcov
@@ -97,7 +97,7 @@ jobs:
             ${{ steps.summary.outputs.output }}
             ```
 
-            Full lcov report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) → run `genhtml lcov.info --branch-coverage -o coverage && open coverage/index.html`
+            Full lcov report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To view locally: `genhtml lcov.info --branch-coverage -o coverage && open coverage/index.html`
 
   fmt:
     name: Format
@@ -109,7 +109,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Check formatting
         run: forge fmt --check
