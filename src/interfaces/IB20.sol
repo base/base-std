@@ -16,13 +16,10 @@ interface IB20 {
     /// @param TRANSFER `transfer`, `transferFrom`, and memo'd variants.
     /// @param MINT     `mint` and `mintWithMemo`.
     /// @param BURN     `burn`, `burnWithMemo`, and `burnBlocked`.
-    /// @param REDEEM   Reserved. No operation in the current spec consumes this slot;
-    ///                 retained for ordinal stability after the redemption subsystem was removed.
     enum PausableFeature {
         TRANSFER,
         MINT,
-        BURN,
-        REDEEM
+        BURN
     }
 
     /*//////////////////////////////////////////////////////////////

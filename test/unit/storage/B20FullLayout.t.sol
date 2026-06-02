@@ -185,14 +185,13 @@ contract B20FullLayoutTest is B20Test {
 
         // ---------- pausedVectors (slot 11) ----------
         // Every PausableFeature is paused so every defined bit position
-        // is independently asserted. Pinning all four (vs only two) is
+        // is independently asserted. Pinning all three (vs only two) is
         // what makes "Rust uses different bit positions for these
         // features" detectable.
         uint256 pausedRaw = uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot()));
         uint256 expectedPaused = (uint256(1) << uint8(IB20.PausableFeature.TRANSFER))
-            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN))
-            | (uint256(1) << uint8(IB20.PausableFeature.REDEEM));
-        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the four defined bits");
+            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN));
+        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the three defined bits");
         // No bits set outside the defined PausableFeature range. Computed
         // as the complement of the union of all defined bits.
         assertEq(
@@ -283,7 +282,6 @@ contract B20FullLayoutTest is B20Test {
         _pause(IB20.PausableFeature.TRANSFER);
         _pause(IB20.PausableFeature.MINT);
         _pause(IB20.PausableFeature.BURN);
-        _pause(IB20.PausableFeature.REDEEM);
 
         // ---------- Nonce ----------
         // Permit increments alice's nonce. To sign a valid permit we

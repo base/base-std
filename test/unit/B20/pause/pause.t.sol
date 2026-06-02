@@ -51,7 +51,6 @@ contract B20PauseTest is B20Test {
         assertTrue(token.isPaused(IB20.PausableFeature.TRANSFER), "TRANSFER must be paused");
         assertTrue(token.isPaused(IB20.PausableFeature.MINT), "MINT must be paused");
         assertFalse(token.isPaused(IB20.PausableFeature.BURN), "BURN must remain unpaused");
-        assertFalse(token.isPaused(IB20.PausableFeature.REDEEM), "REDEEM must remain unpaused");
         uint256 expected = (1 << uint8(IB20.PausableFeature.TRANSFER)) | (1 << uint8(IB20.PausableFeature.MINT));
         assertEq(
             uint256(vm.load(address(token), MockB20Storage.pausedVectorsSlot())),
