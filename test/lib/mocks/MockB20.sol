@@ -408,8 +408,7 @@ abstract contract MockB20 is IB20 {
     function pausedFeatures() external view returns (PausableFeature[] memory) {
         uint256 vectors = MockB20Storage.layout().pausedVectors;
         uint256 count;
-        // Bound the scan off `type(PausableFeature).max` so it tracks the enum as variants are
-        // added or removed (the REDEEM variant was removed in BOP-251) rather than a stale literal.
+        // Derive the bound from the enum so it can't drift out of sync with PausableFeature.
         uint256 featureCount = uint256(type(PausableFeature).max) + 1;
         for (uint256 i = 0; i < featureCount; i++) {
             if (((vectors >> i) & uint256(1)) == 1) count++;

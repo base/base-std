@@ -12,7 +12,7 @@ Read the current multiplier with `multiplier()`; the value is in WAD precision (
 
 ## Announcements
 
-Announcements are publicly viewable notifications posted by a token operator. They can represent anything the operator wants to create a record of and can be coupled with actual state changes on the token (updating the multiplier, batched mints/burns, and so on).
+Announcements are publicly viewable notifications posted by a token operator. They can represent anything the operator wants to create a record of and can be coupled with actual state changes on the token (updating the multiplier, batched mints, and so on).
 
 ### Event Topology
 
