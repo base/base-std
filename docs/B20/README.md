@@ -24,7 +24,7 @@ Standard role taxonomy:
 | `DEFAULT_ADMIN_ROLE` | All admin operations: role grants, policy updates, supply-cap changes |
 | `MINT_ROLE` | `mint`, `mintWithMemo` |
 | `BURN_ROLE` | Caller-side burns (`burn`, `burnWithMemo`) |
-| `BURN_BLOCKED_ROLE` | Sanctions-burns against policy-blocked accounts (`burnBlocked`) |
+| `BURN_BLOCKED_ROLE` | Burns against policy-blocked accounts (`burnBlocked`) |
 | `PAUSE_ROLE` | `pause` |
 | `UNPAUSE_ROLE` | `unpause` |
 | `METADATA_ROLE` | `updateName`, `updateSymbol`, `updateContractURI` |
@@ -54,7 +54,7 @@ Because scopes are per-actor, send-side and receive-side rules can be configured
 
 > ⚠️ **Every scope defaults to `ALWAYS_ALLOW` at token creation** unless overridden in the bootstrap `initCalls`. Token behavior must be intentionally constrained — an unattended deployment of B20 is fully open.
 
-Scopes are read via `policyId(scope)` and written via `updatePolicy(scope, policyId)`. `updatePolicy` is admin-gated and reverts if the scope isn't recognized — typo'd scopes hard-revert rather than silently no-op'ing.
+Scopes are read via `policyId(scope)` and written via `updatePolicy(scope, policyId)`. `updatePolicy` is admin-gated and reverts if the scope isn't recognized.
 
 See [PolicyRegistry](../PolicyRegistry/README.md) for registry mechanics (built-in policy IDs, encoding, admin lifecycle).
 
@@ -114,4 +114,4 @@ ERC-1271 contract signatures are deliberately NOT accepted — permit recovers v
 | Variant | Decimals | What it adds |
 |---|---|---|
 | [Asset](Asset.md) | 6-18 (configurable per token) | multiplier, announcements, extra metadata, batched issuance |
-| [Stablecoin](Stablecoin.md) | 6 (fixed) | currency ISO code |
+| [Stablecoin](Stablecoin.md) | 6 (fixed) | self-declared currency code |

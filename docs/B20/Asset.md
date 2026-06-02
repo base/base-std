@@ -4,7 +4,7 @@ The Asset variant of B20 — designed for assets of all kinds. Everything in [B2
 
 ## Multiplier
 
-Each account's stored balance is the **raw** balance. A uniform on-chain **multiplier** scales that raw balance into a derived **scaled** view that consumers display. The multiplier applies to all accounts equally, which lets issuers rescale every balance — for splits, reverse-splits, or rebases — without rewriting individual balances — the shape is similar to wstETH wrapping stETH, where the stored unit is the unwrapped quantity and the derived unit is the rebased view.
+Each account's stored balance is the **raw** balance. A uniform on-chain **multiplier** scales that raw balance into a derived **scaled** view that consumers display. The multiplier applies to all accounts equally, which lets issuers rebase every balance at once — without rewriting individual balances — the shape is similar to wstETH wrapping stETH, where the stored unit is the unwrapped quantity and the derived unit is the rebased view.
 
 Read the current multiplier with `multiplier()`; the value is in WAD precision (`1e18`, exposed as `WAD_PRECISION()`). `toScaledBalance(rawBalance)` converts a raw amount to its scaled view, `toRawBalance(scaledBalance)` is the reverse converter (integer-floored, so the round-trip can lose up to one ULP), and `scaledBalanceOf(account)` is a convenience over ERC-20's `balanceOf` that returns the same account's raw balance in its scaled form.
 
@@ -25,24 +25,17 @@ Indexers should treat every `Announcement` log as the start of exactly one brack
 Wrap a set of operations in a single announcement by calling `announce(internalCalls, id, description, uri)`. The function (gated by `OPERATOR_ROLE`) emits `Announcement`, dispatches each internal call via self-`delegatecall` (which preserves `msg.sender` so the inner role checks see the operator), then emits `EndAnnouncement`. Inner reverts are wrapped in `InternalCallFailed` rather than bubbled — replay the call directly to debug. Nested calls to `announce` revert with `AnnouncementInProgress`; calls shorter than 4 bytes revert with `InternalCallMalformed`.
 
 ```solidity
-// Disclose and execute a 2-for-1 forward split atomically.
+// Disclose and apply a community-ratified rebase atomically.
 bytes[] memory internalCalls = new bytes[](1);
 internalCalls[0] = abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
 
 IB20Asset(token).announce({
     internalCalls: internalCalls,
-    id: "2026-Q3-split",
-    description: "2-for-1 forward split",
+    id: "2026-Q3-rebase",
+    description: "Community governance proposal #42: ratified rebase",
     uri: "https://disclosures.example.com/..."
 });
 ```
-
-The two supply-action setters should be wrapped in `announce()`:
-
-- `updateMultiplier(...)`
-- `batchMint(...)`
-
-Direct invocation by a role holder is permitted as an **emergency override** — it succeeds but produces no bracket events. Suitable only for break-glass scenarios where the inability to emit an announcement is itself part of the response.
 
 ## Batch Mint
 
@@ -58,10 +51,8 @@ Each Asset token can carry an arbitrary set of named metadata entries — a gene
 
 ### `OPERATOR_ROLE`
 
-Gates the two supply-action setters (`updateMultiplier`, `batchMint`) and the `announce` wrapper itself. Held separately from `DEFAULT_ADMIN_ROLE` so supply-action operators don't need full admin authority. Operationally paired with `METADATA_ROLE` — when granting one, you typically grant the other to the same address.
+Gates the `updateMultiplier` and the `announce`. These are metadata-like operations — they post disclosures and rescale the displayed balance rather than moving raw balances directly — but a compromised operator carries materially higher severity than ordinary metadata edits, so the capability is elevated into its own independent role instead of being folded into `METADATA_ROLE`. Held separately from `DEFAULT_ADMIN_ROLE` so operators don't need full admin authority.
 
 ## Configurable Decimals
 
-`decimals()` is chosen at creation via `B20AssetCreateParams.decimals` and immutable thereafter. The factory enforces the inclusive range `[6, 18]` (exposed as `B20Constants.MIN_ASSET_DECIMALS` and `MAX_ASSET_DECIMALS`); out-of-range values revert `InvalidDecimals(decimals)`. `6` is the smallest unit any common stablecoin uses and the floor most integrations expect; `18` is the ERC-20 community ceiling that every wallet and indexer renders correctly.
-
-The stablecoin variant is unchanged — it hardcodes `decimals()` to `6`.
+`decimals()` is chosen at creation via `B20AssetCreateParams.decimals` and immutable thereafter. The factory enforces the inclusive range `[6, 18]` (exposed as `B20Constants.MIN_ASSET_DECIMALS` and `MAX_ASSET_DECIMALS`); out-of-range values revert `InvalidDecimals(decimals)`. `6` is the smallest unit any asset should use and `18` is a reasonable ceiling that encompasses the supermajority of assets.

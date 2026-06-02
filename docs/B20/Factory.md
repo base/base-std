@@ -16,7 +16,7 @@ Variant-specific creation arguments, ABI-encoded as a versioned struct (one stru
 
 ### `initCalls`
 
-An optional array of ABI-encoded calls dispatched on the new token immediately after creation. These let you configure anything beyond the variant's defined `params` — role grants, mint operations, policy slot wiring, contract URI, and so on. They execute on the new token as if the factory were the admin, so admin-gated operations are permitted within this window. The factory itself receives no official roles and has no persisted access to the token.
+An optional array of ABI-encoded calls dispatched on the new token immediately after creation. These let you configure anything beyond the variant's defined `params` — role grants, mint operations, policy scopes, contract URI, and so on. They execute on the new token as if the factory were the admin, so admin-gated operations are permitted within this window. The factory itself receives no official roles and has no persisted access to the token.
 
 Build the array with [`B20FactoryLib`](../../src/lib/B20FactoryLib.sol) helpers (or encode manually):
 
