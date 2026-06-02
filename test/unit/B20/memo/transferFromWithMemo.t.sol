@@ -177,4 +177,85 @@ contract B20TransferFromWithMemoTest is B20Test {
         );
         assertEq(token.balanceOf(to), amount, "to must receive the transferred amount");
     }
+
+    // ============================================================
+    //        REGRESSION: PRIVILEGED BOOTSTRAP ALLOWANCE (BOP-230 / L-04)
+    // ============================================================
+    //
+    // Mirrors the transferFrom regression: a privileged transferFromWithMemo
+    // (factory caller during the bootstrap window) consumes allowance exactly
+    // like an ordinary call — both checked and decremented — while only the
+    // executor-policy check stays bypassed, matching the Rust precompile. See
+    // transferFrom.t.sol for the canonical discussion.
+
+    /// @notice Verifies a privileged transferFromWithMemo reverts InsufficientAllowance when allowance is below the spend
+    /// @dev Pins that the allowance check is unconditional — a privileged caller is still
+    ///      rejected for insufficient allowance; before BOP-230 the privileged path skipped
+    ///      the check entirely. Regression: BOP-230 / L-04.
+    function test_transferFromWithMemo_revert_privileged_insufficientAllowance(
+        address from,
+        address to,
+        uint256 allowanceAmount,
+        uint256 spendAmount,
+        bytes32 memo
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        allowanceAmount = bound(allowanceAmount, 0, type(uint128).max - 1);
+        spendAmount = bound(spendAmount, allowanceAmount + 1, type(uint128).max);
+
+        _mint(from, spendAmount);
+        vm.prank(from);
+        token.approve(address(factory), allowanceAmount);
+
+        // Reopen the factory bootstrap window so the factory caller is privileged.
+        vm.store(address(token), MockB20Storage.initializedSlot(), bytes32(0));
+
+        vm.prank(address(factory));
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.InsufficientAllowance.selector, address(factory), allowanceAmount, spendAmount)
+        );
+        token.transferFromWithMemo(from, to, spendAmount, memo);
+    }
+
+    /// @notice Verifies a privileged transferFromWithMemo decrements allowance by the spent amount
+    /// @dev Allowance is consumed during the bootstrap window exactly as outside it, matching
+    ///      the Rust precompile. Before BOP-230 the privileged path left the allowance
+    ///      untouched. Regression: BOP-230 / L-04.
+    function test_transferFromWithMemo_success_privileged_decrementsAllowance(
+        address from,
+        address to,
+        uint256 allowanceAmount,
+        uint256 spendAmount,
+        bytes32 memo
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
+        vm.assume(allowanceAmount != type(uint256).max);
+        spendAmount = bound(spendAmount, 0, allowanceAmount);
+
+        _mint(from, spendAmount);
+        vm.prank(from);
+        token.approve(address(factory), allowanceAmount);
+
+        // Reopen the factory bootstrap window so the factory caller is privileged.
+        vm.store(address(token), MockB20Storage.initializedSlot(), bytes32(0));
+
+        vm.prank(address(factory));
+        token.transferFromWithMemo(from, to, spendAmount, memo);
+
+        assertEq(
+            token.allowance(from, address(factory)),
+            allowanceAmount - spendAmount,
+            "privileged transferFromWithMemo must decrement allowance by the spent amount"
+        );
+        assertEq(token.balanceOf(to), spendAmount, "to must receive the spent amount");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, address(factory)))),
+            allowanceAmount - spendAmount,
+            "allowances[from][factory] slot must reflect the consumed amount"
+        );
+    }
 }

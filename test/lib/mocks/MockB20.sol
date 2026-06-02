@@ -186,20 +186,21 @@ abstract contract MockB20 is IB20 {
         returns (bool)
     {
         _requireNonZeroActors(from, to);
-        if (!_isPrivileged()) {
-            // Allowance is consumed unconditionally outside the factory
-            // bootstrap window. Matches OZ ERC20 and the Rust precompile,
-            // both of which carve no exception for `msg.sender == from`.
-            _consumeAllowance(from, msg.sender, amount);
-            if (msg.sender != from) {
-                // Read the executor policy ID out of the transfer-side packed
-                // slot. Cold here; warm by the time _transfer reads the same
-                // slot for sender + receiver. Skipped when the caller is the
-                // owner — sender-policy already covers `from` inside _transfer.
-                uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
-                if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                    revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
-                }
+        // Allowance is consumed unconditionally — including during the factory
+        // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
+        // which carves no `privileged` exception for allowance accounting
+        // (BOP-230 / L-04); only the executor-policy check below is bypassed
+        // for a privileged caller. An infinite allowance is still not
+        // decremented (handled inside `_consumeAllowance`).
+        _consumeAllowance(from, msg.sender, amount);
+        if (!_isPrivileged() && msg.sender != from) {
+            // Read the executor policy ID out of the transfer-side packed
+            // slot. Cold here; warm by the time _transfer reads the same
+            // slot for sender + receiver. Skipped when the caller is the
+            // owner — sender-policy already covers `from` inside _transfer.
+            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
+                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
             }
         }
         _transfer(from, to, amount);
@@ -235,13 +236,15 @@ abstract contract MockB20 is IB20 {
         returns (bool)
     {
         _requireNonZeroActors(from, to);
-        if (!_isPrivileged()) {
-            _consumeAllowance(from, msg.sender, amount);
-            if (msg.sender != from) {
-                uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
-                if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                    revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
-                }
+        // Allowance is consumed unconditionally — including during the factory
+        // bootstrap window — matching the Rust precompile (BOP-230 / L-04).
+        // Only the executor-policy check below is bypassed for a privileged
+        // caller; infinite allowance is still not decremented.
+        _consumeAllowance(from, msg.sender, amount);
+        if (!_isPrivileged() && msg.sender != from) {
+            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
+                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
             }
         }
         _transfer(from, to, amount);
@@ -702,10 +705,12 @@ abstract contract MockB20 is IB20 {
     ///      every external caller (`transfer`, `transferFrom`,
     ///      `transferWithMemo`, `transferFromWithMemo`) before reaching
     ///      this helper. `transferFrom` / `transferFromWithMemo`
-    ///      additionally consume allowance and check the executor
-    ///      policy in their bodies before calling here; both of those
-    ///      checks ALSO honor the bootstrap bypass, consistent with
-    ///      the policy bypass below.
+    ///      additionally consume the allowance (unconditionally —
+    ///      including in the bootstrap window, matching the Rust
+    ///      precompile, see BOP-230 / L-04) and check the executor
+    ///      policy in their bodies before calling here; only the
+    ///      executor-policy check honors the bootstrap bypass,
+    ///      consistent with the sender/receiver policy bypass below.
     function _transfer(address from, address to, uint256 amount) internal {
         if (!_isPrivileged()) {
             // One SLOAD pulls both policy IDs we need for the transfer
