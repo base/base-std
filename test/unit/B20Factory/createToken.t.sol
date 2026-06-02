@@ -73,7 +73,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Any non-empty string containing a non-`A`–`Z` byte reverts with `InvalidCurrency(code)`.
     /// @dev Subsumes every point case (lowercase, digits, symbols, multi-byte UTF-8) via
     ///      `vm.assume(!_isValidFiatCode)`. Empty input is covered by
-    ///      `test_createB20_revert_emptyCurrency` (rejected with `InvalidCurrency("")`).
+    ///      `test_createB20_revert_emptyCurrency` (rejected with `MissingRequiredField("currency")`).
     function test_createB20_revert_currency_rejectsInvalidFormat(string memory code, address caller, bytes32 salt)
         public
     {
@@ -127,12 +127,12 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies stablecoin createToken reverts when currency is the empty string
     /// @dev The format-check loop on `currency` is vacuously safe on empty input (no bytes
     ///      to inspect), so an explicit length check is required to reject empty up front.
-    ///      Checks InvalidCurrency("") error, matching the Rust precompile's selector.
+    ///      Checks MissingRequiredField("currency") error, matching the Rust precompile's selector.
     function test_createB20_revert_emptyCurrency(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         IB20Factory.B20StablecoinCreateParams memory p = _stablecoinParams("Stablecoin Test", "USD", admin, "");
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidCurrency.selector, ""));
+        vm.expectRevert(abi.encodeWithSelector(IB20Factory.MissingRequiredField.selector, "currency"));
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(p), new bytes[](0));
     }
 

@@ -75,7 +75,7 @@ interface IB20Factory {
     /// @param field Name of the missing field (e.g. `"currency"`).
     error MissingRequiredField(string field);
 
-    /// @notice The stablecoin `currency` contained a non-`A`-`Z` byte.
+    /// @notice The stablecoin `currency` was non-empty but contained a non-`A`-`Z` byte.
     error InvalidCurrency(string code);
 
     /// @notice One of the `initCalls` reverted. The factory bubbles the underlying revert reason
@@ -112,8 +112,8 @@ interface IB20Factory {
     /// @dev Reverts with IActivationRegistry.FeatureNotActivated when the variant feature is not activated.
     /// @dev Reverts with `InvalidVariant` when `variant` is outside the `B20Variant` range.
     /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
-    /// @dev Reverts with `MissingRequiredField` when a required string field is empty.
-    /// @dev Reverts with `InvalidCurrency` when a stablecoin `currency` contains a non-`A`-`Z` byte.
+    /// @dev Reverts with `MissingRequiredField` when a required string field is empty (e.g. stablecoin `currency` or security `isin`).
+    /// @dev Reverts with `InvalidCurrency` when a stablecoin `currency` is non-empty but contains a non-`A`-`Z` byte.
     /// @dev Reverts with `TokenAlreadyExists` when a token already exists at the derived address.
     /// @dev Reverts with `InitCallFailed` (or the bubbled inner reason) when any entry in `initCalls` reverts.
     ///
