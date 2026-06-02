@@ -36,7 +36,7 @@ interface IB20Factory {
 
     /// @notice Creation parameters for a Security-variant B-20 token. ABI-encoded into `params`.
     struct B20SecurityCreateParams {
-        /// @dev Encoding version. Currently `2`.
+        /// @dev Encoding version. Currently `1`.
         uint8 version;
         /// @dev ERC-20 token name.
         string name;

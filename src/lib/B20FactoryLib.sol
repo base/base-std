@@ -15,9 +15,7 @@ library B20FactoryLib {
     uint8 internal constant B20_STABLECOIN_CREATE_PARAMS_VERSION = 1;
 
     /// @notice Encoding version carried as the leading byte of a `B20SecurityCreateParams` blob.
-    ///         Bumped from `1` to `2` when the struct gained the `decimals` field
-    ///         (previously hardcoded to `6` by the factory's security arm).
-    uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 2;
+    uint8 internal constant B20_SECURITY_CREATE_PARAMS_VERSION = 1;
 
     /// @notice Encoding version carried as the leading byte of a `B20StablecoinEventParams` blob.
     uint8 internal constant B20_STABLECOIN_EVENT_PARAMS_VERSION = 1;

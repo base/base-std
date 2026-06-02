@@ -54,9 +54,9 @@ contract B20FactoryLibEncodeSecurityCreateParamsTest is B20FactoryLibTest {
         assertEq(actual, expected, "encoded blob must match hand-encoded struct byte-for-byte");
     }
 
-    /// @notice Verifies the library's current security create-params version is `2`.
+    /// @notice Verifies the library's current security create-params version is `1`.
     /// @dev    Pins the constant so a future bump is intentional and visible in diff.
     function test_b20SecurityCreateParamsVersion_pinned() public pure {
-        assertEq(uint256(B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION), 2, "version must be 2");
+        assertEq(uint256(B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION), 1, "version must be 1");
     }
 }

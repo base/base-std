@@ -30,8 +30,8 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     /// @notice Cross-cuts every field of the security-variant namespace in
     ///         one populated snapshot.
     /// @dev    Field coverage for `base.b20.security` (slots 0..3):
-    ///         - 0: multiplier
-    ///         - 1: decimals (factory-written at creation)
+    ///         - 0: decimals (factory-written at creation)
+    ///         - 1: multiplier
     ///         - 2: usedAnnouncementIds[id]
     ///         - 3: identifiers[identifierType]  (FIGI mutated)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
@@ -40,20 +40,20 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
 
         address tokenAddr = address(token);
 
-        // ---------- multiplier (slot 0) ----------
-        assertEq(
-            uint256(vm.load(tokenAddr, MockB20SecurityStorage.multiplierSlot())),
-            MULTIPLIER_MARKER,
-            "security slot 0: multiplier must hold the written value"
-        );
-
-        // ---------- decimals (slot 1) ----------
+        // ---------- decimals (slot 0) ----------
         // The default `_securityParams()` helper passes MIN_ASSET_DECIMALS (6),
         // and the factory writes that as a one-word `uint256` (low byte).
         assertEq(
             uint256(vm.load(tokenAddr, MockB20SecurityStorage.decimalsSlot())),
             uint256(B20Constants.MIN_ASSET_DECIMALS),
-            "security slot 1: decimals must hold the factory-written value"
+            "security slot 0: decimals must hold the factory-written value"
+        );
+
+        // ---------- multiplier (slot 1) ----------
+        assertEq(
+            uint256(vm.load(tokenAddr, MockB20SecurityStorage.multiplierSlot())),
+            MULTIPLIER_MARKER,
+            "security slot 1: multiplier must hold the written value"
         );
 
         // ---------- usedAnnouncementIds[id] (slot 2, hashed by id) ----------

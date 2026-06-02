@@ -107,9 +107,8 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant
     /// @dev Each variant arm has its own version check; this exercises the security arm's check.
-    ///      The current supported version is `B20_SECURITY_CREATE_PARAMS_VERSION` (bumped from
-    ///      `1` to `2` when the struct gained the `decimals` field) — fuzzing assumes the
-    ///      version byte is anything else.
+    ///      The current supported version is `B20_SECURITY_CREATE_PARAMS_VERSION` — fuzzing
+    ///      assumes the version byte is anything else.
     function test_createB20_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt) public {
         _assumeValidCaller(caller);
         vm.assume(badVersion != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION);
@@ -683,26 +682,6 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertEq(vm.load(tokenAddr, MockB20Storage.nameSlot()), bytes32(0), "empty name field slot must be all-zero");
         assertEq(
             vm.load(tokenAddr, MockB20Storage.symbolSlot()), bytes32(0), "empty symbol field slot must be all-zero"
-        );
-    }
-
-    /// @notice Verifies stablecoin decimals are hardcoded at `6` and security decimals
-    ///         reflect the value passed at creation (rather than coming from address bytes).
-    /// @dev    Stablecoin decimals are immutable and not configurable. Security decimals
-    ///         are per-token (see `B20SecurityCreateParams.decimals`); the default
-    ///         `_securityParams()` helper passes `MIN_ASSET_DECIMALS` (`6`) so this test
-    ///         still pins the legacy-behavior case. Full range coverage lives in
-    ///         `createB20_security_decimals.t.sol`.
-    function test_createB20_success_decimalsFixedByVariant(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        address stablecoinToken = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
-        address securityToken = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
-
-        assertEq(MockB20(stablecoinToken).decimals(), 6, "stablecoin decimals must be hardcoded at 6");
-        assertEq(
-            MockB20(securityToken).decimals(),
-            B20Constants.MIN_ASSET_DECIMALS,
-            "security decimals must reflect default _securityParams (MIN_ASSET_DECIMALS)"
         );
     }
 }

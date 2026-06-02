@@ -22,34 +22,6 @@ import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 ///      and the stablecoin variant's regression-free hardcoded `6`.
 contract B20FactoryCreateB20SecurityDecimalsTest is B20FactoryTest {
     /*//////////////////////////////////////////////////////////////
-                          BOUNDARY SUCCESSES
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Verifies the lower-bound boundary value `MIN_ASSET_DECIMALS` (`6`) succeeds
-    ///         and the deployed token reports it from `decimals()`.
-    function test_createB20_success_decimals_lowerBound(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        IB20Factory.B20SecurityCreateParams memory p =
-            _securityParams("Security Test", "SEC", admin, B20Constants.MIN_ASSET_DECIMALS);
-        address token = _createSecurity(caller, salt, p, new bytes[](0));
-        assertEq(
-            MockB20(token).decimals(), B20Constants.MIN_ASSET_DECIMALS, "decimals() must equal MIN_ASSET_DECIMALS (6)"
-        );
-    }
-
-    /// @notice Verifies the upper-bound boundary value `MAX_ASSET_DECIMALS` (`18`) succeeds
-    ///         and the deployed token reports it from `decimals()`.
-    function test_createB20_success_decimals_upperBound(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        IB20Factory.B20SecurityCreateParams memory p =
-            _securityParams("Security Test", "SEC", admin, B20Constants.MAX_ASSET_DECIMALS);
-        address token = _createSecurity(caller, salt, p, new bytes[](0));
-        assertEq(
-            MockB20(token).decimals(), B20Constants.MAX_ASSET_DECIMALS, "decimals() must equal MAX_ASSET_DECIMALS (18)"
-        );
-    }
-
-    /*//////////////////////////////////////////////////////////////
                          OUT-OF-RANGE REVERTS
     //////////////////////////////////////////////////////////////*/
 
@@ -94,6 +66,34 @@ contract B20FactoryCreateB20SecurityDecimalsTest is B20FactoryTest {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20Factory.InvalidDecimals.selector, bad));
         factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(p), new bytes[](0));
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                          BOUNDARY SUCCESSES
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Verifies the lower-bound boundary value `MIN_ASSET_DECIMALS` (`6`) succeeds
+    ///         and the deployed token reports it from `decimals()`.
+    function test_createB20_success_decimals_lowerBound(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        IB20Factory.B20SecurityCreateParams memory p =
+            _securityParams("Security Test", "SEC", admin, B20Constants.MIN_ASSET_DECIMALS);
+        address token = _createSecurity(caller, salt, p, new bytes[](0));
+        assertEq(
+            MockB20(token).decimals(), B20Constants.MIN_ASSET_DECIMALS, "decimals() must equal MIN_ASSET_DECIMALS (6)"
+        );
+    }
+
+    /// @notice Verifies the upper-bound boundary value `MAX_ASSET_DECIMALS` (`18`) succeeds
+    ///         and the deployed token reports it from `decimals()`.
+    function test_createB20_success_decimals_upperBound(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        IB20Factory.B20SecurityCreateParams memory p =
+            _securityParams("Security Test", "SEC", admin, B20Constants.MAX_ASSET_DECIMALS);
+        address token = _createSecurity(caller, salt, p, new bytes[](0));
+        assertEq(
+            MockB20(token).decimals(), B20Constants.MAX_ASSET_DECIMALS, "decimals() must equal MAX_ASSET_DECIMALS (18)"
+        );
     }
 
     /*//////////////////////////////////////////////////////////////
