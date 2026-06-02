@@ -4,13 +4,15 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @title Sequential revert-order test for `createPolicy`.
 ///
 /// @notice **Canonical order:**
 ///         1. ZERO-ADMIN (`admin == address(0)`) → `ZeroAddress`
+///         2. COUNTER-OVERFLOW (nextCounter == type(uint56).max) → `CounterOverflow`
 ///
-///         Single revert condition; walks from that condition to success.
+///         Walks from the first failing condition to success.
 contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
     /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
     function test_createPolicy_revertOrder(address caller, address admin_, uint8 typeIdx) public {
@@ -19,11 +21,24 @@ contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);
 
         // 1. ZERO-ADMIN: admin == address(0) → ZeroAddress
+        vm.store(
+            address(policyRegistry),
+            MockPolicyRegistryStorage.nextCounterSlot(),
+            bytes32(uint256(type(uint56).max))
+        );
         vm.prank(caller);
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
         policyRegistry.createPolicy(address(0), pt);
 
         // Fix: use a non-zero admin.
+
+        // 2. COUNTER-OVERFLOW: nextCounter == type(uint56).max → CounterOverflow
+        vm.prank(caller);
+        vm.expectRevert(IPolicyRegistry.CounterOverflow.selector);
+        policyRegistry.createPolicy(admin_, pt);
+
+        // Fix: reset counter to a valid value.
+        vm.store(address(policyRegistry), MockPolicyRegistryStorage.nextCounterSlot(), bytes32(uint256(2)));
 
         // Success
         vm.prank(caller);
