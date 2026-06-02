@@ -11,7 +11,7 @@ import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 /// @notice Pins the activation gating on `createB20`.
 ///
 /// @dev    Two per-variant gates run before any other validation:
-///         - `B20_ASSET` — SECURITY (and DEFAULT) off
+///         - `B20_ASSET` — ASSET (and DEFAULT) off
 ///         - `B20_STABLECOIN` — STABLECOIN off
 ///         `BaseTest.setUp` activates both by default so the rest of
 ///         the suite is unaffected; this file deactivates the specific
@@ -37,19 +37,19 @@ contract B20FactoryCreateB20ActivationTest is B20FactoryTest {
         factory.createB20(IB20Factory.B20Variant.STABLECOIN, salt, abi.encode(_stablecoinParams()), new bytes[](0));
     }
 
-    /// @notice Verifies the stablecoin gate doesn't block SECURITY creation — the gates
+    /// @notice Verifies the stablecoin gate doesn't block ASSET creation — the gates
     ///         are per-variant and isolated.
-    function test_createB20_success_stablecoinGateOff_securityStillWorks(address caller, bytes32 salt) public {
+    function test_createB20_success_stablecoinGateOff_assetStillWorks(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         _deactivate(ActivationRegistryFeatureList.B20_STABLECOIN);
 
-        address token = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
-        assertTrue(factory.isB20(token), "security creation must succeed when only the stablecoin gate is off");
+        address token = _createAsset(caller, salt, _assetParams(), new bytes[](0));
+        assertTrue(factory.isB20(token), "asset creation must succeed when only the stablecoin gate is off");
     }
 
-    /// @notice Verifies createB20(SECURITY, ...) reverts with FeatureNotActivated(B20_ASSET)
+    /// @notice Verifies createB20(ASSET, ...) reverts with FeatureNotActivated(B20_ASSET)
     ///         when the asset-variant gate is off.
-    function test_createB20_revert_assetFeatureNotActivated_security(address caller, bytes32 salt) public {
+    function test_createB20_revert_assetFeatureNotActivated_asset(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
         _deactivate(ActivationRegistryFeatureList.B20_ASSET);
 
@@ -59,7 +59,7 @@ contract B20FactoryCreateB20ActivationTest is B20FactoryTest {
                 IActivationRegistry.FeatureNotActivated.selector, ActivationRegistryFeatureList.B20_ASSET
             )
         );
-        factory.createB20(IB20Factory.B20Variant.SECURITY, salt, abi.encode(_securityParams()), new bytes[](0));
+        factory.createB20(IB20Factory.B20Variant.ASSET, salt, abi.encode(_assetParams()), new bytes[](0));
     }
 
     /// @notice Verifies the asset gate doesn't block STABLECOIN creation.

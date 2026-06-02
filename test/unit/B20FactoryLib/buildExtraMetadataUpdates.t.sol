@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
-import {IB20Security} from "src/interfaces/IB20Security.sol";
+import {IB20Asset} from "src/interfaces/IB20Asset.sol";
 
 import {B20FactoryLibTest} from "test/lib/B20FactoryLibTest.sol";
 
@@ -72,7 +72,7 @@ contract B20FactoryLibBuildExtraMetadataUpdatesTest is B20FactoryLibTest {
         for (uint256 i = 0; i < len; i++) {
             assertEq(
                 result[i],
-                abi.encodeCall(IB20Security.updateExtraMetadata, (keys[i], values[i])),
+                abi.encodeCall(IB20Asset.updateExtraMetadata, (keys[i], values[i])),
                 "ordering must follow input"
             );
         }
@@ -96,18 +96,14 @@ contract B20FactoryLibBuildExtraMetadataUpdatesTest is B20FactoryLibTest {
 
         assertEq(result.length, 3, "no entry may be elided");
         assertEq(
-            result[0],
-            abi.encodeCall(IB20Security.updateExtraMetadata, (keys[0], values[0])),
-            "empty value passed through"
+            result[0], abi.encodeCall(IB20Asset.updateExtraMetadata, (keys[0], values[0])), "empty value passed through"
         );
         assertEq(
-            result[1],
-            abi.encodeCall(IB20Security.updateExtraMetadata, (keys[1], values[1])),
-            "empty key passed through"
+            result[1], abi.encodeCall(IB20Asset.updateExtraMetadata, (keys[1], values[1])), "empty key passed through"
         );
         assertEq(
             result[2],
-            abi.encodeCall(IB20Security.updateExtraMetadata, (keys[2], values[2])),
+            abi.encodeCall(IB20Asset.updateExtraMetadata, (keys[2], values[2])),
             "fully populated pair preserved"
         );
     }

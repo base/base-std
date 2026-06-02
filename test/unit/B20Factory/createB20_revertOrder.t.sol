@@ -16,7 +16,7 @@ import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 ///
 ///         **Canonical order per variant arm (Solidity reference):**
 ///         - STABLECOIN: VERSION → INVALID-CURRENCY (format check on each byte)
-///         - SECURITY: VERSION (single guard; no body validation pairs to test)
+///         - ASSET: VERSION (single guard; no body validation pairs to test)
 contract B20FactoryCreateB20RevertOrderTest is B20FactoryTest {
     /// @notice For the STABLECOIN arm: VERSION beats INVALID-CURRENCY.
     /// @dev Both violations: unsupported version AND invalid currency byte. Version check
