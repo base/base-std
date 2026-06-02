@@ -57,13 +57,13 @@ Redemptions let token holders initiate their own burn — typically the on-chain
 Two gates apply on every call:
 
 - `REDEEM_SENDER_POLICY` — the caller must be authorized.
-- `minimumRedeemable` — admin-set floor (in shares); redemptions below this floor revert with `BelowMinimumRedeemable`. Any redemption that resolves to zero shares (e.g. token dust against a large share ratio) is always rejected, even when `minimumRedeemable == 0`. Read with `minimumRedeemable()`; update with `updateMinimumRedeemable(newMin)` (admin-gated; emits `MinimumRedeemableUpdated`).
+- `minimumRedeemable` — admin-set floor (in shares); redemptions below this floor revert with `BelowMinimumRedeemable`. Any redemption that resolves to zero shares (e.g. token dust against a large share ratio) is always rejected, even when `minimumRedeemable == 0`. Defaults to `0` at creation. Read with `minimumRedeemable()`; update with `updateMinimumRedeemable(newMin)` (admin-gated; emits `MinimumRedeemableUpdated`).
 
 > ⚠️ **`REDEEM_SENDER_POLICY` defaults to `ALWAYS_BLOCK` at token creation** — redemptions are closed until the admin explicitly opens them via `updatePolicy`. The conservative default reflects that redemption is irreversible and regulator-sensitive.
 
 ## Security Identifiers
 
-Each Security token can carry one or more standardized identifiers (ISIN, CUSIP, FIGI, SEDOL, etc.). Read with `securityIdentifier(type)`; the value is a `string`. ISIN is required at creation via `B20SecurityCreateParams.isin`; other identifiers are optional and added post-creation.
+Each Security token can carry one or more standardized identifiers (ISIN, CUSIP, FIGI, SEDOL, etc.). Read with `securityIdentifier(type)`; the value is a `string`. All identifiers are optional and added post-creation — the factory does not seed any identifier at token creation.
 
 `updateSecurityIdentifier(type, value)` adds or updates an identifier and should be wrapped in `announce()`. Passing an empty `value` removes the entry. Unknown identifier types revert with `InvalidIdentifierType`.
 

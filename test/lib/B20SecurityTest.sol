@@ -25,11 +25,13 @@ contract B20SecurityTest is B20Test {
     // ============================================================
     //              SECURITY-VARIANT IDENTIFIER FIXTURES
     // ============================================================
-    // Test-only identifier-type keys (`CUSIP`, `FIGI`). The canonical
-    // `ISIN` key lives on `B20FactoryTest` as `IDENTIFIER_ISIN`
-    // because the factory writes it during bootstrap too; CUSIP and
-    // FIGI are post-creation additions exercised only by the variant
-    // tests, so they belong on this base.
+    // Test-only identifier-type keys (`ISIN`, `CUSIP`, `FIGI`). All
+    // three are post-creation additions exercised only by the variant
+    // tests; the factory no longer seeds any identifier at bootstrap.
+
+    /// @notice Identifier-type key for the ISIN entry (International
+    ///         Securities Identification Number). Test-fixture only.
+    string internal constant IDENTIFIER_ISIN = "ISIN";
 
     /// @notice Identifier-type key for the CUSIP entry (US/Canada
     ///         securities identifier). Test-fixture only.

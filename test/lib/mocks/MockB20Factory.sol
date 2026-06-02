@@ -10,12 +10,7 @@ import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {
-    MockB20Storage,
-    MockB20StablecoinStorage,
-    MockB20SecurityStorage,
-    MockB20RedeemStorage
-} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Storage, MockB20StablecoinStorage, MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Factory
 /// @notice Reference implementation of the `IB20Factory` precompile
@@ -104,8 +99,6 @@ contract MockB20Factory is IB20Factory {
         address admin;
         uint8 decimals;
         string memory currency_;
-        string memory isin_;
-        uint256 minimumRedeemable_;
 
         if (variant == B20Variant.SECURITY) {
             B20SecurityCreateParams memory p = abi.decode(params, (B20SecurityCreateParams));
@@ -116,8 +109,6 @@ contract MockB20Factory is IB20Factory {
             symbol_ = p.symbol;
             admin = p.initialAdmin;
             decimals = 6;
-            isin_ = p.isin;
-            minimumRedeemable_ = p.minimumRedeemable;
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
@@ -161,7 +152,7 @@ contract MockB20Factory is IB20Factory {
         if (variant == B20Variant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
         } else if (variant == B20Variant.SECURITY) {
-            _writeSecurityStorage(token, isin_, minimumRedeemable_);
+            _writeSecurityStorage(token);
         }
 
         // -- 6. Emit B20Created. Identity-only signal; admin role
@@ -174,8 +165,10 @@ contract MockB20Factory is IB20Factory {
         //       `B20StablecoinEventParams` so stream-based indexers
         //       can recover the immutable `currency`
         //       without an RPC call. SECURITY emits empty bytes
-        //       (`isin` / `minimumRedeemable` are mutable and surfaced
-        //       via their own update events).
+        //       (SECURITY has no variant-specific immutable identity
+        //       fields beyond the base set; identifiers and redemption
+        //       configuration are mutable and surfaced via their own
+        //       update events).
         bytes memory variantEventParams;
         if (variant == B20Variant.STABLECOIN) {
             variantEventParams = B20FactoryLib.encodeStablecoinEventParams(currency_);
@@ -297,15 +290,11 @@ contract MockB20Factory is IB20Factory {
         _writeString(token, MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET), currency_);
     }
 
-    /// @dev Writes the security variant's initial `identifiers["ISIN"]`
-    ///      entry at the `base.b20.security` namespace, the initial
-    ///      `minimumRedeemable` at the `base.b20.redeem` namespace, and
-    ///      defaults the `REDEEM_SENDER_POLICY` slot to `ALWAYS_BLOCK_ID`.
-    ///      Mirrors stablecoin's `currency` pattern: variant-specific
-    ///      initial state is written directly without an event,
-    ///      paralleling how base identity (name, symbol, supply cap) is
-    ///      seeded. Post-creation identifier mutations go through
-    ///      `updateSecurityIdentifier` and emit `SecurityIdentifierUpdated`.
+    /// @dev Defaults the security variant's `REDEEM_SENDER_POLICY` slot to
+    ///      `ALWAYS_BLOCK_ID`. The `base.b20.security` namespace has no
+    ///      creation-time initial state (identifiers are added post-creation
+    ///      via `updateSecurityIdentifier`), and `minimumRedeemable` defaults
+    ///      to the EVM zero of its slot.
     ///
     ///      The `REDEEM_SENDER_POLICY` default differs from the other
     ///      four policy slots (which default to `ALWAYS_ALLOW_ID = 0`
@@ -317,9 +306,7 @@ contract MockB20Factory is IB20Factory {
     ///      above stay zero. To open redemption at creation, override
     ///      the slot atomically via an
     ///      `updatePolicy(REDEEM_SENDER_POLICY, <policyId>)` initCall.
-    function _writeSecurityStorage(address token, string memory isin_, uint256 minimumRedeemable_) internal {
-        _writeString(token, MockB20SecurityStorage.identifierSlot("ISIN"), isin_);
-        _writeUint(token, MockB20RedeemStorage.minimumRedeemableSlot(), minimumRedeemable_);
+    function _writeSecurityStorage(address token) internal {
         _writeUint(token, MockB20RedeemStorage.redeemPolicyIdsSlot(), uint256(PolicyRegistryConstants.ALWAYS_BLOCK_ID));
     }
 

@@ -44,10 +44,6 @@ interface IB20Factory {
         string symbol;
         /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
-        /// @dev International Securities Identification Number. Required; empty string reverts.
-        string isin;
-        /// @dev Initial value of `minimumRedeemable`. Use `0` to allow any non-zero redemption.
-        uint256 minimumRedeemable;
     }
 
     /// @notice Event payload carried in the `variantEventParams` field of `B20Created` for
@@ -73,11 +69,6 @@ interface IB20Factory {
 
     /// @notice The leading `version` byte in `params` does not match any known encoding for the requested variant.
     error UnsupportedVersion(uint8 version, B20Variant variant);
-
-    /// @notice A required string argument was the empty string.
-    ///
-    /// @param field Name of the missing field (e.g. `"isin"`).
-    error MissingRequiredField(string field);
 
     /// @notice The stablecoin `currency` contained a non-`A`-`Z` byte.
     error InvalidCurrency(string code);
@@ -115,7 +106,6 @@ interface IB20Factory {
     ///
     /// @dev Reverts with `InvalidVariant` when `variant` is outside the `B20Variant` range.
     /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
-    /// @dev Reverts with `MissingRequiredField` when a required string field is empty.
     /// @dev Reverts with `InvalidCurrency` when a stablecoin `currency` contains a non-`A`-`Z` byte.
     /// @dev Reverts with `TokenAlreadyExists` when a token already exists at the derived address.
     /// @dev Reverts with `InitCallFailed` (or the bubbled inner reason) when any entry in `initCalls` reverts.

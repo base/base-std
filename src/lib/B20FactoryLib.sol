@@ -101,26 +101,17 @@ library B20FactoryLib {
 
     /// @notice Encodes a `B20SecurityCreateParams` blob tagged with `B20_SECURITY_CREATE_PARAMS_VERSION`.
     ///
-    /// @param name              ERC-20 token name.
-    /// @param symbol            ERC-20 token symbol.
-    /// @param initialAdmin      Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
-    /// @param isin              International Securities Identification Number. Required; empty string reverts at the factory.
-    /// @param minimumRedeemable Initial `minimumRedeemable` (shares).
-    function encodeSecurityCreateParams(
-        string memory name,
-        string memory symbol,
-        address initialAdmin,
-        string memory isin,
-        uint256 minimumRedeemable
-    ) internal pure returns (bytes memory) {
+    /// @param name         ERC-20 token name.
+    /// @param symbol       ERC-20 token symbol.
+    /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
+    function encodeSecurityCreateParams(string memory name, string memory symbol, address initialAdmin)
+        internal
+        pure
+        returns (bytes memory)
+    {
         return abi.encode(
             IB20Factory.B20SecurityCreateParams({
-                version: B20_SECURITY_CREATE_PARAMS_VERSION,
-                name: name,
-                symbol: symbol,
-                initialAdmin: initialAdmin,
-                isin: isin,
-                minimumRedeemable: minimumRedeemable
+                version: B20_SECURITY_CREATE_PARAMS_VERSION, name: name, symbol: symbol, initialAdmin: initialAdmin
             })
         );
     }
