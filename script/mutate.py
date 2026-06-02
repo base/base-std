@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hand-rolled mutation testing for MockB20 / MockTokenFactory.
+"""Hand-rolled mutation testing for MockB20 / MockB20Factory.
 
 For each mutation: back up the file, apply a single substitution, run forge test,
 record pass/fail, restore the backup. A mutation that "survives" (all tests pass
@@ -23,7 +23,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 
 MOCK_B20 = REPO / "test/lib/mocks/MockB20.sol"
-MOCK_FACTORY = REPO / "test/lib/mocks/MockTokenFactory.sol"
+MOCK_FACTORY = REPO / "test/lib/mocks/MockB20Factory.sol"
 MOCK_POLICY = REPO / "test/lib/mocks/MockPolicyRegistry.sol"
 MOCK_STABLECOIN = REPO / "test/lib/mocks/MockB20Stablecoin.sol"
 
@@ -59,9 +59,9 @@ MUTATIONS: list[Mutation] = [
     # === MockB20: pause gate in _transfer ===
     Mutation(
         MOCK_B20,
-        "if (_isPaused(PausableFeature.TRANSFER)) revert ContractPaused(PausableFeature.TRANSFER);",
-        "if (!_isPaused(PausableFeature.TRANSFER)) revert ContractPaused(PausableFeature.TRANSFER);",
-        "_transfer: invert pause check (paused transfers succeed, unpaused revert)",
+        "if (_isPaused(feature)) revert ContractPaused(feature);",
+        "if (!_isPaused(feature)) revert ContractPaused(feature);",
+        "whenNotPaused: invert pause check (paused ops succeed, unpaused revert)",
     ),
     # === MockB20: role check in _requireRole (the onlyRole modifier body) ===
     # After the modifier refactor, role checks at the call site (mint, pause,
@@ -105,15 +105,15 @@ MUTATIONS: list[Mutation] = [
     # === MockB20: skip policy check on sender (matches new inline pattern) ===
     Mutation(
         MOCK_B20,
-        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {\n                revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicyId);\n            }",
-        "            // sender policy check elided\n            if (false) revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicyId);",
+        "if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.sender, from)) {\n                revert PolicyForbids(TRANSFER_SENDER_POLICY, packed.sender);\n            }",
+        "if (false) revert PolicyForbids(TRANSFER_SENDER_POLICY, packed.sender);",
         "_transfer: drop TRANSFER_SENDER_POLICY policy check entirely",
     ),
     # === MockB20: skip policy check on receiver (matches new inline pattern) ===
     Mutation(
         MOCK_B20,
-        "            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(receiverPolicyId, to)) {\n                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicyId);\n            }",
-        "            // receiver policy check elided\n            if (false) revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicyId);",
+        "if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.receiver, to)) {\n                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, packed.receiver);\n            }",
+        "if (false) revert PolicyForbids(TRANSFER_RECEIVER_POLICY, packed.receiver);",
         "_transfer: drop TRANSFER_RECEIVER_POLICY policy check entirely",
     ),
     # === MockB20: skip MINT_RECEIVER_POLICY policy check (matches new inline pattern) ===
@@ -147,9 +147,9 @@ MUTATIONS: list[Mutation] = [
     # === MockB20: zero-receiver check skipped in _transfer specifically ===
     Mutation(
         MOCK_B20,
-        "    function _transfer(address from, address to, uint256 amount) internal {\n        if (to == address(0)) revert InvalidReceiver(to);",
-        "    function _transfer(address from, address to, uint256 amount) internal {\n        // if (to == address(0)) revert InvalidReceiver(to);",
-        "_transfer: drop zero-recipient guard",
+        "    function _requireNonZeroActors(address from, address to) internal pure {\n        if (to == address(0)) revert InvalidReceiver(to);",
+        "    function _requireNonZeroActors(address from, address to) internal pure {\n        // if (to == address(0)) revert InvalidReceiver(to);",
+        "_requireNonZeroActors: drop zero-recipient guard",
     ),
     # === MockB20: more mutations on accounting / event integrity ===
     Mutation(
@@ -296,40 +296,40 @@ MUTATIONS: list[Mutation] = [
     # === Pausable feature loop bounds (pausedFeatures view) ===
     Mutation(
         MOCK_B20,
-        "for (uint256 i = 0; i < 4; i++) {\n            if (((vectors >> i) & uint256(1)) == 1) count++;",
-        "for (uint256 i = 0; i < 3; i++) {\n            if (((vectors >> i) & uint256(1)) == 1) count++;",
-        "pausedFeatures: count loop misses REDEEM (4 features, loop only iterates 3)",
+        "for (uint256 i = 0; i < featureCount; i++) {\n            if (((vectors >> i) & uint256(1)) == 1) count++;",
+        "for (uint256 i = 0; i < featureCount - 1; i++) {\n            if (((vectors >> i) & uint256(1)) == 1) count++;",
+        "pausedFeatures: count loop drops the highest feature (off-by-one misses BURN)",
     ),
     # === Policy lane wiring (transferPolicyIds reads) ===
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds);",
-        "if (policyType == TRANSFER_SENDER_POLICY) return uint64($.transferPolicyIds >> 64);",
-        "_readPolicyId: TRANSFER_SENDER_POLICY reads RECEIVER lane (wrong shift)",
+        "if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.sender;",
+        "if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.receiver;",
+        "_readPolicyId: TRANSFER_SENDER_POLICY reads RECEIVER lane (wrong field)",
     ),
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 64);",
-        "if (policyType == TRANSFER_RECEIVER_POLICY) return uint64($.transferPolicyIds >> 128);",
-        "_readPolicyId: TRANSFER_RECEIVER_POLICY reads EXECUTOR lane (wrong shift)",
+        "if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;",
+        "if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.executor;",
+        "_readPolicyId: TRANSFER_RECEIVER_POLICY reads EXECUTOR lane (wrong field)",
     ),
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds >> 128);",
-        "if (policyType == TRANSFER_EXECUTOR_POLICY) return uint64($.transferPolicyIds);",
-        "_readPolicyId: TRANSFER_EXECUTOR_POLICY reads SENDER lane (wrong shift)",
+        "if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;",
+        "if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.sender;",
+        "_readPolicyId: TRANSFER_EXECUTOR_POLICY reads SENDER lane (wrong field)",
     ),
     # === Permit cross-cutting ===
     Mutation(
         MOCK_B20,
-        "return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, block.chainid, address(this)));",
-        "return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, uint256(1), address(this)));",
+        "block.chainid,\n                address(this)",
+        "uint256(1),\n                address(this)",
         "DOMAIN_SEPARATOR: hardcoded chainId 1 (signatures replayable across forks)",
     ),
     Mutation(
         MOCK_B20,
-        "return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, block.chainid, address(this)));",
-        "return keccak256(abi.encode(EIP712_DOMAIN_TYPEHASH, block.chainid, address(0)));",
+        "block.chainid,\n                address(this)\n            )",
+        "block.chainid,\n                address(0)\n            )",
         "DOMAIN_SEPARATOR: verifyingContract hardcoded to zero (cross-token replay)",
     ),
     # === MockB20Stablecoin variant ===
@@ -349,8 +349,8 @@ MUTATIONS: list[Mutation] = [
     # === MockPolicyRegistry: authorization core ===
     Mutation(
         MOCK_POLICY,
-        "return _decodeType(packed) == PolicyType.ALLOWLIST ? member : !member;",
-        "return _decodeType(packed) == PolicyType.ALLOWLIST ? !member : member;",
+        "return _typeOf(policyId) == PolicyType.ALLOWLIST ? member : !member;",
+        "return _typeOf(policyId) == PolicyType.ALLOWLIST ? !member : member;",
         "isAuthorized: ALLOWLIST/BLOCKLIST polarity flipped (allowlist becomes blocklist and vice versa)",
     ),
     Mutation(
@@ -361,21 +361,21 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_POLICY,
-        "if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;\n        return MockPolicyRegistryStorage.layout().policies[policyId] != 0;",
-        "if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return false;\n        return MockPolicyRegistryStorage.layout().policies[policyId] != 0;",
+        "if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;",
+        "if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return false;",
         "policyExists: built-ins report as nonexistent (breaks token updatePolicy guard)",
     ),
     # === MockPolicyRegistry: policy creation ===
     Mutation(
         MOCK_POLICY,
-        "if (policyType != PolicyType.ALLOWLIST && policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();",
-        "if (policyType != PolicyType.ALLOWLIST || policyType != PolicyType.BLOCKLIST) revert InvalidPolicyType();",
-        "_create: && -> || in PolicyType guard (rejects every policy type, including valid ones)",
+        "return PolicyType(uint8(policyId >> POLICY_ID_TYPE_SHIFT));",
+        "return PolicyType(uint8(policyId));",
+        "_typeOf: omit type shift (every policyId decodes as PolicyType 0)",
     ),
     Mutation(
         MOCK_POLICY,
-        "if (admin == address(0)) revert ZeroAddress();",
-        "if (admin != address(0)) revert ZeroAddress();",
+        "if (admin == address(0)) revert ZeroAddress();\n        // Out-of-range",
+        "if (admin != address(0)) revert ZeroAddress();\n        // Out-of-range",
         "_create: zero-admin guard inverted (only zero-admin is allowed)",
     ),
     Mutation(
@@ -399,21 +399,21 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_POLICY,
-        "        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();\n        $.policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});",
-        "        if (_decodeAdmin(packed) == msg.sender) revert Unauthorized();\n        $.policies[policyId] = _encode({policyType: _decodeType(packed), admin: address(0)});",
+        "if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();\n        // Admin lane cleared",
+        "if (_decodeAdmin(packed) == msg.sender) revert Unauthorized();\n        // Admin lane cleared",
         "renounceAdmin: admin auth check inverted (anyone but admin can renounce)",
     ),
     # === MockPolicyRegistry: list membership ===
     Mutation(
         MOCK_POLICY,
-        "if (_decodeType(packed) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();",
-        "if (_decodeType(packed) == PolicyType.ALLOWLIST) revert IncompatiblePolicyType();",
+        "if (_typeOf(policyId) != PolicyType.ALLOWLIST) revert IncompatiblePolicyType();",
+        "if (_typeOf(policyId) == PolicyType.ALLOWLIST) revert IncompatiblePolicyType();",
         "updateAllowlist: type check inverted (only NON-allowlists accepted)",
     ),
     Mutation(
         MOCK_POLICY,
-        "if (_decodeType(packed) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();",
-        "if (_decodeType(packed) == PolicyType.BLOCKLIST) revert IncompatiblePolicyType();",
+        "if (_typeOf(policyId) != PolicyType.BLOCKLIST) revert IncompatiblePolicyType();",
+        "if (_typeOf(policyId) == PolicyType.BLOCKLIST) revert IncompatiblePolicyType();",
         "updateBlocklist: type check inverted",
     ),
     Mutation(
@@ -431,51 +431,51 @@ MUTATIONS: list[Mutation] = [
     ),
     Mutation(
         MOCK_POLICY,
-        "return address(uint160(packed >> PACKED_ADMIN_SHIFT));",
         "return address(uint160(packed));",
-        "_decodeAdmin: omits the shift (returns garbage that includes the policyType byte)",
+        "return address(uint160(packed >> 8));",
+        "_decodeAdmin: spurious shift corrupts the decoded admin address",
     ),
     Mutation(
         MOCK_POLICY,
-        "if (uint8(policyId >> POLICY_ID_TYPE_SHIFT) > uint8(type(PolicyType).max)) {\n            revert MalformedPolicyId(policyId);\n        }",
-        "if (uint8(policyId >> POLICY_ID_TYPE_SHIFT) >= uint8(type(PolicyType).max)) {\n            revert MalformedPolicyId(policyId);\n        }",
-        "_requireWellFormed: off-by-one (rejects last valid PolicyType discriminator)",
+        "return uint8(policyId >> POLICY_ID_TYPE_SHIFT) <= uint8(type(PolicyType).max);",
+        "return uint8(policyId >> POLICY_ID_TYPE_SHIFT) < uint8(type(PolicyType).max);",
+        "_isWellFormed: off-by-one (rejects last valid PolicyType discriminator)",
     ),
     # === _writePolicyId lane writes (MockB20, mirror of the read mutations) ===
     Mutation(
         MOCK_B20,
-        "if (policyType == TRANSFER_SENDER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
-        "if (policyType == TRANSFER_SENDER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
-        "_writePolicyId: TRANSFER_SENDER_POLICY writes to RECEIVER lane (lane swap)",
+        "if (policyScope == TRANSFER_SENDER_POLICY) {\n            $.transferPolicyIds.sender = newPolicyId;",
+        "if (policyScope == TRANSFER_SENDER_POLICY) {\n            $.transferPolicyIds.receiver = newPolicyId;",
+        "_writePolicyId: TRANSFER_SENDER_POLICY writes to RECEIVER lane (field swap)",
     ),
     Mutation(
         MOCK_B20,
-        "} else if (policyType == TRANSFER_RECEIVER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 64)) | (uint256(newPolicyId) << 64);",
-        "} else if (policyType == TRANSFER_RECEIVER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~(mask << 128)) | (uint256(newPolicyId) << 128);",
+        "} else if (policyScope == TRANSFER_RECEIVER_POLICY) {\n            $.transferPolicyIds.receiver = newPolicyId;",
+        "} else if (policyScope == TRANSFER_RECEIVER_POLICY) {\n            $.transferPolicyIds.executor = newPolicyId;",
         "_writePolicyId: TRANSFER_RECEIVER_POLICY writes to EXECUTOR lane",
     ),
     Mutation(
         MOCK_B20,
-        "} else if (policyType == MINT_RECEIVER_POLICY) {\n            $.mintPolicyIds = ($.mintPolicyIds & ~mask) | uint256(newPolicyId);",
-        "} else if (policyType == MINT_RECEIVER_POLICY) {\n            $.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
-        "_writePolicyId: MINT_RECEIVER_POLICY writes to transferPolicyIds slot (wrong storage var)",
+        "} else if (policyScope == MINT_RECEIVER_POLICY) {\n            $.mintPolicyIds.receiver = newPolicyId;",
+        "} else if (policyScope == MINT_RECEIVER_POLICY) {\n            $.transferPolicyIds.receiver = newPolicyId;",
+        "_writePolicyId: MINT_RECEIVER_POLICY writes to transfer lane (wrong storage field)",
     ),
     Mutation(
         MOCK_B20,
-        "$.transferPolicyIds = ($.transferPolicyIds & ~mask) | uint256(newPolicyId);",
-        "$.transferPolicyIds = ($.transferPolicyIds & mask) | uint256(newPolicyId);",
-        "_writePolicyId: mask not inverted on SENDER write (zeroes RECEIVER + EXECUTOR lanes)",
+        "if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;",
+        "if (policyScope == MINT_RECEIVER_POLICY) return $.transferPolicyIds.receiver;",
+        "_readPolicyId: MINT_RECEIVER_POLICY reads transfer lane (wrong storage field)",
     ),
     # === _writeStablecoinStorage ===
     Mutation(
         MOCK_FACTORY,
-        "_writeString(\n            token,\n            MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),\n            currency_\n        );",
-        "_writeString(\n            token,\n            MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET),\n            currency_\n        );",
+        "_writeString(token, MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET), currency_);",
+        "_writeString(token, MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET), currency_);",
         "_writeStablecoinStorage: writes currency to base-token NAME slot instead of variant namespace",
     ),
     Mutation(
         MOCK_FACTORY,
-        "        _writeString(\n            token,\n            MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET),\n            currency_\n        );\n    }",
+        "        _writeString(token, MockB20StablecoinStorage.slotOf(MockB20StablecoinStorage.CURRENCY_OFFSET), currency_);\n    }",
         "        // currency write elided\n    }",
         "_writeStablecoinStorage: never writes the currency field (silent: currency() returns empty)",
     ),

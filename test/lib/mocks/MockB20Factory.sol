@@ -100,10 +100,9 @@ contract MockB20Factory is IB20Factory {
         //       Per-variant features gate which variants can be created at
         //       any moment. Variant-feature mapping:
         //         STABLECOIN → B20_STABLECOIN
-        //         ASSET / DEFAULT → B20_ASSET
-        //       (DEFAULT is folded under `B20_ASSET` until BOP-253 removes
-        //       the variant; the dedicated `B20_TOKEN` feature was retired
-        //       by BOP-257.)
+        //         ASSET      → B20_ASSET
+        //       (The dedicated `B20_TOKEN` feature was retired by BOP-257
+        //       and the `DEFAULT` variant by BOP-253.)
         _enforceActivationGates(variant);
 
         // -- 1. Decode + validate, get the common params --
@@ -147,6 +146,9 @@ contract MockB20Factory is IB20Factory {
             decimals = 6;
             currency_ = p.currency;
         } else {
+            // Unreachable in Solidity: an out-of-range `B20Variant` is rejected by ABI
+            // enum-decoding (Panic 0x21) before this body runs. Retained to mirror the Rust
+            // precompile, which decodes the raw discriminator and surfaces this typed revert.
             revert InvalidVariant();
         }
 
@@ -260,7 +262,7 @@ contract MockB20Factory is IB20Factory {
     // ============================================================
 
     /// @dev Reverts with `IActivationRegistry.FeatureNotActivated(feature)` if
-    ///      the variant-specific gate (`B20_ASSET` for ASSET / DEFAULT,
+    ///      the variant-specific gate (`B20_ASSET` for ASSET,
     ///      `B20_STABLECOIN` for STABLECOIN) is not currently activated in
     ///      the registry. Factored out of `createB20` to keep the dispatcher
     ///      body under the EVM stack-depth limit.
