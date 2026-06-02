@@ -196,12 +196,12 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Security.batchMint, (recipients, amounts));
     }
 
-    /// @notice Encodes a bootstrap initCall to `IB20Security.updateCustomMetadata`.
+    /// @notice Encodes a bootstrap initCall to `IB20Security.updateExtraMetadata`.
     ///
     /// @param key   Metadata entry key (e.g. `"category"`).
     /// @param value New value, or empty string to remove.
-    function encodeUpdateCustomMetadata(string memory key, string memory value) internal pure returns (bytes memory) {
-        return abi.encodeCall(IB20Security.updateCustomMetadata, (key, value));
+    function encodeUpdateExtraMetadata(string memory key, string memory value) internal pure returns (bytes memory) {
+        return abi.encodeCall(IB20Security.updateExtraMetadata, (key, value));
     }
 
     /// @notice Encodes a bootstrap initCall to `IB20Security.updateMultiplier`.
@@ -295,15 +295,15 @@ library B20FactoryLib {
         }
     }
 
-    /// @notice Builds the `updateCustomMetadata` initCalls implied by parallel
+    /// @notice Builds the `updateExtraMetadata` initCalls implied by parallel
     ///         `keys` / `values` arrays. All entries are emitted in input order.
     ///
     /// @dev Reverts with `LengthMismatch` when `keys.length != values.length`.
     ///
     /// @param keys   Metadata entry keys (e.g. `"category"`).
     /// @param values Values parallel to `keys`.
-    /// @return initCalls ABI-encoded `updateCustomMetadata` initCalls.
-    function buildCustomMetadataUpdates(string[] memory keys, string[] memory values)
+    /// @return initCalls ABI-encoded `updateExtraMetadata` initCalls.
+    function buildExtraMetadataUpdates(string[] memory keys, string[] memory values)
         internal
         pure
         returns (bytes[] memory initCalls)
@@ -314,7 +314,7 @@ library B20FactoryLib {
 
         initCalls = new bytes[](keys.length);
         for (uint256 k = 0; k < keys.length; k++) {
-            initCalls[k] = encodeUpdateCustomMetadata(keys[k], values[k]);
+            initCalls[k] = encodeUpdateExtraMetadata(keys[k], values[k]);
         }
     }
 

@@ -12,7 +12,7 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 /// `_mint` / `_pause` action wrappers, and the security-variant token
 /// deployed by `_deployToken`). Adds the variant-specific role holder
 /// (`operator`) plus helpers for the announcement, multiplier,
-/// and custom-metadata surfaces.
+/// and extra-metadata surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
 /// variant-only surface (`announce`, `batchMint`, etc.) cast inline via
@@ -22,9 +22,9 @@ contract B20SecurityTest is B20Test {
     address internal operator = makeAddr("operator");
 
     // ============================================================
-    //          SECURITY-VARIANT CUSTOM-METADATA FIXTURES
+    //           SECURITY-VARIANT EXTRA-METADATA FIXTURES
     // ============================================================
-    // Test-only metadata-entry keys. The `customMetadata` surface is
+    // Test-only metadata-entry keys. The `extraMetadata` surface is
     // a variant-agnostic key/value store; these three keys form a
     // coherent generic example so tests don't accidentally encode a
     // securities-specific assumption. All entries are post-creation

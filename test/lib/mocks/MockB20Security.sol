@@ -12,7 +12,7 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 /// @notice Reference implementation of the `IB20Security` variant.
 ///         Extends `MockB20` with the announcement bracket,
 ///         multiplier-based scaling, batched issuance, and
-///         custom-metadata surfaces; all base behavior is
+///         extra-metadata surfaces; all base behavior is
 ///         inherited unchanged.
 ///
 /// @dev    Variant-specific state lives in `MockB20SecurityStorage`'s
@@ -46,7 +46,7 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 ///
 ///         **Factory bootstrap.** Operator and admin gates honor
 ///         `_isPrivileged()` so the factory can stage initial
-///         announcements, batched issuance, multipliers, and custom-metadata
+///         announcements, batched issuance, multipliers, and extra-metadata
 ///         entries during the bootstrap window without first granting
 ///         itself roles. Token invariants (supply-cap math, balance
 ///         accounting) are NOT bypassed anywhere.
@@ -159,17 +159,17 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
-    //                       CUSTOM METADATA
+    //                       EXTRA METADATA
     // ============================================================
 
-    function customMetadata(string calldata key) external view returns (string memory) {
-        return MockB20SecurityStorage.layout().customMetadata[key];
+    function extraMetadata(string calldata key) external view returns (string memory) {
+        return MockB20SecurityStorage.layout().extraMetadata[key];
     }
 
-    function updateCustomMetadata(string calldata key, string calldata value) external onlyRole(METADATA_ROLE) {
+    function updateExtraMetadata(string calldata key, string calldata value) external onlyRole(METADATA_ROLE) {
         if (bytes(key).length == 0) revert InvalidMetadataKey();
-        MockB20SecurityStorage.layout().customMetadata[key] = value;
-        emit CustomMetadataUpdated(key, value);
+        MockB20SecurityStorage.layout().extraMetadata[key] = value;
+        emit ExtraMetadataUpdated(key, value);
     }
 
     // ============================================================

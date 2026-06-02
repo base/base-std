@@ -8,16 +8,16 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 
 import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 
-/// @title Sequential revert-order test for `updateCustomMetadata`.
+/// @title Sequential revert-order test for `updateExtraMetadata`.
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(METADATA_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///         2. INVALID-METADATA-KEY (`bytes(key).length == 0`) → `InvalidMetadataKey`
 ///
 ///         Walks from all conditions broken to success, fixing one per step.
-contract B20SecurityUpdateCustomMetadataRevertOrderTest is B20SecurityTest {
+contract B20SecurityUpdateExtraMetadataRevertOrderTest is B20SecurityTest {
     /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
-    function test_updateCustomMetadata_revertOrder(address caller, string calldata value) public {
+    function test_updateExtraMetadata_revertOrder(address caller, string calldata value) public {
         // Exclude precompiles (which can distort msg.sender) and admin (needed
         // internally by _grantRole to approve the role grant).
         _assumeValidCaller(caller);
@@ -30,7 +30,7 @@ contract B20SecurityUpdateCustomMetadataRevertOrderTest is B20SecurityTest {
         vm.expectRevert(
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.METADATA_ROLE)
         );
-        security().updateCustomMetadata("", value);
+        security().updateExtraMetadata("", value);
 
         // Fix: grant METADATA_ROLE to caller.
         _grantRole(B20Constants.METADATA_ROLE, caller);
@@ -38,12 +38,12 @@ contract B20SecurityUpdateCustomMetadataRevertOrderTest is B20SecurityTest {
         // 2. INVALID-METADATA-KEY fires: caller now holds the role, but key is still empty.
         vm.prank(caller);
         vm.expectRevert(IB20Security.InvalidMetadataKey.selector);
-        security().updateCustomMetadata("", value);
+        security().updateExtraMetadata("", value);
 
         // Fix: pass a non-empty key.
 
         // Success: all conditions resolved.
         vm.prank(caller);
-        security().updateCustomMetadata(METADATA_EXAMPLE_1, value);
+        security().updateExtraMetadata(METADATA_EXAMPLE_1, value);
     }
 }

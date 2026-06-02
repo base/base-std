@@ -7,7 +7,7 @@ import {IB20} from "./IB20.sol";
 /// @author Coinbase
 ///
 /// @notice A B-20 token variant for tokenized securities. Extends `IB20` with announcements,
-///         multiplier-based scaling, batched mint for corporate actions, and custom-metadata
+///         multiplier-based scaling, batched mint for corporate actions, and extra-metadata
 ///         entries.
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
@@ -17,7 +17,7 @@ interface IB20Security is IB20 {
     /// @notice `announce` was called with an `id` that has already been consumed.
     error AnnouncementIdAlreadyUsed(string id);
 
-    /// @notice `updateCustomMetadata` was called with an empty `key`.
+    /// @notice `updateExtraMetadata` was called with an empty `key`.
     error InvalidMetadataKey();
 
     /// @notice A batched function was called with parallel arrays of differing lengths.
@@ -49,8 +49,8 @@ interface IB20Security is IB20 {
     /// @notice Emitted by `updateMultiplier`.
     event MultiplierUpdated(uint256 multiplier);
 
-    /// @notice Emitted by `updateCustomMetadata`. An empty `value` indicates removal.
-    event CustomMetadataUpdated(string key, string value);
+    /// @notice Emitted by `updateExtraMetadata`. An empty `value` indicates removal.
+    event ExtraMetadataUpdated(string key, string value);
 
     /// @notice Emitted by `announce` to open an announcement bracket.
     event Announcement(address indexed caller, string id, string description, string uri);
@@ -63,7 +63,7 @@ interface IB20Security is IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Required to call `announce` and `updateMultiplier`. The metadata setters
-    ///         (`updateName`, `updateSymbol`, `updateCustomMetadata`) are gated by the
+    ///         (`updateName`, `updateSymbol`, `updateExtraMetadata`) are gated by the
     ///         inherited `METADATA_ROLE` instead.
     /// @return Role constant.
     function OPERATOR_ROLE() external view returns (bytes32);
@@ -174,7 +174,7 @@ interface IB20Security is IB20 {
     function batchMint(address[] calldata recipients, uint256[] calldata amounts) external;
 
     /*//////////////////////////////////////////////////////////////
-                            CUSTOM METADATA
+                             EXTRA METADATA
     //////////////////////////////////////////////////////////////*/
 
     /// @notice The value of the named metadata entry, or the empty string if not set. A
@@ -184,15 +184,15 @@ interface IB20Security is IB20 {
     /// @param key Metadata entry key.
     ///
     /// @return Current value, or the empty string.
-    function customMetadata(string calldata key) external view returns (string memory);
+    function extraMetadata(string calldata key) external view returns (string memory);
 
-    /// @notice Sets, updates, or removes a custom-metadata entry. An empty `value` removes the
-    ///         entry. Emits `CustomMetadataUpdated`.
+    /// @notice Sets, updates, or removes an extra-metadata entry. An empty `value` removes the
+    ///         entry. Emits `ExtraMetadataUpdated`.
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `METADATA_ROLE`.
     /// @dev Reverts with `InvalidMetadataKey` when `key` is the empty string.
     ///
     /// @param key   Metadata entry key (e.g. `"category"`).
     /// @param value New value, or empty string to remove.
-    function updateCustomMetadata(string calldata key, string calldata value) external;
+    function updateExtraMetadata(string calldata key, string calldata value) external;
 }

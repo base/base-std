@@ -33,7 +33,7 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///         - 0: decimals (factory-written at creation)
     ///         - 1: multiplier
     ///         - 2: usedAnnouncementIds[id]
-    ///         - 3: customMetadata[key]  (one example key mutated; the other
+    ///         - 3: extraMetadata[key]  (one example key mutated; the other
     ///              left empty to confirm the factory seeds no entries)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
@@ -66,19 +66,19 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
             "security slot 2: usedAnnouncementIds[id] must be true after announce"
         );
 
-        // ---------- customMetadata[key] (slot 3, hashed by key) ----------
+        // ---------- extraMetadata[key] (slot 3, hashed by key) ----------
         // The factory does not seed any entry at creation, so a fresh token's
         // unwritten key reads as empty. The post-creation write is pinned to
         // the canonical string-field encoding at its derived slot.
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(METADATA_EXAMPLE_1)),
+            vm.load(tokenAddr, MockB20SecurityStorage.extraMetadataSlot(METADATA_EXAMPLE_1)),
             bytes32(0),
-            "security slot 3: customMetadata[example_1] must remain zero (factory seeds no entries)"
+            "security slot 3: extraMetadata[example_1] must remain zero (factory seeds no entries)"
         );
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(METADATA_EXAMPLE_3)),
+            vm.load(tokenAddr, MockB20SecurityStorage.extraMetadataSlot(METADATA_EXAMPLE_3)),
             _expectedStringFieldSlot(REFERENCE_VALUE),
-            "security slot 3: customMetadata[example_3] must hold the post-creation short-string encoding"
+            "security slot 3: extraMetadata[example_3] must hold the post-creation short-string encoding"
         );
     }
 
@@ -89,12 +89,12 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     function _populate() internal {
         // multiplier: write the non-WAD marker via the public surface.
         _updateMultiplier(MULTIPLIER_MARKER);
-        // customMetadata[example_3]: post-creation metadata-admin write. The
+        // extraMetadata[example_3]: post-creation metadata-admin write. The
         // factory does not seed any entry at creation; every other key
         // defaults to empty.
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);
-        security().updateCustomMetadata(METADATA_EXAMPLE_3, REFERENCE_VALUE);
+        security().updateExtraMetadata(METADATA_EXAMPLE_3, REFERENCE_VALUE);
         // usedAnnouncementIds[ANNOUNCEMENT_ID]: flip via announce.
         _announce(ANNOUNCEMENT_ID);
     }

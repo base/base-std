@@ -335,7 +335,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies createToken emits B20Created with decimals=6 for the security variant
     /// @dev Variant-specific dedicated event test: the security arm pins decimals=6 and asserts
     ///      empty `variantEventParams` (SECURITY has no variant-specific immutable identity
-    ///      fields beyond the base set; custom-metadata entries are mutable and surfaced via
+    ///      fields beyond the base set; extra-metadata entries are mutable and surfaced via
     ///      their own update events).
     function test_createB20_success_emitsB20Created_security(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);
