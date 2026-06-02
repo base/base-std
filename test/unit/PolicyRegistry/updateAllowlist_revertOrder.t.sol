@@ -29,7 +29,6 @@ contract PolicyRegistryUpdateAllowlistRevertOrderTest is PolicyRegistryTest {
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         policyRegistry.updateAllowlist(ghostId, true, tooMany);
 
-        // Fix: create a BLOCKLIST policy with alice as admin (exists, but wrong type for updateAllowlist).
         uint64 blocklistId = _createBlocklist(admin, alice);
 
         // 2. INCOMPATIBLE-TYPE: policy exists as BLOCKLIST; updateAllowlist requires ALLOWLIST.
@@ -38,7 +37,6 @@ contract PolicyRegistryUpdateAllowlistRevertOrderTest is PolicyRegistryTest {
         vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
         policyRegistry.updateAllowlist(blocklistId, true, tooMany);
 
-        // Fix: create an ALLOWLIST policy with alice as admin.
         uint64 policyId = _createAllowlist(admin, alice);
 
         // 3. UNAUTHORIZED: policy is ALLOWLIST but attacker is not the policy admin (alice).
@@ -47,14 +45,10 @@ contract PolicyRegistryUpdateAllowlistRevertOrderTest is PolicyRegistryTest {
         vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
         policyRegistry.updateAllowlist(policyId, true, tooMany);
 
-        // Fix: call as alice (the policy admin).
-
         // 4. BATCH-SIZE: alice is the admin, but accounts.length > MAX_BATCH_SIZE.
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_BATCH_SIZE));
         policyRegistry.updateAllowlist(policyId, true, tooMany);
-
-        // Fix: use an empty accounts array.
 
         // Success
         vm.prank(alice);

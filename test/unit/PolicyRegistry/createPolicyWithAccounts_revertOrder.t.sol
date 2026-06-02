@@ -29,14 +29,10 @@ contract PolicyRegistryCreatePolicyWithAccountsRevertOrderTest is PolicyRegistry
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
         policyRegistry.createPolicyWithAccounts(address(0), pt, tooMany);
 
-        // Fix: use a non-zero admin.
-
         // 2. BATCH-SIZE: valid admin, but accounts.length > MAX_BATCH_SIZE → BatchSizeTooLarge.
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_BATCH_SIZE));
         policyRegistry.createPolicyWithAccounts(admin_, pt, tooMany);
-
-        // Fix: use an empty accounts array.
 
         // Success
         vm.prank(caller);

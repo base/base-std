@@ -23,8 +23,6 @@ contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
         policyRegistry.createPolicy(address(0), pt);
 
-        // Fix: use a non-zero admin.
-
         // Success
         vm.prank(caller);
         policyRegistry.createPolicy(admin_, pt);

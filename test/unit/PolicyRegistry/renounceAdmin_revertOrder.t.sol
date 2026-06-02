@@ -24,15 +24,12 @@ contract PolicyRegistryRenounceAdminRevertOrderTest is PolicyRegistryTest {
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         policyRegistry.renounceAdmin(ghostId);
 
-        // Fix: create an allowlist policy with alice as admin.
         uint64 policyId = policyRegistry.createPolicy(alice, IPolicyRegistry.PolicyType.ALLOWLIST);
 
         // 2. UNAUTHORIZED: attacker is not the policy admin (alice).
         vm.prank(attacker);
         vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
         policyRegistry.renounceAdmin(policyId);
-
-        // Fix: call as alice (the policy admin).
 
         // Success
         vm.prank(alice);

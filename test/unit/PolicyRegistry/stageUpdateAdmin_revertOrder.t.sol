@@ -24,15 +24,12 @@ contract PolicyRegistryStageUpdateAdminRevertOrderTest is PolicyRegistryTest {
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         policyRegistry.stageUpdateAdmin(ghostId, newAdmin);
 
-        // Fix: create an allowlist policy with alice as admin.
         uint64 policyId = policyRegistry.createPolicy(alice, IPolicyRegistry.PolicyType.ALLOWLIST);
 
         // 2. UNAUTHORIZED: attacker is not the policy admin (alice).
         vm.prank(attacker);
         vm.expectRevert(IPolicyRegistry.Unauthorized.selector);
         policyRegistry.stageUpdateAdmin(policyId, newAdmin);
-
-        // Fix: call as alice (the policy admin).
 
         // Success
         vm.prank(alice);
