@@ -9,7 +9,7 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 /// @title Differential check-order tests for `announce`.
 ///
 /// @notice **Canonical order (Solidity reference):**
-///         1. ROLE (`onlyRole(SECURITY_OPERATOR_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
+///         1. ROLE (`onlyRole(OPERATOR_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///         2. ID-ALREADY-USED (`$.usedAnnouncementIds[id]`) → `AnnouncementIdAlreadyUsed`
 ///         3. (per-internalCall) MALFORMED (`_checkSelector` rejects < 4 bytes or self-call)
 ///            → `InternalCallMalformed` / `AnnouncementInProgress`
@@ -36,12 +36,10 @@ contract B20SecurityAnnounceRevertOrderTest is B20SecurityTest {
         vm.assume(caller != admin);
         vm.assume(caller != operator);
         _announce(id); // consume the id once
-        // caller lacks SECURITY_OPERATOR_ROLE AND id is already used.
+        // caller lacks OPERATOR_ROLE AND id is already used.
 
         vm.prank(caller);
-        vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, SECURITY_OPERATOR_ROLE)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, OPERATOR_ROLE));
         security().announce(new bytes[](0), id, "desc", "uri");
     }
 
@@ -52,9 +50,7 @@ contract B20SecurityAnnounceRevertOrderTest is B20SecurityTest {
         // caller lacks role AND would supply a malformed inner call.
 
         vm.prank(caller);
-        vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, SECURITY_OPERATOR_ROLE)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, OPERATOR_ROLE));
         security().announce(_singletonBytes(MALFORMED_BLOB), id, "desc", "uri");
     }
 

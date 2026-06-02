@@ -50,7 +50,7 @@ library B20FactoryLib {
     }
 
     /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`. Superset of `B20RoleHolders`
-    ///         with a `SECURITY_OPERATOR_ROLE` slot.
+    ///         with an `OPERATOR_ROLE` slot.
     ///
     /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20SecurityCreateParams.initialAdmin`, not this struct.
     struct B20SecurityRoleHolders {
@@ -66,8 +66,8 @@ library B20FactoryLib {
         address unpauser;
         /// @dev Account granted `METADATA_ROLE`.
         address metadataAdmin;
-        /// @dev Account granted `SECURITY_OPERATOR_ROLE`.
-        address securityOperator;
+        /// @dev Account granted `OPERATOR_ROLE`.
+        address operator;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -196,16 +196,16 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Security.batchMint, (recipients, amounts));
     }
 
-    /// @notice Encodes a bootstrap initCall to `IB20Security.updateSecurityIdentifier`.
+    /// @notice Encodes a bootstrap initCall to `IB20Security.updateCustomMetadata`.
     ///
-    /// @param identifierType Identifier category (e.g. `"CUSIP"`).
+    /// @param identifierType Metadata entry name (e.g. `"CUSIP"`).
     /// @param value          New value, or empty string to remove.
-    function encodeUpdateSecurityIdentifier(string memory identifierType, string memory value)
+    function encodeUpdateCustomMetadata(string memory identifierType, string memory value)
         internal
         pure
         returns (bytes memory)
     {
-        return abi.encodeCall(IB20Security.updateSecurityIdentifier, (identifierType, value));
+        return abi.encodeCall(IB20Security.updateCustomMetadata, (identifierType, value));
     }
 
     /// @notice Encodes a bootstrap initCall to `IB20Security.updateMultiplier`.
@@ -255,7 +255,7 @@ library B20FactoryLib {
         roles[3] = B20Constants.PAUSE_ROLE;
         roles[4] = B20Constants.UNPAUSE_ROLE;
         roles[5] = B20Constants.METADATA_ROLE;
-        roles[6] = B20Constants.SECURITY_OPERATOR_ROLE;
+        roles[6] = B20Constants.OPERATOR_ROLE;
 
         address[] memory accounts = new address[](7);
         accounts[0] = holders.minter;
@@ -264,7 +264,7 @@ library B20FactoryLib {
         accounts[3] = holders.pauser;
         accounts[4] = holders.unpauser;
         accounts[5] = holders.metadataAdmin;
-        accounts[6] = holders.securityOperator;
+        accounts[6] = holders.operator;
 
         return buildRoleGrants(roles, accounts);
     }
@@ -299,15 +299,15 @@ library B20FactoryLib {
         }
     }
 
-    /// @notice Builds the `updateSecurityIdentifier` initCalls implied by parallel
+    /// @notice Builds the `updateCustomMetadata` initCalls implied by parallel
     ///         `identifierTypes` / `identifierValues` arrays. All entries are emitted in input order.
     ///
     /// @dev Reverts with `LengthMismatch` when `identifierTypes.length != identifierValues.length`.
     ///
-    /// @param identifierTypes  Identifier categories (e.g. `"CUSIP"`).
+    /// @param identifierTypes  Metadata entry names (e.g. `"CUSIP"`).
     /// @param identifierValues Values parallel to `identifierTypes`.
-    /// @return initCalls ABI-encoded `updateSecurityIdentifier` initCalls.
-    function buildSecurityIdentifierUpdates(string[] memory identifierTypes, string[] memory identifierValues)
+    /// @return initCalls ABI-encoded `updateCustomMetadata` initCalls.
+    function buildCustomMetadataUpdates(string[] memory identifierTypes, string[] memory identifierValues)
         internal
         pure
         returns (bytes[] memory initCalls)
@@ -318,7 +318,7 @@ library B20FactoryLib {
 
         initCalls = new bytes[](identifierTypes.length);
         for (uint256 k = 0; k < identifierTypes.length; k++) {
-            initCalls[k] = encodeUpdateSecurityIdentifier(identifierTypes[k], identifierValues[k]);
+            initCalls[k] = encodeUpdateCustomMetadata(identifierTypes[k], identifierValues[k]);
         }
     }
 

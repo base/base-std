@@ -353,8 +353,11 @@ library MockB20Storage {
 ///         - `usedAnnouncementIds` keys directly on the raw `string id`
 ///           that callers pass to `announce` / `isAnnouncementIdUsed`,
 ///           not on a hash, so the on-chain query mirrors the API.
-///         - `identifiers` keys directly on the raw `identifierType`
-///           string (e.g. `"ISIN"`); empty value means unset/removed.
+///         - `identifiers` (the storage field backing the public
+///           `customMetadata` / `updateCustomMetadata` surface) keys
+///           directly on the raw `identifierType` string (e.g.
+///           `"ISIN"`); empty value means unset/removed. The field name
+///           is retained to keep the ERC-7201 slot layout stable.
 library MockB20SecurityStorage {
     /// @custom:storage-location erc7201:base.b20.security
     struct Layout {
@@ -375,8 +378,11 @@ library MockB20SecurityStorage {
         // Tracks consumed announcement IDs; flips to true on first
         // `announce` for a given id, and remains true forever.
         mapping(string id => bool used) usedAnnouncementIds;
-        // ---------- Security identifiers ----------
-        // ISIN, CUSIP, FIGI, etc. Empty string means unset/removed.
+        // ---------- Custom metadata ----------
+        // Named string entries (ISIN, CUSIP, FIGI, etc.). Empty string
+        // means unset/removed. Field name retained for storage-layout
+        // stability across the rename of the public surface to
+        // `customMetadata` / `updateCustomMetadata`.
         mapping(string identifierType => string value) identifiers;
     }
 
@@ -441,10 +447,13 @@ library MockB20SecurityStorage {
         return keccak256(abi.encodePacked(id, usedAnnouncementIdsBaseSlot()));
     }
 
-    /// @notice Slot of `identifiers[identifierType]` (the value, which
-    ///         is itself a string and follows Solidity's short/long
-    ///         encoding convention).
-    function identifierSlot(string memory identifierType) internal pure returns (bytes32) {
+    /// @notice Slot of the custom-metadata entry keyed by `identifierType`
+    ///         (the value, which is itself a string and follows
+    ///         Solidity's short/long encoding convention). The underlying
+    ///         storage field retains its `identifiers` name to preserve
+    ///         the ERC-7201 slot layout across the rename to
+    ///         `customMetadata` on the public surface.
+    function customMetadataSlot(string memory identifierType) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(identifierType, identifiersBaseSlot()));
     }
 }

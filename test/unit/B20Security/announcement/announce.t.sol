@@ -11,8 +11,8 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {B20Constants} from "src/lib/B20Constants.sol";
 
 contract B20SecurityAnnounceTest is B20SecurityTest {
-    /// @notice Verifies announce reverts when caller lacks SECURITY_OPERATOR_ROLE
-    /// @dev Access control: announce is `onlyRole(SECURITY_OPERATOR_ROLE)`. Non-role-holders
+    /// @notice Verifies announce reverts when caller lacks OPERATOR_ROLE
+    /// @dev Access control: announce is `onlyRole(OPERATOR_ROLE)`. Non-role-holders
     ///      hit AccessControlUnauthorizedAccount before any other check.
     function test_announce_revert_unauthorized(address caller, string calldata id) public {
         _assumeValidCaller(caller);
@@ -20,9 +20,7 @@ contract B20SecurityAnnounceTest is B20SecurityTest {
         vm.assume(caller != operator);
 
         vm.prank(caller);
-        vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, SECURITY_OPERATOR_ROLE)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, OPERATOR_ROLE));
         security().announce(new bytes[](0), id, "desc", "uri");
     }
 

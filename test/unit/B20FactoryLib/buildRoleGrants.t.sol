@@ -227,8 +227,8 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
     /// @notice A fully-populated `B20SecurityRoleHolders` bundle emits the
     ///         seven grants in struct-field order.
     /// @dev    Same field-to-role pinning as the IB20 bundle, extended to
-    ///         the security-only `securityOperator` slot. Catches any
-    ///         swap among the seven role IDs.
+    ///         the security-only `operator` slot. Catches any swap
+    ///         among the seven role IDs.
     function test_buildRoleGrants_securityBundle_success_emitsAllSevenInStructOrder(
         address minter_,
         address burner_,
@@ -236,7 +236,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         address pauser_,
         address unpauser_,
         address metadataAdmin_,
-        address securityOperator_
+        address operator_
     ) public pure {
         vm.assume(minter_ != address(0));
         vm.assume(burner_ != address(0));
@@ -244,7 +244,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         vm.assume(pauser_ != address(0));
         vm.assume(unpauser_ != address(0));
         vm.assume(metadataAdmin_ != address(0));
-        vm.assume(securityOperator_ != address(0));
+        vm.assume(operator_ != address(0));
 
         B20FactoryLib.B20SecurityRoleHolders memory holders = B20FactoryLib.B20SecurityRoleHolders({
             minter: minter_,
@@ -253,7 +253,7 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
             pauser: pauser_,
             unpauser: unpauser_,
             metadataAdmin: metadataAdmin_,
-            securityOperator: securityOperator_
+            operator: operator_
         });
 
         bytes[] memory result = B20FactoryLib.buildRoleGrants(holders);
@@ -271,23 +271,16 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
         assertEq(
             result[5], abi.encodeCall(IB20.grantRole, (B20Constants.METADATA_ROLE, metadataAdmin_)), "5: METADATA_ROLE"
         );
-        assertEq(
-            result[6],
-            abi.encodeCall(IB20.grantRole, (B20Constants.SECURITY_OPERATOR_ROLE, securityOperator_)),
-            "6: SECURITY_OPERATOR_ROLE"
-        );
+        assertEq(result[6], abi.encodeCall(IB20.grantRole, (B20Constants.OPERATOR_ROLE, operator_)), "6: OPERATOR_ROLE");
     }
 
     /// @notice A `B20SecurityRoleHolders` bundle with only the
     ///         security-only slot populated emits exactly that one
     ///         grant.
-    /// @dev    Pins that `SECURITY_OPERATOR_ROLE` picks up its slot
-    ///         position and the IB20 slots are skipped when zero.
-    function test_buildRoleGrants_securityBundle_success_emitsOnlySecurityOnlySlot(address securityOperator_)
-        public
-        pure
-    {
-        vm.assume(securityOperator_ != address(0));
+    /// @dev    Pins that `OPERATOR_ROLE` picks up its slot position
+    ///         and the IB20 slots are skipped when zero.
+    function test_buildRoleGrants_securityBundle_success_emitsOnlySecurityOnlySlot(address operator_) public pure {
+        vm.assume(operator_ != address(0));
 
         B20FactoryLib.B20SecurityRoleHolders memory holders = B20FactoryLib.B20SecurityRoleHolders({
             minter: address(0),
@@ -296,16 +289,12 @@ contract B20FactoryLibBuildRoleGrantsTest is B20FactoryLibTest {
             pauser: address(0),
             unpauser: address(0),
             metadataAdmin: address(0),
-            securityOperator: securityOperator_
+            operator: operator_
         });
 
         bytes[] memory result = B20FactoryLib.buildRoleGrants(holders);
 
         assertEq(result.length, 1, "exactly the security-only entry must survive");
-        assertEq(
-            result[0],
-            abi.encodeCall(IB20.grantRole, (B20Constants.SECURITY_OPERATOR_ROLE, securityOperator_)),
-            "securityOperator only"
-        );
+        assertEq(result[0], abi.encodeCall(IB20.grantRole, (B20Constants.OPERATOR_ROLE, operator_)), "operator only");
     }
 }

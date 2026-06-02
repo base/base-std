@@ -33,7 +33,9 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///         - 0: decimals (factory-written at creation)
     ///         - 1: multiplier
     ///         - 2: usedAnnouncementIds[id]
-    ///         - 3: identifiers[identifierType]  (FIGI mutated)
+    ///         - 3: identifiers[identifierType]  (FIGI mutated; the field
+    ///              name preserves the ERC-7201 slot layout across the
+    ///              public-surface rename to `customMetadata`)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -70,12 +72,12 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
         // ISIN slot is empty. The post-creation FIGI write is pinned to the
         // canonical string-field encoding at its derived slot.
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_ISIN)),
+            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(IDENTIFIER_ISIN)),
             bytes32(0),
-            "security slot 3: identifiers[ISIN] must remain zero (factory seeds no identifiers)"
+            "security slot 3: identifiers[ISIN] must remain zero (factory seeds no entries)"
         );
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_FIGI)),
+            vm.load(tokenAddr, MockB20SecurityStorage.customMetadataSlot(IDENTIFIER_FIGI)),
             _expectedStringFieldSlot(FIGI_VALUE),
             "security slot 3: identifiers[FIGI] must hold the post-creation short-string encoding"
         );
@@ -88,11 +90,12 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     function _populate() internal {
         // multiplier: write the non-WAD marker via the public surface.
         _updateMultiplier(MULTIPLIER_MARKER);
-        // identifiers[FIGI]: post-creation operator write. The factory does not
-        // seed any identifier at creation; ISIN, CUSIP, etc. all default to empty.
-        _grantOperator();
-        vm.prank(operator);
-        security().updateSecurityIdentifier(IDENTIFIER_FIGI, FIGI_VALUE);
+        // identifiers[FIGI]: post-creation metadata-admin write. The factory
+        // does not seed any entry at creation; ISIN, CUSIP, etc. all default
+        // to empty.
+        _grantRole(B20Constants.METADATA_ROLE, admin);
+        vm.prank(admin);
+        security().updateCustomMetadata(IDENTIFIER_FIGI, FIGI_VALUE);
         // usedAnnouncementIds[ANNOUNCEMENT_ID]: flip via announce.
         _announce(ANNOUNCEMENT_ID);
     }
