@@ -16,12 +16,10 @@ interface IB20 {
     /// @param TRANSFER `transfer`, `transferFrom`, and memo'd variants.
     /// @param MINT     `mint` and `mintWithMemo`.
     /// @param BURN     `burn`, `burnWithMemo`, and `burnBlocked`.
-    /// @param REDEEM   Security variant's `redeem` path.
     enum PausableFeature {
         TRANSFER,
         MINT,
-        BURN,
-        REDEEM
+        BURN
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -124,7 +122,7 @@ interface IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice ERC-20 transfer event. Emitted on every successful transfer (including memo'd variants),
-    ///         mint (`from = address(0)`), and burn (`to = address(0)`, including `burnBlocked` and `redeem`).
+    ///         mint (`from = address(0)`), and burn (`to = address(0)`, including `burnBlocked`).
     event Transfer(address indexed from, address indexed to, uint256 amount);
 
     /// @notice ERC-20 approval event. Emitted by `approve` and `permit`.

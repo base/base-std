@@ -7,8 +7,8 @@ import {IB20} from "./IB20.sol";
 /// @author Coinbase
 ///
 /// @notice A B-20 token variant for tokenized securities. Extends `IB20` with announcements,
-///         share-ratio accounting, batched mint for corporate actions, holder-initiated
-///         redemption, and security-identifier metadata.
+///         share-ratio accounting, batched mint for corporate actions, and
+///         security-identifier metadata.
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -29,12 +29,6 @@ interface IB20Security is IB20 {
     /// @notice A batched function was called with empty arrays.
     error EmptyBatch();
 
-    /// @notice `redeem` / `redeemWithMemo` resolved to a share count of zero or below the active floor.
-    ///
-    /// @param shares  Computed share count (`amount * sharesToTokensRatio / WAD_PRECISION`).
-    /// @param minimum Configured `minimumRedeemable`.
-    error BelowMinimumRedeemable(uint256 shares, uint256 minimum);
-
     /// @notice An inner call dispatched by `announce` tried to re-invoke `announce`.
     error AnnouncementInProgress();
 
@@ -51,13 +45,6 @@ interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
-
-    /// @notice Emitted by `redeem` and `redeemWithMemo` immediately after the `Transfer` burn event.
-    ///         `amt` is in tokens; the corresponding share count is `amt * sharesToTokensRatio / WAD_PRECISION`.
-    event Redeemed(address indexed from, uint256 amt, uint256 sharesToTokensRatio);
-
-    /// @notice Emitted by `updateMinimumRedeemable`.
-    event MinimumRedeemableUpdated(address indexed caller, uint256 newMinimumRedeemable);
 
     /// @notice Emitted by `updateShareRatio`.
     event ShareRatioUpdated(uint256 sharesToTokensRatio);
@@ -87,14 +74,6 @@ interface IB20Security is IB20 {
     /// @notice Fixed-point precision used to scale `sharesToTokensRatio`. Equal to `1e18`.
     /// @return Precision constant.
     function WAD_PRECISION() external view returns (uint256);
-
-    /*//////////////////////////////////////////////////////////////
-                          POLICY TYPE IDENTIFIERS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Policy slot consulted against `msg.sender` on `redeem` and `redeemWithMemo`.
-    /// @return Policy scope identifier.
-    function REDEEM_SENDER_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                               ANNOUNCEMENTS
@@ -178,39 +157,6 @@ interface IB20Security is IB20 {
     /// @param recipients Accounts receiving the minted tokens.
     /// @param amounts    Per-recipient amounts, parallel to `recipients`.
     function batchMint(address[] calldata recipients, uint256[] calldata amounts) external;
-
-    /*//////////////////////////////////////////////////////////////
-                              REDEMPTION
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Burns `amount` from the caller, recording intent to settle off-chain. Emits
-    ///         `Transfer(caller, address(0), amount)` followed by `Redeemed`.
-    ///
-    /// @dev Reverts with `ContractPaused(REDEEM)` when `REDEEM` is paused. Strict — no factory-bootstrap bypass.
-    /// @dev Reverts with `PolicyForbids(REDEEM_SENDER_POLICY, ...)` when the caller is not authorized.
-    /// @dev Reverts with `BelowMinimumRedeemable` when the resolved share count is zero or below `minimumRedeemable`.
-    /// @dev Reverts with `InsufficientBalance` when the caller's balance is below `amount`.
-    ///
-    /// @param amount Token amount to redeem from the caller's balance.
-    function redeem(uint256 amount) external;
-
-    /// @notice Same as `redeem`, plus emits `Memo` immediately after the `Transfer` event and
-    ///         before `Redeemed`. A memo of `bytes32(0)` is permitted.
-    ///
-    /// @param amount Token amount to redeem from the caller's balance.
-    /// @param memo   Off-chain memo payload.
-    function redeemWithMemo(uint256 amount, bytes32 memo) external;
-
-    /// @notice Sets a new minimum-redeemable threshold in shares. Emits `MinimumRedeemableUpdated`.
-    ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `DEFAULT_ADMIN_ROLE`.
-    ///
-    /// @param newMinimumRedeemable New minimum redeemable amount, in shares.
-    function updateMinimumRedeemable(uint256 newMinimumRedeemable) external;
-
-    /// @notice The current minimum-redeemable threshold, in shares.
-    /// @return Current floor.
-    function minimumRedeemable() external view returns (uint256);
 
     /*//////////////////////////////////////////////////////////////
                           SECURITY IDENTIFIERS

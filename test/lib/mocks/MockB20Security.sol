@@ -3,19 +3,17 @@ pragma solidity ^0.8.20;
 
 import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
 
 import {MockB20} from "test/lib/mocks/MockB20.sol";
 import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
-import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Security
 /// @author Coinbase
 /// @notice Reference implementation of the `IB20Security` variant.
 ///         Extends `MockB20` with the announcement bracket,
-///         share-ratio accounting, batched issuance / clawback,
-///         redemption, and security-identifier surfaces; all base
-///         behavior is inherited unchanged.
+///         share-ratio accounting, batched issuance, and
+///         security-identifier surfaces; all base behavior is
+///         inherited unchanged.
 ///
 /// @dev    Variant-specific state lives in `MockB20SecurityStorage`'s
 ///         own ERC-7201 namespace (`base.b20.security`), disjoint from
@@ -40,15 +38,6 @@ import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 ///         would change `msg.sender` to the contract address and
 ///         break the inner role checks.
 ///
-///         **Policy override.** `REDEEM_SENDER_POLICY` lives in this
-///         variant's own `redeemPolicyIds` packed slot, mirroring the
-///         per-operation packed-slot layout the base uses for
-///         `transferPolicyIds` / `mintPolicyIds`. `_readPolicyId` and
-///         `_writePolicyId` are overridden to handle that slot first
-///         and fall through to `super` for everything else, which is
-///         the pattern `MockB20Storage`'s natspec explicitly
-///         anticipates.
-///
 ///         **Share ratio default.** A stored `sharesToTokensRatio` of
 ///         zero is interpreted by the read surface as `WAD_PRECISION`,
 ///         so a freshly-etched token reports a 1:1 ratio without
@@ -57,25 +46,16 @@ import {MockB20RedeemStorage} from "test/lib/mocks/MockB20Storage.sol";
 ///
 ///         **Factory bootstrap.** Operator and admin gates honor
 ///         `_isPrivileged()` so the factory can stage initial
-///         announcements, batched issuance, ratios, identifiers, and
-///         minimum-redeemable values during the bootstrap window
-///         without first granting itself roles. `redeem` /
-///         `redeemWithMemo` are the only paths the factory will never
-///         legitimately call during bootstrap (they are
-///         holder-initiated) and deliberately do NOT bypass their
-///         authorization checks: there is no init-time use case for
-///         them, so the bypass would be dead code that widens the
-///         attack surface without buying anything. Token invariants
-///         (supply-cap math, balance accounting, share-amount floor
-///         on `redeem`) are NOT bypassed anywhere.
+///         announcements, batched issuance, ratios, and identifiers
+///         during the bootstrap window without first granting itself
+///         roles. Token invariants (supply-cap math, balance
+///         accounting) are NOT bypassed anywhere.
 contract MockB20Security is MockB20, IB20Security {
     // ============================================================
     //                          CONSTANTS
     // ============================================================
 
     bytes32 public constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
-
-    bytes32 public constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
 
     /// @notice Fixed-point precision for the share ratio. `1e18` (one
     ///         WAD) is the standard DeFi convention; `toShares` and
@@ -170,31 +150,6 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
-    //                          REDEMPTION
-    // ============================================================
-
-    function redeem(uint256 amount) external whenNotPaused(PausableFeature.REDEEM) {
-        uint256 ratio = _redeemBurn(amount);
-        emit Redeemed(msg.sender, amount, ratio);
-    }
-
-    function redeemWithMemo(uint256 amount, bytes32 memo) external whenNotPaused(PausableFeature.REDEEM) {
-        uint256 ratio = _redeemBurn(amount);
-        // Order matters: Transfer (in _redeemBurn), then Memo, then Redeemed.
-        emit Memo(msg.sender, memo);
-        emit Redeemed(msg.sender, amount, ratio);
-    }
-
-    function updateMinimumRedeemable(uint256 newMinimumRedeemable) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        MockB20RedeemStorage.layout().minimumRedeemable = newMinimumRedeemable;
-        emit MinimumRedeemableUpdated(msg.sender, newMinimumRedeemable);
-    }
-
-    function minimumRedeemable() external view returns (uint256) {
-        return MockB20RedeemStorage.layout().minimumRedeemable;
-    }
-
-    // ============================================================
     //                     SECURITY IDENTIFIERS
     // ============================================================
 
@@ -212,29 +167,6 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
-    //                       POLICY OVERRIDES
-    // ============================================================
-
-    /// @dev Variant-first policy resolution: REDEEM_SENDER_POLICY lives in
-    ///      this variant's own packed slot; everything else falls
-    ///      through to the base. The base's UnsupportedPolicyType
-    ///      revert is the terminal case.
-    function _readPolicyId(bytes32 policyScope) internal view virtual override returns (uint64) {
-        if (policyScope == REDEEM_SENDER_POLICY) {
-            return MockB20RedeemStorage.layout().redeemPolicyIds.sender;
-        }
-        return super._readPolicyId(policyScope);
-    }
-
-    function _writePolicyId(bytes32 policyScope, uint64 newPolicyId) internal virtual override {
-        if (policyScope == REDEEM_SENDER_POLICY) {
-            MockB20RedeemStorage.layout().redeemPolicyIds.sender = newPolicyId;
-            return;
-        }
-        super._writePolicyId(policyScope, newPolicyId);
-    }
-
-    // ============================================================
     //                       INTERNAL HELPERS
     // ============================================================
 
@@ -243,32 +175,6 @@ contract MockB20Security is MockB20, IB20Security {
     function _sharesToTokensRatio() internal view returns (uint256) {
         uint256 stored = MockB20SecurityStorage.layout().sharesToTokensRatio;
         return stored == 0 ? WAD_PRECISION : stored;
-    }
-
-    /// @dev Burn the caller's balance for redemption. Returns the
-    ///      ratio used for the share-amount math so callers can emit
-    ///      `Redeemed` with the same value the floor was checked
-    ///      against. No factory bypass: redeem is a holder-initiated
-    ///      path that the factory has no legitimate reason to invoke
-    ///      during bootstrap, so the bypass is omitted by design.
-    function _redeemBurn(uint256 amount) internal returns (uint256 ratio) {
-        MockB20RedeemStorage.Layout storage $ = MockB20RedeemStorage.layout();
-        uint64 REDEEMSenderPolicyId = $.redeemPolicyIds.sender;
-        if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(REDEEMSenderPolicyId, msg.sender)) {
-            revert PolicyForbids(REDEEM_SENDER_POLICY, REDEEMSenderPolicyId);
-        }
-        ratio = _sharesToTokensRatio();
-        uint256 shares = (amount * ratio) / WAD_PRECISION;
-        uint256 minimum = $.minimumRedeemable;
-        // Zero amounts are allowed per ERC-20 conventions (`transfer(0)` is valid).
-        // For amount > 0, reject dust burns that round to zero shares OR fall below the
-        // configured minimum — burning a positive amount that resolves to no shares is
-        // never the holder's intent. The `amount > 0` guard is what keeps explicit
-        // zero-amount redemptions from being absorbed by the dust path.
-        if (amount > 0 && (shares == 0 || shares < minimum)) {
-            revert BelowMinimumRedeemable(shares, minimum);
-        }
-        _burnRaw(msg.sender, amount);
     }
 
     /// @dev Validates a single `internalCalls[i]` blob before

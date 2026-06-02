@@ -49,17 +49,6 @@ Direct invocation by a role holder is permitted as an **emergency override** —
 
 `batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. It should be wrapped in `announce()`, which additionally requires the operator to hold `SECURITY_OPERATOR_ROLE` (typically granted as a single bundle).
 
-## Redemptions
-
-Redemptions let token holders initiate their own burn — typically the on-chain leg of a flow where the issuer post-processes the redemption off-chain (delivering underlying assets, crediting fiat, etc.). The Security variant exposes `redeem(amount)` and `redeemWithMemo(amount, memo)`, both of which burn the caller's token balance and emit `Redeemed(redeemer, tokenAmount, shareAmount)`. `redeemWithMemo` additionally emits `Memo` per the indexer-join convention (see [B20 README → Memos](README.md#memos)).
-
-Two gates apply on every call:
-
-- `REDEEM_SENDER_POLICY` — the caller must be authorized.
-- `minimumRedeemable` — admin-set floor (in shares); redemptions below this floor revert with `BelowMinimumRedeemable`. Any redemption that resolves to zero shares (e.g. token dust against a large share ratio) is always rejected, even when `minimumRedeemable == 0`. Defaults to `0` at creation. Read with `minimumRedeemable()`; update with `updateMinimumRedeemable(newMin)` (admin-gated; emits `MinimumRedeemableUpdated`).
-
-> ⚠️ **`REDEEM_SENDER_POLICY` defaults to `ALWAYS_BLOCK` at token creation** — redemptions are closed until the admin explicitly opens them via `updatePolicy`. The conservative default reflects that redemption is irreversible and regulator-sensitive.
-
 ## Security Identifiers
 
 Each Security token can carry one or more standardized identifiers (ISIN, CUSIP, FIGI, SEDOL, etc.). Read with `securityIdentifier(type)`; the value is a `string`. All identifiers are optional and added post-creation — the factory does not seed any identifier at token creation.

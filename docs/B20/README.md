@@ -86,7 +86,7 @@ Memo-emitting entrypoints:
 
 ## Pause
 
-B20 pauses are granular: the `PausableFeature` enum partitions the gated surface into independently pausable operations, currently `TRANSFER`, `MINT`, `BURN`, and `REDEEM` (Security variant only). The enum is append-only across protocol versions, so existing positions are stable forever. `isPaused(feature)` is `O(1)`; `pausedFeatures()` returns the full set as an array.
+B20 pauses are granular: the `PausableFeature` enum partitions the gated surface into independently pausable operations, currently `TRANSFER`, `MINT`, and `BURN`. The enum is append-only across protocol versions, so existing positions are stable forever. `isPaused(feature)` is `O(1)`; `pausedFeatures()` returns the full set as an array.
 
 `pause(features)` and `unpause(features)` are gated by *separate* roles (`PAUSE_ROLE` and `UNPAUSE_ROLE`) by design — an incident-response operator can pause without holding the authority to re-enable.
 

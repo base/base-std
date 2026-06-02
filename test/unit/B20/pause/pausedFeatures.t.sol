@@ -16,7 +16,7 @@ contract B20PausedFeaturesTest is B20Test {
 
     /// @notice Verifies pausedFeatures returns the set of features paused via pause
     /// @dev Readback after one or more pause calls. The bitmask-to-enum-array conversion
-    ///      iterates bits in ordinal order (TRANSFER=0, MINT=1, BURN=2, REDEEM=3), so
+    ///      iterates bits in ordinal order (TRANSFER=0, MINT=1, BURN=2), so
     ///      the returned array is sorted by enum ordinal.
     function test_pausedFeatures_success_reflectsPauseCalls() public {
         _pause(IB20.PausableFeature.BURN);
@@ -28,16 +28,16 @@ contract B20PausedFeaturesTest is B20Test {
         assertEq(uint256(features[1]), uint256(IB20.PausableFeature.BURN), "ordinal 2 second");
     }
 
-    /// @notice Verifies pausedFeatures correctly reports REDEEM when it is the only paused feature
-    /// @dev REDEEM is the last (highest-ordinal) feature in PausableFeature. A loop bound
-    ///      off-by-one (e.g. `i < 3` instead of `i < 4`) would silently miss REDEEM in the
+    /// @notice Verifies pausedFeatures correctly reports BURN when it is the highest-ordinal paused feature
+    /// @dev BURN is the last (highest-ordinal) feature in PausableFeature. A loop bound
+    ///      off-by-one (e.g. `i < 2` instead of `i < 3`) would silently miss BURN in the
     ///      returned array. Explicit single-feature test catches the loop-bound bug.
-    function test_pausedFeatures_success_includesRedeem() public {
-        _pause(IB20.PausableFeature.REDEEM);
+    function test_pausedFeatures_success_includesHighestOrdinal() public {
+        _pause(IB20.PausableFeature.BURN);
 
         IB20.PausableFeature[] memory features = token.pausedFeatures();
         assertEq(features.length, 1, "must list exactly one feature");
-        assertEq(uint256(features[0]), uint256(IB20.PausableFeature.REDEEM), "must be REDEEM");
+        assertEq(uint256(features[0]), uint256(IB20.PausableFeature.BURN), "must be BURN");
     }
 
     /// @notice Verifies pausedFeatures returns the set minus features removed via unpause

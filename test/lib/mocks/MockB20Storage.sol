@@ -121,11 +121,10 @@ library MockB20Storage {
         // There is no generic fallback mapping for "other" policy
         // types. Each supported `policyType` lives in a fixed slot on
         // this struct (or, for variant-specific operations, in the
-        // variant's own namespaced storage library — e.g. a future
-        // `MockB20SecurityStorage` adds `redeemPolicyIds` at namespace
-        // `base.b20.security`, mirroring how `MockB20StablecoinStorage`
-        // adds `currency` at `base.b20.stablecoin`). `updatePolicy` on
-        // an unsupported `policyType` reverts `UnsupportedPolicyType`.
+        // variant's own namespaced storage library — mirroring how
+        // `MockB20StablecoinStorage` adds `currency` at
+        // `base.b20.stablecoin`). `updatePolicy` on an unsupported
+        // `policyType` reverts `UnsupportedPolicyType`.
         // ---------- Pause ----------
         // Bitmask: bit i set means PausableFeature(i) is paused. Translated
         // to/from the PausableFeature[] enum array at the IB20 surface
@@ -342,12 +341,6 @@ library MockB20Storage {
 ///           requiring the factory to write the default value during
 ///           bootstrap. `updateShareRatio` writes the new ratio
 ///           verbatim; subsequent reads return the stored value as-is.
-///         - `redeemPolicyIds` is a per-operation packed slot,
-///           mirroring base's `transferPolicyIds` / `mintPolicyIds`
-///           layout: only `REDEEM_SENDER_POLICY` is defined today, with
-///           three reserved lanes for future redeem-side granularity
-///           (e.g. `REDEEMER_RECEIVER` if and when off-chain
-///           settlement counterparties get policy gating).
 ///         - `usedAnnouncementIds` keys directly on the raw `string id`
 ///           that callers pass to `announce` / `isAnnouncementIdUsed`,
 ///           not on a hash, so the on-chain query mirrors the API.
@@ -434,72 +427,6 @@ library MockB20SecurityStorage {
     function identifierSlot(string memory identifierType) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(identifierType, identifiersBaseSlot()));
     }
-}
-
-library MockB20RedeemStorage {
-    // keccak256(abi.encode(uint256(keccak256("base.b20.redeem")) - 1)) & ~bytes32(uint256(0xff))
-    // Verified against the computation in derivedLocation() below.
-    bytes32 internal constant STORAGE_LOCATION = 0xc95c24ab0255f9fb9fcdcd524f71c4fe0437265856b7e5e6d0801df0e6cf5100;
-
-    uint256 internal constant MINIMUM_REDEEMABLE_OFFSET = 0;
-    uint256 internal constant REDEEM_POLICY_IDS_OFFSET = 1;
-
-    /// @notice Absolute slot for a top-level field of `Layout`.
-    function slotOf(uint256 offset) internal pure returns (bytes32) {
-        return bytes32(uint256(STORAGE_LOCATION) + offset);
-    }
-
-    function layout() internal pure returns (Layout storage $) {
-        assembly {
-            $.slot := STORAGE_LOCATION
-        }
-    }
-
-    /// @notice Redeem-side policy IDs (read by `_redeemBurn` on the
-    ///         security variant). Mirrors the per-op packed-slot
-    ///         convention of `MockB20Storage.TransferPolicyIds` /
-    ///         `MintPolicyIds`. Only the sender policy is defined
-    ///         today; future granular redeem-side types
-    ///         (e.g. `REDEEMER_RECEIVER`) get added as additional
-    ///         `uint64` fields here so adding one doesn't force a
-    ///         second SLOAD.
-    /// @dev    Bit layout (Solidity LSB-first packing):
-    ///           bits   0.. 63 : sender
-    ///           bits  64..255 : reserved (implicit)
-    struct RedeemPolicyIds {
-        uint64 sender;
-    }
-
-    /// @custom:storage-location erc7201:base.b20.redeem
-    struct Layout {
-        // ---------- Redemption ----------
-        // Floor on `redeem` / `redeemWithMemo`, expressed in shares.
-        // Defaults to 0 (no floor); admin sets via updateMinimumRedeemable.
-        uint256 minimumRedeemable;
-
-        // ---------- Redeem-side policies (PACKED) ----------
-        // Solidity-packed struct: field declarations are the binary
-        // layout spec. Bit-identical to the prior hand-rolled
-        // `uint256` layout; consumer code uses named field access
-        // (`$.redeemPolicyIds.sender = id;`) instead of inline shifts.
-        RedeemPolicyIds redeemPolicyIds;
-    }
-
-    /// @notice Returns the storage location derived per the ERC-7201 formula
-    ///         from the namespace string. Used in tests to assert the
-    ///         hardcoded `STORAGE_LOCATION` constant matches the formula.
-    function derivedLocation() internal pure returns (bytes32) {
-        return keccak256(abi.encode(uint256(keccak256("base.b20.redeem")) - 1)) & ~bytes32(uint256(0xff));
-    }
-
-    // ============================================================
-    //                     TOP-LEVEL FIELD SLOTS
-    // ============================================================
-
-    // forgefmt: disable-start
-    function minimumRedeemableSlot() internal pure returns (bytes32) { return slotOf(MINIMUM_REDEEMABLE_OFFSET); }
-    function redeemPolicyIdsSlot() internal pure returns (bytes32) { return slotOf(REDEEM_POLICY_IDS_OFFSET); }
-        // forgefmt: disable-end
 }
 
 /// @title MockB20StablecoinStorage

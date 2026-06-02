@@ -18,6 +18,6 @@ library B20Constants {
     bytes32 internal constant TRANSFER_EXECUTOR_POLICY = keccak256("TRANSFER_EXECUTOR_POLICY");
     bytes32 internal constant MINT_RECEIVER_POLICY = keccak256("MINT_RECEIVER_POLICY");
 
-    /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN | REDEEM).
-    uint8 internal constant ALL_FEATURES_PAUSED = 15;
+    /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN).
+    uint8 internal constant ALL_FEATURES_PAUSED = 7;
 }

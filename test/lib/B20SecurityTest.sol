@@ -12,10 +12,10 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 /// `_mint` / `_pause` action wrappers, and the security-variant token
 /// deployed by `_deployToken`). Adds the variant-specific role holder
 /// (`operator`) plus helpers for the announcement, share-ratio,
-/// redemption, and identifier surfaces.
+/// and identifier surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
-/// variant-only surface (`announce`, `redeem`, etc.) cast inline via
+/// variant-only surface (`announce`, `batchMint`, etc.) cast inline via
 /// the `security` view-helper.
 contract B20SecurityTest is B20Test {
     // -- Security-variant role-holder actors --
@@ -80,28 +80,6 @@ contract B20SecurityTest is B20Test {
     }
 
     // ============================================================
-    //                        REDEMPTION HELPERS
-    // ============================================================
-
-    /// @notice Sets the minimum-redeemable floor via the admin actor.
-    function _updateMinimumRedeemable(uint256 newMinimum) internal {
-        vm.prank(admin);
-        security().updateMinimumRedeemable(newMinimum);
-    }
-
-    /// @notice Sets the REDEEM_SENDER_POLICY slot via the admin actor.
-    ///         Use `ALWAYS_ALLOW_ID` (0) or `ALWAYS_BLOCK_ID` (1) for
-    ///         the policy registry's built-in sentinels.
-    /// @dev Resolves the policy-type bytes32 BEFORE `vm.prank` so the
-    ///      prank applies to `updatePolicy`, not to the view call that
-    ///      resolves the constant.
-    function _setRedeemPolicy(uint64 policyId) internal {
-        bytes32 policyScope = security().REDEEM_SENDER_POLICY();
-        vm.prank(admin);
-        token.updatePolicy(policyScope, policyId);
-    }
-
-    // ============================================================
     //                      ANNOUNCEMENT HELPERS
     // ============================================================
 
@@ -150,27 +128,6 @@ contract B20SecurityTest is B20Test {
     }
 
     // ============================================================
-    //                  POLICY-TYPE INDEXER OVERRIDE
-    // ============================================================
-
-    /// @notice Variant-specific policy-type indexer that extends
-    ///         `B20Test._knownPolicyType`'s 4-element codomain with
-    ///         `REDEEM_SENDER_POLICY`. Tests that fuzz over the
-    ///         security variant's full supported set use this; tests
-    ///         that fuzz over base-only types use the inherited 4-set.
-    function _knownSecurityPolicyType(uint8 idx) internal view returns (bytes32) {
-        uint8 i = idx % 5;
-        if (i < 4) return _knownPolicyType(i);
-        return security().REDEEM_SENDER_POLICY();
-    }
-
-    /// @notice Extends `_isKnownPolicyType` with the variant's own
-    ///         redeem-side type.
-    function _isKnownSecurityPolicyType(bytes32 policyScope) internal view returns (bool) {
-        return _isKnownPolicyType(policyScope) || policyScope == security().REDEEM_SENDER_POLICY();
-    }
-
-    // ============================================================
     //                      VARIANT-ONLY CONSTANTS
     // ============================================================
     // Compile-time copies of the contract's variant-only constants.
@@ -181,5 +138,4 @@ contract B20SecurityTest is B20Test {
     // `test/unit/B20Security/constants/` pins that down.
 
     bytes32 internal constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
-    bytes32 internal constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
 }

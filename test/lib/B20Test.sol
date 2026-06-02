@@ -131,8 +131,8 @@ contract B20Test is B20FactoryTest {
     ///         must fuzz over the supported set; reads and writes to an
     ///         unsupported `bytes32` revert `UnsupportedPolicyType`.
     /// @dev    Variant tests can wrap this with their own indexer that
-    ///         extends the codomain (e.g. a Security test that also
-    ///         covers `REDEEM_SENDER_POLICY`).
+    ///         extends the codomain when they add variant-specific
+    ///         policy slots.
     function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
         uint8 i = idx % 4;
         if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;
@@ -143,17 +143,11 @@ contract B20Test is B20FactoryTest {
 
     /// @notice True iff `policyType` is supported by the deployed token.
     ///         Used by tests that fuzz arbitrary `bytes32` and need to filter
-    ///         to the supported / unsupported partition. Includes the four
-    ///         base-token policy types AND the security variant's own
-    ///         `REDEEM_SENDER_POLICY`, because `_deployToken()` returns a
-    ///         security-variant token (see contract-level natspec) — fuzzing
-    ///         a `bytes32` that happens to equal `keccak256("REDEEM_SENDER_POLICY")`
-    ///         would otherwise fall through to the variant's `_readPolicyId`
-    ///         override and not revert as `UnsupportedPolicyType`.
+    ///         to the supported / unsupported partition over the four
+    ///         base-token policy types.
     function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
         return policyType == B20Constants.TRANSFER_SENDER_POLICY || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
-            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.MINT_RECEIVER_POLICY
-            || policyType == keccak256("REDEEM_SENDER_POLICY");
+            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.MINT_RECEIVER_POLICY;
     }
 
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`

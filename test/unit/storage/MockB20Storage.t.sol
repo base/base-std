@@ -3,12 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
-import {
-    MockB20Storage,
-    MockB20StablecoinStorage,
-    MockB20SecurityStorage,
-    MockB20RedeemStorage
-} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Storage, MockB20StablecoinStorage, MockB20SecurityStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @notice Asserts the hardcoded `STORAGE_LOCATION` constants on the B-20
 ///         storage libraries match the ERC-7201 formula they document.
@@ -49,22 +44,12 @@ contract MockB20StorageLocationTest is Test {
         );
     }
 
-    /// @notice `MockB20RedeemStorage.STORAGE_LOCATION` equals
-    ///         keccak256(abi.encode(uint256(keccak256("base.b20.redeem")) - 1)) & ~bytes32(uint256(0xff)).
-    function test_MockB20RedeemStorage_storageLocation_matchesFormula() public pure {
-        assertEq(
-            MockB20RedeemStorage.STORAGE_LOCATION,
-            MockB20RedeemStorage.derivedLocation(),
-            "MockB20RedeemStorage.STORAGE_LOCATION must match its ERC-7201 derivation"
-        );
-    }
-
     /// @notice Every B-20 namespace must derive to a distinct storage root.
-    /// @dev    All four libraries (base + three variant/auxiliary
-    ///         namespaces) compose into a single B-20 token's storage,
-    ///         so any pair colliding would silently overwrite fields.
-    ///         Tests `n*(n-1)/2` pairs explicitly so the assertion
-    ///         message identifies which pair drifted.
+    /// @dev    All three libraries (base + two variant namespaces) compose
+    ///         into a single B-20 token's storage, so any pair colliding
+    ///         would silently overwrite fields. Tests `n*(n-1)/2` pairs
+    ///         explicitly so the assertion message identifies which pair
+    ///         drifted.
     function test_storageLocations_disjoint() public pure {
         assertTrue(
             MockB20Storage.STORAGE_LOCATION != MockB20StablecoinStorage.STORAGE_LOCATION,
@@ -75,20 +60,8 @@ contract MockB20StorageLocationTest is Test {
             "base and security namespaces must derive to disjoint roots"
         );
         assertTrue(
-            MockB20Storage.STORAGE_LOCATION != MockB20RedeemStorage.STORAGE_LOCATION,
-            "base and redeem namespaces must derive to disjoint roots"
-        );
-        assertTrue(
             MockB20StablecoinStorage.STORAGE_LOCATION != MockB20SecurityStorage.STORAGE_LOCATION,
             "stablecoin and security namespaces must derive to disjoint roots"
-        );
-        assertTrue(
-            MockB20StablecoinStorage.STORAGE_LOCATION != MockB20RedeemStorage.STORAGE_LOCATION,
-            "stablecoin and redeem namespaces must derive to disjoint roots"
-        );
-        assertTrue(
-            MockB20SecurityStorage.STORAGE_LOCATION != MockB20RedeemStorage.STORAGE_LOCATION,
-            "security and redeem namespaces must derive to disjoint roots"
         );
     }
 }
