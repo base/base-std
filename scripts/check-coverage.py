@@ -2,144 +2,88 @@
 """
 check-coverage.py
 
-Validates that every external function declared in base-std interface files
-has a corresponding unit test file. Exits 1 if gaps are found.
+Runs forge coverage and checks that every function in the mock implementations
+under test/lib/mocks/ has at least one test calling it. Uses the lcov report
+as the source of truth rather than parsing Solidity files.
 
 Usage:
   python3 scripts/check-coverage.py
 """
 
-import re
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-
-# ---------------------------------------------------------------------------
-# Configuration
-# ---------------------------------------------------------------------------
-
-# Maps interface filename -> unit test subdirectory under test/unit/
-INTERFACE_MAP = {
-    "IB20.sol":               "B20",
-    "IB20Security.sol":       "B20Security",
-    "IB20Stablecoin.sol":     "B20Stablecoin",
-    "IB20Factory.sol":        "B20Factory",
-    "IPolicyRegistry.sol":    "PolicyRegistry",
-    "IActivationRegistry.sol": "ActivationRegistry",
-}
-
-# Functions covered by a shared grouped test file rather than one file each.
-# These are skipped by the per-function file check. Update this when a new
-# constant is added to an interface and it belongs to an existing grouped test.
-GROUPED: dict[str, set[str]] = {
-    "B20": {
-        # Role byte constants — covered by roles/roleConstants.t.sol
-        "DEFAULT_ADMIN_ROLE", "MINT_ROLE", "BURN_ROLE", "BURN_BLOCKED_ROLE",
-        "PAUSE_ROLE", "UNPAUSE_ROLE", "METADATA_ROLE",
-        # Policy-slot constants — covered by policy tests
-        "TRANSFER_SENDER_POLICY", "TRANSFER_RECEIVER_POLICY",
-        "TRANSFER_EXECUTOR_POLICY", "MINT_RECEIVER_POLICY",
-    },
-    "B20Security": {
-        # Role constant — covered by constants/roleConstants.t.sol
-        "SECURITY_OPERATOR_ROLE", "BURN_FROM_ROLE",
-        # Precision constant — covered by constants/precisionConstants.t.sol
-        "WAD_PRECISION",
-        # Policy constant — covered by constants/policyTypeConstants.t.sol
-        "REDEEM_SENDER_POLICY",
-    },
-}
-
-# Happy-path test file stem overrides for functions whose test file was named
-# differently from the function (historical naming). Only affects the happy-path
-# file; _revertOrder files always use the actual function name.
-HAPPY_PATH_RENAMES: dict[str, dict[str, str]] = {
-    "B20Factory": {
-        "createB20":     "createToken",
-        "getB20Address": "getTokenAddress",
-    },
-}
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-_FUNC_RE = re.compile(
-    r"function\s+(\w+)\s*\([^)]*\)\s*external\s*(view|pure)?",
-    re.MULTILINE,
-)
+MOCK_DIR = "test/lib/mocks/"
+LCOV_PATH = ROOT / "lcov.info"
 
 
-def extract_functions(sol_file: Path) -> list[dict]:
-    text = sol_file.read_text()
-    results = []
-    for m in _FUNC_RE.finditer(text):
-        results.append({
-            "name": m.group(1),
-            "view": m.group(2) in ("view", "pure"),
-        })
-    return results
+def generate_lcov() -> None:
+    result = subprocess.run(
+        [
+            "forge",
+            "coverage",
+            "--no-match-coverage",
+            r"(\.t\.sol|Test\.sol)$",
+            "--report",
+            "lcov",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(f"forge coverage failed:\n{result.stderr}", file=sys.stderr)
+        sys.exit(1)
 
 
-def exists_in(test_dir: Path, stem: str) -> bool:
-    return bool(list(test_dir.rglob(f"{stem}.t.sol")))
+def parse_lcov() -> dict[str, list[str]]:
+    """Return {source_file: [uncovered_fn, ...]} for mock files with 0-hit functions."""
+    uncovered: dict[str, list[str]] = {}
+    current_file: str | None = None
+    fn_hits: dict[str, int] = {}
 
+    for line in LCOV_PATH.read_text().splitlines():
+        if line.startswith("SF:"):
+            current_file = line[3:]
+            fn_hits = {}
+        elif line.startswith("FN:"):
+            _, name = line[3:].split(",", 1)
+            fn_hits.setdefault(name, 0)
+        elif line.startswith("FNDA:"):
+            count_str, name = line[5:].split(",", 1)
+            fn_hits[name] = fn_hits.get(name, 0) + int(count_str)
+        elif line == "end_of_record":
+            if current_file and MOCK_DIR in current_file:
+                zero = sorted(fn for fn, hits in fn_hits.items() if hits == 0)
+                if zero:
+                    uncovered[current_file] = zero
+            current_file = None
+            fn_hits = {}
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+    return uncovered
 
 
 def main() -> int:
-    interfaces_dir = ROOT / "src" / "interfaces"
-    test_unit_dir = ROOT / "test" / "unit"
+    generate_lcov()
 
-    gaps: list[str] = []
-
-    for iface_file, contract_dir_name in INTERFACE_MAP.items():
-        iface_path = interfaces_dir / iface_file
-        if not iface_path.exists():
-            print(f"WARNING: {iface_file} not found, skipping")
-            continue
-
-        test_dir = test_unit_dir / contract_dir_name
-        if not test_dir.exists():
-            gaps.append(
-                f"[{contract_dir_name}] MISSING test directory: test/unit/{contract_dir_name}/"
-            )
-            continue
-
-        grouped = GROUPED.get(contract_dir_name, set())
-        renames = HAPPY_PATH_RENAMES.get(contract_dir_name, {})
-        functions = extract_functions(iface_path)
-
-        for fn in functions:
-            name = fn["name"]
-            if name in grouped:
-                continue
-
-            happy_stem = renames.get(name, name)
-            if not exists_in(test_dir, happy_stem):
-                gaps.append(
-                    f"[{contract_dir_name}] MISSING happy-path  : {happy_stem}.t.sol"
-                )
-
-            # _revertOrder is required for every state-mutating function
-            if not fn["view"]:
-                if not exists_in(test_dir, f"{name}_revertOrder"):
-                    gaps.append(
-                        f"[{contract_dir_name}] MISSING revertOrder : {name}_revertOrder.t.sol"
-                    )
-
-    if gaps:
-        print("Interface coverage gaps found:\n")
-        for g in sorted(gaps):
-            print(f"  {g}")
-        print(f"\n{len(gaps)} gap(s). Add missing test files or update GROUPED/HAPPY_PATH_RENAMES in scripts/check-coverage.py.")
+    if not LCOV_PATH.exists():
+        print("ERROR: lcov.info not found after forge coverage run", file=sys.stderr)
         return 1
 
-    print("Coverage OK — all interface functions have test files.")
+    uncovered = parse_lcov()
+
+    if uncovered:
+        total = sum(len(fns) for fns in uncovered.values())
+        print(f"Mock functions with no test coverage ({total}):\n")
+        for source_file, fns in sorted(uncovered.items()):
+            rel = source_file.replace(str(ROOT) + "/", "")
+            for fn in fns:
+                print(f"  {rel}: {fn}")
+        return 1
+
+    print("Coverage OK — all mock functions have test coverage.")
     return 0
 
 

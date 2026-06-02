@@ -107,6 +107,12 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
 
       - name: Run interface coverage check
         id: check
@@ -143,7 +149,7 @@ jobs:
             <!-- interface-coverage -->
             ### Interface Coverage
 
-            ${{ steps.check.outputs.exit_code == '0' && '✅ All interface functions have test files.' || '❌ Gaps found — add the missing test files or update `GROUPED`/`HAPPY_PATH_RENAMES` in `scripts/check-coverage.py`.' }}
+            ${{ steps.check.outputs.exit_code == '0' && '✅ All mock functions have test coverage.' || '❌ Mock functions with no test coverage found.' }}
 
             ```
             ${{ steps.check.outputs.output }}
