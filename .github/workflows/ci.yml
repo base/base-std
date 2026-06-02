@@ -60,20 +60,57 @@ jobs:
       - name: Capture coverage summary
         id: summary
         run: |
-          output=$(forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" 2>/dev/null | grep "^|" || echo "| (no coverage data) |")
-          # Compute a status line: 🟢 if Total row shows 100% functions, 🟡 otherwise
-          total=$(echo "$output" | grep "^| Total" || echo "")
-          if echo "$total" | grep -qE "100\.00%[^|]+100\.00%[^|]+100\.00%[^|]+100\.00%"; then
-            status="🟢 **100% coverage** — all lines, statements, branches, and functions hit."
-          elif [ -z "$total" ]; then
+          raw=$(forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" 2>/dev/null | grep "^|" || echo "")
+
+          if [ -z "$raw" ]; then
             status="⚠️ Coverage data unavailable."
+            table="_(no coverage data)_"
           else
-            status="🟡 Near-full coverage — one or more metrics below 100%."
+            # Transform forge output into a proper GFM table:
+            # - strip test/lib/mocks/ and src/lib/ path prefixes
+            # - show percentages only (drop raw hit counts)
+            # - add per-row emoji: ✅ for 100%, ⚠️ otherwise
+            table=$(echo "$raw" | awk -v CHECK="✅" -v WARN="⚠️" -F'|' '
+              BEGIN {
+                print "| File | Lines | Stmts | Branches | Funcs |"
+                print "|------|-------|-------|----------|-------|"
+              }
+              /\+/ { next }
+              /% Lines/ { next }
+              NF < 5 { next }
+              {
+                file = $2
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", file)
+                if (file == "") next
+                for (i = 3; i <= 6; i++) {
+                  match($i, /[0-9]+\.[0-9]+%/)
+                  pct[i-2] = substr($i, RSTART, RLENGTH)
+                }
+                gsub(/^test\/lib\/mocks\//, "", file)
+                gsub(/^src\/lib\//, "", file)
+                all100 = (pct[1]=="100.00%" && pct[2]=="100.00%" && pct[3]=="100.00%" && pct[4]=="100.00%")
+                if (file == "Total") {
+                  printf "| **%s** | **%s** | **%s** | **%s** | **%s** |\n", file, pct[1], pct[2], pct[3], pct[4]
+                } else if (all100) {
+                  printf "| %s %s | %s | %s | %s | %s |\n", CHECK, file, pct[1], pct[2], pct[3], pct[4]
+                } else {
+                  printf "| %s %s | %s | %s | %s | %s |\n", WARN, file, pct[1], pct[2], pct[3], pct[4]
+                }
+              }
+            ')
+
+            total=$(echo "$raw" | grep "^| Total" || echo "")
+            if echo "$total" | grep -qE "100\.00%[^|]+100\.00%[^|]+100\.00%[^|]+100\.00%"; then
+              status="🟢 **100% coverage** — all lines, statements, branches, and functions hit."
+            else
+              status="🟡 Near-full coverage — one or more metrics below 100%."
+            fi
           fi
+
           {
             echo "status=$status"
-            echo "output<<__EOF__"
-            echo "$output"
+            echo "table<<__EOF__"
+            printf "%s\n" "$table"
             echo "__EOF__"
           } >> "$GITHUB_OUTPUT"
 
@@ -105,9 +142,7 @@ jobs:
 
             ${{ steps.summary.outputs.status }}
 
-            ```
-            ${{ steps.summary.outputs.output }}
-            ```
+            ${{ steps.summary.outputs.table }}
 
             Full report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To browse locally: `make coverage` (runs forge coverage + genhtml + opens the HTML report).
 
@@ -161,7 +196,7 @@ jobs:
             <!-- interface-coverage -->
             ### Interface Coverage
 
-            ${{ steps.check.outputs.exit_code == '0' && '✅ All mock functions have test coverage.' || '❌ Mock functions with no test coverage found.' }}
+            ${{ steps.check.outputs.exit_code == '0' && '✅ All interface functions have test coverage.' || '❌ Interface functions with no test coverage found.' }}
 
             ${{ steps.check.outputs.exit_code != '0' && format('```\n{0}\n```', steps.check.outputs.output) || '' }}
 

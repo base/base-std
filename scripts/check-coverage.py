@@ -34,8 +34,7 @@ def generate_lcov() -> None:
         text=True,
     )
     if result.returncode != 0:
-        print(f"forge coverage failed:
-{result.stderr}", file=sys.stderr)
+        print("forge coverage failed:\n" + result.stderr, file=sys.stderr)
         sys.exit(1)
 
 
@@ -77,15 +76,15 @@ def main() -> int:
 
     if uncovered:
         total = sum(len(fns) for fns in uncovered.values())
-        print(f"Mock functions with no test coverage ({total}):
-")
+        print(f"Functions with no test coverage ({total}):")
+        print()
         for source_file, fns in sorted(uncovered.items()):
             rel = source_file.replace(str(ROOT) + "/", "")
             for fn in fns:
                 print(f"  {rel}: {fn}")
         return 1
 
-    print("All mock functions have test coverage.")
+    print("All interface functions have test coverage.")
     return 0
 
 
