@@ -7,7 +7,7 @@ import {IB20} from "./IB20.sol";
 /// @author Coinbase
 ///
 /// @notice A B-20 token variant for tokenized securities. Extends `IB20` with announcements,
-///         share-ratio accounting, batched mint for corporate actions, and
+///         multiplier-based scaling, batched mint for corporate actions, and
 ///         security-identifier metadata.
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
@@ -46,8 +46,8 @@ interface IB20Security is IB20 {
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Emitted by `updateShareRatio`.
-    event ShareRatioUpdated(uint256 sharesToTokensRatio);
+    /// @notice Emitted by `updateMultiplier`.
+    event MultiplierUpdated(uint256 multiplier);
 
     /// @notice Emitted by `updateSecurityIdentifier`. An empty `value` indicates removal.
     event SecurityIdentifierUpdated(string identifierType, string value);
@@ -62,7 +62,7 @@ interface IB20Security is IB20 {
                             ROLE IDENTIFIERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Required to call `announce`, `updateShareRatio`, and `updateSecurityIdentifier`.
+    /// @notice Required to call `announce`, `updateMultiplier`, and `updateSecurityIdentifier`.
     ///         `updateName` / `updateSymbol` remain gated by the inherited `METADATA_ROLE`.
     /// @return Role identifier.
     function SECURITY_OPERATOR_ROLE() external view returns (bytes32);
@@ -71,7 +71,7 @@ interface IB20Security is IB20 {
                               PRECISION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Fixed-point precision used to scale `sharesToTokensRatio`. Equal to `1e18`.
+    /// @notice Fixed-point precision used to scale `multiplier`. Equal to `1e18`.
     /// @return Precision constant.
     function WAD_PRECISION() external view returns (uint256);
 
@@ -109,34 +109,48 @@ interface IB20Security is IB20 {
     function isAnnouncementIdUsed(string calldata id) external view returns (bool);
 
     /*//////////////////////////////////////////////////////////////
-                              SHARE RATIO
+                               MULTIPLIER
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The current share-to-tokens ratio, scaled to `WAD_PRECISION`.
-    /// @return Current ratio.
-    function sharesToTokensRatio() external view returns (uint256);
+    /// @notice The current multiplier, scaled to `WAD_PRECISION`. Holder balances are stored
+    ///         as raw units; the multiplier scales them into a derived "scaled" view, similar
+    ///         in shape to wstETH wrapping stETH.
+    /// @return Current multiplier.
+    function multiplier() external view returns (uint256);
 
-    /// @notice Converts `balance` to its current share count: `balance * sharesToTokensRatio / WAD_PRECISION`.
+    /// @notice Converts a raw balance to its scaled view: `rawBalance * multiplier / WAD_PRECISION`.
     ///
-    /// @param balance Token amount to convert.
+    /// @param rawBalance Raw token amount to scale.
     ///
-    /// @return Share count at the current ratio.
-    function toShares(uint256 balance) external view returns (uint256);
+    /// @return Scaled balance at the current multiplier.
+    function toScaledBalance(uint256 rawBalance) external view returns (uint256);
 
-    /// @notice Convenience for `toShares(balanceOf(account))`.
+    /// @notice Converts a scaled balance back to its raw representation:
+    ///         `scaledBalance * WAD_PRECISION / multiplier`.
     ///
-    /// @param account Account whose share count is being queried.
+    /// @dev Integer division rounds toward zero; conversions are not exactly reversible when
+    ///      `multiplier != WAD_PRECISION`. `toRawBalance(toScaledBalance(x))` may return a
+    ///      value slightly less than `x`.
     ///
-    /// @return Share count.
-    function sharesOf(address account) external view returns (uint256);
+    /// @param scaledBalance Scaled token amount to convert back.
+    ///
+    /// @return rawBalance Raw balance at the current multiplier.
+    function toRawBalance(uint256 scaledBalance) external view returns (uint256 rawBalance);
 
-    /// @notice Sets a new share ratio. Holder balances are not rewritten; displayed share counts
-    ///         derive from the new ratio at read time. Emits `ShareRatioUpdated`.
+    /// @notice Convenience for `toScaledBalance(balanceOf(account))`.
+    ///
+    /// @param account Account whose scaled balance is being queried.
+    ///
+    /// @return Scaled balance.
+    function scaledBalanceOf(address account) external view returns (uint256);
+
+    /// @notice Sets a new multiplier. Holder raw balances are not rewritten; scaled balances
+    ///         derive from the new multiplier at read time. Emits `MultiplierUpdated`.
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SECURITY_OPERATOR_ROLE`.
     ///
-    /// @param newSharesToTokensRatio New ratio scaled to `WAD_PRECISION`.
-    function updateShareRatio(uint256 newSharesToTokensRatio) external;
+    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`.
+    function updateMultiplier(uint256 newMultiplier) external;
 
     /*//////////////////////////////////////////////////////////////
                             BATCHED ISSUANCE

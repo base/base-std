@@ -333,14 +333,15 @@ library MockB20Storage {
 ///         is `keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))`.
 ///
 ///         **Storage notes.**
-///         - `sharesToTokensRatio` stores the WAD-scaled
-///           share-to-tokens ratio. A stored value of `0` is
-///           interpreted by the read surface (`sharesToTokensRatio()`,
-///           `toShares(...)`, `sharesOf(...)`) as `WAD_PRECISION`, so a
-///           freshly-etched token reports a 1:1 ratio without
-///           requiring the factory to write the default value during
-///           bootstrap. `updateShareRatio` writes the new ratio
-///           verbatim; subsequent reads return the stored value as-is.
+///         - `multiplier` stores the WAD-scaled multiplier applied to
+///           raw balances. A stored value of `0` is interpreted by the
+///           read surface (`multiplier()`, `toScaledBalance(...)`,
+///           `toRawBalance(...)`, `scaledBalanceOf(...)`) as
+///           `WAD_PRECISION`, so a freshly-etched token reports a 1:1
+///           multiplier without requiring the factory to write the
+///           default value during bootstrap. `updateMultiplier` writes
+///           the new multiplier verbatim; subsequent reads return the
+///           stored value as-is.
 ///         - `usedAnnouncementIds` keys directly on the raw `string id`
 ///           that callers pass to `announce` / `isAnnouncementIdUsed`,
 ///           not on a hash, so the on-chain query mirrors the API.
@@ -349,10 +350,10 @@ library MockB20Storage {
 library MockB20SecurityStorage {
     /// @custom:storage-location erc7201:base.b20.security
     struct Layout {
-        // ---------- Share ratio ----------
+        // ---------- Multiplier ----------
         // Scaled by WAD_PRECISION (1e18). Stored value of 0 is
         // interpreted as WAD by the read surface.
-        uint256 sharesToTokensRatio;
+        uint256 multiplier;
         // ---------- Announcements ----------
         // Tracks consumed announcement IDs; flips to true on first
         // `announce` for a given id, and remains true forever.
@@ -374,7 +375,7 @@ library MockB20SecurityStorage {
     // unrelated locations); the factory uses these as base slots when
     // deriving member slots via `keccak256(abi.encode(key, baseSlot))`.
 
-    uint256 internal constant SHARES_TO_TOKENS_RATIO_OFFSET = 0;
+    uint256 internal constant MULTIPLIER_OFFSET = 0;
     uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 1;
     uint256 internal constant IDENTIFIERS_OFFSET = 2;
 
@@ -401,7 +402,7 @@ library MockB20SecurityStorage {
     // ============================================================
 
     // forgefmt: disable-start
-    function sharesToTokensRatioSlot() internal pure returns (bytes32) { return slotOf(SHARES_TO_TOKENS_RATIO_OFFSET); }
+    function multiplierSlot() internal pure returns (bytes32) { return slotOf(MULTIPLIER_OFFSET); }
     function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
     function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }
 

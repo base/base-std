@@ -11,7 +11,7 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 /// @author Coinbase
 /// @notice Reference implementation of the `IB20Security` variant.
 ///         Extends `MockB20` with the announcement bracket,
-///         share-ratio accounting, batched issuance, and
+///         multiplier-based scaling, batched issuance, and
 ///         security-identifier surfaces; all base behavior is
 ///         inherited unchanged.
 ///
@@ -38,15 +38,15 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 ///         would change `msg.sender` to the contract address and
 ///         break the inner role checks.
 ///
-///         **Share ratio default.** A stored `sharesToTokensRatio` of
-///         zero is interpreted by the read surface as `WAD_PRECISION`,
-///         so a freshly-etched token reports a 1:1 ratio without
+///         **Multiplier default.** A stored `multiplier` of zero is
+///         interpreted by the read surface as `WAD_PRECISION`, so a
+///         freshly-etched token reports a 1:1 multiplier without
 ///         requiring the factory to write the default. The Rust impl
 ///         applies the same fallback so on-chain reads agree.
 ///
 ///         **Factory bootstrap.** Operator and admin gates honor
 ///         `_isPrivileged()` so the factory can stage initial
-///         announcements, batched issuance, ratios, and identifiers
+///         announcements, batched issuance, multipliers, and identifiers
 ///         during the bootstrap window without first granting itself
 ///         roles. Token invariants (supply-cap math, balance
 ///         accounting) are NOT bypassed anywhere.
@@ -57,10 +57,11 @@ contract MockB20Security is MockB20, IB20Security {
 
     bytes32 public constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
 
-    /// @notice Fixed-point precision for the share ratio. `1e18` (one
-    ///         WAD) is the standard DeFi convention; `toShares` and
-    ///         `sharesOf` divide by this after multiplying by the
-    ///         stored ratio.
+    /// @notice Fixed-point precision for the multiplier. `1e18` (one
+    ///         WAD) is the standard DeFi convention; `toScaledBalance`
+    ///         and `scaledBalanceOf` divide by this after multiplying
+    ///         by the stored multiplier, and `toRawBalance` multiplies
+    ///         by this before dividing.
     uint256 public constant WAD_PRECISION = 1e18;
 
     // ============================================================
@@ -108,24 +109,28 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
-    //                         SHARE RATIO
+    //                          MULTIPLIER
     // ============================================================
 
-    function sharesToTokensRatio() external view returns (uint256) {
-        return _sharesToTokensRatio();
+    function multiplier() external view returns (uint256) {
+        return _multiplier();
     }
 
-    function toShares(uint256 balance) external view returns (uint256) {
-        return (balance * _sharesToTokensRatio()) / WAD_PRECISION;
+    function toScaledBalance(uint256 rawBalance) external view returns (uint256) {
+        return (rawBalance * _multiplier()) / WAD_PRECISION;
     }
 
-    function sharesOf(address account) external view returns (uint256) {
-        return (MockB20Storage.layout().balances[account] * _sharesToTokensRatio()) / WAD_PRECISION;
+    function toRawBalance(uint256 scaledBalance) external view returns (uint256) {
+        return (scaledBalance * WAD_PRECISION) / _multiplier();
     }
 
-    function updateShareRatio(uint256 newSharesToTokensRatio) external onlyRole(SECURITY_OPERATOR_ROLE) {
-        MockB20SecurityStorage.layout().sharesToTokensRatio = newSharesToTokensRatio;
-        emit ShareRatioUpdated(newSharesToTokensRatio);
+    function scaledBalanceOf(address account) external view returns (uint256) {
+        return (MockB20Storage.layout().balances[account] * _multiplier()) / WAD_PRECISION;
+    }
+
+    function updateMultiplier(uint256 newMultiplier) external onlyRole(SECURITY_OPERATOR_ROLE) {
+        MockB20SecurityStorage.layout().multiplier = newMultiplier;
+        emit MultiplierUpdated(newMultiplier);
     }
 
     // ============================================================
@@ -171,9 +176,9 @@ contract MockB20Security is MockB20, IB20Security {
     // ============================================================
 
     /// @dev Stored `0` resolves to `WAD_PRECISION` so a freshly-etched
-    ///      token (no factory write yet) reports a 1:1 ratio.
-    function _sharesToTokensRatio() internal view returns (uint256) {
-        uint256 stored = MockB20SecurityStorage.layout().sharesToTokensRatio;
+    ///      token (no factory write yet) reports a 1:1 multiplier.
+    function _multiplier() internal view returns (uint256) {
+        uint256 stored = MockB20SecurityStorage.layout().multiplier;
         return stored == 0 ? WAD_PRECISION : stored;
     }
 

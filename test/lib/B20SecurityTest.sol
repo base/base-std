@@ -11,7 +11,7 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 /// setUp wiring, the `_singleFeature` helper, the `_grantRole` /
 /// `_mint` / `_pause` action wrappers, and the security-variant token
 /// deployed by `_deployToken`). Adds the variant-specific role holder
-/// (`operator`) plus helpers for the announcement, share-ratio,
+/// (`operator`) plus helpers for the announcement, multiplier,
 /// and identifier surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
@@ -68,15 +68,15 @@ contract B20SecurityTest is B20Test {
     }
 
     // ============================================================
-    //                       SHARE-RATIO HELPERS
+    //                       MULTIPLIER HELPERS
     // ============================================================
 
-    /// @notice Sets the share ratio via the `operator` actor, lazily
+    /// @notice Sets the multiplier via the `operator` actor, lazily
     ///         granting `SECURITY_OPERATOR_ROLE` on first call.
-    function _updateShareRatio(uint256 newRatio) internal {
+    function _updateMultiplier(uint256 newMultiplier) internal {
         _grantOperator();
         vm.prank(operator);
-        security().updateShareRatio(newRatio);
+        security().updateMultiplier(newMultiplier);
     }
 
     // ============================================================

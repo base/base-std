@@ -336,8 +336,8 @@ verified.
 
 #### Announcement coupling for metadata changes
 
-Every state-changing operation that affects security identity (share
-ratio updates, name/symbol changes, identifier updates, admin
+Every state-changing operation that affects security identity
+(multiplier updates, name/symbol changes, identifier updates, admin
 mint/burn) must be paired with an `Announcement(id)` event emitted
 earlier in the same transaction. The token enforces this via transient
 storage at the implementation level.
@@ -354,21 +354,23 @@ Per the user-stories doc, the announcement URI itself is event-only
 (not stored on-chain). Indexers must scan event logs to retrieve URIs
 for a given announcement.
 
-#### Share ratio for split-safe accounting
+#### Multiplier for split-safe accounting
 
 A security token's underlying ERC-20 balance is the "raw" balance.
-Holders' "share" count is `balance * denominator / numerator`. Stock
-splits and reverse splits change the ratio; raw balances NEVER change.
+Holders' "scaled" balance is `rawBalance * multiplier / WAD`. Stock
+splits and reverse splits change the multiplier; raw balances NEVER
+change. The shape mirrors wstETH wrapping stETH: the stored unit is
+the raw quantity, the derived unit is the scaled view.
 
 **Why.** A naive stock-split implementation that mints additional
 tokens to every holder would break every smart contract that holds
 the token (lending pools, AMMs, bridges, vaults) because those
-contracts only know their deposit amount, not the post-split share
-count. The ratio approach keeps raw balances stable so every smart
-contract holder remains correct without modification; only the
-displayed share count changes.
+contracts only know their deposit amount, not the post-split scaled
+balance. The multiplier approach keeps raw balances stable so every
+smart contract holder remains correct without modification; only the
+displayed scaled balance changes.
 
-Wallets and integrators call `sharesOf(account)` instead of
+Wallets and integrators call `scaledBalanceOf(account)` instead of
 `balanceOf(account)` for display purposes.
 
 ---
@@ -489,7 +491,7 @@ announcement can destroy any holder's balance. Use cases for
 non-blocked accounts: liquidations, reverse tender settlements,
 accounting corrections. Worth explicit confirmation.
 
-#### 🟡 OPEN: `share ratio` initial value at creation
+#### 🟡 OPEN: `multiplier` initial value at creation
 
 Tangor uses `1_000_000_000 / 1_000_000_000` (large 1:1, fractional
 headroom). Wiki spec uses `1 / 1`. Factory/impl decision; not in
@@ -604,7 +606,7 @@ items needing your input:
 6. `adminBurn` semantics — confirm it can affect any account, gated by
    `BURN_BLOCKED_ROLE` + announcement coupling, NOT restricted to
    policy-blocked addresses?
-7. `share ratio` default at creation — 1:1 or 1e9:1e9?
+7. `multiplier` default at creation — 1:1 or 1e9:1e9?
 8. `pausedBurn` as a separate function vs. `adminBurn` always
    bypassing pause?
 9. The pause-doesn't-block-mints/burns interpretation (per user

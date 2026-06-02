@@ -18,9 +18,9 @@ import {MockB20SecurityStorage} from "test/lib/mocks/MockB20Storage.sol";
 contract B20SecurityFullLayoutTest is B20SecurityTest {
     // ---------- Distinct marker values per field ----------
 
-    /// @dev Non-WAD ratio so the slot value is observably different from
+    /// @dev Non-WAD multiplier so the slot value is observably different from
     ///      both zero (the "unwritten = WAD" default) and WAD itself.
-    uint256 internal constant SHARE_RATIO_MARKER = 2.5e18;
+    uint256 internal constant MULTIPLIER_MARKER = 2.5e18;
 
     string internal constant FIGI_VALUE = "BBG000B9XRY4";
     string internal constant ANNOUNCEMENT_ID = "layout-pin-announcement";
@@ -28,7 +28,7 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     /// @notice Cross-cuts every field of the security-variant namespace in
     ///         one populated snapshot.
     /// @dev    Field coverage for `base.b20.security` (slots 0..2):
-    ///         - 0: sharesToTokensRatio
+    ///         - 0: multiplier
     ///         - 1: usedAnnouncementIds[id]
     ///         - 2: identifiers[identifierType]  (FIGI mutated)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
@@ -37,11 +37,11 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
 
         address tokenAddr = address(token);
 
-        // ---------- sharesToTokensRatio (slot 0) ----------
+        // ---------- multiplier (slot 0) ----------
         assertEq(
-            uint256(vm.load(tokenAddr, MockB20SecurityStorage.sharesToTokensRatioSlot())),
-            SHARE_RATIO_MARKER,
-            "security slot 0: sharesToTokensRatio must hold the written ratio"
+            uint256(vm.load(tokenAddr, MockB20SecurityStorage.multiplierSlot())),
+            MULTIPLIER_MARKER,
+            "security slot 0: multiplier must hold the written value"
         );
 
         // ---------- usedAnnouncementIds[id] (slot 1, hashed by id) ----------
@@ -74,8 +74,8 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///         the layout test reads as a single assertion sweep with no
     ///         interleaved mutations.
     function _populate() internal {
-        // sharesToTokensRatio: write the non-WAD marker via the public surface.
-        _updateShareRatio(SHARE_RATIO_MARKER);
+        // multiplier: write the non-WAD marker via the public surface.
+        _updateMultiplier(MULTIPLIER_MARKER);
         // identifiers[FIGI]: post-creation operator write. The factory does not
         // seed any identifier at creation; ISIN, CUSIP, etc. all default to empty.
         _grantOperator();
