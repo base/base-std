@@ -133,19 +133,7 @@ abstract contract MockB20 is IB20 {
     ///      / `setRoleAdmin`, where the gate is over the meta-role,
     ///      not the role itself.
     modifier onlyRoleAdmin(bytes32 role) {
-        if (!_isPrivileged()) {
-            // Admin-resurrection guard: once `adminCount == 0` the token is admin-less
-            // by design (post-`renounceLastAdmin`). No role-mgmt mutation is permitted
-            // even if the caller holds a custom-admin role that would otherwise
-            // authorize them, because allowing such mutations would let a custom-admin
-            // chain (e.g. setRoleAdmin(MINT_ROLE, BURN_ROLE) → grantRole(BURN_ROLE, X))
-            // re-establish admin power on a token that has explicitly relinquished it.
-            // Mirrors the Rust precompile's `ensure_role_admin_mutations_available`.
-            if (MockB20Storage.layout().adminCount == 0) {
-                revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);
-            }
-            _requireRoleAdmin(role);
-        }
+        if (!_isPrivileged()) _requireRoleAdmin(role);
         _;
     }
 
@@ -495,16 +483,16 @@ abstract contract MockB20 is IB20 {
     ///      falling through to `super`.
     function _writePolicyId(bytes32 policyScope, uint64 newPolicyId) internal virtual {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
+        // `updatePolicy` validates the scope via `_readPolicyId` before calling this, so it is
+        // guaranteed to be one of the four supported scopes — the last arm needs no guard.
         if (policyScope == TRANSFER_SENDER_POLICY) {
             $.transferPolicyIds.sender = newPolicyId;
         } else if (policyScope == TRANSFER_RECEIVER_POLICY) {
             $.transferPolicyIds.receiver = newPolicyId;
         } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds.executor = newPolicyId;
-        } else if (policyScope == MINT_RECEIVER_POLICY) {
-            $.mintPolicyIds.receiver = newPolicyId;
         } else {
-            revert UnsupportedPolicyType(policyScope);
+            $.mintPolicyIds.receiver = newPolicyId;
         }
     }
 
@@ -654,6 +642,16 @@ abstract contract MockB20 is IB20 {
     ///      unconfigured roles it's `bytes32(0) == DEFAULT_ADMIN_ROLE`,
     ///      which is the role the caller actually needs to hold.
     function _requireRoleAdmin(bytes32 role) internal view {
+        // Admin-resurrection guard: once `adminCount == 0` the token is admin-less
+        // by design (post-`renounceLastAdmin`). No role-mgmt mutation is permitted
+        // even if the caller holds a custom-admin role that would otherwise
+        // authorize them, because allowing such mutations would let a custom-admin
+        // chain (e.g. setRoleAdmin(MINT_ROLE, BURN_ROLE) → grantRole(BURN_ROLE, X))
+        // re-establish admin power on a token that has explicitly relinquished it.
+        // Mirrors the Rust precompile's `ensure_role_admin_mutations_available`.
+        if (MockB20Storage.layout().adminCount == 0) {
+            revert AccessControlUnauthorizedAccount(msg.sender, DEFAULT_ADMIN_ROLE);
+        }
         bytes32 adminRole = MockB20Storage.layout().roleAdmins[role];
         if (!hasRole(adminRole, msg.sender)) revert AccessControlUnauthorizedAccount(msg.sender, adminRole);
     }
