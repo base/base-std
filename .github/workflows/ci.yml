@@ -66,11 +66,8 @@ jobs:
             status="⚠️ Coverage data unavailable."
             table="_(no coverage data)_"
           else
-            # Transform forge output into a proper GFM table:
-            # - strip test/lib/mocks/ and src/lib/ path prefixes
-            # - show percentages only (drop raw hit counts)
-            # - add per-row emoji: ✅ for 100%, ⚠️ otherwise
-            table=$(echo "$raw" | awk -v CHECK="✅" -v WARN="⚠️" -F'|' '
+            # Per-row color: 🟢 ≥99% on all metrics, 🟡 ≥95%, 🔴 below 95%
+            table=$(echo "$raw" | awk -v GREEN="🟢" -v YELLOW="🟡" -v RED="🔴" -F'|' '
               BEGIN {
                 print "| File | Lines | Stmts | Branches | Funcs |"
                 print "|------|-------|-------|----------|-------|"
@@ -88,23 +85,31 @@ jobs:
                 }
                 gsub(/^test\/lib\/mocks\//, "", file)
                 gsub(/^src\/lib\//, "", file)
-                all100 = (pct[1]=="100.00%" && pct[2]=="100.00%" && pct[3]=="100.00%" && pct[4]=="100.00%")
                 if (file == "Total") {
                   printf "| **%s** | **%s** | **%s** | **%s** | **%s** |\n", file, pct[1], pct[2], pct[3], pct[4]
-                } else if (all100) {
-                  printf "| %s %s | %s | %s | %s | %s |\n", CHECK, file, pct[1], pct[2], pct[3], pct[4]
                 } else {
-                  printf "| %s %s | %s | %s | %s | %s |\n", WARN, file, pct[1], pct[2], pct[3], pct[4]
+                  min_pct = 999
+                  for (j = 1; j <= 4; j++) {
+                    val = pct[j]; gsub(/%/, "", val); val += 0
+                    if (val < min_pct) min_pct = val
+                  }
+                  if (min_pct >= 99)      emoji = GREEN
+                  else if (min_pct >= 95) emoji = YELLOW
+                  else                    emoji = RED
+                  printf "| %s %s | %s | %s | %s | %s |\n", emoji, file, pct[1], pct[2], pct[3], pct[4]
                 }
               }
             ')
 
+            # Status line uses same thresholds applied to Total row minimum
             total=$(echo "$raw" | grep "^| Total" || echo "")
-            if echo "$total" | grep -qE "100\.00%[^|]+100\.00%[^|]+100\.00%[^|]+100\.00%"; then
-              status="🟢 **100% coverage** — all lines, statements, branches, and functions hit."
-            else
-              status="🟡 Near-full coverage — one or more metrics below 100%."
-            fi
+            min_total=$(echo "$total" | grep -oE "[0-9]+\.[0-9]+%" | sed 's/%//' | sort -n | head -1)
+            status=$(echo "$min_total" | awk '{
+              if      ($1 >= 99) print "🟢 ≥99% across all metrics."
+              else if ($1 >= 95) print "🟡 ≥95% across all metrics \xe2\x80\x94 some metrics below 99%."
+              else               print "🔴 Below 95% on one or more metrics."
+            }')
+            [ -z "$status" ] && status="⚠️ Coverage data unavailable."
           fi
 
           {
