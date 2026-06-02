@@ -6,14 +6,29 @@ import {IB20} from "src/interfaces/IB20.sol";
 import {B20Test} from "test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
 
-/// @title Differential check-order tests for `updateContractURI`.
+/// @title Sequential check-order test for `updateContractURI`.
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(METADATA_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///
-///         C(1, 2) = 0 pairs. `updateContractURI` has only a single revert
-///         condition so there is no pair-wise ordering to pin. This file exists
-///         for coverage bookkeeping only; the individual revert is tested in
-///         `updateContractURI.t.sol`.
-// solhint-disable-next-line no-empty-blocks
-contract B20UpdateContractURIRevertOrderTest is B20Test {}
+///         Single condition: caller must hold METADATA_ROLE. The test fires the
+///         revert, grants the required role, and verifies success.
+contract B20UpdateContractURIRevertOrderTest is B20Test {
+    function test_updateContractURI_revertOrder(address caller, string calldata newURI) public {
+        _assumeValidCaller(caller);
+        vm.assume(!token.hasRole(B20Constants.METADATA_ROLE, caller));
+
+        // 1. ROLE fires (caller lacks METADATA_ROLE).
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.METADATA_ROLE)
+        );
+        token.updateContractURI(newURI);
+        // Fix: grant METADATA_ROLE to caller.
+        _grantRole(B20Constants.METADATA_ROLE, caller);
+
+        // Success — caller now holds METADATA_ROLE.
+        vm.prank(caller);
+        token.updateContractURI(newURI);
+    }
+}
