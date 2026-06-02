@@ -98,19 +98,21 @@ abstract contract BaseTest is Test {
             vm.etch(StdPrecompiles.B20_FACTORY_ADDRESS, type(MockB20Factory).runtimeCode);
             vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
             vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
-        }
 
-        // Activate every B-20 feature so the bulk of the suite — which
-        // exercises behaviors orthogonal to the activation gate — doesn't
-        // have to repeat the bootstrap. Tests that pin the gating
-        // behavior itself (`B20Factory/activation.t.sol`) deactivate the
-        // specific feature under test before exercising it.
-        address activationAdmin = StdPrecompiles.ACTIVATION_REGISTRY.admin();
-        vm.startPrank(activationAdmin);
-        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_ASSET);
-        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_STABLECOIN);
-        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.POLICY_REGISTRY);
-        vm.stopPrank();
+            // Activate every B-20 feature so the bulk of the suite — which
+            // exercises behaviors orthogonal to the activation gate — doesn't
+            // have to repeat the bootstrap. Tests that pin the gating
+            // behavior itself (`B20Factory/activation.t.sol`) deactivate the
+            // specific feature under test before exercising it.
+            // In fork mode (LIVE_PRECOMPILES=true) the features are already
+            // active on the live chain, so this bootstrap is skipped.
+            address activationAdmin = StdPrecompiles.ACTIVATION_REGISTRY.admin();
+            vm.startPrank(activationAdmin);
+            StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_ASSET);
+            StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_STABLECOIN);
+            StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.POLICY_REGISTRY);
+            vm.stopPrank();
+        }
     }
 
     /// @notice Filters out addresses that are unsafe to use as a fuzzed
