@@ -16,7 +16,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Build
         run: forge build
@@ -34,10 +34,70 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Run tests
         run: forge test -v
+
+  forge-coverage:
+    name: Forge Coverage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+
+      - name: Generate lcov report
+        run: forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" --report lcov
+
+      - name: Capture coverage summary
+        id: summary
+        run: |
+          output=$(forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" 2>/dev/null | grep "^|" || echo "| (no coverage data) |")
+          {
+            echo "output<<__EOF__"
+            echo "$output"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload lcov report
+        uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info
+
+      - name: Find existing comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: <!-- forge-coverage -->
+
+      - name: Post or update PR comment
+        if: github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- forge-coverage -->
+            ### Forge Coverage (`src/lib/`)
+
+            ```
+            ${{ steps.summary.outputs.output }}
+            ```
+
+            Full report: [download artifact](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}). To browse locally: `make coverage` (runs forge coverage + genhtml + opens the HTML report).
 
   fmt:
     name: Format
@@ -49,7 +109,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: stable
+          version: v1.7.1
 
       - name: Check formatting
         run: forge fmt --check
