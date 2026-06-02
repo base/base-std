@@ -30,7 +30,6 @@ contract B20AssetUpdateMinimumRedeemableRevertOrderTest is B20AssetTest {
         );
         security().updateMinimumRedeemable(newMinimum);
 
-        // Fix: grant DEFAULT_ADMIN_ROLE to caller.
         _grantRole(B20Constants.DEFAULT_ADMIN_ROLE, caller);
 
         // Success: all conditions resolved.

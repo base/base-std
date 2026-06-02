@@ -47,7 +47,6 @@ contract B20AssetRedeemWithMemoRevertOrderTest is B20AssetTest {
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.REDEEM));
         security().redeemWithMemo(amount, memo);
 
-        // Fix: unpause REDEEM.
         _unpause(IB20.PausableFeature.REDEEM);
 
         // 2. POLICY fires next (pause fixed).
@@ -59,7 +58,6 @@ contract B20AssetRedeemWithMemoRevertOrderTest is B20AssetTest {
         );
         security().redeemWithMemo(amount, memo);
 
-        // Fix: allow alice through the redeem-sender policy.
         _setRedeemPolicy(PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
         // 3. BELOW-MIN fires next (pause and policy fixed).
@@ -68,7 +66,6 @@ contract B20AssetRedeemWithMemoRevertOrderTest is B20AssetTest {
         vm.expectRevert(abi.encodeWithSelector(IB20Asset.BelowMinimumRedeemable.selector, amount, minimum));
         security().redeemWithMemo(amount, memo);
 
-        // Fix: clear the minimum floor so shares == amount satisfies the check.
         _updateMinimumRedeemable(0);
 
         // 4. BALANCE fires next (pause, policy, and minimum fixed).
@@ -76,7 +73,6 @@ contract B20AssetRedeemWithMemoRevertOrderTest is B20AssetTest {
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientBalance.selector, alice, 0, amount));
         security().redeemWithMemo(amount, memo);
 
-        // Fix: give alice exactly enough balance to cover the redemption.
         _mint(alice, amount);
 
         // Success: all conditions resolved.

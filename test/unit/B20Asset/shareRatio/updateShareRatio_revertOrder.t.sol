@@ -29,7 +29,6 @@ contract B20AssetUpdateShareRatioRevertOrderTest is B20AssetTest {
         vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, operatorRole));
         security().updateShareRatio(newRatio);
 
-        // Fix: grant OPERATOR_ROLE to caller.
         _grantRole(operatorRole, caller);
 
         // Success: all conditions resolved.
