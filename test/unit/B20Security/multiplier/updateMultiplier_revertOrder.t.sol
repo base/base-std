@@ -8,7 +8,7 @@ import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 /// @title Sequential revert-order test for `updateMultiplier`.
 ///
 /// @notice **Canonical order (Solidity reference):**
-///         1. ROLE (`onlyRole(SECURITY_OPERATOR_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
+///         1. ROLE (`onlyRole(OPERATOR_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///
 ///         A single test verifies the guard fires for an unauthorized caller and then
 ///         confirms the call succeeds once the role is granted.
@@ -19,17 +19,17 @@ contract B20SecurityUpdateMultiplierRevertOrderTest is B20SecurityTest {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
 
-        // Resolve the role identifier before setting the prank; an external view
+        // Resolve the role constant before setting the prank; an external view
         // call inside abi.encodeWithSelector would otherwise consume vm.prank
         // before the state-changing call, sending it as address(this) instead.
-        bytes32 operatorRole = security().SECURITY_OPERATOR_ROLE();
+        bytes32 operatorRole = security().OPERATOR_ROLE();
 
         // 1. ROLE fires.
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, operatorRole));
         security().updateMultiplier(newMultiplier);
 
-        // Fix: grant SECURITY_OPERATOR_ROLE to caller.
+        // Fix: grant OPERATOR_ROLE to caller.
         _grantRole(operatorRole, caller);
 
         // Success: all conditions resolved.

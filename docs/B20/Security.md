@@ -12,7 +12,7 @@ Read the current multiplier with `multiplier()`; the value is in WAD precision (
 
 ## Announcements
 
-Announcements are publicly viewable notifications posted by a token operator. They can represent anything the operator wants to create a record of and can be coupled with actual state changes on the token (updating the multiplier, batched mints/burns, updating identifiers, and so on).
+Announcements are publicly viewable notifications posted by a token operator. They can represent anything the operator wants to create a record of and can be coupled with actual state changes on the token (updating the multiplier, batched mints/burns, and so on).
 
 ### Event Topology
 
@@ -22,7 +22,7 @@ Indexers should treat every `Announcement` log as the start of exactly one brack
 
 ### Wrapping calls in announcements
 
-Wrap a set of operations in a single announcement by calling `announce(internalCalls, id, description, uri)`. The function (gated by `SECURITY_OPERATOR_ROLE`) emits `Announcement`, dispatches each internal call via self-`delegatecall` (which preserves `msg.sender` so the inner role checks see the operator), then emits `EndAnnouncement`. Inner reverts are wrapped in `InternalCallFailed` rather than bubbled — replay the call directly to debug. Nested calls to `announce` revert with `AnnouncementInProgress`; calls shorter than 4 bytes revert with `InternalCallMalformed`.
+Wrap a set of operations in a single announcement by calling `announce(internalCalls, id, description, uri)`. The function (gated by `OPERATOR_ROLE`) emits `Announcement`, dispatches each internal call via self-`delegatecall` (which preserves `msg.sender` so the inner role checks see the operator), then emits `EndAnnouncement`. Inner reverts are wrapped in `InternalCallFailed` rather than bubbled — replay the call directly to debug. Nested calls to `announce` revert with `AnnouncementInProgress`; calls shorter than 4 bytes revert with `InternalCallMalformed`.
 
 ```solidity
 // Disclose and execute a 2-for-1 forward split atomically.
@@ -37,29 +37,28 @@ IB20Security(token).announce({
 });
 ```
 
-The three corporate-actions setters should be wrapped in `announce()`:
+The two corporate-actions setters should be wrapped in `announce()`:
 
 - `updateMultiplier(...)`
 - `batchMint(...)`
-- `updateSecurityIdentifier(...)`
 
 Direct invocation by a role holder is permitted as an **emergency override** — it succeeds but produces no bracket events. Suitable only for break-glass scenarios where the inability to emit an announcement is itself part of the response.
 
 ## Batch Mint
 
-`batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. It should be wrapped in `announce()`, which additionally requires the operator to hold `SECURITY_OPERATOR_ROLE` (typically granted as a single bundle).
+`batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. It should be wrapped in `announce()`, which additionally requires the operator to hold `OPERATOR_ROLE` (typically granted as a single bundle).
 
-## Security Identifiers
+## Extra Metadata
 
-Each Security token can carry one or more standardized identifiers (ISIN, CUSIP, FIGI, SEDOL, etc.). Read with `securityIdentifier(type)`; the value is a `string`. All identifiers are optional and added post-creation — the factory does not seed any identifier at token creation.
+Each Security token can carry an arbitrary set of named metadata entries — a general-purpose key/value store the issuer is free to use however they want (e.g. `"category"` → `"electronics"`, `"region"` → `"north-america"`, `"reference"` → `"REF-2024-001"`). Read with `extraMetadata(key)`; the value is a `string`. All entries are optional and added post-creation — the factory does not seed any entry at token creation.
 
-`updateSecurityIdentifier(type, value)` adds or updates an identifier and should be wrapped in `announce()`. Passing an empty `value` removes the entry. Unknown identifier types revert with `InvalidIdentifierType`.
+`updateExtraMetadata(key, value)` adds, updates, or removes an entry, gated by `METADATA_ROLE` (the same role that gates `updateName` / `updateSymbol`). It does NOT require `OPERATOR_ROLE` and can be invoked directly without an `announce()` wrapper. Passing an empty `value` removes the entry. An empty `key` reverts with `InvalidMetadataKey`.
 
 ## Additional roles
 
-### `SECURITY_OPERATOR_ROLE`
+### `OPERATOR_ROLE`
 
-Gates the three corporate-actions setters (`updateMultiplier`, `batchMint`, `updateSecurityIdentifier`) and the `announce` wrapper itself. Held separately from `DEFAULT_ADMIN_ROLE` so corporate-actions operators don't need full admin authority. Operationally paired with `METADATA_ROLE` — when granting one, you typically grant the other to the same address.
+Gates the two corporate-actions setters (`updateMultiplier`, `batchMint`) and the `announce` wrapper itself. Held separately from `DEFAULT_ADMIN_ROLE` so corporate-actions operators don't need full admin authority. Operationally paired with `METADATA_ROLE` — when granting one, you typically grant the other to the same address.
 
 ## Configurable Decimals
 

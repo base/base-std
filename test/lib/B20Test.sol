@@ -22,9 +22,9 @@ import {B20Constants} from "test/lib/mocks/MockB20.sol";
 /// `unpauser`, `burnBlocker`) so role-gated tests have explicit named
 /// accounts to grant roles to in setUp's initCalls.
 contract B20Test is B20FactoryTest {
-    // Role identifiers (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
+    // Role constants (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
     // BURN_BLOCKED_ROLE, PAUSE_ROLE, UNPAUSE_ROLE, METADATA_ROLE) and
-    // policy-type identifiers (TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY,
+    // policy-type constants (TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY,
     // TRANSFER_EXECUTOR_POLICY, MINT_RECEIVER_POLICY) are NOT redeclared here.
     // Tests reference them directly from MockB20 as `MINT_ROLE`
     // etc. — single source of truth, no drift risk.

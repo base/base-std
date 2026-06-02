@@ -6,38 +6,37 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 
 import {B20FactoryLibTest} from "test/lib/B20FactoryLibTest.sol";
 
-contract B20FactoryLibBuildSecurityIdentifierUpdatesTest is B20FactoryLibTest {
+contract B20FactoryLibBuildExtraMetadataUpdatesTest is B20FactoryLibTest {
     /// @notice External wrapper that re-exposes
-    ///         `buildSecurityIdentifierUpdates` for revert-path tests.
+    ///         `buildExtraMetadataUpdates` for revert-path tests.
     ///         Internal library calls inline into the test contract;
     ///         `vm.expectRevert` requires the revert one CALL frame
     ///         deeper, so revert tests must dispatch through an external
-    ///         entry point via `this.callBuildSecurityIdentifierUpdates`.
-    function callBuildSecurityIdentifierUpdates(string[] memory types, string[] memory values)
+    ///         entry point via `this.callBuildExtraMetadataUpdates`.
+    function callBuildExtraMetadataUpdates(string[] memory keys, string[] memory values)
         external
         pure
         returns (bytes[] memory)
     {
-        return B20FactoryLib.buildSecurityIdentifierUpdates(types, values);
+        return B20FactoryLib.buildExtraMetadataUpdates(keys, values);
     }
 
     /*//////////////////////////////////////////////////////////////
                                 REVERTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Verifies the helper reverts when `identifierTypes` and
-    ///         `identifierValues` differ in length.
+    /// @notice Verifies the helper reverts when `keys` and `values` differ in length.
     /// @dev    Mirrors the length-check semantics of
     ///         `buildRoleGrants(bytes32[], address[])`.
-    function test_buildSecurityIdentifierUpdates_revert_lengthMismatch(uint8 typesLenSeed, uint8 valuesLenSeed) public {
-        uint256 typesLen = bound(uint256(typesLenSeed), 0, 16);
+    function test_buildExtraMetadataUpdates_revert_lengthMismatch(uint8 keysLenSeed, uint8 valuesLenSeed) public {
+        uint256 keysLen = bound(uint256(keysLenSeed), 0, 16);
         uint256 valuesLen = bound(uint256(valuesLenSeed), 0, 16);
-        vm.assume(typesLen != valuesLen);
-        string[] memory types = new string[](typesLen);
+        vm.assume(keysLen != valuesLen);
+        string[] memory keys = new string[](keysLen);
         string[] memory values = new string[](valuesLen);
 
-        vm.expectRevert(abi.encodeWithSelector(B20FactoryLib.LengthMismatch.selector, typesLen, valuesLen));
-        this.callBuildSecurityIdentifierUpdates(types, values);
+        vm.expectRevert(abi.encodeWithSelector(B20FactoryLib.LengthMismatch.selector, keysLen, valuesLen));
+        this.callBuildExtraMetadataUpdates(keys, values);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -47,33 +46,33 @@ contract B20FactoryLibBuildSecurityIdentifierUpdatesTest is B20FactoryLibTest {
     /// @notice Empty input arrays produce an empty result.
     /// @dev    Boundary case; unlike `buildRoleGrants` there is no
     ///         skip-on-empty rule, so length tracks input exactly.
-    function test_buildSecurityIdentifierUpdates_success_emptyInputProducesEmpty() public pure {
-        bytes[] memory result = B20FactoryLib.buildSecurityIdentifierUpdates(new string[](0), new string[](0));
+    function test_buildExtraMetadataUpdates_success_emptyInputProducesEmpty() public pure {
+        bytes[] memory result = B20FactoryLib.buildExtraMetadataUpdates(new string[](0), new string[](0));
         assertEq(result.length, 0, "empty inputs must produce an empty result");
     }
 
     /// @notice Every input pair produces one
-    ///         `updateSecurityIdentifier(type, value)` init call, in
+    ///         `updateExtraMetadata(key, value)` init call, in
     ///         input order, with no entries elided.
     /// @dev    Pins ordering and the no-skip semantics; even empty
     ///         strings are passed through (the token, not this helper,
     ///         validates).
-    function test_buildSecurityIdentifierUpdates_success_emitsAllPairsInOrder(uint8 lenSeed) public pure {
+    function test_buildExtraMetadataUpdates_success_emitsAllPairsInOrder(uint8 lenSeed) public pure {
         uint256 len = bound(uint256(lenSeed), 1, 8);
-        string[] memory types = new string[](len);
+        string[] memory keys = new string[](len);
         string[] memory values = new string[](len);
         for (uint256 i = 0; i < len; i++) {
-            types[i] = string(abi.encodePacked("TYPE", _toAscii(i)));
+            keys[i] = string(abi.encodePacked("KEY", _toAscii(i)));
             values[i] = string(abi.encodePacked("VAL", _toAscii(i)));
         }
 
-        bytes[] memory result = B20FactoryLib.buildSecurityIdentifierUpdates(types, values);
+        bytes[] memory result = B20FactoryLib.buildExtraMetadataUpdates(keys, values);
 
         assertEq(result.length, len, "every pair must produce one init call");
         for (uint256 i = 0; i < len; i++) {
             assertEq(
                 result[i],
-                abi.encodeCall(IB20Security.updateSecurityIdentifier, (types[i], values[i])),
+                abi.encodeCall(IB20Security.updateExtraMetadata, (keys[i], values[i])),
                 "ordering must follow input"
             );
         }
@@ -83,32 +82,32 @@ contract B20FactoryLibBuildSecurityIdentifierUpdatesTest is B20FactoryLibTest {
     /// @dev    The helper does NOT skip empty entries — validation lives
     ///         on the token. This pins that behavior against a future
     ///         "skip empty pairs" mis-edit.
-    function test_buildSecurityIdentifierUpdates_success_emptyStringsArePassedThrough() public pure {
-        string[] memory types = new string[](3);
+    function test_buildExtraMetadataUpdates_success_emptyStringsArePassedThrough() public pure {
+        string[] memory keys = new string[](3);
         string[] memory values = new string[](3);
-        types[0] = "ISIN";
+        keys[0] = "category";
         values[0] = "";
-        types[1] = "";
-        values[1] = "us-cusip";
-        types[2] = "FIGI";
-        values[2] = "BBG000B9XRY4";
+        keys[1] = "";
+        values[1] = "north-america";
+        keys[2] = "reference";
+        values[2] = "REF-2024-001";
 
-        bytes[] memory result = B20FactoryLib.buildSecurityIdentifierUpdates(types, values);
+        bytes[] memory result = B20FactoryLib.buildExtraMetadataUpdates(keys, values);
 
         assertEq(result.length, 3, "no entry may be elided");
         assertEq(
             result[0],
-            abi.encodeCall(IB20Security.updateSecurityIdentifier, (types[0], values[0])),
+            abi.encodeCall(IB20Security.updateExtraMetadata, (keys[0], values[0])),
             "empty value passed through"
         );
         assertEq(
             result[1],
-            abi.encodeCall(IB20Security.updateSecurityIdentifier, (types[1], values[1])),
-            "empty type passed through"
+            abi.encodeCall(IB20Security.updateExtraMetadata, (keys[1], values[1])),
+            "empty key passed through"
         );
         assertEq(
             result[2],
-            abi.encodeCall(IB20Security.updateSecurityIdentifier, (types[2], values[2])),
+            abi.encodeCall(IB20Security.updateExtraMetadata, (keys[2], values[2])),
             "fully populated pair preserved"
         );
     }

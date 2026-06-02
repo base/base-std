@@ -7,8 +7,8 @@ import {IB20} from "./IB20.sol";
 /// @author Coinbase
 ///
 /// @notice A B-20 token variant for tokenized securities. Extends `IB20` with announcements,
-///         multiplier-based scaling, batched mint for corporate actions, and
-///         security-identifier metadata.
+///         multiplier-based scaling, batched mint for corporate actions, and extra-metadata
+///         entries.
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
@@ -17,8 +17,8 @@ interface IB20Security is IB20 {
     /// @notice `announce` was called with an `id` that has already been consumed.
     error AnnouncementIdAlreadyUsed(string id);
 
-    /// @notice `updateSecurityIdentifier` was called with an empty `identifierType`.
-    error InvalidIdentifierType();
+    /// @notice `updateExtraMetadata` was called with an empty `key`.
+    error InvalidMetadataKey();
 
     /// @notice A batched function was called with parallel arrays of differing lengths.
     ///
@@ -49,8 +49,8 @@ interface IB20Security is IB20 {
     /// @notice Emitted by `updateMultiplier`.
     event MultiplierUpdated(uint256 multiplier);
 
-    /// @notice Emitted by `updateSecurityIdentifier`. An empty `value` indicates removal.
-    event SecurityIdentifierUpdated(string identifierType, string value);
+    /// @notice Emitted by `updateExtraMetadata`. An empty `value` indicates removal.
+    event ExtraMetadataUpdated(string key, string value);
 
     /// @notice Emitted by `announce` to open an announcement bracket.
     event Announcement(address indexed caller, string id, string description, string uri);
@@ -59,13 +59,14 @@ interface IB20Security is IB20 {
     event EndAnnouncement(string id);
 
     /*//////////////////////////////////////////////////////////////
-                            ROLE IDENTIFIERS
+                              ROLE CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Required to call `announce`, `updateMultiplier`, and `updateSecurityIdentifier`.
-    ///         `updateName` / `updateSymbol` remain gated by the inherited `METADATA_ROLE`.
-    /// @return Role identifier.
-    function SECURITY_OPERATOR_ROLE() external view returns (bytes32);
+    /// @notice Required to call `announce` and `updateMultiplier`. The metadata setters
+    ///         (`updateName`, `updateSymbol`, `updateExtraMetadata`) are gated by the
+    ///         inherited `METADATA_ROLE` instead.
+    /// @return Role constant.
+    function OPERATOR_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                               PRECISION
@@ -84,14 +85,14 @@ interface IB20Security is IB20 {
     ///         `Announcement` then `EndAnnouncement` with the same `id`. Pass an empty
     ///         `internalCalls` for a pure disclosure.
     ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SECURITY_OPERATOR_ROLE`.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
     /// @dev Reverts with `AnnouncementIdAlreadyUsed` when `id` has previously been consumed.
     /// @dev Reverts with `InternalCallMalformed` when an entry in `internalCalls` is shorter than four bytes.
     /// @dev Reverts with `AnnouncementInProgress` when an entry in `internalCalls` targets `announce` itself.
     /// @dev Reverts with `InternalCallFailed` when an entry in `internalCalls` reverts during the inner `delegatecall`.
     ///
     /// @param internalCalls ABI-encoded calldata blobs executed in order via self-`delegatecall`; may be empty.
-    /// @param id            Caller-chosen announcement identifier; single-use over the token's lifetime.
+    /// @param id            Caller-chosen announcement id; single-use over the token's lifetime.
     /// @param description   Human-readable summary of the announcement.
     /// @param uri           Off-chain URI containing the full announcement contents.
     function announce(
@@ -103,7 +104,7 @@ interface IB20Security is IB20 {
 
     /// @notice Whether `id` has previously been consumed by `announce`.
     ///
-    /// @param id Announcement identifier to query.
+    /// @param id Announcement id to query.
     ///
     /// @return Whether `id` is used.
     function isAnnouncementIdUsed(string calldata id) external view returns (bool);
@@ -147,7 +148,7 @@ interface IB20Security is IB20 {
     /// @notice Sets a new multiplier. Holder raw balances are not rewritten; scaled balances
     ///         derive from the new multiplier at read time. Emits `MultiplierUpdated`.
     ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SECURITY_OPERATOR_ROLE`.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`.
     function updateMultiplier(uint256 newMultiplier) external;
@@ -173,23 +174,25 @@ interface IB20Security is IB20 {
     function batchMint(address[] calldata recipients, uint256[] calldata amounts) external;
 
     /*//////////////////////////////////////////////////////////////
-                          SECURITY IDENTIFIERS
+                             EXTRA METADATA
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The value of the named identifier (e.g. ISIN, CUSIP, FIGI), or the empty string if not set.
+    /// @notice The value of the named metadata entry, or the empty string if not set. A
+    ///         variant-agnostic key/value store; the issuer chooses the key namespace
+    ///         (e.g. `"category"`, `"region"`, `"reference"`).
     ///
-    /// @param identifierType Identifier category.
+    /// @param key Metadata entry key.
     ///
     /// @return Current value, or the empty string.
-    function securityIdentifier(string calldata identifierType) external view returns (string memory);
+    function extraMetadata(string calldata key) external view returns (string memory);
 
-    /// @notice Sets, updates, or removes a security identifier. An empty `value` removes the entry.
-    ///         Emits `SecurityIdentifierUpdated`.
+    /// @notice Sets, updates, or removes an extra-metadata entry. An empty `value` removes the
+    ///         entry. Emits `ExtraMetadataUpdated`.
     ///
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SECURITY_OPERATOR_ROLE`.
-    /// @dev Reverts with `InvalidIdentifierType` when `identifierType` is the empty string.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `METADATA_ROLE`.
+    /// @dev Reverts with `InvalidMetadataKey` when `key` is the empty string.
     ///
-    /// @param identifierType Identifier category (e.g. "ISIN").
-    /// @param value          New value, or empty string to remove.
-    function updateSecurityIdentifier(string calldata identifierType, string calldata value) external;
+    /// @param key   Metadata entry key (e.g. `"category"`).
+    /// @param value New value, or empty string to remove.
+    function updateExtraMetadata(string calldata key, string calldata value) external;
 }

@@ -39,7 +39,7 @@ After `renounceLastAdmin()` (or for tokens deployed with `initialAdmin == addres
 
 B20 declares a fixed set of *policy scopes*. Each scope stores a `uint64` policy ID that points into the [PolicyRegistry](../PolicyRegistry/README.md); on every gated operation, B20 calls `isAuthorized` against the relevant scope and reverts (`PolicyForbids`) if the account isn't authorized.
 
-Scope identifiers follow the `{ACTION}_{ACTOR}_POLICY` convention:
+Scope names follow the `{ACTION}_{ACTOR}_POLICY` convention:
 
 | Scope | Gates |
 |---|---|
@@ -54,7 +54,7 @@ Because scopes are per-actor, send-side and receive-side rules can be configured
 
 > ⚠️ **Every scope defaults to `ALWAYS_ALLOW` at token creation** unless overridden in the bootstrap `initCalls`. Token behavior must be intentionally constrained — an unattended deployment of B20 is fully open.
 
-Scopes are read via `policyId(scope)` and written via `updatePolicy(scope, policyId)`. `updatePolicy` is admin-gated and reverts if the scope identifier isn't recognized — typo'd scopes hard-revert rather than silently no-op'ing.
+Scopes are read via `policyId(scope)` and written via `updatePolicy(scope, policyId)`. `updatePolicy` is admin-gated and reverts if the scope isn't recognized — typo'd scopes hard-revert rather than silently no-op'ing.
 
 See [PolicyRegistry](../PolicyRegistry/README.md) for registry mechanics (built-in policy IDs, encoding, admin lifecycle).
 
@@ -114,4 +114,4 @@ ERC-1271 contract signatures are deliberately NOT accepted — permit recovers v
 | Variant | Decimals | What it adds |
 |---|---|---|
 | [Stablecoin](Stablecoin.md) | 6 (fixed) | currency ISO code |
-| [Security](Security.md) | 6-18 (configurable per token) | multiplier, announcements, identifiers, redemptions |
+| [Security](Security.md) | 6-18 (configurable per token) | multiplier, announcements, extra metadata, redemptions |

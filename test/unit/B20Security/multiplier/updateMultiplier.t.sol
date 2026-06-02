@@ -9,18 +9,16 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 import {MockB20SecurityStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 contract B20SecurityUpdateMultiplierTest is B20SecurityTest {
-    /// @notice Verifies updateMultiplier reverts when caller lacks SECURITY_OPERATOR_ROLE
+    /// @notice Verifies updateMultiplier reverts when caller lacks OPERATOR_ROLE
     /// @dev Access control: only role-holders can rotate the multiplier; checks
-    ///      AccessControlUnauthorizedAccount with SECURITY_OPERATOR_ROLE.
+    ///      AccessControlUnauthorizedAccount with OPERATOR_ROLE.
     function test_updateMultiplier_revert_unauthorized(address caller, uint256 newMultiplier) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
         vm.assume(caller != operator);
 
         vm.prank(caller);
-        vm.expectRevert(
-            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, SECURITY_OPERATOR_ROLE)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, OPERATOR_ROLE));
         security().updateMultiplier(newMultiplier);
     }
 

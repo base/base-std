@@ -12,7 +12,7 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 /// `_mint` / `_pause` action wrappers, and the security-variant token
 /// deployed by `_deployToken`). Adds the variant-specific role holder
 /// (`operator`) plus helpers for the announcement, multiplier,
-/// and identifier surfaces.
+/// and extra-metadata surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
 /// variant-only surface (`announce`, `batchMint`, etc.) cast inline via
@@ -22,23 +22,25 @@ contract B20SecurityTest is B20Test {
     address internal operator = makeAddr("operator");
 
     // ============================================================
-    //              SECURITY-VARIANT IDENTIFIER FIXTURES
+    //           SECURITY-VARIANT EXTRA-METADATA FIXTURES
     // ============================================================
-    // Test-only identifier-type keys (`ISIN`, `CUSIP`, `FIGI`). All
-    // three are post-creation additions exercised only by the variant
-    // tests; the factory no longer seeds any identifier at bootstrap.
+    // Test-only metadata-entry keys. The `extraMetadata` surface is
+    // a variant-agnostic key/value store; these three keys form a
+    // coherent generic example so tests don't accidentally encode a
+    // securities-specific assumption. All entries are post-creation
+    // additions exercised only by the variant tests; the factory does
+    // not seed any entry at bootstrap.
 
-    /// @notice Identifier-type key for the ISIN entry (International
-    ///         Securities Identification Number). Test-fixture only.
-    string internal constant IDENTIFIER_ISIN = "ISIN";
+    /// @notice Example metadata-entry key #1. String value chosen for readability;
+    ///         the constant name stays generic so tests don't encode any
+    ///         variant-specific assumption about what keys mean.
+    string internal constant METADATA_EXAMPLE_1 = "category";
 
-    /// @notice Identifier-type key for the CUSIP entry (US/Canada
-    ///         securities identifier). Test-fixture only.
-    string internal constant IDENTIFIER_CUSIP = "CUSIP";
+    /// @notice Example metadata-entry key #2.
+    string internal constant METADATA_EXAMPLE_2 = "region";
 
-    /// @notice Identifier-type key for the FIGI entry (Bloomberg's
-    ///         financial-instrument global identifier). Test-fixture only.
-    string internal constant IDENTIFIER_FIGI = "FIGI";
+    /// @notice Example metadata-entry key #3.
+    string internal constant METADATA_EXAMPLE_3 = "reference";
 
     // -- Setup --
     function setUp() public virtual override {
@@ -60,10 +62,10 @@ contract B20SecurityTest is B20Test {
     //                    SECURITY-ROLE HELPERS
     // ============================================================
 
-    /// @notice Grants `SECURITY_OPERATOR_ROLE` to the `operator` actor as
+    /// @notice Grants `OPERATOR_ROLE` to the `operator` actor as
     ///         the admin, idempotent.
     function _grantOperator() internal {
-        bytes32 role = security().SECURITY_OPERATOR_ROLE();
+        bytes32 role = security().OPERATOR_ROLE();
         if (!token.hasRole(role, operator)) _grantRole(role, operator);
     }
 
@@ -72,7 +74,7 @@ contract B20SecurityTest is B20Test {
     // ============================================================
 
     /// @notice Sets the multiplier via the `operator` actor, lazily
-    ///         granting `SECURITY_OPERATOR_ROLE` on first call.
+    ///         granting `OPERATOR_ROLE` on first call.
     function _updateMultiplier(uint256 newMultiplier) internal {
         _grantOperator();
         vm.prank(operator);
@@ -133,9 +135,9 @@ contract B20SecurityTest is B20Test {
     // Compile-time copies of the contract's variant-only constants.
     // Tests reference these when they need the value in a context that
     // can't make a contract call (e.g. inside a struct literal). The
-    // values match `security().SECURITY_OPERATOR_ROLE()` etc. by
-    // construction; the per-constant test in
-    // `test/unit/B20Security/constants/` pins that down.
+    // values match `security().OPERATOR_ROLE()` etc. by construction;
+    // the per-constant test in `test/unit/B20Security/constants/` pins
+    // that down.
 
-    bytes32 internal constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
+    bytes32 internal constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 }

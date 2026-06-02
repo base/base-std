@@ -50,7 +50,7 @@ library B20FactoryLib {
     }
 
     /// @notice Bootstrap role-grant bundle for `B20Variant.SECURITY`. Superset of `B20RoleHolders`
-    ///         with a `SECURITY_OPERATOR_ROLE` slot.
+    ///         with an `OPERATOR_ROLE` slot.
     ///
     /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20SecurityCreateParams.initialAdmin`, not this struct.
     struct B20SecurityRoleHolders {
@@ -66,8 +66,8 @@ library B20FactoryLib {
         address unpauser;
         /// @dev Account granted `METADATA_ROLE`.
         address metadataAdmin;
-        /// @dev Account granted `SECURITY_OPERATOR_ROLE`.
-        address securityOperator;
+        /// @dev Account granted `OPERATOR_ROLE`.
+        address operator;
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -79,7 +79,7 @@ library B20FactoryLib {
     /// @param name         ERC-20 token name.
     /// @param symbol       ERC-20 token symbol.
     /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
-    /// @param currency     Self-declared currency identifier (uppercase ASCII).
+    /// @param currency     Self-declared currency code (uppercase ASCII).
     function encodeStablecoinCreateParams(
         string memory name,
         string memory symbol,
@@ -154,7 +154,7 @@ library B20FactoryLib {
 
     /// @notice Encodes a bootstrap initCall to `IB20.updatePolicy`.
     ///
-    /// @param policyScope The policy-slot identifier.
+    /// @param policyScope The policy-slot scope.
     /// @param newPolicyId The new policy registry ID.
     function encodeUpdatePolicy(bytes32 policyScope, uint64 newPolicyId) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updatePolicy, (policyScope, newPolicyId));
@@ -196,16 +196,12 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Security.batchMint, (recipients, amounts));
     }
 
-    /// @notice Encodes a bootstrap initCall to `IB20Security.updateSecurityIdentifier`.
+    /// @notice Encodes a bootstrap initCall to `IB20Security.updateExtraMetadata`.
     ///
-    /// @param identifierType Identifier category (e.g. `"CUSIP"`).
-    /// @param value          New value, or empty string to remove.
-    function encodeUpdateSecurityIdentifier(string memory identifierType, string memory value)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encodeCall(IB20Security.updateSecurityIdentifier, (identifierType, value));
+    /// @param key   Metadata entry key (e.g. `"category"`).
+    /// @param value New value, or empty string to remove.
+    function encodeUpdateExtraMetadata(string memory key, string memory value) internal pure returns (bytes memory) {
+        return abi.encodeCall(IB20Security.updateExtraMetadata, (key, value));
     }
 
     /// @notice Encodes a bootstrap initCall to `IB20Security.updateMultiplier`.
@@ -255,7 +251,7 @@ library B20FactoryLib {
         roles[3] = B20Constants.PAUSE_ROLE;
         roles[4] = B20Constants.UNPAUSE_ROLE;
         roles[5] = B20Constants.METADATA_ROLE;
-        roles[6] = B20Constants.SECURITY_OPERATOR_ROLE;
+        roles[6] = B20Constants.OPERATOR_ROLE;
 
         address[] memory accounts = new address[](7);
         accounts[0] = holders.minter;
@@ -264,7 +260,7 @@ library B20FactoryLib {
         accounts[3] = holders.pauser;
         accounts[4] = holders.unpauser;
         accounts[5] = holders.metadataAdmin;
-        accounts[6] = holders.securityOperator;
+        accounts[6] = holders.operator;
 
         return buildRoleGrants(roles, accounts);
     }
@@ -275,7 +271,7 @@ library B20FactoryLib {
     ///
     /// @dev Reverts with `LengthMismatch` when `roles.length != accounts.length`.
     ///
-    /// @param roles    Role identifiers, parallel to `accounts`.
+    /// @param roles    Roles to grant, parallel to `accounts`.
     /// @param accounts Role holders, parallel to `roles`.
     /// @return initCalls ABI-encoded `grantRole` initCalls.
     function buildRoleGrants(bytes32[] memory roles, address[] memory accounts)
@@ -299,26 +295,26 @@ library B20FactoryLib {
         }
     }
 
-    /// @notice Builds the `updateSecurityIdentifier` initCalls implied by parallel
-    ///         `identifierTypes` / `identifierValues` arrays. All entries are emitted in input order.
+    /// @notice Builds the `updateExtraMetadata` initCalls implied by parallel
+    ///         `keys` / `values` arrays. All entries are emitted in input order.
     ///
-    /// @dev Reverts with `LengthMismatch` when `identifierTypes.length != identifierValues.length`.
+    /// @dev Reverts with `LengthMismatch` when `keys.length != values.length`.
     ///
-    /// @param identifierTypes  Identifier categories (e.g. `"CUSIP"`).
-    /// @param identifierValues Values parallel to `identifierTypes`.
-    /// @return initCalls ABI-encoded `updateSecurityIdentifier` initCalls.
-    function buildSecurityIdentifierUpdates(string[] memory identifierTypes, string[] memory identifierValues)
+    /// @param keys   Metadata entry keys (e.g. `"category"`).
+    /// @param values Values parallel to `keys`.
+    /// @return initCalls ABI-encoded `updateExtraMetadata` initCalls.
+    function buildExtraMetadataUpdates(string[] memory keys, string[] memory values)
         internal
         pure
         returns (bytes[] memory initCalls)
     {
-        if (identifierTypes.length != identifierValues.length) {
-            revert LengthMismatch(identifierTypes.length, identifierValues.length);
+        if (keys.length != values.length) {
+            revert LengthMismatch(keys.length, values.length);
         }
 
-        initCalls = new bytes[](identifierTypes.length);
-        for (uint256 k = 0; k < identifierTypes.length; k++) {
-            initCalls[k] = encodeUpdateSecurityIdentifier(identifierTypes[k], identifierValues[k]);
+        initCalls = new bytes[](keys.length);
+        for (uint256 k = 0; k < keys.length; k++) {
+            initCalls[k] = encodeUpdateExtraMetadata(keys[k], values[k]);
         }
     }
 

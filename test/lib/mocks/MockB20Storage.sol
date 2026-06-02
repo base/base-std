@@ -353,8 +353,10 @@ library MockB20Storage {
 ///         - `usedAnnouncementIds` keys directly on the raw `string id`
 ///           that callers pass to `announce` / `isAnnouncementIdUsed`,
 ///           not on a hash, so the on-chain query mirrors the API.
-///         - `identifiers` keys directly on the raw `identifierType`
-///           string (e.g. `"ISIN"`); empty value means unset/removed.
+///         - `extraMetadata` (the storage field backing the public
+///           `extraMetadata` / `updateExtraMetadata` surface) keys
+///           directly on the raw `key` string (e.g. `"category"`);
+///           empty value means unset/removed.
 library MockB20SecurityStorage {
     /// @custom:storage-location erc7201:base.b20.security
     struct Layout {
@@ -375,9 +377,11 @@ library MockB20SecurityStorage {
         // Tracks consumed announcement IDs; flips to true on first
         // `announce` for a given id, and remains true forever.
         mapping(string id => bool used) usedAnnouncementIds;
-        // ---------- Security identifiers ----------
-        // ISIN, CUSIP, FIGI, etc. Empty string means unset/removed.
-        mapping(string identifierType => string value) identifiers;
+        // ---------- Extra metadata ----------
+        // Named string entries — a variant-agnostic key/value store
+        // (e.g. `category`, `region`, `reference`). Empty string means
+        // unset/removed.
+        mapping(string key => string value) extraMetadata;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))
@@ -395,7 +399,7 @@ library MockB20SecurityStorage {
     uint256 internal constant DECIMALS_OFFSET = 0;
     uint256 internal constant MULTIPLIER_OFFSET = 1;
     uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 2;
-    uint256 internal constant IDENTIFIERS_OFFSET = 3;
+    uint256 internal constant EXTRA_METADATA_OFFSET = 3;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {
@@ -423,7 +427,7 @@ library MockB20SecurityStorage {
     function decimalsSlot() internal pure returns (bytes32) { return slotOf(DECIMALS_OFFSET); }
     function multiplierSlot() internal pure returns (bytes32) { return slotOf(MULTIPLIER_OFFSET); }
     function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
-    function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }
+    function extraMetadataBaseSlot() internal pure returns (bytes32) { return slotOf(EXTRA_METADATA_OFFSET); }
 
             // forgefmt: disable-end
 
@@ -441,11 +445,11 @@ library MockB20SecurityStorage {
         return keccak256(abi.encodePacked(id, usedAnnouncementIdsBaseSlot()));
     }
 
-    /// @notice Slot of `identifiers[identifierType]` (the value, which
-    ///         is itself a string and follows Solidity's short/long
-    ///         encoding convention).
-    function identifierSlot(string memory identifierType) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(identifierType, identifiersBaseSlot()));
+    /// @notice Slot of the extra-metadata entry keyed by `key`
+    ///         (the value, which is itself a string and follows
+    ///         Solidity's short/long encoding convention).
+    function extraMetadataSlot(string memory key) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(key, extraMetadataBaseSlot()));
     }
 }
 

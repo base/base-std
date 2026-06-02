@@ -4,7 +4,7 @@ The ActivationRegistry tracks which Base features are live. This is managed excl
 
 ## Feature IDs
 
-Feature IDs are opaque `bytes32` identifiers. By convention each is the keccak256 digest of a human-readable feature name (e.g., `keccak256("base.b20_asset")`); a feature ID is permanently bound to its semantic and is never recycled.
+Feature IDs are opaque `bytes32` values. By convention each is the keccak256 digest of a human-readable feature name (e.g., `keccak256("base.b20_asset")`); a feature ID is permanently bound to its semantic and is never recycled.
 
 The canonical IDs in use today, defined in [`ActivationRegistryFeatureList`](../../test/lib/mocks/ActivationRegistryFeatureList.sol):
 

@@ -79,7 +79,7 @@ abstract contract MockB20 is IB20 {
     ///         bytes32 for an unconfigured role.
     bytes32 public constant DEFAULT_ADMIN_ROLE = B20Constants.DEFAULT_ADMIN_ROLE;
 
-    /// @notice Role identifiers. Values delegate to `B20Constants` so the
+    /// @notice Role constants. Values delegate to `B20Constants` so the
     ///         single-source-of-truth lives in one library; the Rust impl
     ///         derives the same `keccak256` of each role name.
     bytes32 public constant MINT_ROLE = B20Constants.MINT_ROLE;
@@ -89,7 +89,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant UNPAUSE_ROLE = B20Constants.UNPAUSE_ROLE;
     bytes32 public constant METADATA_ROLE = B20Constants.METADATA_ROLE;
 
-    /// @notice Policy-type identifiers. Same `keccak256` convention as roles.
+    /// @notice Policy-type constants. Same `keccak256` convention as roles.
     bytes32 public constant TRANSFER_SENDER_POLICY = B20Constants.TRANSFER_SENDER_POLICY;
     bytes32 public constant TRANSFER_RECEIVER_POLICY = B20Constants.TRANSFER_RECEIVER_POLICY;
     bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
@@ -394,7 +394,7 @@ abstract contract MockB20 is IB20 {
         // Raw read for the event payload. An unconfigured admin reads
         // as `bytes32(0)` which IS `DEFAULT_ADMIN_ROLE`, so the
         // `RoleAdminChanged.previousAdminRole` field carries the
-        // correct identifier with no fall-through code. See the
+        // correct value with no fall-through code. See the
         // DEFAULT_ADMIN_ROLE constant's natspec.
         bytes32 previousAdminRole = MockB20Storage.layout().roleAdmins[role];
         MockB20Storage.layout().roleAdmins[role] = newAdminRole;
@@ -648,7 +648,7 @@ abstract contract MockB20 is IB20 {
     ///      `bytes32(0)`, which IS `DEFAULT_ADMIN_ROLE`, so unconfigured
     ///      roles correctly require the default admin to authorize
     ///      without any fall-through code. The revert payload's
-    ///      `adminRole` field carries the same identifier — for
+    ///      `adminRole` field carries the same value — for
     ///      unconfigured roles it's `bytes32(0) == DEFAULT_ADMIN_ROLE`,
     ///      which is the role the caller actually needs to hold.
     function _requireRoleAdmin(bytes32 role) internal view {

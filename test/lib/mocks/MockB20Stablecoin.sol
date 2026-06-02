@@ -10,7 +10,7 @@ import {MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 /// @title MockB20Stablecoin
 /// @notice Reference implementation of the `IB20Stablecoin` variant.
 ///         Extends `MockB20` with a single immutable `currency()`
-///         identifier; all other variant behavior is inherited unchanged.
+///         code; all other variant behavior is inherited unchanged.
 ///
 /// @dev    Variant-specific state lives in `MockB20StablecoinStorage`'s
 ///         own ERC-7201 namespace (`base.b20.stablecoin`), disjoint from
@@ -27,7 +27,7 @@ contract MockB20Stablecoin is MockB20, IB20Stablecoin {
         return 6;
     }
 
-    /// @notice The immutable currency identifier (e.g. "USD", "EUR",
+    /// @notice The immutable currency code (e.g. "USD", "EUR",
     ///         "XAU"). Written by the factory at creation.
     function currency() external view returns (string memory) {
         return MockB20StablecoinStorage.layout().currency;

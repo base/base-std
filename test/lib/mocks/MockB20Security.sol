@@ -12,7 +12,7 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 /// @notice Reference implementation of the `IB20Security` variant.
 ///         Extends `MockB20` with the announcement bracket,
 ///         multiplier-based scaling, batched issuance, and
-///         security-identifier surfaces; all base behavior is
+///         extra-metadata surfaces; all base behavior is
 ///         inherited unchanged.
 ///
 /// @dev    Variant-specific state lives in `MockB20SecurityStorage`'s
@@ -46,16 +46,16 @@ import {MockB20SecurityStorage, MockB20Storage} from "test/lib/mocks/MockB20Stor
 ///
 ///         **Factory bootstrap.** Operator and admin gates honor
 ///         `_isPrivileged()` so the factory can stage initial
-///         announcements, batched issuance, multipliers, and identifiers
-///         during the bootstrap window without first granting itself
-///         roles. Token invariants (supply-cap math, balance
+///         announcements, batched issuance, multipliers, and extra-metadata
+///         entries during the bootstrap window without first granting
+///         itself roles. Token invariants (supply-cap math, balance
 ///         accounting) are NOT bypassed anywhere.
 contract MockB20Security is MockB20, IB20Security {
     // ============================================================
     //                          CONSTANTS
     // ============================================================
 
-    bytes32 public constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice Fixed-point precision for the multiplier. `1e18` (one
     ///         WAD) is the standard DeFi convention; `toScaledBalance`
@@ -88,7 +88,7 @@ contract MockB20Security is MockB20, IB20Security {
         string calldata id,
         string calldata description,
         string calldata uri
-    ) external onlyRole(SECURITY_OPERATOR_ROLE) {
+    ) external onlyRole(OPERATOR_ROLE) {
         MockB20SecurityStorage.Layout storage $ = MockB20SecurityStorage.layout();
         if ($.usedAnnouncementIds[id]) revert AnnouncementIdAlreadyUsed(id);
         // Mark consumed BEFORE the emit and BEFORE any inner calls so
@@ -132,7 +132,7 @@ contract MockB20Security is MockB20, IB20Security {
         return (MockB20Storage.layout().balances[account] * _multiplier()) / WAD_PRECISION;
     }
 
-    function updateMultiplier(uint256 newMultiplier) external onlyRole(SECURITY_OPERATOR_ROLE) {
+    function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
         MockB20SecurityStorage.layout().multiplier = newMultiplier;
         emit MultiplierUpdated(newMultiplier);
     }
@@ -159,20 +159,17 @@ contract MockB20Security is MockB20, IB20Security {
     }
 
     // ============================================================
-    //                     SECURITY IDENTIFIERS
+    //                       EXTRA METADATA
     // ============================================================
 
-    function securityIdentifier(string calldata identifierType) external view returns (string memory) {
-        return MockB20SecurityStorage.layout().identifiers[identifierType];
+    function extraMetadata(string calldata key) external view returns (string memory) {
+        return MockB20SecurityStorage.layout().extraMetadata[key];
     }
 
-    function updateSecurityIdentifier(string calldata identifierType, string calldata value)
-        external
-        onlyRole(SECURITY_OPERATOR_ROLE)
-    {
-        if (bytes(identifierType).length == 0) revert InvalidIdentifierType();
-        MockB20SecurityStorage.layout().identifiers[identifierType] = value;
-        emit SecurityIdentifierUpdated(identifierType, value);
+    function updateExtraMetadata(string calldata key, string calldata value) external onlyRole(METADATA_ROLE) {
+        if (bytes(key).length == 0) revert InvalidMetadataKey();
+        MockB20SecurityStorage.layout().extraMetadata[key] = value;
+        emit ExtraMetadataUpdated(key, value);
     }
 
     // ============================================================
@@ -199,7 +196,7 @@ contract MockB20Security is MockB20, IB20Security {
     ///
     ///      The check is a denylist (only `announce` is blocked), not
     ///      an allowlist of approved corp-action functions: the
-    ///      operator already needs both `SECURITY_OPERATOR_ROLE` to
+    ///      operator already needs both `OPERATOR_ROLE` to
     ///      call `announce` AND whatever role each inner function
     ///      requires (e.g. `MINT_ROLE` for `batchMint`), so the
     ///      authorization story is already enforced by the inner

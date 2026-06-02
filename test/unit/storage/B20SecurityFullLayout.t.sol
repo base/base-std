@@ -24,7 +24,7 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///      both zero (the "unwritten = WAD" default) and WAD itself.
     uint256 internal constant MULTIPLIER_MARKER = 2.5e18;
 
-    string internal constant FIGI_VALUE = "BBG000B9XRY4";
+    string internal constant REFERENCE_VALUE = "REF-2024-001";
     string internal constant ANNOUNCEMENT_ID = "layout-pin-announcement";
 
     /// @notice Cross-cuts every field of the security-variant namespace in
@@ -33,7 +33,8 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     ///         - 0: decimals (factory-written at creation)
     ///         - 1: multiplier
     ///         - 2: usedAnnouncementIds[id]
-    ///         - 3: identifiers[identifierType]  (FIGI mutated)
+    ///         - 3: extraMetadata[key]  (one example key mutated; the other
+    ///              left empty to confirm the factory seeds no entries)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -65,19 +66,19 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
             "security slot 2: usedAnnouncementIds[id] must be true after announce"
         );
 
-        // ---------- identifiers[identifierType] (slot 3, hashed by type) ----------
-        // The factory does not seed any identifier at creation, so a fresh token's
-        // ISIN slot is empty. The post-creation FIGI write is pinned to the
-        // canonical string-field encoding at its derived slot.
+        // ---------- extraMetadata[key] (slot 3, hashed by key) ----------
+        // The factory does not seed any entry at creation, so a fresh token's
+        // unwritten key reads as empty. The post-creation write is pinned to
+        // the canonical string-field encoding at its derived slot.
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_ISIN)),
+            vm.load(tokenAddr, MockB20SecurityStorage.extraMetadataSlot(METADATA_EXAMPLE_1)),
             bytes32(0),
-            "security slot 3: identifiers[ISIN] must remain zero (factory seeds no identifiers)"
+            "security slot 3: extraMetadata[example_1] must remain zero (factory seeds no entries)"
         );
         assertEq(
-            vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_FIGI)),
-            _expectedStringFieldSlot(FIGI_VALUE),
-            "security slot 3: identifiers[FIGI] must hold the post-creation short-string encoding"
+            vm.load(tokenAddr, MockB20SecurityStorage.extraMetadataSlot(METADATA_EXAMPLE_3)),
+            _expectedStringFieldSlot(REFERENCE_VALUE),
+            "security slot 3: extraMetadata[example_3] must hold the post-creation short-string encoding"
         );
     }
 
@@ -88,11 +89,12 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
     function _populate() internal {
         // multiplier: write the non-WAD marker via the public surface.
         _updateMultiplier(MULTIPLIER_MARKER);
-        // identifiers[FIGI]: post-creation operator write. The factory does not
-        // seed any identifier at creation; ISIN, CUSIP, etc. all default to empty.
-        _grantOperator();
-        vm.prank(operator);
-        security().updateSecurityIdentifier(IDENTIFIER_FIGI, FIGI_VALUE);
+        // extraMetadata[example_3]: post-creation metadata-admin write. The
+        // factory does not seed any entry at creation; every other key
+        // defaults to empty.
+        _grantRole(B20Constants.METADATA_ROLE, admin);
+        vm.prank(admin);
+        security().updateExtraMetadata(METADATA_EXAMPLE_3, REFERENCE_VALUE);
         // usedAnnouncementIds[ANNOUNCEMENT_ID]: flip via announce.
         _announce(ANNOUNCEMENT_ID);
     }

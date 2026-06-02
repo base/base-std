@@ -30,7 +30,7 @@ interface IB20Factory {
         string symbol;
         /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
-        /// @dev Immutable self-declared currency identifier; uppercase ASCII `A`-`Z` only.
+        /// @dev Immutable self-declared currency code; uppercase ASCII `A`-`Z` only.
         string currency;
     }
 
@@ -55,7 +55,7 @@ interface IB20Factory {
     struct B20StablecoinEventParams {
         /// @dev Event-encoding version. Currently `1`. Independent of `B20StablecoinCreateParams.version`.
         uint8 version;
-        /// @dev Stablecoin currency identifier, identical to the value passed in
+        /// @dev Stablecoin currency code, identical to the value passed in
         ///      `B20StablecoinCreateParams.currency`.
         string currency;
     }
