@@ -61,6 +61,8 @@ Each Security token can carry one or more standardized identifiers (ISIN, CUSIP,
 
 Gates the three corporate-actions setters (`updateMultiplier`, `batchMint`, `updateSecurityIdentifier`) and the `announce` wrapper itself. Held separately from `DEFAULT_ADMIN_ROLE` so corporate-actions operators don't need full admin authority. Operationally paired with `METADATA_ROLE` — when granting one, you typically grant the other to the same address.
 
-## Fixed Decimals (6)
+## Configurable Decimals
 
-`decimals()` is hard-wired to `6`. The choice matches the precision used by popular real-world securities-platform integrations.
+`decimals()` is chosen at creation via `B20SecurityCreateParams.decimals` and immutable thereafter. The factory enforces the inclusive range `[6, 18]` (exposed as `B20Constants.MIN_ASSET_DECIMALS` and `MAX_ASSET_DECIMALS`); out-of-range values revert `InvalidDecimals(decimals)`. `6` matches the precision used by popular real-world securities-platform integrations and is the smallest unit any common stablecoin uses; `18` is the ERC-20 community ceiling that every wallet and indexer renders correctly.
+
+The stablecoin variant is unchanged — it hardcodes `decimals()` to `6`.

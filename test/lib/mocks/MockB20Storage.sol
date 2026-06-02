@@ -333,6 +333,14 @@ library MockB20Storage {
 ///         is `keccak256(abi.encode(uint256(keccak256("base.b20.security")) - 1)) & ~bytes32(uint256(0xff))`.
 ///
 ///         **Storage notes.**
+///         - `decimals` is the per-token ERC-20 decimals value, chosen
+///           at creation by the factory from `B20SecurityCreateParams`
+///           and immutable thereafter. Validated to the range
+///           `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`
+///           by the factory. Pinned to slot 0 (ahead of `multiplier`)
+///           so future small variant-immutable scalars can pack into
+///           this slot's remaining 31 bytes without shifting other
+///           fields' offsets.
 ///         - `multiplier` stores the WAD-scaled multiplier applied to
 ///           raw balances. A stored value of `0` is interpreted by the
 ///           read surface (`multiplier()`, `toScaledBalance(...)`,
@@ -350,6 +358,15 @@ library MockB20Storage {
 library MockB20SecurityStorage {
     /// @custom:storage-location erc7201:base.b20.security
     struct Layout {
+        // ---------- Decimals ----------
+        // Per-token ERC-20 `decimals`. Written by the factory at
+        // creation from the `B20SecurityCreateParams.decimals` field
+        // (validated to [MIN_ASSET_DECIMALS, MAX_ASSET_DECIMALS]) and
+        // never mutated afterwards. Pinned to slot 0 so future
+        // small variant-immutable scalars can pack into the same
+        // slot's remaining 31 bytes without disturbing offsets of
+        // later fields.
+        uint8 decimals;
         // ---------- Multiplier ----------
         // Scaled by WAD_PRECISION (1e18). Stored value of 0 is
         // interpreted as WAD by the read surface.
@@ -375,9 +392,10 @@ library MockB20SecurityStorage {
     // unrelated locations); the factory uses these as base slots when
     // deriving member slots via `keccak256(abi.encode(key, baseSlot))`.
 
-    uint256 internal constant MULTIPLIER_OFFSET = 0;
-    uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 1;
-    uint256 internal constant IDENTIFIERS_OFFSET = 2;
+    uint256 internal constant DECIMALS_OFFSET = 0;
+    uint256 internal constant MULTIPLIER_OFFSET = 1;
+    uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 2;
+    uint256 internal constant IDENTIFIERS_OFFSET = 3;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {
@@ -402,6 +420,7 @@ library MockB20SecurityStorage {
     // ============================================================
 
     // forgefmt: disable-start
+    function decimalsSlot() internal pure returns (bytes32) { return slotOf(DECIMALS_OFFSET); }
     function multiplierSlot() internal pure returns (bytes32) { return slotOf(MULTIPLIER_OFFSET); }
     function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
     function identifiersBaseSlot() internal pure returns (bytes32) { return slotOf(IDENTIFIERS_OFFSET); }

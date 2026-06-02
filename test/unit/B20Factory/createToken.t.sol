@@ -107,9 +107,11 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
 
     /// @notice Verifies createToken reverts for any unsupported version byte on the SECURITY variant
     /// @dev Each variant arm has its own version check; this exercises the security arm's check.
+    ///      The current supported version is `B20_SECURITY_CREATE_PARAMS_VERSION` — fuzzing
+    ///      assumes the version byte is anything else.
     function test_createB20_revert_unsupportedVersion_security(address caller, uint8 badVersion, bytes32 salt) public {
         _assumeValidCaller(caller);
-        vm.assume(badVersion != 1);
+        vm.assume(badVersion != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION);
         IB20Factory.B20SecurityCreateParams memory p = _securityParams();
         p.version = badVersion;
         vm.prank(caller);
@@ -681,16 +683,5 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertEq(
             vm.load(tokenAddr, MockB20Storage.symbolSlot()), bytes32(0), "empty symbol field slot must be all-zero"
         );
-    }
-
-    /// @notice Verifies decimals are fixed by variant and not encoded in address bytes
-    /// @dev Both variants return 6.
-    function test_createB20_success_decimalsFixedByVariant(address caller, bytes32 salt) public {
-        _assumeValidCaller(caller);
-        address stablecoinToken = _createStablecoin(caller, salt, _stablecoinParams(), new bytes[](0));
-        address securityToken = _createSecurity(caller, salt, _securityParams(), new bytes[](0));
-
-        assertEq(MockB20(stablecoinToken).decimals(), 6, "stablecoin decimals must be fixed at 6");
-        assertEq(MockB20(securityToken).decimals(), 6, "security decimals must be fixed at 6");
     }
 }

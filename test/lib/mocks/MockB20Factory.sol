@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Vm} from "forge-std/Vm.sol";
 
+import {B20Constants} from "src/lib/B20Constants.sol";
 import {IB20Factory} from "src/interfaces/IB20Factory.sol";
 import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
 import {StdPrecompiles} from "src/StdPrecompiles.sol";
@@ -12,7 +13,7 @@ import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFe
 import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
 import {MockB20Security} from "test/lib/mocks/MockB20Security.sol";
 import {MockB20} from "test/lib/mocks/MockB20.sol";
-import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Storage, MockB20SecurityStorage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Factory
 /// @notice Reference implementation of the `IB20Factory` precompile
@@ -117,10 +118,15 @@ contract MockB20Factory is IB20Factory {
             if (p.version != B20FactoryLib.B20_SECURITY_CREATE_PARAMS_VERSION) {
                 revert UnsupportedVersion(p.version, variant);
             }
+            // Configurable per-token decimals; bounded so wallets, indexers, and
+            // downstream integrations stay in the well-supported ERC-20 range.
+            if (p.decimals < B20Constants.MIN_ASSET_DECIMALS || p.decimals > B20Constants.MAX_ASSET_DECIMALS) {
+                revert InvalidDecimals(p.decimals);
+            }
             name_ = p.name;
             symbol_ = p.symbol;
             admin = p.initialAdmin;
-            decimals = 6;
+            decimals = p.decimals;
         } else if (variant == B20Variant.STABLECOIN) {
             B20StablecoinCreateParams memory p = abi.decode(params, (B20StablecoinCreateParams));
             if (p.version != B20FactoryLib.B20_STABLECOIN_CREATE_PARAMS_VERSION) {
@@ -161,7 +167,9 @@ contract MockB20Factory is IB20Factory {
         //       canonical grantRole path in step 7 so RoleGranted fires
         //       from the token.
         _writeBaseStorage(token, name_, symbol_);
-        if (variant == B20Variant.STABLECOIN) {
+        if (variant == B20Variant.SECURITY) {
+            _writeSecurityStorage(token, decimals);
+        } else if (variant == B20Variant.STABLECOIN) {
             _writeStablecoinStorage(token, currency_);
         }
 
@@ -306,6 +314,19 @@ contract MockB20Factory is IB20Factory {
         // the EVM's zero state, which is correct for a fresh token.
         // The factory flips `initialized` to true in createToken step 9
         // after initCalls have run.
+    }
+
+    /// @dev Writes the security variant's per-token immutable state at its
+    ///      disjoint ERC-7201 namespace (`base.b20.security`). Today that
+    ///      is just `decimals`; `multiplier` defaults to zero
+    ///      (interpreted by the read surface as WAD), and announcement /
+    ///      identifier maps are empty by default.
+    function _writeSecurityStorage(address token, uint8 decimals) internal {
+        // `decimals` is a `uint8` packed in the low byte of its own slot.
+        // Writing the whole slot is safe because the slot is otherwise
+        // unused today (future small variant-immutable fields packed into
+        // this slot would need this writer to mask instead).
+        _writeUint(token, MockB20SecurityStorage.decimalsSlot(), uint256(decimals));
     }
 
     /// @dev Writes the stablecoin variant's `currency` field at its

@@ -13,7 +13,7 @@ interface IB20Factory {
 
     /// @notice Variant of a B-20 token. Encoded in address byte `[10]`.
     ///
-    /// @param SECURITY   Security variant (multiplier, announcements, batched issuance / clawback).
+    /// @param SECURITY   Security variant (configurable `decimals`, multiplier, announcements, batched issuance / clawback).
     /// @param STABLECOIN Stablecoin variant (fixed `6` decimals, immutable `currency`).
     enum B20Variant {
         SECURITY,
@@ -44,6 +44,10 @@ interface IB20Factory {
         string symbol;
         /// @dev Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
         address initialAdmin;
+        /// @dev ERC-20 `decimals` value. Immutable post-creation. Must be in the inclusive
+        ///      range `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`
+        ///      (`[6, 18]`); out-of-range values revert with `InvalidDecimals`.
+        uint8 decimals;
     }
 
     /// @notice Event payload carried in the `variantEventParams` field of `B20Created` for
@@ -78,6 +82,12 @@ interface IB20Factory {
     /// @notice The stablecoin `currency` was non-empty but contained a non-`A`-`Z` byte.
     error InvalidCurrency(string code);
 
+    /// @notice The security `decimals` was outside the allowed inclusive range
+    ///         `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`.
+    ///
+    /// @param decimals Offending decimals value.
+    error InvalidDecimals(uint8 decimals);
+
     /// @notice One of the `initCalls` reverted. The factory bubbles the underlying revert reason
     ///         where the call returns one; this error wraps empty reverts.
     error InitCallFailed(uint256 index);
@@ -92,6 +102,9 @@ interface IB20Factory {
     /// @dev `variantEventParams` carries variant-specific immutable identity data, ABI-encoded
     ///      and prefixed with a version byte. Empty for SECURITY; for STABLECOIN,
     ///      `abi.encode(B20StablecoinEventParams)` with `currency`.
+    /// @dev `decimals` mirrors the value chosen at creation: configurable in
+    ///      `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]` for SECURITY
+    ///      (from `B20SecurityCreateParams.decimals`); hardcoded to `6` for STABLECOIN.
     event B20Created(
         address indexed token,
         B20Variant indexed variant,
@@ -114,6 +127,7 @@ interface IB20Factory {
     /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
     /// @dev Reverts with `MissingRequiredField` when a required string field is empty (e.g. stablecoin `currency` or security `isin`).
     /// @dev Reverts with `InvalidCurrency` when a stablecoin `currency` is non-empty but contains a non-`A`-`Z` byte.
+    /// @dev Reverts with `InvalidDecimals` when a security `decimals` is outside `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`.
     /// @dev Reverts with `TokenAlreadyExists` when a token already exists at the derived address.
     /// @dev Reverts with `InitCallFailed` (or the bubbled inner reason) when any entry in `initCalls` reverts.
     ///

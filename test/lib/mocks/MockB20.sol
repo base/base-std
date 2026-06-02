@@ -161,10 +161,14 @@ abstract contract MockB20 is IB20 {
         return MockB20Storage.layout().symbol;
     }
 
-    /// @notice Default-variant decimals are fixed at 18.
-    function decimals() external pure virtual returns (uint8) {
-        return 18;
-    }
+    /// @notice ERC-20 `decimals`. Unimplemented at the base; each variant
+    ///         must provide its own override. `MockB20Stablecoin.decimals()`
+    ///         returns `pure 6`; `MockB20Security.decimals()` returns the
+    ///         per-token value stored at `MockB20SecurityStorage.decimalsSlot()`
+    ///         (declared `view` for the storage read). Leaving the base
+    ///         abstract forces new variants to make an explicit decision and
+    ///         avoids accidentally inheriting a stale default.
+    function decimals() external view virtual returns (uint8);
 
     function totalSupply() external view returns (uint256) {
         return MockB20Storage.layout().totalSupply;

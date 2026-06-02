@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {B20Constants} from "src/lib/B20Constants.sol";
+
 import {B20SecurityTest} from "test/lib/B20SecurityTest.sol";
 import {MockB20SecurityStorage} from "test/lib/mocks/MockB20Storage.sol";
 
@@ -27,45 +29,55 @@ contract B20SecurityFullLayoutTest is B20SecurityTest {
 
     /// @notice Cross-cuts every field of the security-variant namespace in
     ///         one populated snapshot.
-    /// @dev    Field coverage for `base.b20.security` (slots 0..2):
-    ///         - 0: multiplier
-    ///         - 1: usedAnnouncementIds[id]
-    ///         - 2: identifiers[identifierType]  (FIGI mutated)
+    /// @dev    Field coverage for `base.b20.security` (slots 0..3):
+    ///         - 0: decimals (factory-written at creation)
+    ///         - 1: multiplier
+    ///         - 2: usedAnnouncementIds[id]
+    ///         - 3: identifiers[identifierType]  (FIGI mutated)
     function test_b20SecurityLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
 
         address tokenAddr = address(token);
 
-        // ---------- multiplier (slot 0) ----------
+        // ---------- decimals (slot 0) ----------
+        // The default `_securityParams()` helper passes MIN_ASSET_DECIMALS (6),
+        // and the factory writes that as a one-word `uint256` (low byte).
+        assertEq(
+            uint256(vm.load(tokenAddr, MockB20SecurityStorage.decimalsSlot())),
+            uint256(B20Constants.MIN_ASSET_DECIMALS),
+            "security slot 0: decimals must hold the factory-written value"
+        );
+
+        // ---------- multiplier (slot 1) ----------
         assertEq(
             uint256(vm.load(tokenAddr, MockB20SecurityStorage.multiplierSlot())),
             MULTIPLIER_MARKER,
-            "security slot 0: multiplier must hold the written value"
+            "security slot 1: multiplier must hold the written value"
         );
 
-        // ---------- usedAnnouncementIds[id] (slot 1, hashed by id) ----------
+        // ---------- usedAnnouncementIds[id] (slot 2, hashed by id) ----------
         // Slot resolves to keccak256(abi.encodePacked(id, baseSlot)). Solidity
         // stores a `bool true` as a one-word `uint256(1)`.
         assertEq(
             uint256(vm.load(tokenAddr, MockB20SecurityStorage.usedAnnouncementIdSlot(ANNOUNCEMENT_ID))),
             uint256(1),
-            "security slot 1: usedAnnouncementIds[id] must be true after announce"
+            "security slot 2: usedAnnouncementIds[id] must be true after announce"
         );
 
-        // ---------- identifiers[identifierType] (slot 2, hashed by type) ----------
+        // ---------- identifiers[identifierType] (slot 3, hashed by type) ----------
         // The factory does not seed any identifier at creation, so a fresh token's
         // ISIN slot is empty. The post-creation FIGI write is pinned to the
         // canonical string-field encoding at its derived slot.
         assertEq(
             vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_ISIN)),
             bytes32(0),
-            "security slot 2: identifiers[ISIN] must remain zero (factory seeds no identifiers)"
+            "security slot 3: identifiers[ISIN] must remain zero (factory seeds no identifiers)"
         );
         assertEq(
             vm.load(tokenAddr, MockB20SecurityStorage.identifierSlot(IDENTIFIER_FIGI)),
             _expectedStringFieldSlot(FIGI_VALUE),
-            "security slot 2: identifiers[FIGI] must hold the post-creation short-string encoding"
+            "security slot 3: identifiers[FIGI] must hold the post-creation short-string encoding"
         );
     }
 

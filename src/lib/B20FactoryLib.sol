@@ -102,14 +102,20 @@ library B20FactoryLib {
     /// @param name         ERC-20 token name.
     /// @param symbol       ERC-20 token symbol.
     /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
-    function encodeSecurityCreateParams(string memory name, string memory symbol, address initialAdmin)
+    /// @param decimals     ERC-20 `decimals` value. Must be in `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`;
+    ///                     out-of-range values cause the factory to revert with `InvalidDecimals`.
+    function encodeSecurityCreateParams(string memory name, string memory symbol, address initialAdmin, uint8 decimals)
         internal
         pure
         returns (bytes memory)
     {
         return abi.encode(
             IB20Factory.B20SecurityCreateParams({
-                version: B20_SECURITY_CREATE_PARAMS_VERSION, name: name, symbol: symbol, initialAdmin: initialAdmin
+                version: B20_SECURITY_CREATE_PARAMS_VERSION,
+                name: name,
+                symbol: symbol,
+                initialAdmin: initialAdmin,
+                decimals: decimals
             })
         );
     }
