@@ -134,20 +134,22 @@ contract B20Test is B20FactoryTest {
     ///         extends the codomain (e.g. a Security test that also
     ///         covers `REDEEM_SENDER_POLICY`).
     function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
-        uint8 i = idx % 4;
+        uint8 i = idx % 5;
         if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;
         if (i == 1) return B20Constants.TRANSFER_RECEIVER_POLICY;
         if (i == 2) return B20Constants.TRANSFER_EXECUTOR_POLICY;
-        return B20Constants.MINT_RECEIVER_POLICY;
+        if (i == 3) return B20Constants.MINT_RECEIVER_POLICY;
+        return keccak256("REDEEM_SENDER_POLICY");
     }
 
-    /// @notice True iff `policyType` is one of the four base-token
-    ///         supported policy types. Used by tests that fuzz arbitrary
-    ///         `bytes32` and need to filter to the supported / unsupported
-    ///         partition.
+    /// @notice True iff `policyType` is one of the five policy types
+    ///         supported by the security-variant token deployed in setUp.
+    ///         Used by tests that fuzz arbitrary `bytes32` and need to
+    ///         filter to the supported / unsupported partition.
     function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
         return policyType == B20Constants.TRANSFER_SENDER_POLICY || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
-            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.MINT_RECEIVER_POLICY;
+            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.MINT_RECEIVER_POLICY
+            || policyType == keccak256("REDEEM_SENDER_POLICY");
     }
 
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`
