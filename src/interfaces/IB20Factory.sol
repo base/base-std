@@ -86,6 +86,13 @@ interface IB20Factory {
     ///         where the call returns one; this error wraps empty reverts.
     error InitCallFailed(uint256 index);
 
+    /// @notice A required activation feature is not currently activated in the
+    ///         `IActivationRegistry`. Either the global `B20_FACTORY` gate or
+    ///         the variant-specific gate (`B20_ASSET` / `B20_STABLECOIN`) is off.
+    ///
+    /// @param feature The feature id that was not activated.
+    error FeatureNotActivated(bytes32 feature);
+
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
@@ -113,6 +120,9 @@ interface IB20Factory {
     ///         from `(variant, msg.sender, salt)`, then dispatches each entry in `initCalls` on
     ///         the new token. Emits `B20Created`.
     ///
+    /// @dev Reverts with `FeatureNotActivated(B20_FACTORY)` when the factory itself is gated off.
+    /// @dev Reverts with `FeatureNotActivated(B20_ASSET)` when creating SECURITY / DEFAULT with the asset feature gated off.
+    /// @dev Reverts with `FeatureNotActivated(B20_STABLECOIN)` when creating STABLECOIN with the stablecoin feature gated off.
     /// @dev Reverts with `InvalidVariant` when `variant` is outside the `B20Variant` range.
     /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
     /// @dev Reverts with `MissingRequiredField` when a required string field is empty.
