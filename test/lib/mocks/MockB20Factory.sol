@@ -144,9 +144,11 @@ contract MockB20Factory is IB20Factory {
             decimals = 6;
             currency_ = p.currency;
         } else {
-            // Unreachable in Solidity: an out-of-range `B20Variant` is rejected by ABI
-            // enum-decoding (Panic 0x21) before this body runs. Retained to mirror the Rust
-            // precompile, which decodes the raw discriminator and surfaces this typed revert.
+            // Unreachable in Solidity, and intentionally so: an out-of-range `B20Variant` is
+            // rejected by ABI enum-decoding (Panic 0x21) before this body runs, so no test can
+            // reach it — this is the single line the coverage report shows uncovered, by design.
+            // It is retained to mirror the Rust precompile, which decodes the raw discriminator
+            // and surfaces this typed `InvalidVariant` revert.
             revert InvalidVariant();
         }
 
