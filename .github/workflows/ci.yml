@@ -61,7 +61,17 @@ jobs:
         id: summary
         run: |
           output=$(forge coverage --no-match-coverage "(\.t\.sol|Test\.sol)$" 2>/dev/null | grep "^|" || echo "| (no coverage data) |")
+          # Compute a status line: 🟢 if Total row shows 100% functions, 🟡 otherwise
+          total=$(echo "$output" | grep "^| Total" || echo "")
+          if echo "$total" | grep -qE "100\.00%[^|]+100\.00%[^|]+100\.00%[^|]+100\.00%"; then
+            status="🟢 **100% coverage** — all lines, statements, branches, and functions hit."
+          elif [ -z "$total" ]; then
+            status="⚠️ Coverage data unavailable."
+          else
+            status="🟡 Near-full coverage — one or more metrics below 100%."
+          fi
           {
+            echo "status=$status"
             echo "output<<__EOF__"
             echo "$output"
             echo "__EOF__"
@@ -91,7 +101,9 @@ jobs:
           edit-mode: replace
           body: |
             <!-- forge-coverage -->
-            ### Forge Coverage (`src/lib/`)
+            ### 📊 Forge Coverage (`src/lib/`)
+
+            ${{ steps.summary.outputs.status }}
 
             ```
             ${{ steps.summary.outputs.output }}
@@ -149,11 +161,9 @@ jobs:
             <!-- interface-coverage -->
             ### Interface Coverage
 
-            ${{ steps.check.outputs.exit_code == '0' && '✅ All interface functions have test coverage.' || '❌ Interface functions with no test coverage found.' }}
+            ${{ steps.check.outputs.exit_code == '0' && '✅ All mock functions have test coverage.' || '❌ Mock functions with no test coverage found.' }}
 
-            ```
-            ${{ steps.check.outputs.output }}
-            ```
+            ${{ steps.check.outputs.exit_code != '0' && format('```\n{0}\n```', steps.check.outputs.output) || '' }}
 
       - name: Fail if gaps found
         if: steps.check.outputs.exit_code != '0'
