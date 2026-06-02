@@ -3,19 +3,16 @@ pragma solidity ^0.8.20;
 
 import {B20Test} from "test/lib/B20Test.sol";
 
-import {IB20} from "src/interfaces/IB20.sol";
 import {IB20Security} from "src/interfaces/IB20Security.sol";
 
 /// @notice Base test contract for `IB20Security` unit tests.
 ///
-/// Extends `B20Test` because `IB20Security is IB20`: the inherited
-/// surface (actors, labels, setUp wiring, the `_singleFeature` helper,
-/// the `_grantRole` / `_mint` / `_pause` action wrappers) applies
-/// unchanged to a security-variant token. The only security-specific
-/// concerns at the base level are which variant the deployed token is
-/// (controlled by `_deployToken`), and the variant-specific role
-/// holders (`operator`, `burnFromActor`) plus a handful of helpers for
-/// the announcement, share-ratio, redemption, and identifier surfaces.
+/// Extends `B20Test` for the inherited test surface (actors, labels,
+/// setUp wiring, the `_singleFeature` helper, the `_grantRole` /
+/// `_mint` / `_pause` action wrappers, and the security-variant token
+/// deployed by `_deployToken`). Adds the variant-specific role holders
+/// (`operator`, `burnFromActor`) plus helpers for the announcement,
+/// share-ratio, redemption, and identifier surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
 /// variant-only surface (`announce`, `redeem`, etc.) cast inline via
@@ -47,16 +44,6 @@ contract B20SecurityTest is B20Test {
         super.setUp();
         vm.label(operator, "operator");
         vm.label(burnFromActor, "burnFromActor");
-    }
-
-    /// @inheritdoc B20Test
-    /// @dev Override deploys a security-variant token via the factory mock.
-    ///      The factory etches `MockB20Security` runtime bytecode at the
-    ///      computed address, seeds `identifiers["ISIN"]` and
-    ///      `minimumRedeemable` directly via vm.store, grants the initial
-    ///      admin, then closes the bootstrap window.
-    function _deployToken() internal virtual override returns (IB20) {
-        return IB20(_createSecurity());
     }
 
     // ============================================================

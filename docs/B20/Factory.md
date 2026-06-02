@@ -8,7 +8,7 @@ The B20 Factory is the singleton precompile that creates B20 tokens of every var
 
 ### `variant`
 
-Selects which variant of B20 to deploy — currently `DEFAULT`, `STABLECOIN`, or `SECURITY`. See the [variant overview](README.md#variant-overview) for what each one bundles.
+Selects which variant of B20 to deploy — currently `STABLECOIN` or `SECURITY`. See the [variant overview](README.md#variant-overview) for what each one bundles.
 
 ### `params`
 

@@ -7,7 +7,7 @@ contract B20FactoryIsB20Test is B20FactoryTest {
     /// @notice Verifies isB20 returns true for a freshly-created token
     /// @dev Recognition via address-prefix match; no storage read
     function test_isB20_success_trueForCreatedToken(bytes32 salt) public {
-        address token = _createDefault(alice, salt, _b20Params(), new bytes[](0));
+        address token = _createStablecoin(alice, salt, _stablecoinParams(), new bytes[](0));
         assertTrue(factory.isB20(token), "freshly created token must be recognized");
     }
 

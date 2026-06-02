@@ -15,7 +15,6 @@ import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
 ///         (raw-bytes ABI-decoder panic; see audit-response PR #89).
 ///
 ///         **Canonical order per variant arm (Solidity reference):**
-///         - DEFAULT: VERSION (single guard; no body validation pairs to test)
 ///         - STABLECOIN: VERSION → INVALID-CURRENCY (format check on each byte)
 ///         - SECURITY: VERSION → MISSING-ISIN (empty isin)
 contract B20FactoryCreateB20RevertOrderTest is B20FactoryTest {

@@ -8,8 +8,8 @@ contract B20NameTest is B20Test {
     /// @notice Verifies name returns the value passed to the factory at creation
     /// @dev Constructor-stored value readback
     function test_name_success_returnsCreationName() public view {
-        // The default _b20Params() helper creates a token with name "Test".
-        assertEq(token.name(), "Test", "name must match creation value");
+        // The default _securityParams() helper creates a token with name "Security Test".
+        assertEq(token.name(), "Security Test", "name must match creation value");
     }
 
     /// @notice Verifies name reflects updates made via updateName

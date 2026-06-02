@@ -11,9 +11,6 @@ import {IB20Security} from "../interfaces/IB20Security.sol";
 /// @notice Pure encoder helpers for the `params` blob and `initCalls` array consumed by
 ///         `IB20Factory.createB20`. No precompile dispatch, no storage reads, no auth checks.
 library B20FactoryLib {
-    /// @notice Encoding version carried as the leading byte of a `B20CreateParams` blob.
-    uint8 internal constant B20_CREATE_PARAMS_VERSION = 1;
-
     /// @notice Encoding version carried as the leading byte of a `B20StablecoinCreateParams` blob.
     uint8 internal constant B20_STABLECOIN_CREATE_PARAMS_VERSION = 1;
 
@@ -33,10 +30,10 @@ library B20FactoryLib {
                           ROLE-HOLDER BUNDLES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Bootstrap role-grant bundle for `B20Variant.DEFAULT` and `B20Variant.STABLECOIN`.
+    /// @notice Bootstrap role-grant bundle for `B20Variant.STABLECOIN`.
     ///         `address(0)` fields are skipped at bootstrap.
     ///
-    /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `*CreateParams.initialAdmin`, not this struct.
+    /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20StablecoinCreateParams.initialAdmin`, not this struct.
     struct B20RoleHolders {
         /// @dev Account granted `MINT_ROLE`.
         address minter;
@@ -79,29 +76,11 @@ library B20FactoryLib {
                           CREATE-PARAMS ENCODERS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Encodes a `B20CreateParams` blob (default variant) tagged with `B20_CREATE_PARAMS_VERSION`.
+    /// @notice Encodes a `B20StablecoinCreateParams` blob tagged with `B20_STABLECOIN_CREATE_PARAMS_VERSION`.
     ///
     /// @param name         ERC-20 token name.
     /// @param symbol       ERC-20 token symbol.
     /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
-    function encodeDefaultCreateParams(string memory name, string memory symbol, address initialAdmin)
-        internal
-        pure
-        returns (bytes memory)
-    {
-        return abi.encode(
-            IB20Factory.B20CreateParams({
-                version: B20_CREATE_PARAMS_VERSION, name: name, symbol: symbol, initialAdmin: initialAdmin
-            })
-        );
-    }
-
-    /// @notice Same as `encodeDefaultCreateParams`, plus the stablecoin `currency`. Tagged with
-    ///         `B20_STABLECOIN_CREATE_PARAMS_VERSION`.
-    ///
-    /// @param name         ERC-20 token name.
-    /// @param symbol       ERC-20 token symbol.
-    /// @param initialAdmin Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)`.
     /// @param currency     Self-declared currency identifier (uppercase ASCII).
     function encodeStablecoinCreateParams(
         string memory name,
@@ -120,12 +99,11 @@ library B20FactoryLib {
         );
     }
 
-    /// @notice Same as `encodeDefaultCreateParams`, plus security `isin` and `minimumRedeemable`.
-    ///         Tagged with `B20_SECURITY_CREATE_PARAMS_VERSION`.
+    /// @notice Encodes a `B20SecurityCreateParams` blob tagged with `B20_SECURITY_CREATE_PARAMS_VERSION`.
     ///
     /// @param name              ERC-20 token name.
     /// @param symbol            ERC-20 token symbol.
-    /// @param initialAdmin      Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)`.
+    /// @param initialAdmin      Initial holder of `DEFAULT_ADMIN_ROLE`, or `address(0)` to deploy admin-less.
     /// @param isin              International Securities Identification Number. Required; empty string reverts at the factory.
     /// @param minimumRedeemable Initial `minimumRedeemable` (shares).
     function encodeSecurityCreateParams(

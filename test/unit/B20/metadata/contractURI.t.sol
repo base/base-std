@@ -6,7 +6,7 @@ import {B20Constants} from "test/lib/mocks/MockB20.sol";
 
 contract B20ContractURITest is B20Test {
     /// @notice Verifies contractURI returns the value set at token creation
-    /// @dev Constructor-stored value readback. The default _b20Params() helper
+    /// @dev Constructor-stored value readback. The default _securityParams() helper
     ///      doesn't set a contractURI, so a fresh token's contractURI is the
     ///      empty string.
     function test_contractURI_success_returnsCreationURI() public view {

@@ -91,9 +91,9 @@ contract B20FullLayoutTest is B20Test {
         address tokenAddr = address(token);
 
         // ---------- Identity (slots 0..2) ----------
-        // Bootstrap-default identity is "Test" / "TST" / "" from
-        // B20FactoryTest._b20Params(). Empty contractURI is the
-        // zero-slot encoding; "Test" and "TST" are short-string
+        // Bootstrap-default identity is "Security Test" / "SEC" / "" from
+        // B20FactoryTest._securityParams(). Empty contractURI is the
+        // zero-slot encoding; "Security Test" and "SEC" are short-string
         // encoded via _expectedStringFieldSlot.
         assertEq(vm.load(tokenAddr, MockB20Storage.nameSlot()), _expectedStringFieldSlot(token.name()), "slot 0: name");
         assertEq(
@@ -231,8 +231,8 @@ contract B20FullLayoutTest is B20Test {
     ///         interleaved mutations.
     function _populate() internal {
         // ---------- Identity ----------
-        // name/symbol come from factory bootstrap ("Test" / "TST" via
-        // B20FactoryTest._b20Params()). Set contractURI explicitly so
+        // name/symbol come from factory bootstrap ("Security Test" / "SEC" via
+        // B20FactoryTest._securityParams()). Set contractURI explicitly so
         // slot 2 has a non-zero value to assert.
         _grantRole(B20Constants.METADATA_ROLE, admin);
         vm.prank(admin);

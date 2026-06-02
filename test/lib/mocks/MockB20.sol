@@ -48,7 +48,7 @@ import {B20Constants} from "src/lib/B20Constants.sol";
 ///         **What this mock is for:** local-tests-with-vm.etch and as a
 ///         readable spec artifact for auditors and Rust developers. It
 ///         lives under `test/` and is never deployed as production code.
-contract MockB20 is IB20 {
+abstract contract MockB20 is IB20 {
     // ============================================================
     //                          CONSTANTS
     // ============================================================

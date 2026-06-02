@@ -10,8 +10,7 @@ contract B20FactoryLibEncodeStablecoinCreateParamsTest is B20FactoryLibTest {
     /// @notice Verifies the output decodes back to a `B20StablecoinCreateParams`
     ///         with the caller's fields and the current version byte.
     /// @dev    Round-trips through `abi.decode` to pin the wire format the
-    ///         factory's stablecoin decode arm consumes (currency lives on
-    ///         this struct, not on `B20CreateParams`).
+    ///         factory's stablecoin decode arm consumes.
     function test_encodeStablecoinCreateParams_success_roundTripsThroughDecode(
         string memory name,
         string memory symbol,

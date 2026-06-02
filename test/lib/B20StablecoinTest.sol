@@ -10,7 +10,7 @@ import {IB20} from "src/interfaces/IB20.sol";
 /// Extends `B20Test` because `IB20Stablecoin is IB20`: the inherited
 /// surface (actors, labels, setUp wiring, the `_singleFeature` helper)
 /// applies unchanged to a stablecoin-variant token. The only
-/// stablecoin-specific concern at the base level is the variant of the
+/// stablecoin-specific concerns at the base level are the variant of the
 /// deployed token, which `_deployToken` controls, and the currency
 /// string the test will compare against.
 ///
