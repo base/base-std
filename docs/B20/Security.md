@@ -37,18 +37,17 @@ IB20Security(token).announce({
 });
 ```
 
-The four corporate-actions setters should be wrapped in `announce()`:
+The three corporate-actions setters should be wrapped in `announce()`:
 
 - `updateShareRatio(...)`
 - `batchMint(...)`
-- `batchBurn(...)`
 - `updateSecurityIdentifier(...)`
 
 Direct invocation by a role holder is permitted as an **emergency override** — it succeeds but produces no bracket events. Suitable only for break-glass scenarios where the inability to emit an announcement is itself part of the response.
 
-## Batch Mint/Burn
+## Batch Mint
 
-`batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. `batchBurn(holders, amounts)` burns from many accounts in one call, gated by `BURN_FROM_ROLE`. Both should be wrapped in `announce()`, which additionally requires the operator to hold `SECURITY_OPERATOR_ROLE` (typically granted as a single bundle).
+`batchMint(recipients, amounts)` mints to many accounts in one call, gated by `MINT_ROLE`. It should be wrapped in `announce()`, which additionally requires the operator to hold `SECURITY_OPERATOR_ROLE` (typically granted as a single bundle).
 
 ## Redemptions
 
@@ -71,11 +70,7 @@ Each Security token can carry one or more standardized identifiers (ISIN, CUSIP,
 
 ### `SECURITY_OPERATOR_ROLE`
 
-Gates the four corporate-actions setters (`updateShareRatio`, `batchMint`, `batchBurn`, `updateSecurityIdentifier`) and the `announce` wrapper itself. Held separately from `DEFAULT_ADMIN_ROLE` so corporate-actions operators don't need full admin authority. Operationally paired with `METADATA_ROLE` — when granting one, you typically grant the other to the same address.
-
-### `BURN_FROM_ROLE`
-
-Gates `batchBurn`, which burns balances held by other accounts as part of an announced corporate action. Distinct from `BURN_ROLE` (caller burns their own balance) and `BURN_BLOCKED_ROLE` (sanctions-seizure against policy-blocked addresses) — three burn primitives serve three different operational scenarios.
+Gates the three corporate-actions setters (`updateShareRatio`, `batchMint`, `updateSecurityIdentifier`) and the `announce` wrapper itself. Held separately from `DEFAULT_ADMIN_ROLE` so corporate-actions operators don't need full admin authority. Operationally paired with `METADATA_ROLE` — when granting one, you typically grant the other to the same address.
 
 ## Fixed Decimals (6)
 

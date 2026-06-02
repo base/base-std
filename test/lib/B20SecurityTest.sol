@@ -10,9 +10,9 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 /// Extends `B20Test` for the inherited test surface (actors, labels,
 /// setUp wiring, the `_singleFeature` helper, the `_grantRole` /
 /// `_mint` / `_pause` action wrappers, and the security-variant token
-/// deployed by `_deployToken`). Adds the variant-specific role holders
-/// (`operator`, `burnFromActor`) plus helpers for the announcement,
-/// share-ratio, redemption, and identifier surfaces.
+/// deployed by `_deployToken`). Adds the variant-specific role holder
+/// (`operator`) plus helpers for the announcement, share-ratio,
+/// redemption, and identifier surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
 /// variant-only surface (`announce`, `redeem`, etc.) cast inline via
@@ -20,7 +20,6 @@ import {IB20Security} from "src/interfaces/IB20Security.sol";
 contract B20SecurityTest is B20Test {
     // -- Security-variant role-holder actors --
     address internal operator = makeAddr("operator");
-    address internal burnFromActor = makeAddr("burnFromActor");
 
     // ============================================================
     //              SECURITY-VARIANT IDENTIFIER FIXTURES
@@ -43,7 +42,6 @@ contract B20SecurityTest is B20Test {
     function setUp() public virtual override {
         super.setUp();
         vm.label(operator, "operator");
-        vm.label(burnFromActor, "burnFromActor");
     }
 
     // ============================================================
@@ -65,13 +63,6 @@ contract B20SecurityTest is B20Test {
     function _grantOperator() internal {
         bytes32 role = security().SECURITY_OPERATOR_ROLE();
         if (!token.hasRole(role, operator)) _grantRole(role, operator);
-    }
-
-    /// @notice Grants `BURN_FROM_ROLE` to the `burnFromActor` actor as
-    ///         the admin, idempotent.
-    function _grantBurnFrom() internal {
-        bytes32 role = security().BURN_FROM_ROLE();
-        if (!token.hasRole(role, burnFromActor)) _grantRole(role, burnFromActor);
     }
 
     // ============================================================
@@ -188,6 +179,5 @@ contract B20SecurityTest is B20Test {
     // `test/unit/B20Security/constants/` pins that down.
 
     bytes32 internal constant SECURITY_OPERATOR_ROLE = keccak256("SECURITY_OPERATOR_ROLE");
-    bytes32 internal constant BURN_FROM_ROLE = keccak256("BURN_FROM_ROLE");
     bytes32 internal constant REDEEM_SENDER_POLICY = keccak256("REDEEM_SENDER_POLICY");
 }

@@ -7,7 +7,7 @@ import {IB20} from "./IB20.sol";
 /// @author Coinbase
 ///
 /// @notice A B-20 token variant for tokenized securities. Extends `IB20` with announcements,
-///         share-ratio accounting, batched mint/burn for corporate actions, holder-initiated
+///         share-ratio accounting, batched mint for corporate actions, holder-initiated
 ///         redemption, and security-identifier metadata.
 interface IB20Security is IB20 {
     /*//////////////////////////////////////////////////////////////
@@ -79,10 +79,6 @@ interface IB20Security is IB20 {
     ///         `updateName` / `updateSymbol` remain gated by the inherited `METADATA_ROLE`.
     /// @return Role identifier.
     function SECURITY_OPERATOR_ROLE() external view returns (bytes32);
-
-    /// @notice Required to call `batchBurn`.
-    /// @return Role identifier.
-    function BURN_FROM_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                               PRECISION
@@ -164,7 +160,7 @@ interface IB20Security is IB20 {
     function updateShareRatio(uint256 newSharesToTokensRatio) external;
 
     /*//////////////////////////////////////////////////////////////
-                  BATCHED ISSUANCE AND CORP-ACTION CLAWBACK
+                            BATCHED ISSUANCE
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Mints `amounts[i]` to `recipients[i]` in one call. All-or-nothing: any element
@@ -182,21 +178,6 @@ interface IB20Security is IB20 {
     /// @param recipients Accounts receiving the minted tokens.
     /// @param amounts    Per-recipient amounts, parallel to `recipients`.
     function batchMint(address[] calldata recipients, uint256[] calldata amounts) external;
-
-    /// @notice Burns `amounts[i]` from `accounts[i]` in one call, unconditionally on the supplied
-    ///         accounts (no policy gate). All-or-nothing: any element revert unwinds the whole
-    ///         transaction. Emits `Transfer(accounts[i], address(0), amounts[i])` per element;
-    ///         does NOT emit `BurnedBlocked`.
-    ///
-    /// @dev Reverts with `ContractPaused(BURN)` when `BURN` is paused.
-    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_FROM_ROLE`. Strict — no factory-bootstrap bypass.
-    /// @dev Reverts with `LengthMismatch` when `accounts.length != amounts.length`.
-    /// @dev Reverts with `EmptyBatch` when either array is empty.
-    /// @dev Reverts with `InsufficientBalance` when any `accounts[i]`'s balance is below `amounts[i]`.
-    ///
-    /// @param accounts Accounts whose balances will be debited.
-    /// @param amounts  Per-account amounts, parallel to `accounts`.
-    function batchBurn(address[] calldata accounts, uint256[] calldata amounts) external;
 
     /*//////////////////////////////////////////////////////////////
                               REDEMPTION
