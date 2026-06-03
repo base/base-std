@@ -128,8 +128,12 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
 
     /// @notice Verifies createPolicy panics with arithmetic overflow when the counter is at uint56 max.
     /// @dev    Slot-writes nextCounter to type(uint56).max to avoid iterating 2^56 times.
+    ///         Mock-only: `vm.store` cannot write to native precompile addresses, so this
+    ///         test is skipped when running against live precompiles.
     ///         Matches the Rust precompile which reverts with Panic(UnderOverflow) = Panic(0x11).
     function test_createPolicy_revert_counterOverflow(address caller, address admin_, uint8 typeIdx) public {
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);

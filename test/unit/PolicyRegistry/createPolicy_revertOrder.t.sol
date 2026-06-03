@@ -13,9 +13,14 @@ import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorag
 ///         2. COUNTER-OVERFLOW (nextCounter == type(uint56).max) → `Panic(0x11)`
 ///
 ///         Walks from the first failing condition to success.
+///
+/// @dev    Mock-only: this test forces `nextCounter` with `vm.store`, which cannot
+///         write to native precompile addresses under `LIVE_PRECOMPILES=true`.
 contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
     /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
     function test_createPolicy_revertOrder(address caller, address admin_, uint8 typeIdx) public {
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);

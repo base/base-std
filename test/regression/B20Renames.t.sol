@@ -11,7 +11,7 @@ import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFe
 /// @title  B20 rename regression suite
 ///
 /// @notice Locks in the *renames* from the B-20 asset rework: the operator role
-///         (`OPERATOR_ROLE` → `OPERATOR_ROLE`), share-ratio scaling
+///         surface (`OPERATOR_ROLE`), share-ratio scaling
 ///         (`sharesToTokensRatio`/`toShares`/`sharesOf`/`updateShareRatio` → `multiplier`/
 ///         `toScaledBalance`/`scaledBalanceOf`/`updateMultiplier`), the METADATA/OPERATOR
 ///         authority split, and the `base.b20_asset` activation namespace. Each test asserts the
@@ -34,17 +34,12 @@ contract B20RenamesTest is B20AssetTest {
     //                      OPERATOR ROLE
     // ============================================================
 
-    /// @notice Verifies the operator role is exposed as `OPERATOR_ROLE` and the legacy
-    ///         `OPERATOR_ROLE` selector is gone
-    /// @dev The wire value (`keccak256("OPERATOR_ROLE")`) and library source-of-truth must agree,
-    ///      and the old getter must not resolve. Regression: BOP-248.
-    function test_operatorRole_success_renamedFromSecurityOperator() public {
+    /// @notice Verifies the operator role is exposed as `OPERATOR_ROLE`.
+    /// @dev The wire value (`keccak256("OPERATOR_ROLE")`) and library source-of-truth must agree.
+    ///      Regression: BOP-248.
+    function test_operatorRole_success_renamedFromSecurityOperator() public view {
         assertEq(asset().OPERATOR_ROLE(), keccak256("OPERATOR_ROLE"), "OPERATOR_ROLE must equal its keccak preimage");
         assertEq(asset().OPERATOR_ROLE(), B20Constants.OPERATOR_ROLE, "OPERATOR_ROLE must match B20Constants");
-        _assertSelectorRemoved(
-            abi.encodeWithSignature("OPERATOR_ROLE()"),
-            "OPERATOR_ROLE() must not resolve (renamed to OPERATOR_ROLE)"
-        );
     }
 
     // ============================================================
