@@ -65,6 +65,28 @@ contract MockB20Asset is MockB20, IB20Asset {
     uint256 public constant WAD_PRECISION = 1e18;
 
     // ============================================================
+    //                  ANNOUNCEMENT-ACTIVE FLAG
+    // ============================================================
+
+    /// @dev Per-transaction flag set true at the start of `announce`
+    ///      and false at the end, surfaced via `isAnnouncementActive()`.
+    ///      Lives in transient storage (EIP-1153) because the value is
+    ///      meaningful only within the bracket's call frame and MUST
+    ///      reset between transactions; transient storage also means
+    ///      the slot is reclaimed automatically on a revert anywhere in
+    ///      the bracket, so the flag never gets stuck `true`.
+    ///
+    ///      Declared as a contract-level state variable (not an
+    ///      ERC-7201 namespaced struct field) because transient storage
+    ///      lives in its own opcode-distinct address space — slot
+    ///      indices here can't collide with the regular-storage layout
+    ///      written by the factory bootstrap. The Rust precompile
+    ///      exposes the same value via a runtime context flag rather
+    ///      than a storage slot, so there is no persistent layout the
+    ///      Rust impl needs to mirror.
+    bool transient internal _announcementActive;
+
+    // ============================================================
     //                           DECIMALS
     // ============================================================
 
@@ -97,6 +119,13 @@ contract MockB20Asset is MockB20, IB20Asset {
         // selector check were ever weakened.
         $.usedAnnouncementIds[id] = true;
 
+        // Open the bracket — flip the transient flag BEFORE emitting
+        // `Announcement` and before dispatching any inner call, so any
+        // contract reached transitively through `internalCalls` sees
+        // `isAnnouncementActive() == true` for the full lifetime of the
+        // bracket.
+        _announcementActive = true;
+
         emit Announcement(msg.sender, id, description, uri);
 
         for (uint256 i = 0; i < internalCalls.length; i++) {
@@ -106,10 +135,19 @@ contract MockB20Asset is MockB20, IB20Asset {
         }
 
         emit EndAnnouncement(id);
+
+        // Close the bracket. A revert above leaves transient storage
+        // untouched at tx end (per EIP-1153), so an aborted bracket
+        // also resets the flag implicitly.
+        _announcementActive = false;
     }
 
     function isAnnouncementIdUsed(string calldata id) external view returns (bool) {
         return MockB20AssetStorage.layout().usedAnnouncementIds[id];
+    }
+
+    function isAnnouncementActive() external view returns (bool) {
+        return _announcementActive;
     }
 
     // ============================================================
