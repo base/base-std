@@ -84,7 +84,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     ///      exposes the same value via a runtime context flag rather
     ///      than a storage slot, so there is no persistent layout the
     ///      Rust impl needs to mirror.
-    bool transient internal _announcementActive;
+    bool internal transient _announcementActive;
 
     // ============================================================
     //                           DECIMALS

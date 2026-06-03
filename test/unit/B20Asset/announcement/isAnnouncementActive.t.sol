@@ -36,11 +36,7 @@ contract B20AssetIsAnnouncementActiveTest is B20AssetTest {
         // announce to revert AFTER the flag has been set true at the top of the body.
         bytes[] memory inner = _singletonBytes(
             abi.encodeWithSelector(
-                bytes4(keccak256("announce(bytes[],string,string,string)")),
-                new bytes[](0),
-                "inner",
-                "desc",
-                "uri"
+                bytes4(keccak256("announce(bytes[],string,string,string)")), new bytes[](0), "inner", "desc", "uri"
             )
         );
 
