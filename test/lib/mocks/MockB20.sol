@@ -737,18 +737,25 @@ abstract contract MockB20 is IB20 {
         emit Transfer(from, to, amount);
     }
 
-    /// @dev Pure mechanics: policy (with bootstrap bypass) + supply cap
-    ///      + effects. Pause, role, and the zero-receiver check are
-    ///      enforced upstream by `mint` / `mintWithMemo`. The asset
-    ///      variant's `batchMint` carries the same `whenNotPaused` +
-    ///      `onlyRole` modifiers ONCE for the whole batch and validates
-    ///      per-element receivers inline before invoking this helper.
+    /// @dev Pure mechanics: policy + supply cap + effects. Pause, role,
+    ///      and the zero-receiver check are enforced upstream by `mint`
+    ///      / `mintWithMemo`. The asset variant's `batchMint` carries
+    ///      the same `whenNotPaused` + `onlyRole` modifiers ONCE for the
+    ///      whole batch and validates per-element receivers inline
+    ///      before invoking this helper.
+    ///
+    ///      MINT_RECEIVER_POLICY is enforced unconditionally — including
+    ///      for factory-originated mints during the bootstrap window —
+    ///      matching the Rust precompile, which carves no `privileged`
+    ///      exception for the receiver-policy check. An unconfigured
+    ///      slot reads as `ALWAYS_ALLOW_ID`, so the default-deploy
+    ///      bootstrap flow is unaffected; only initCalls that set a
+    ///      restrictive `MINT_RECEIVER_POLICY` first AND then mint to a
+    ///      non-authorized account see the (correct) revert.
     function _mint(address to, uint256 amount) internal {
-        if (!_isPrivileged()) {
-            uint64 mintReceiverPolicyId = MockB20Storage.layout().mintPolicyIds.receiver;
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
-                revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);
-            }
+        uint64 mintReceiverPolicyId = MockB20Storage.layout().mintPolicyIds.receiver;
+        if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(mintReceiverPolicyId, to)) {
+            revert PolicyForbids(MINT_RECEIVER_POLICY, mintReceiverPolicyId);
         }
 
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
