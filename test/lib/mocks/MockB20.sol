@@ -304,15 +304,16 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.BURN)
         onlyRole(BURN_BLOCKED_ROLE)
     {
-        if (!_isPrivileged()) {
-            // The point of burnBlocked is to seize from policy-blocked
-            // accounts. Read the transfer-sender policy ID out of the
-            // transfer-side packed slot and reject if the target is
-            // currently authorized.
-            uint64 senderPolicyId = MockB20Storage.layout().transferPolicyIds.sender;
-            if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
-                revert AccountNotBlocked(from);
-            }
+        // The point of burnBlocked is to seize from policy-blocked
+        // accounts. Read the transfer-sender policy ID out of the
+        // transfer-side packed slot and reject if the target is
+        // currently authorized. Enforced unconditionally — including
+        // for factory-originated calls during the bootstrap window —
+        // matching the Rust precompile, which carves no `privileged`
+        // exception for this guard.
+        uint64 senderPolicyId = MockB20Storage.layout().transferPolicyIds.sender;
+        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
+            revert AccountNotBlocked(from);
         }
         _burnRaw(from, amount);
         emit BurnedBlocked(msg.sender, from, amount);
