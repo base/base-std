@@ -209,6 +209,22 @@ jobs:
         if: steps.check.outputs.exit_code != '0'
         run: exit 1
 
+  import-paths:
+    name: Import Paths
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enforce base-std/ and base-std-test/ import prefixes
+        run: |
+          # Raw src/ or test/ imports must use the public remapping prefixes instead.
+          bad=$(grep -rn --include="*.sol" -E 'import(\s+\{[^}]*\}\s+from)?\s+"(src|test)/' src/ test/ || true)
+          if [ -n "$bad" ]; then
+            echo "Raw src/ or test/ imports found — use base-std/ or base-std-test/ instead:"
+            echo "$bad"
+            exit 1
+          fi
+
   fmt:
     name: Format
     runs-on: ubuntu-latest
