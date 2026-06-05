@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
-import {IB20} from "src/interfaces/IB20.sol";
+import {B20FactoryLib} from "base-std/lib/B20FactoryLib.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
 
-import {B20FactoryLibTest} from "test/lib/B20FactoryLibTest.sol";
+import {B20FactoryLibTest} from "base-std-test/lib/B20FactoryLibTest.sol";
 
 contract B20FactoryLibEncodeUpdateNameTest is B20FactoryLibTest {
     /// @notice Verifies the encoded blob matches `abi.encodeCall(IB20.updateName, ...)`.

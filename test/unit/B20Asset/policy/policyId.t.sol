@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20AssetTest} from "test/lib/B20AssetTest.sol";
+import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
-import {B20Constants} from "src/lib/B20Constants.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
 
 contract B20AssetPolicyIdTest is B20AssetTest {
     /// @notice Verifies policyId still resolves the four base policy types on the asset variant.

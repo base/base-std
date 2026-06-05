@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
-import {IB20} from "src/interfaces/IB20.sol";
+import {IB20Stablecoin} from "base-std/interfaces/IB20Stablecoin.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
 
-import {MockB20} from "test/lib/mocks/MockB20.sol";
-import {MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
+import {MockB20StablecoinStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Stablecoin
 /// @notice Reference implementation of the `IB20Stablecoin` variant.

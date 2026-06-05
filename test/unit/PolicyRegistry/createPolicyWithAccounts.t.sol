@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
-import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
+import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
+import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @notice Verifies createPolicyWithAccounts reverts when admin is the zero address

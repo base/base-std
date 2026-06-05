@@ -3,7 +3,11 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MockB20Storage, MockB20StablecoinStorage, MockB20AssetStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {
+    MockB20Storage,
+    MockB20StablecoinStorage,
+    MockB20AssetStorage
+} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 /// @notice Asserts the hardcoded `STORAGE_LOCATION` constants on the B-20
 ///         storage libraries match the ERC-7201 formula they document.

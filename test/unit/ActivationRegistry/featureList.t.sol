@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
-import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
+import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationRegistryFeatureList.sol";
 
 /// @notice Pins each feature id constant in `ActivationRegistryFeatureList` to
 ///         its canonical `keccak256("base.<feature>")` preimage.

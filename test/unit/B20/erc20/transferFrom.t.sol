@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20} from "src/interfaces/IB20.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
 
-import {B20Test} from "test/lib/B20Test.sol";
-import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
-import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
-import {MockPolicyRegistry, PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
+import {B20Test} from "base-std-test/lib/B20Test.sol";
+import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {MockPolicyRegistry, PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20TransferFromTest is B20Test {
     /// @notice Verifies transferFrom reverts when the TRANSFER feature is paused

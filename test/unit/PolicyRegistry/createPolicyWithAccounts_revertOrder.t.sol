@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 
-import {PolicyRegistryTest} from "test/lib/PolicyRegistryTest.sol";
+import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 
 /// @title Sequential revert-order test for `createPolicyWithAccounts`.
 ///

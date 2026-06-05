@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20Test} from "test/lib/B20Test.sol";
-import {B20Constants} from "test/lib/mocks/MockB20.sol";
+import {B20Test} from "base-std-test/lib/B20Test.sol";
+import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 
 contract B20Eip712DomainTest is B20Test {
     /// @notice Verifies eip712Domain returns the documented (name, version, chainId, verifyingContract) shape

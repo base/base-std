@@ -3,16 +3,16 @@ pragma solidity ^0.8.20;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {IB20} from "src/interfaces/IB20.sol";
-import {IB20Stablecoin} from "src/interfaces/IB20Stablecoin.sol";
-import {IB20Asset} from "src/interfaces/IB20Asset.sol";
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Stablecoin} from "base-std/interfaces/IB20Stablecoin.sol";
+import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {B20FactoryLib} from "base-std/lib/B20FactoryLib.sol";
 
-import {MockB20, B20Constants} from "test/lib/mocks/MockB20.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {MockB20Storage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
-import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
+import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
+import {MockB20Storage, MockB20StablecoinStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {B20FactoryTest} from "base-std-test/lib/B20FactoryTest.sol";
 
 contract B20FactoryCreateB20Test is B20FactoryTest {
     // Role constants are accessed as `MINT_ROLE` etc. — these are

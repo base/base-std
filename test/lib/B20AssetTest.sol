@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20Test} from "test/lib/B20Test.sol";
+import {B20Test} from "base-std-test/lib/B20Test.sol";
 
-import {IB20Asset} from "src/interfaces/IB20Asset.sol";
+import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 
 /// @notice Base test contract for `IB20Asset` unit tests.
 ///

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20} from "src/interfaces/IB20.sol";
-import {IB20Asset} from "src/interfaces/IB20Asset.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 
-import {MockB20} from "test/lib/mocks/MockB20.sol";
-import {MockB20AssetStorage, MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
+import {MockB20AssetStorage, MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Asset
 /// @author Coinbase

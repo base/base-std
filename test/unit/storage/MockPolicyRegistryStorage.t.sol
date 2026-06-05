@@ -3,8 +3,8 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
-import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
+import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @notice Asserts the hardcoded `STORAGE_LOCATION` constant on
 ///         `MockPolicyRegistryStorage` matches the ERC-7201 formula it documents.

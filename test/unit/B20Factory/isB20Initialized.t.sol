@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
-import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
+import {B20FactoryTest} from "base-std-test/lib/B20FactoryTest.sol";
 
 contract B20FactoryIsB20InitializedTest is B20FactoryTest {
     /// @notice Verifies isB20Initialized returns false for any address lacking the B-20 prefix

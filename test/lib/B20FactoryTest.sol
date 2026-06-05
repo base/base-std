@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseTest} from "test/lib/BaseTest.sol";
-import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
+import {BaseTest} from "base-std-test/lib/BaseTest.sol";
+import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
-import {B20Constants} from "src/lib/B20Constants.sol";
-import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
+import {B20FactoryLib} from "base-std/lib/B20FactoryLib.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
 /// @notice Base test contract for `IB20Factory` unit tests, and the
 ///         parent for token-test bases (`B20Test`, `B20StablecoinTest`)

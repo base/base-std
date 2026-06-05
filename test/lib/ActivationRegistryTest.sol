@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
-import {BaseTest} from "test/lib/BaseTest.sol";
+import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationRegistryFeatureList.sol";
+import {BaseTest} from "base-std-test/lib/BaseTest.sol";
 
-import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {IActivationRegistry} from "base-std/interfaces/IActivationRegistry.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
 /// @notice Base test contract for `IActivationRegistry` unit tests.
 ///
