@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
+import {IActivationRegistry} from "base-std/interfaces/IActivationRegistry.sol";
 
-import {MockActivationRegistryStorage} from "test/lib/mocks/MockActivationRegistryStorage.sol";
+import {MockActivationRegistryStorage} from "base-std-test/lib/mocks/MockActivationRegistryStorage.sol";
 
 /// @title MockActivationRegistry
 /// @notice Reference implementation of the `IActivationRegistry` precompile.

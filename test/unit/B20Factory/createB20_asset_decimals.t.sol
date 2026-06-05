@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {IB20} from "src/interfaces/IB20.sol";
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {B20Constants} from "src/lib/B20Constants.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
 
-import {MockB20} from "test/lib/mocks/MockB20.sol";
-import {MockB20AssetStorage} from "test/lib/mocks/MockB20Storage.sol";
-import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
+import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
+import {MockB20AssetStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {B20FactoryTest} from "base-std-test/lib/B20FactoryTest.sol";
 
 /// @notice Coverage for the asset variant's configurable `decimals` field.
 ///

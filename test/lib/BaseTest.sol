@@ -4,13 +4,13 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
-import {MockActivationRegistry} from "test/lib/mocks/MockActivationRegistry.sol";
-import {MockPolicyRegistry} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {MockB20Factory} from "test/lib/mocks/MockB20Factory.sol";
+import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationRegistryFeatureList.sol";
+import {MockActivationRegistry} from "base-std-test/lib/mocks/MockActivationRegistry.sol";
+import {MockPolicyRegistry} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
+import {MockB20Factory} from "base-std-test/lib/mocks/MockB20Factory.sol";
 
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
 /// @notice Common base for every test contract in this suite.
 ///

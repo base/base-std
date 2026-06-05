@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ActivationRegistryTest} from "test/lib/ActivationRegistryTest.sol";
-import {MockActivationRegistryStorage} from "test/lib/mocks/MockActivationRegistryStorage.sol";
+import {ActivationRegistryTest} from "base-std-test/lib/ActivationRegistryTest.sol";
+import {MockActivationRegistryStorage} from "base-std-test/lib/mocks/MockActivationRegistryStorage.sol";
 
 /// @notice Self-tests for `MockActivationRegistryStorage`'s slot-derivation helpers.
 ///

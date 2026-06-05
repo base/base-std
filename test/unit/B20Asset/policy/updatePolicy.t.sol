@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20AssetTest} from "test/lib/B20AssetTest.sol";
+import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
-import {B20Constants} from "src/lib/B20Constants.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20AssetUpdatePolicyTest is B20AssetTest {
     /// @notice Verifies updatePolicy still routes base policy types through the inherited write path on the asset variant.

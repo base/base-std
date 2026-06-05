@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 
-import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
+import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @notice Canonical built-in policy ID constants. Declared as a library
 ///         so tests can reference them at compile time via

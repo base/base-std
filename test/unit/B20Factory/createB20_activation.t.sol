@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {IActivationRegistry} from "base-std/interfaces/IActivationRegistry.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
-import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
-import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
+import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationRegistryFeatureList.sol";
+import {B20FactoryTest} from "base-std-test/lib/B20FactoryTest.sol";
 
 /// @notice Pins the activation gating on `createB20`.
 ///

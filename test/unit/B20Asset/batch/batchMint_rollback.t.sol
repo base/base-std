@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20AssetTest} from "test/lib/B20AssetTest.sol";
+import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
-import {IB20} from "src/interfaces/IB20.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
 
-import {B20Constants} from "src/lib/B20Constants.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
 
 /// @title B20AssetBatchMintRollbackTest
 /// @notice Verifies a revert mid-batchMint leaves no orphan token state.

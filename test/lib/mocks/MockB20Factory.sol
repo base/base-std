@@ -3,17 +3,21 @@ pragma solidity ^0.8.20;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {B20Constants} from "src/lib/B20Constants.sol";
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
-import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
+import {B20FactoryLib} from "base-std/lib/B20FactoryLib.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
-import {ActivationRegistryFeatureList} from "test/lib/mocks/ActivationRegistryFeatureList.sol";
+import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationRegistryFeatureList.sol";
 
-import {MockB20Stablecoin} from "test/lib/mocks/MockB20Stablecoin.sol";
-import {MockB20Asset} from "test/lib/mocks/MockB20Asset.sol";
-import {MockB20} from "test/lib/mocks/MockB20.sol";
-import {MockB20Storage, MockB20AssetStorage, MockB20StablecoinStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20Stablecoin} from "base-std-test/lib/mocks/MockB20Stablecoin.sol";
+import {MockB20Asset} from "base-std-test/lib/mocks/MockB20Asset.sol";
+import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
+import {
+    MockB20Storage,
+    MockB20AssetStorage,
+    MockB20StablecoinStorage
+} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Factory
 /// @notice Reference implementation of the `IB20Factory` precompile

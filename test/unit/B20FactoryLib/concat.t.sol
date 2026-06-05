@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20FactoryLib} from "src/lib/B20FactoryLib.sol";
+import {B20FactoryLib} from "base-std/lib/B20FactoryLib.sol";
 
-import {B20FactoryLibTest} from "test/lib/B20FactoryLibTest.sol";
+import {B20FactoryLibTest} from "base-std-test/lib/B20FactoryLibTest.sol";
 
 contract B20FactoryLibConcatTest is B20FactoryLibTest {
     /// @notice Concatenating two empty arrays produces an empty result.

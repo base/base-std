@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {BaseTest} from "test/lib/BaseTest.sol";
+import {BaseTest} from "base-std-test/lib/BaseTest.sol";
 
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
-import {PolicyRegistryConstants} from "test/lib/mocks/MockPolicyRegistry.sol";
-import {MockPolicyRegistryStorage} from "test/lib/mocks/MockPolicyRegistryStorage.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
+import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 /// @notice Base test contract for `IPolicyRegistry` unit tests.
 ///

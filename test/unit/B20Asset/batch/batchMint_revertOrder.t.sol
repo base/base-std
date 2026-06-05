@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20} from "src/interfaces/IB20.sol";
-import {IB20Asset} from "src/interfaces/IB20Asset.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 
-import {B20AssetTest} from "test/lib/B20AssetTest.sol";
-import {B20Constants} from "test/lib/mocks/MockB20.sol";
+import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
+import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 
 /// @title Differential check-order tests for `batchMint` (asset variant).
 ///

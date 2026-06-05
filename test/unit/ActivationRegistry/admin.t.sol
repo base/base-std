@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {ActivationRegistryTest} from "test/lib/ActivationRegistryTest.sol";
+import {ActivationRegistryTest} from "base-std-test/lib/ActivationRegistryTest.sol";
 
 contract ActivationRegistryAdminTest is ActivationRegistryTest {
     /// @notice Verifies admin returns the configured activation admin address

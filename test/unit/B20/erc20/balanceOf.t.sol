@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20Test} from "test/lib/B20Test.sol";
+import {B20Test} from "base-std-test/lib/B20Test.sol";
 
 contract B20BalanceOfTest is B20Test {
     /// @notice Verifies balanceOf returns zero for any account that has never received tokens

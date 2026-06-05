@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20Factory} from "src/interfaces/IB20Factory.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
 
-import {B20FactoryTest} from "test/lib/B20FactoryTest.sol";
+import {B20FactoryTest} from "base-std-test/lib/B20FactoryTest.sol";
 
 contract B20FactoryGetTokenAddressTest is B20FactoryTest {
     /// @notice Wraps an arbitrary uint8 into a valid B20Variant ordinal.

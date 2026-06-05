@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IActivationRegistry} from "src/interfaces/IActivationRegistry.sol";
+import {IActivationRegistry} from "base-std/interfaces/IActivationRegistry.sol";
 
-import {ActivationRegistryTest} from "test/lib/ActivationRegistryTest.sol";
-import {MockActivationRegistryStorage} from "test/lib/mocks/MockActivationRegistryStorage.sol";
+import {ActivationRegistryTest} from "base-std-test/lib/ActivationRegistryTest.sol";
+import {MockActivationRegistryStorage} from "base-std-test/lib/mocks/MockActivationRegistryStorage.sol";
 
 contract ActivationRegistryActivateTest is ActivationRegistryTest {
     /// @notice Verifies activate reverts when called by any non-admin caller

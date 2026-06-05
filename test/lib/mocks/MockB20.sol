@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IB20} from "src/interfaces/IB20.sol";
-import {IPolicyRegistry} from "src/interfaces/IPolicyRegistry.sol";
-import {StdPrecompiles} from "src/StdPrecompiles.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
-import {MockB20Storage} from "test/lib/mocks/MockB20Storage.sol";
-import {B20Constants} from "src/lib/B20Constants.sol";
+import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {B20Constants} from "base-std/lib/B20Constants.sol";
 
 /// @title MockB20
 /// @notice Reference implementation of the `IB20` default-token surface.

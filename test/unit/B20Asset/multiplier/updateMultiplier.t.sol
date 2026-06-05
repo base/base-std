@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {B20AssetTest} from "test/lib/B20AssetTest.sol";
+import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
-import {IB20} from "src/interfaces/IB20.sol";
-import {IB20Asset} from "src/interfaces/IB20Asset.sol";
+import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 
-import {MockB20AssetStorage} from "test/lib/mocks/MockB20Storage.sol";
+import {MockB20AssetStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 contract B20AssetUpdateMultiplierTest is B20AssetTest {
     /// @notice Verifies updateMultiplier reverts when caller lacks OPERATOR_ROLE
