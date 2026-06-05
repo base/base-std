@@ -15,9 +15,6 @@ interface IActivationRegistry {
     /// @notice Feature is already activated.
     error AlreadyActivated(bytes32 feature);
 
-    /// @notice Feature is already deactivated.
-    error AlreadyDeactivated(bytes32 feature);
-
     /// @notice Feature is not activated.
     error FeatureNotActivated(bytes32 feature);
 
