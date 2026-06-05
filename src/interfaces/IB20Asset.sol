@@ -109,20 +109,6 @@ interface IB20Asset is IB20 {
     /// @return Whether `id` is used.
     function isAnnouncementIdUsed(string calldata id) external view returns (bool);
 
-    /// @notice Whether an announcement bracket is currently open on this token. True from the
-    ///         start of `announce` through the dispatch of every entry in `internalCalls` and
-    ///         until `EndAnnouncement` fires; false at all other times, including before the
-    ///         first `announce` call and after the bracket closes. Resets per transaction:
-    ///         a revert anywhere in the bracket leaves no observable side effect on this view.
-    ///
-    /// @dev    Intended for inner-call contracts dispatched via `internalCalls` (or other
-    ///         contracts they reach) to detect they are executing inside an announcement
-    ///         bracket — useful for issuance, multiplier, and metadata flows whose policy
-    ///         differs when run as part of a disclosed corp action vs. ad-hoc.
-    ///
-    /// @return Whether an announcement is currently active.
-    function isAnnouncementActive() external view returns (bool);
-
     /*//////////////////////////////////////////////////////////////
                                MULTIPLIER
     //////////////////////////////////////////////////////////////*/
