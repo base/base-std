@@ -97,6 +97,41 @@ Forward any `forge test` flag through the script:
 ./script/run-fork-tests.sh -vvvv --match-test test_transfer_success_debitsSender
 ```
 
+## Faster: consume the published base-anvil image (skip the build)
+
+base/base's `base-anvil-package.yml` workflow builds `anvil` + `forge` against
+base/base on every merge to `main`, smoke-tests them with this suite, and pushes
+a multi-arch image to `ghcr.io/base/base-anvil` (with a `MANIFEST.json` recording
+the exact base/base, base-anvil, and base-std SHAs). You can consume that image
+instead of doing the ~30-minute local base-anvil build:
+
+```bash
+cd ~/code/base-std
+BASE_ANVIL_IMAGE=ghcr.io/base/base-anvil:main ./script/run-fork-tests.sh
+```
+
+The script pulls the image, extracts its `anvil` + `forge`, prints which base/base
+SHA they were built against (so a green run is never mistaken for "current main"),
+then runs exactly as it would with local binaries.
+
+Tags:
+
+- `:main` — built from the latest base/base `main` merge.
+- `:sha-<base/base-sha>` — pin to the binaries built from a specific base/base
+  commit (reproducible; what CI should pin to).
+- `:main-<date>-<short-sha>` — human-readable historical builds.
+
+Caveats:
+
+- **Linux only.** The published image ships linux binaries; no macOS (darwin)
+  build is published. On a Mac, use the local-build path above (or run this
+  script inside a linux container / dev box). The script detects a non-Linux host
+  and tells you so rather than extracting binaries that can't exec.
+- Requires `docker`. If the GHCR package is private, run `docker login ghcr.io`
+  first.
+- This is the path base-std's own fork-test CI can use to skip rebuilding
+  base-anvil on every PR.
+
 ## When the precompiles update — the loop
 
 This is the main workflow. base/base's precompile crate changes; you want

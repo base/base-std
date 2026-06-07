@@ -23,6 +23,13 @@
 #                    back to debug if release is missing)
 #   FORGE_BIN        path to the patched forge binary
 #                    (default: `forge` next to ANVIL_BIN)
+#   BASE_ANVIL_IMAGE prebuilt base-anvil package image to consume instead of a
+#                    local build, e.g. ghcr.io/base/base-anvil:main (or a
+#                    :sha-<base/base-sha> tag). When set (and ANVIL_BIN is not
+#                    explicitly overridden), the image's anvil + forge binaries
+#                    are extracted and used, skipping the ~30-min local build.
+#                    Linux-only: the image ships linux binaries (no darwin build
+#                    is published). Requires docker. See FORK_TESTING.md.
 #   PORT             local RPC port for anvil (default: 8546)
 #   ACTIVATION_ADMIN address authorized to activate features
 #                    (default: 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc, the
@@ -43,6 +50,45 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEFAULT_ANVIL_RELEASE="$REPO_ROOT/../base-anvil/target/release/anvil"
 DEFAULT_ANVIL_DEBUG="$REPO_ROOT/../base-anvil/target/debug/anvil"
+
+# Binary resolution precedence:
+#   1. Explicit ANVIL_BIN / FORGE_BIN env vars (full override).
+#   2. BASE_ANVIL_IMAGE — pull the prebuilt base-anvil package image published by
+#      base/base on every merge to main and extract its anvil + forge binaries.
+#      Skips the ~30-min local build. The published image ships LINUX binaries
+#      only, so this path requires a Linux host (CI / Linux dev box / container);
+#      on macOS, build base-anvil locally instead (see FORK_TESTING.md).
+#        Tags: ghcr.io/base/base-anvil:main | :sha-<base/base-sha> | :main-<date>-<sha>
+#   3. A local ../base-anvil release (then debug) build — the default for local dev.
+if [[ -z "${ANVIL_BIN:-}" && -n "${BASE_ANVIL_IMAGE:-}" ]]; then
+    if [[ "$(uname -s)" != "Linux" ]]; then
+        echo "ERROR: BASE_ANVIL_IMAGE ($BASE_ANVIL_IMAGE) ships linux binaries that cannot" >&2
+        echo "run natively on $(uname -s). Build base-anvil locally (see FORK_TESTING.md)," >&2
+        echo "or run this script on a linux host / inside a linux container." >&2
+        exit 2
+    fi
+    command -v docker >/dev/null 2>&1 || { echo "ERROR: docker is required to use BASE_ANVIL_IMAGE." >&2; exit 2; }
+
+    img_dir="$(mktemp -d)"
+    echo "[run-fork-tests] pulling $BASE_ANVIL_IMAGE ..." >&2
+    docker pull "$BASE_ANVIL_IMAGE" >&2 \
+        || { echo "ERROR: failed to pull $BASE_ANVIL_IMAGE (private package? try 'docker login ghcr.io')." >&2; exit 2; }
+
+    cid="$(docker create "$BASE_ANVIL_IMAGE")"
+    docker cp "$cid:/usr/local/bin/anvil" "$img_dir/anvil" >/dev/null
+    docker cp "$cid:/usr/local/bin/forge" "$img_dir/forge" >/dev/null
+    docker cp "$cid:/usr/local/share/base-anvil/MANIFEST.json" "$img_dir/MANIFEST.json" >/dev/null 2>&1 || true
+    docker rm "$cid" >/dev/null
+    chmod +x "$img_dir/anvil" "$img_dir/forge"
+
+    ANVIL_BIN="$img_dir/anvil"
+    : "${FORGE_BIN:="$img_dir/forge"}"
+
+    # Surface provenance so a green run is never mistaken for "current base/base".
+    if [[ -f "$img_dir/MANIFEST.json" ]] && command -v jq >/dev/null 2>&1; then
+        echo "[run-fork-tests] image built against base/base $(jq -r '.base.sha // "?"' "$img_dir/MANIFEST.json") (base-std smoke-tested: $(jq -r '.base_std.smoke_tested // "?"' "$img_dir/MANIFEST.json"))" >&2
+    fi
+fi
 
 if [[ -z "${ANVIL_BIN:-}" ]]; then
     if [[ -x "$DEFAULT_ANVIL_RELEASE" ]]; then
