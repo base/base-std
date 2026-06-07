@@ -45,6 +45,23 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         ok; // silence unused warning; the revert is asserted via vm.expectRevert.
     }
 
+    /// @notice Verifies createB20 reverts when the params bytes are not valid ABI-encoded create params
+    /// @dev The factory ABI-decodes `params` into the variant's create-params struct after the
+    ///      activation gate; a malformed blob fails to decode. The Rust precompile surfaces this as
+    ///      AbiDecodeFailed; the Solidity reference reverts at the decoder. A generic expectRevert
+    ///      keeps the assertion robust across both. Activation is active by default in setUp, so the
+    ///      decode step is reached before any variant-body validation.
+    function test_createB20_revert_invalidParamsEncoding(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        // Four bytes is far too short to decode as B20AssetCreateParams (which begins with
+        // string-field offset words), so abi.decode reverts.
+        bytes memory badParams = hex"deadbeef";
+
+        vm.prank(caller);
+        vm.expectRevert();
+        factory.createB20(IB20Factory.B20Variant.ASSET, salt, badParams, new bytes[](0));
+    }
+
     /// @notice Verifies createToken reverts for any unsupported version byte on the STABLECOIN variant
     /// @dev Each variant arm has its own version check; this exercises the stablecoin arm's check.
     function test_createB20_revert_unsupportedVersion_stablecoin(address caller, uint8 badVersion, bytes32 salt)

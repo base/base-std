@@ -199,6 +199,11 @@ contract B20TransferFromWithMemoTest is B20Test {
         uint256 spendAmount,
         bytes32 memo
     ) public {
+        // Mock-only: the privileged path is reached by reopening the bootstrap window via
+        // vm.store on the mock's initialized slot, which the live precompile omits from its
+        // namespaced layout (it derives init-state from code presence, not slot 14). Matches the
+        // guard on test/unit/storage/MockB20SlotHelpers.t.sol:test_initializedSlot_*.
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);
         allowanceAmount = bound(allowanceAmount, 0, type(uint128).max - 1);
@@ -229,6 +234,9 @@ contract B20TransferFromWithMemoTest is B20Test {
         uint256 spendAmount,
         bytes32 memo
     ) public {
+        // Mock-only: see test_transferFromWithMemo_revert_privileged_insufficientAllowance. The
+        // vm.store bootstrap-window reopen has no effect on the live precompile.
+        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);

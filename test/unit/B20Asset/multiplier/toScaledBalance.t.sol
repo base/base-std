@@ -49,4 +49,19 @@ contract B20AssetToScaledBalanceTest is B20AssetTest {
             "stored zero multiplier must produce identity (WAD fallback)"
         );
     }
+
+    /// @notice Verifies toScaledBalance reverts when rawBalance * multiplier overflows uint256
+    /// @dev The Rust precompile uses checked multiplication and reverts on overflow; the Solidity
+    ///      reference relies on 0.8.x checked arithmetic (Panic 0x11). The success tests bound inputs
+    ///      to avoid the overflow, leaving the boundary itself untested. A generic expectRevert keeps
+    ///      the assertion robust across the mock (Panic) and the live precompile's overflow error.
+    function test_toScaledBalance_revert_arithmeticOverflow(uint256 rawBalance, uint256 newMultiplier) public {
+        newMultiplier = bound(newMultiplier, 2, type(uint256).max);
+        // Force rawBalance * multiplier strictly above type(uint256).max.
+        rawBalance = bound(rawBalance, type(uint256).max / newMultiplier + 1, type(uint256).max);
+        _updateMultiplier(newMultiplier);
+
+        vm.expectRevert();
+        asset().toScaledBalance(rawBalance);
+    }
 }
