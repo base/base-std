@@ -466,9 +466,7 @@ contract B20TransferFromTest is B20Test {
     ///      ALWAYS_BLOCK a non-privileged transferFrom reverts PolicyForbids; the privileged (factory
     ///      bootstrap) path must succeed and still burn the allowance. Only the executor-policy check
     ///      honors the privileged bypass — the allowance is consumed unconditionally (BOP-230 / L-04).
-    function test_transferFrom_success_privileged_skipsExecutorPolicy(address from, address to, uint256 amount)
-        public
-    {
+    function test_transferFrom_success_privileged_skipsExecutorPolicy(address from, address to, uint256 amount) public {
         // Mock-only: privilege is reached by reopening the bootstrap window via vm.store on the
         // mock's initialized slot, which has no effect on the live precompile (it derives privilege
         // from a real factory bootstrap call). Matches the guard the other vm.store-based tests use.
