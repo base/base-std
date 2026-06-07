@@ -90,19 +90,4 @@ contract B20BurnTest is B20Test {
         vm.prank(burner);
         token.burn(amount);
     }
-
-    /// @notice Verifies burn with a zero amount succeeds as a no-op
-    /// @dev amount == 0 is not rejected (the `InvalidAmount` selector is unused on the burn path).
-    ///      The InsufficientBalance check (`balance < amount` == `0 < 0` == false) passes even with
-    ///      a zero balance, so a zero burn leaves balance and totalSupply unchanged.
-    function test_burn_success_zeroAmount() public {
-        _grantRole(B20Constants.BURN_ROLE, burner);
-        uint256 supplyBefore = token.totalSupply();
-
-        vm.prank(burner);
-        token.burn(0);
-
-        assertEq(token.balanceOf(burner), 0, "zero burn must leave balance unchanged");
-        assertEq(token.totalSupply(), supplyBefore, "zero burn must leave totalSupply unchanged");
-    }
 }

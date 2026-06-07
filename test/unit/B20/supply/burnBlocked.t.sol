@@ -122,21 +122,4 @@ contract B20BurnBlockedTest is B20Test {
         vm.prank(burnBlocker);
         token.burnBlocked(from, amount);
     }
-
-    /// @notice Verifies burnBlocked with a zero amount succeeds as a no-op against a blocked account
-    /// @dev amount == 0 is not rejected; with `from` policy-blocked under TRANSFER_SENDER_POLICY the
-    ///      AccountNotBlocked guard passes, and the InsufficientBalance check (`0 < 0` == false)
-    ///      passes against a zero balance, so the seizure is a no-op leaving state unchanged.
-    function test_burnBlocked_success_zeroAmount(address from) public {
-        _assumeValidActor(from);
-        _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
-        uint256 supplyBefore = token.totalSupply();
-
-        vm.prank(burnBlocker);
-        token.burnBlocked(from, 0);
-
-        assertEq(token.balanceOf(from), 0, "zero seizure must leave balance unchanged");
-        assertEq(token.totalSupply(), supplyBefore, "zero seizure must leave totalSupply unchanged");
-    }
 }

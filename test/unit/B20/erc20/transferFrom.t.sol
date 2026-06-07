@@ -393,10 +393,13 @@ contract B20TransferFromTest is B20Test {
         uint256 allowanceAmount,
         uint256 spendAmount
     ) public {
-        // Mock-only: the privileged path is reached by reopening the bootstrap window via
-        // vm.store on the mock's initialized slot, which the live precompile omits from its
-        // namespaced layout (it derives init-state from code presence, not slot 14). Matches the
-        // guard on test/unit/storage/MockB20SlotHelpers.t.sol:test_initializedSlot_*.
+        // Mock-only by necessity. This pins a privileged (factory bootstrap) transferFrom that
+        // consumes a pre-existing third-party allowance (allowance[from][factory], from != factory).
+        // Such an allowance can only be set by `from` calling approve, which requires the token to
+        // already exist with the bootstrap window CLOSED, yet the privileged path requires the
+        // window OPEN (during which the factory is the only caller). The two states are mutually
+        // exclusive in any real sequence, so there is no fork-reachable construction. The mock
+        // observes it only by reopening the window via vm.store, which has no live-precompile analog.
         vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);
@@ -427,8 +430,9 @@ contract B20TransferFromTest is B20Test {
         uint256 allowanceAmount,
         uint256 spendAmount
     ) public {
-        // Mock-only: see test_transferFrom_revert_privileged_insufficientAllowance. The vm.store
-        // bootstrap-window reopen has no effect on the live precompile.
+        // Mock-only by necessity: see test_transferFrom_revert_privileged_insufficientAllowance.
+        // The privileged path needs a pre-existing allowance[from][factory] that cannot be
+        // established inside the atomic bootstrap window, so there is no fork-reachable construction.
         vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);
@@ -467,9 +471,10 @@ contract B20TransferFromTest is B20Test {
     ///      bootstrap) path must succeed and still burn the allowance. Only the executor-policy check
     ///      honors the privileged bypass — the allowance is consumed unconditionally (BOP-230 / L-04).
     function test_transferFrom_success_privileged_skipsExecutorPolicy(address from, address to, uint256 amount) public {
-        // Mock-only: privilege is reached by reopening the bootstrap window via vm.store on the
-        // mock's initialized slot, which has no effect on the live precompile (it derives privilege
-        // from a real factory bootstrap call). Matches the guard the other vm.store-based tests use.
+        // Mock-only by necessity: like test_transferFrom_revert_privileged_insufficientAllowance,
+        // the privileged path needs a pre-existing allowance[from][factory] (from != factory) that
+        // cannot be set inside the atomic bootstrap window (the factory is the only in-window
+        // caller). No fork-reachable construction exists; the mock reaches it via vm.store.
         vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);

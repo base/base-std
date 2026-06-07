@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
 import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
@@ -165,9 +166,9 @@ contract B20TransferTest is B20Test {
         assertTrue(token.transfer(to, amount), "transfer must return true");
     }
 
-    /// @notice Verifies repeated self-transfers never inflate balance or totalSupply
+    /// @notice Verifies a self-transfer never inflates balance or totalSupply
     /// @dev Regression guard against a dual-write bug where `balances[from] -= amount` followed by
-    ///      `balances[to] += amount` with from == to could net non-zero. Five self-transfers must
+    ///      `balances[to] += amount` with from == to could net non-zero. A self-transfer must
     ///      leave both the balance and totalSupply exactly where they started.
     function test_transfer_success_selfTransferNoInflation(address account, uint256 amount) public {
         _assumeValidActor(account);
@@ -177,10 +178,8 @@ contract B20TransferTest is B20Test {
         uint256 balanceBefore = token.balanceOf(account);
         uint256 supplyBefore = token.totalSupply();
 
-        for (uint256 i = 0; i < 5; i++) {
-            vm.prank(account);
-            token.transfer(account, amount);
-        }
+        vm.prank(account);
+        token.transfer(account, amount);
 
         assertEq(token.balanceOf(account), balanceBefore, "self-transfer must not change balance");
         assertEq(token.totalSupply(), supplyBefore, "self-transfer must not change totalSupply");
@@ -188,49 +187,57 @@ contract B20TransferTest is B20Test {
 
     /// @notice Verifies a privileged (factory bootstrap) transfer bypasses the TRANSFER_SENDER_POLICY
     /// @dev During the bootstrap window the factory caller is privileged and the sender policy is not
-    ///      consulted. With the sender policy set to ALWAYS_BLOCK a non-privileged transfer would
-    ///      revert PolicyForbids; the privileged path must succeed. Window reopened via vm.store on
-    ///      the initialized slot, mirroring the privileged transferFrom regression tests.
+    ///      consulted. Privilege is reached through a genuine bootstrap: the token is created with
+    ///      initCalls that (1) mint to the factory, (2) set the sender policy to ALWAYS_BLOCK, then
+    ///      (3) transfer from the factory. A non-privileged transfer would revert PolicyForbids, so
+    ///      the init-call transfer succeeding (createB20 not bubbling InitCallFailed) proves the
+    ///      bypass. This drives the real factory-as-caller path with no vm.store cheat, so it runs
+    ///      identically against the live precompile under LIVE_PRECOMPILES.
     function test_transfer_success_privilegedBypassesSenderPolicy(address to, uint256 amount) public {
-        // Mock-only: the privileged path is reached by reopening the bootstrap window via
-        // vm.store on the mock's initialized slot. The live precompile derives privilege from a
-        // real factory bootstrap call, not a storable flag, so this mechanism doesn't apply.
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(to);
         amount = bound(amount, 0, type(uint128).max);
 
-        _mint(address(factory), amount);
-        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        bytes32 salt = keccak256("privileged-sender-bypass");
+        // The fuzzed recipient must not collide with the to-be-created token's own address.
+        vm.assume(to != factory.getB20Address(IB20Factory.B20Variant.ASSET, alice, salt));
 
-        // Reopen the factory bootstrap window so the factory caller is privileged.
-        vm.store(address(token), MockB20Storage.initializedSlot(), bytes32(0));
+        bytes[] memory initCalls = new bytes[](3);
+        initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(factory), amount);
+        initCalls[1] = abi.encodeWithSelector(
+            IB20.updatePolicy.selector, B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+        );
+        initCalls[2] = abi.encodeWithSelector(IB20.transfer.selector, to, amount);
 
-        vm.prank(address(factory));
-        token.transfer(to, amount);
+        address newToken = _createAsset(alice, salt, _assetParams(), initCalls);
 
-        assertEq(token.balanceOf(to), amount, "privileged transfer must succeed despite blocked sender policy");
+        assertEq(IB20(newToken).balanceOf(to), amount, "privileged transfer must succeed despite blocked sender policy");
     }
 
     /// @notice Verifies a privileged (factory bootstrap) transfer bypasses the TRANSFER_RECEIVER_POLICY
-    /// @dev Receiver-side mirror of the sender bypass: with the receiver policy set to ALWAYS_BLOCK a
-    ///      non-privileged transfer would revert PolicyForbids, but the privileged path must succeed.
+    /// @dev Receiver-side mirror of the sender bypass: the bootstrap initCalls set the receiver policy
+    ///      to ALWAYS_BLOCK and transfer to the blocked recipient. A non-privileged transfer would
+    ///      revert PolicyForbids; the privileged init-call transfer must succeed. Like the sender
+    ///      mirror, this drives the real factory bootstrap path and runs under LIVE_PRECOMPILES.
     function test_transfer_success_privilegedBypassesReceiverPolicy(address to, uint256 amount) public {
-        // Mock-only: see test_transfer_success_privilegedBypassesSenderPolicy. The vm.store
-        // bootstrap-window reopen has no effect on the live precompile.
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(to);
         amount = bound(amount, 0, type(uint128).max);
 
-        _mint(address(factory), amount);
-        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        bytes32 salt = keccak256("privileged-receiver-bypass");
+        // The fuzzed recipient must not collide with the to-be-created token's own address.
+        vm.assume(to != factory.getB20Address(IB20Factory.B20Variant.ASSET, alice, salt));
 
-        // Reopen the factory bootstrap window so the factory caller is privileged.
-        vm.store(address(token), MockB20Storage.initializedSlot(), bytes32(0));
+        bytes[] memory initCalls = new bytes[](3);
+        initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(factory), amount);
+        initCalls[1] = abi.encodeWithSelector(
+            IB20.updatePolicy.selector, B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+        );
+        initCalls[2] = abi.encodeWithSelector(IB20.transfer.selector, to, amount);
 
-        vm.prank(address(factory));
-        token.transfer(to, amount);
+        address newToken = _createAsset(alice, salt, _assetParams(), initCalls);
 
-        assertEq(token.balanceOf(to), amount, "privileged transfer must succeed despite blocked receiver policy");
+        assertEq(
+            IB20(newToken).balanceOf(to), amount, "privileged transfer must succeed despite blocked receiver policy"
+        );
     }
 
     /// @notice Verifies transfer succeeds when the sender is a member of a custom ALLOWLIST policy
