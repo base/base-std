@@ -257,13 +257,21 @@ class Chain:
         ok(f"{desc} ({len(signatures)} event type{'s' if len(signatures) != 1 else ''} confirmed emitted)")
 
     # ── deploy / raw low-level calls ──────────────────────────────────────────
-    def deploy(self, abi: list, bytecode: str, *args, account: LocalAccount | None = None) -> Contract:
-        """Deploy a contract from abi+bytecode and return a bound handle (used for the probe)."""
+    def deploy(
+        self, abi: list, bytecode: str, *args, account: LocalAccount | None = None, value: int = 0
+    ) -> Contract:
+        """Deploy a contract from abi+bytecode and return a bound handle (used for the probe).
+
+        `value` attaches wei to the constructor (e.g. for a payable force-feeder that self-destructs
+        its balance into a target). The returned handle points at the deployed address even if the
+        constructor leaves no code there.
+        """
         account = account or self.deployer
         factory = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        tx = factory.constructor(*args).build_transaction(
-            {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
-        )
+        overrides = {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
+        if value:
+            overrides["value"] = value
+        tx = factory.constructor(*args).build_transaction(overrides)
         signed = account.sign_transaction(tx)
         receipt = self.w3.eth.wait_for_transaction_receipt(self.w3.eth.send_raw_transaction(signed.raw_transaction))
         if receipt["status"] != 1 or not receipt.get("contractAddress"):

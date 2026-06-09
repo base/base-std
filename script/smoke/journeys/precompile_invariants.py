@@ -26,7 +26,7 @@ from hexbytes import HexBytes
 from web3 import Web3
 
 from .. import config
-from ..abis import probe_artifact
+from ..abis import forcefeeder_artifact, probe_artifact
 from ..chain import Chain, log, ok, step
 from ..codec import AssetCreateParams, init_call
 
@@ -150,6 +150,38 @@ def _atomicity(c: Chain, probe) -> None:
     c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), alice_before, "alice balance unchanged after reverted mint")
 
 
+def _create_gas_independent_of_prefunded_balance(c: Chain, _probe) -> None:
+    # Finding (b20-precompile-selfdestruct-audit.md): the factory decides "already deployed?" on
+    # code-hash only, but set_code decides whether to charge the CREATE + EIP-8037 state-expansion
+    # gas via AccountInfo::is_empty(), which is false the moment an address holds any balance. So a
+    # token address that was force-fed ether (SELFDESTRUCT / coinbase / genesis — paths a callvalue
+    # guard cannot block) still creates, but skips the state gas the network is owed. Desired
+    # invariant: createB20 gas is a function of its calldata, NOT of the target's pre-existing balance.
+    #
+    # Two identical creations (same calldata, fresh disjoint addresses) so the only variable is whether
+    # the target was pre-funded. If pre-funding makes creation cheaper, that's the divergence.
+    params = AssetCreateParams("GasProbe", "GASP", c.DEPLOYER, config.ASSET_DECIMALS).encode()
+
+    salt_ctrl = c.cfg.salt_for("invariants-gas-control")
+    gas_unfunded = c.create_b20(config.VARIANT_ASSET, salt_ctrl, params, [])["gasUsed"]
+
+    salt_fed = c.cfg.salt_for("invariants-gas-prefunded")
+    target = c.predict_b20(config.VARIANT_ASSET, salt_fed)
+    abi, bytecode = forcefeeder_artifact()
+    c.deploy(abi, bytecode, target, value=1)  # SELFDESTRUCT 1 wei into the predicted token address
+    fed = c.w3.eth.get_balance(target)
+    c.assert_eq(fed >= 1, True, f"force-fed ether landed at predicted token address ({fed} wei @ {target})")
+
+    gas_prefunded = c.create_b20(config.VARIANT_ASSET, salt_fed, params, [])["gasUsed"]
+
+    c.assert_eq(
+        gas_prefunded < gas_unfunded,
+        False,
+        f"createB20 gas independent of target's prefunded balance "
+        f"(unfunded={gas_unfunded}, prefunded={gas_prefunded}, discount={gas_unfunded - gas_prefunded})",
+    )
+
+
 # Ordered audit checklist: (name, fn). `name` doubles as the INFORMATIONAL downgrade key.
 CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
     ("payable rejected (value on non-payable createPolicy)", _payable_rejected),
@@ -163,6 +195,7 @@ CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
     ("returndata fidelity (RETURNDATACOPY of revert payload)", _returndata_fidelity),
     ("OOG contained to sub-call", _oog_contained),
     ("revert atomicity (reverted mint: no Transfer log, supply/balance unchanged)", _atomicity),
+    ("createB20 gas independent of force-fed target balance (SELFDESTRUCT)", _create_gas_independent_of_prefunded_balance),
 ]
 
 

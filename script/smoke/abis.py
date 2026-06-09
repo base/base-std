@@ -48,3 +48,13 @@ def probe_artifact() -> tuple[list[dict[str, Any]], str]:
     """
     art = _artifact("PrecompileProbe")
     return art["abi"], art["bytecode"]["object"]
+
+
+def forcefeeder_artifact() -> tuple[list[dict[str, Any]], str]:
+    """abi + creation bytecode for ForceFeeder (compiled into `out/`).
+
+    Deployed with a non-zero `value` to SELFDESTRUCT its balance into a target address — the
+    unblockable ether push used by the force-fed-ether invariant check.
+    """
+    art = _artifact("ForceFeeder")
+    return art["abi"], art["bytecode"]["object"]
