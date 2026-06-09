@@ -213,19 +213,28 @@ interface IB20 {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Policy slot consulted against `from` on every transfer (including `transferFrom`).
+    /// @dev Bypassed for factory-originated calls during the creation (bootstrap) window; see
+    ///      `IB20Factory.createB20`.
     /// @return Policy scope constant.
     function TRANSFER_SENDER_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `to` on every transfer.
+    /// @dev Bypassed for factory-originated calls during the creation (bootstrap) window; see
+    ///      `IB20Factory.createB20`.
     /// @return Policy scope constant.
     function TRANSFER_RECEIVER_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `msg.sender` on `transferFrom` when distinct from `from`.
     ///         Not consulted on `transfer`.
+    /// @dev Bypassed for factory-originated calls during the creation (bootstrap) window; see
+    ///      `IB20Factory.createB20`.
     /// @return Policy scope constant.
     function TRANSFER_EXECUTOR_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `to` on every mint.
+    /// @dev Unlike the transfer-side policies, this slot is ALWAYS enforced — including for
+    ///      factory-originated mints during the creation (bootstrap) window — so new supply is never
+    ///      issued to a policy-denied recipient even at creation. See `IB20Factory.createB20`.
     /// @return Policy scope constant.
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
 

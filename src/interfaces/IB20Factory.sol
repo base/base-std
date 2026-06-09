@@ -130,10 +130,19 @@ interface IB20Factory {
     /// @dev Reverts with `InvalidDecimals` when an asset `decimals` is outside `[B20Constants.MIN_ASSET_DECIMALS, B20Constants.MAX_ASSET_DECIMALS]`.
     /// @dev Reverts with `TokenAlreadyExists` when a token already exists at the derived address.
     /// @dev Reverts with `InitCallFailed` (or the bubbled inner reason) when any entry in `initCalls` reverts.
-    /// @dev Each `initCall` executes on the new token within the creation (bootstrap) window, during which the
-    ///      token's role / policy / pause authorization gates are bypassed for factory-originated calls — so
-    ///      admin-gated setup (e.g. `grantRole`, `updatePolicy`, `updateSupplyCap`) succeeds without the factory
-    ///      holding any role. The window closes when `createB20` returns; the factory retains no persisted access.
+    /// @dev Each `initCall` executes on the new token within the creation (bootstrap) window, during which
+    ///      factory-originated calls bypass the token's role gates and its transfer-side policy gates
+    ///      (`TRANSFER_SENDER_POLICY`, `TRANSFER_RECEIVER_POLICY`, `TRANSFER_EXECUTOR_POLICY`) — so admin-gated
+    ///      setup (e.g. `grantRole`, `updatePolicy`, `updateSupplyCap`) and bootstrap transfers succeed without
+    ///      the factory holding any role. The bypass is deliberately NOT total:
+    ///      - `MINT_RECEIVER_POLICY` is ALWAYS enforced, including for factory-originated mints, so new supply is
+    ///        never issued to a policy-denied recipient even at creation. An `initCalls` bundle that sets a
+    ///        restrictive `MINT_RECEIVER_POLICY` and then mints to a non-authorized account reverts
+    ///        `PolicyForbids(MINT_RECEIVER_POLICY, ...)` (bubbled out of `createB20`).
+    ///      - Pause is never bypassed. It defaults to nothing-paused at creation, so a start-paused
+    ///        configuration must sequence its `pause(...)` call last among the `initCalls`.
+    ///      - Token invariants (supply-cap math, balance accounting) are never bypassed.
+    ///      The window closes when `createB20` returns; the factory retains no persisted access.
     ///
     /// @param variant   Which variant struct `params` decodes as.
     /// @param salt      Caller-chosen salt for deterministic address derivation.

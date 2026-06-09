@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IB20} from "base-std/interfaces/IB20.sol";
+import {IB20Factory} from "base-std/interfaces/IB20Factory.sol";
 
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
@@ -72,6 +73,37 @@ contract B20MintTest is B20Test {
             )
         );
         token.mint(to, amount);
+    }
+
+    /// @notice Verifies MINT_RECEIVER_POLICY is enforced even for a privileged (factory bootstrap) mint
+    /// @dev Mint-side counterpart to the transfer privileged-bypass tests (BOP-332): the bootstrap window
+    ///      bypasses the transfer-side policies but ALWAYS enforces MINT_RECEIVER_POLICY, so new supply is
+    ///      never issued to a policy-denied recipient even at creation. Privilege is reached through a
+    ///      genuine bootstrap: the token is created with initCalls that (1) set the mint-receiver policy to
+    ///      ALWAYS_BLOCK, then (2) mint to the blocked recipient. A privileged mint that bypassed the policy
+    ///      would succeed; instead the init-call mint reverts PolicyForbids, which the factory bubbles out of
+    ///      createB20 — proving the asymmetry. This drives the real factory-as-caller path with no vm.store
+    ///      cheat, so it runs identically against the live precompile under LIVE_PRECOMPILES.
+    function test_mint_revert_privilegedStillEnforcesReceiverPolicy(address to, uint256 amount) public {
+        _assumeValidActor(to);
+        amount = bound(amount, 1, type(uint128).max);
+
+        bytes32 salt = keccak256("privileged-mint-receiver-enforced");
+        // The fuzzed recipient must not collide with the to-be-created token's own address.
+        vm.assume(to != factory.getB20Address(IB20Factory.B20Variant.ASSET, alice, salt));
+
+        bytes[] memory initCalls = new bytes[](2);
+        initCalls[0] = abi.encodeWithSelector(
+            IB20.updatePolicy.selector, B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+        );
+        initCalls[1] = abi.encodeWithSelector(IB20.mint.selector, to, amount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector, B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        _createAsset(alice, salt, _assetParams(), initCalls);
     }
 
     /// @notice Verifies mint reverts for the zero recipient address

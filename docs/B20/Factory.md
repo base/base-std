@@ -18,6 +18,12 @@ Variant-specific creation arguments, ABI-encoded as a versioned struct (one stru
 
 An optional array of ABI-encoded calls dispatched on the new token immediately after creation. These let you configure anything beyond the variant's defined `params` — role grants, mint operations, policy scopes, contract URI, and so on. They execute on the new token as if the factory were the admin, so admin-gated operations are permitted within this window. The factory itself receives no official roles and has no persisted access to the token.
 
+The bootstrap bypass is deliberately **not total**. During the window, factory-originated calls skip the token's role gates and its transfer-side policy gates (`TRANSFER_SENDER_POLICY`, `TRANSFER_RECEIVER_POLICY`, `TRANSFER_EXECUTOR_POLICY`), but:
+
+- **`MINT_RECEIVER_POLICY` is always enforced**, even for factory-originated mints — new supply is never issued to a policy-denied recipient, even at creation. If your `initCalls` set a restrictive `MINT_RECEIVER_POLICY` and then mint to a non-authorized account in the same bundle, the mint reverts `PolicyForbids` and the whole `createB20` reverts. Sequence the mint before the restrictive policy, or mint to an authorized recipient.
+- **Pause is never bypassed.** It defaults to nothing-paused at creation, so a start-paused configuration must sequence its `pause(...)` call last.
+- **Token invariants** (supply-cap math, balance accounting) are never bypassed.
+
 Build the array with [`B20FactoryLib`](../../src/lib/B20FactoryLib.sol) helpers (or encode manually):
 
 ```solidity
