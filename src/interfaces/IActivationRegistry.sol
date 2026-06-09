@@ -4,6 +4,12 @@ pragma solidity >=0.8.20 <0.9.0;
 /// @title IActivationRegistry
 /// @notice Singleton precompile that gates Base-native features behind an activation admin. Each feature
 ///         is identified by an opaque `bytes32` id and is either active or inactive.
+///
+/// @dev    INTEGRATION NOTE — do not use code presence as a feature gate. The precompile writes a
+///         bytecode marker to its own storage account on the first successful `activate` call and does
+///         not clear it when features are subsequently deactivated. `EXTCODESIZE` and `EXTCODEHASH` at
+///         this address therefore reflect initialisation state, not live activation state. Always use
+///         `isActivated(feature)` as the authoritative signal.
 interface IActivationRegistry {
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
