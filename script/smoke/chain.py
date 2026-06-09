@@ -9,6 +9,7 @@ use `eth_call` against the node, so the real precompiles execute (no local EVM).
 
 from __future__ import annotations
 
+import json
 import sys
 
 from eth_account import Account
@@ -68,6 +69,7 @@ class Chain:
 
         self._receipts: list[TxReceipt] = []
         self._user2_funded = False
+        self.trace = cfg.trace
 
     # ── contracts at an address ─────────────────────────────────────────────
     def asset_at(self, address: ChecksumAddress) -> Contract:
@@ -86,6 +88,7 @@ class Chain:
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
         receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
         if receipt["status"] != 1:
+            self.trace_tx(tx_hash, label=f"{fn.fn_name} reverted")
             die(f"tx reverted: {fn.fn_name}")
         self._receipts.append(receipt)
         return receipt
@@ -112,9 +115,25 @@ class Chain:
         ok("user2 funded")
 
     # ── assertions ───────────────────────────────────────────────────────────
-    def assert_eq(self, got: object, want: object, desc: str) -> None:
+    def assert_eq(
+        self,
+        got: object,
+        want: object,
+        desc: str,
+        *,
+        repro_fn=None,
+        repro_overrides: dict | None = None,
+        repro_call: dict | None = None,
+        repro_tx: object | None = None,
+    ) -> None:
+        """Assert equality. On failure, dump the full RPC trace of the reproducing call/tx if provided.
+
+        Pass a `repro_*` so the diagnostic can replay the offending call: `repro_fn` (+`repro_overrides`)
+        for a bound contract function, `repro_call` for a hand-built tx dict, or `repro_tx` for a tx hash.
+        """
         gn, wn = _norm(got), _norm(want)
         if gn != wn:
+            self._diagnose(f"assert failed: {desc}", repro_fn, repro_overrides, repro_call, repro_tx)
             die(f"assert_eq failed [{desc}]: got={gn} want={wn}")
         ok(desc)
 
@@ -133,9 +152,11 @@ class Chain:
             if got == error_name:
                 ok(f"reverts {error_name}")
                 return
+            self._diagnose(f"revert mismatch: want {error_name}", repro_fn=fn, repro_overrides={"from": frm})
             die(f"revert mismatch: got={got!r} want={error_name} (raw: {data or exc})")
         except Exception as exc:  # noqa: BLE001 - surface any non-revert failure
             die(f"expected revert {error_name} but call raised {type(exc).__name__}: {exc}")
+        self._diagnose(f"expected revert {error_name} but call succeeded", repro_fn=fn, repro_overrides={"from": frm})
         die(f"expected revert {error_name} but call succeeded")
 
     def assert_log_order(self, receipt: TxReceipt, sig_a: str, sig_b: str, desc: str) -> None:
@@ -155,6 +176,182 @@ class Chain:
         if missing:
             die(f"expected events not emitted [{desc}]: {', '.join(missing)}")
         ok(f"{desc} ({len(signatures)} event type{'s' if len(signatures) != 1 else ''} confirmed emitted)")
+
+    # ── deploy / raw low-level calls ──────────────────────────────────────────
+    def deploy(self, abi: list, bytecode: str, *args, account: LocalAccount | None = None) -> Contract:
+        """Deploy a contract from abi+bytecode and return a bound handle (used for the probe)."""
+        account = account or self.deployer
+        factory = self.w3.eth.contract(abi=abi, bytecode=bytecode)
+        tx = factory.constructor(*args).build_transaction(
+            {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
+        )
+        signed = account.sign_transaction(tx)
+        receipt = self.w3.eth.wait_for_transaction_receipt(self.w3.eth.send_raw_transaction(signed.raw_transaction))
+        if receipt["status"] != 1 or not receipt.get("contractAddress"):
+            die("contract deploy reverted")
+        return self.w3.eth.contract(address=receipt["contractAddress"], abi=abi)
+
+    def raw_call(self, to: ChecksumAddress, data: bytes, *, value: int = 0, frm: ChecksumAddress | None = None) -> bytes:
+        """eth_call with hand-built calldata; returns raw return bytes (traces + raises on revert)."""
+        tx = {"to": to, "from": frm or self.DEPLOYER, "data": HexBytes(data), "value": value}
+        try:
+            return bytes(self.w3.eth.call(tx))
+        except Exception:
+            self.trace_call(tx, label="raw_call reverted")
+            raise
+
+    def expect_raw_revert(
+        self,
+        desc: str,
+        to: ChecksumAddress,
+        data: bytes,
+        *,
+        value: int = 0,
+        frm: ChecksumAddress | None = None,
+        error_name: str | None = None,
+    ) -> None:
+        """Simulate a hand-built call; assert it reverts. Optionally match the custom-error selector."""
+        tx = {"to": to, "from": frm or self.DEPLOYER, "data": HexBytes(data), "value": value}
+        try:
+            self.w3.eth.call(tx)
+        except ContractLogicError as exc:
+            raw = getattr(exc, "data", None)
+            got = None
+            if isinstance(raw, str) and raw.startswith("0x") and len(raw) >= 10:
+                got = ERROR_BY_SELECTOR.get(raw[:10].lower())
+            if error_name is not None and got != error_name:
+                self._diagnose(f"{desc}: revert mismatch", repro_call=tx)
+                die(f"{desc}: revert mismatch got={got!r} want={error_name} (raw: {raw or exc})")
+            ok(f"{desc} (reverts{f' {got}' if got else ''})")
+            return
+        except Exception as exc:  # noqa: BLE001 - any node-level rejection still counts as "not accepted"
+            ok(f"{desc} (rejected: {type(exc).__name__})")
+            return
+        self._diagnose(f"{desc}: expected revert but call succeeded", repro_call=tx)
+        die(f"{desc}: expected revert but call succeeded")
+
+    def send_expecting_revert(self, fn, account: LocalAccount, *, gas: int = 2_000_000) -> TxReceipt:
+        """Broadcast a real tx with explicit gas (skips estimation) and assert the receipt reverted."""
+        tx = fn.build_transaction(
+            {
+                "from": account.address,
+                "nonce": self.w3.eth.get_transaction_count(account.address),
+                "gas": gas,
+            }
+        )
+        signed = account.sign_transaction(tx)
+        tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
+        receipt = self.w3.eth.wait_for_transaction_receipt(tx_hash)
+        if receipt["status"] != 0:
+            self.trace_tx(tx_hash, label=f"{fn.fn_name} unexpectedly succeeded")
+            die(f"expected on-chain revert but tx succeeded: {fn.fn_name}")
+        return receipt
+
+    # ── rpc tracing (failure diagnostics) ─────────────────────────────────────
+    def _diagnose(
+        self,
+        label: str,
+        repro_fn=None,
+        repro_overrides: dict | None = None,
+        repro_call: dict | None = None,
+        repro_tx: object | None = None,
+    ) -> None:
+        """Best-effort: dump the full RPC trace of the offending call/tx. Never masks the real failure."""
+        try:
+            if repro_fn is not None:
+                self.trace_call(self._fn_call_tx(repro_fn, repro_overrides), label=label)
+            elif repro_call is not None:
+                self.trace_call(repro_call, label=label)
+            elif repro_tx is not None:
+                self.trace_tx(repro_tx, label=label)
+        except Exception as exc:  # noqa: BLE001 - diagnostics must not raise over the assertion
+            log(f"(diagnostics failed: {type(exc).__name__}: {exc})")
+
+    def _fn_call_tx(self, fn, overrides: dict | None = None) -> dict:
+        """Reconstruct the eth_call tx dict for a bound contract function (for replay/trace)."""
+        handle = self.w3.eth.contract(abi=fn.contract_abi)
+        data = HexBytes(handle.encode_abi(fn.fn_name, args=list(fn.args)))
+        tx = {"to": fn.address, "from": (overrides or {}).get("from", self.DEPLOYER), "data": data}
+        if overrides and overrides.get("value"):
+            tx["value"] = overrides["value"]
+        return tx
+
+    def _rpc_tx(self, tx: dict) -> dict:
+        """Hex-encode a tx dict for the JSON-RPC debug_* params object."""
+        out: dict = {}
+        for key in ("from", "to"):
+            if tx.get(key) is not None:
+                out[key] = tx[key]
+        data = tx.get("data")
+        if data is not None:
+            out["data"] = data if isinstance(data, str) else "0x" + bytes(data).hex()
+        if tx.get("value"):
+            out["value"] = hex(int(tx["value"]))
+        if tx.get("gas"):
+            out["gas"] = hex(int(tx["gas"]))
+        return out
+
+    def trace_call(self, tx: dict, *, block: str = "latest", label: str = "failed eth_call") -> None:
+        """Print the exact eth_call request and a debug_traceCall (callTracer) call tree."""
+        data = tx.get("data")
+        dhex = data if isinstance(data, str) else "0x" + bytes(data or b"").hex()
+        log(f"\u2500\u2500 rpc trace: {label} \u2500\u2500")
+        log(f"  eth_call to={tx.get('to')} from={tx.get('from')} value={tx.get('value', 0)}")
+        log(f"  selector={dhex[:10]} data={dhex}")
+        if not self.trace:
+            log("  (debug trace disabled; set SMOKE_TRACE=1 for the full call tree)")
+            self._print_revert_data(tx, block)
+            return
+        resp = self.w3.provider.make_request(
+            "debug_traceCall", [self._rpc_tx(tx), block, {"tracer": "callTracer", "tracerConfig": {"withLog": True}}]
+        )
+        self._print_trace_response(resp, fallback_tx=tx, block=block)
+
+    def trace_tx(self, tx_hash: object, *, label: str = "failed tx") -> None:
+        """Print receipt summary and a debug_traceTransaction (callTracer) call tree."""
+        h = tx_hash.hex() if isinstance(tx_hash, (bytes, bytearray)) else str(tx_hash)
+        if not h.startswith("0x"):
+            h = "0x" + h
+        log(f"\u2500\u2500 rpc trace: {label} \u2500\u2500")
+        log(f"  tx={h}")
+        try:
+            rcpt = self.w3.eth.get_transaction_receipt(tx_hash)
+            log(f"  status={rcpt['status']} gasUsed={rcpt['gasUsed']} block={rcpt['blockNumber']}")
+        except Exception:  # noqa: BLE001 - receipt is best-effort context
+            pass
+        if not self.trace:
+            log("  (debug trace disabled; set SMOKE_TRACE=1 for the full call tree)")
+            return
+        resp = self.w3.provider.make_request(
+            "debug_traceTransaction", [h, {"tracer": "callTracer", "tracerConfig": {"withLog": True}}]
+        )
+        self._print_trace_response(resp)
+
+    def _print_trace_response(self, resp: dict, *, fallback_tx: dict | None = None, block: str = "latest") -> None:
+        err = resp.get("error")
+        if err:
+            log(f"  debug trace unavailable: {err.get('message', err) if isinstance(err, dict) else err}")
+            if fallback_tx is not None:
+                self._print_revert_data(fallback_tx, block)
+            return
+        log("  callTracer:")
+        print(json.dumps(resp.get("result"), indent=2, default=str), file=sys.stderr)
+
+    def _print_revert_data(self, tx: dict, block: str) -> None:
+        """Fallback when debug_* is unsupported: replay the eth_call and decode any revert bytes."""
+        try:
+            self.w3.eth.call(
+                {"to": tx.get("to"), "from": tx.get("from"), "data": HexBytes(tx.get("data") or b""),
+                 "value": tx.get("value", 0)},
+                block,
+            )
+            log("  replay: eth_call succeeded (no revert data)")
+        except ContractLogicError as exc:
+            raw = getattr(exc, "data", None)
+            name = ERROR_BY_SELECTOR.get(raw[:10].lower()) if isinstance(raw, str) and len(raw) >= 10 else None
+            log(f"  replay revert: data={raw} ({name or 'unknown/empty selector'})")
+        except Exception as exc:  # noqa: BLE001 - surface whatever the node said
+            log(f"  replay error: {type(exc).__name__}: {exc}")
 
     # ── factory / policy helpers ──────────────────────────────────────────────
     def predict_b20(self, variant: int, salt: bytes, sender: ChecksumAddress | None = None) -> ChecksumAddress:

@@ -24,3 +24,16 @@ STABLECOIN_ABI = _load("IB20Stablecoin")
 POLICY_ABI = _load("IPolicyRegistry")
 
 ALL_ABIS = [FACTORY_ABI, ASSET_ABI, STABLECOIN_ABI, POLICY_ABI]
+
+
+def probe_artifact() -> tuple[list[dict[str, Any]], str]:
+    """abi + creation bytecode for PrecompileProbe (emitted by `make smoke-bindings`).
+
+    The probe is the one helper the harness deploys, so unlike the interface ABIs it needs bytecode
+    too. The artifact is regenerated from forge `out/` rather than committed by hand.
+    """
+    path = _DIR / "PrecompileProbe.json"
+    if not path.exists():
+        raise SystemExit("[smoke] ERROR: script/smoke/abi/PrecompileProbe.json missing; run `make smoke-bindings`")
+    art = json.loads(path.read_text())
+    return art["abi"], art["bytecode"]

@@ -77,6 +77,7 @@ class Config:
     gas_float_wei: int
     run_nonce: str
     salt_pinned: bool
+    trace: bool
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -88,6 +89,9 @@ class Config:
 
         pinned = os.environ.get("SMOKE_SALT")
         gas_ether = os.environ.get("GAS_FLOAT_ETHER", "0.01")
+        # Failure diagnostics emit a debug_traceCall/Transaction call tree. On by default (only fires on
+        # failures); set SMOKE_TRACE=0 to print just the request + replayed revert data instead.
+        trace = os.environ.get("SMOKE_TRACE", "1").strip().lower() not in ("0", "false", "off", "no", "")
         return cls(
             rpc_url=need("RPC_URL"),
             deployer_pk=need("DEPLOYER_PK"),
@@ -95,6 +99,7 @@ class Config:
             gas_float_wei=Web3.to_wei(gas_ether, "ether"),
             run_nonce=pinned or secrets.token_hex(16),
             salt_pinned=pinned is not None,
+            trace=trace,
         )
 
     def salt_for(self, journey: str) -> bytes:
