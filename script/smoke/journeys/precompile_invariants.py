@@ -151,15 +151,6 @@ def _atomicity(c: Chain, probe) -> None:
 
 
 def _create_gas_independent_of_prefunded_balance(c: Chain, _probe) -> None:
-    # Finding (b20-precompile-selfdestruct-audit.md): the factory decides "already deployed?" on
-    # code-hash only, but set_code decides whether to charge the CREATE + EIP-8037 state-expansion
-    # gas via AccountInfo::is_empty(), which is false the moment an address holds any balance. So a
-    # token address that was force-fed ether (SELFDESTRUCT / coinbase / genesis — paths a callvalue
-    # guard cannot block) still creates, but skips the state gas the network is owed. Desired
-    # invariant: createB20 gas is a function of its calldata, NOT of the target's pre-existing balance.
-    #
-    # Two identical creations (same calldata, fresh disjoint addresses) so the only variable is whether
-    # the target was pre-funded. If pre-funding makes creation cheaper, that's the divergence.
     params = AssetCreateParams("GasProbe", "GASP", c.DEPLOYER, config.ASSET_DECIMALS).encode()
 
     salt_ctrl = c.cfg.salt_for("invariants-gas-control")
