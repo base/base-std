@@ -1,6 +1,6 @@
 """Chain harness: provider, signers, send/read, revert + event assertions.
 
-Wraps web3 + the committed interface ABIs so journeys read like the contract
+Wraps web3 + the interface ABIs (read from forge `out/`) so journeys read like the contract
 API. Every mutating call goes through `send`, which signs, broadcasts to the
 live node, waits for the receipt, asserts success, and records it for the
 flow-level `assert_events_emitted` check. Reads and expected-revert simulations
@@ -11,6 +11,9 @@ from __future__ import annotations
 
 import json
 import sys
+import time
+import urllib.error
+import urllib.request
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
@@ -113,6 +116,82 @@ class Chain:
             die("failed to fund user2")
         self._user2_funded = True
         ok("user2 funded")
+
+    # ── activation preflight ──────────────────────────────────────────────────
+    def features_activated(self) -> tuple[bool, str]:
+        """Check the b20 features are switched on via the ActivationRegistry (the authoritative gate).
+
+        The b20/policy precompiles are installed at fork >= Beryl and each feature is individually gated by
+        the ActivationRegistry. `isActivated(bytes32)` is a never-revert view returning a bool. If the
+        registry itself isn't installed (fork < Beryl) the call falls through to account state — an empty
+        account returns `0x`, stub bytecode hits an invalid opcode — which we report as "registry not
+        installed". A clean `false` means the feature exists but isn't activated. In any of these cases the
+        invariant/lifecycle checks would be testing environment state, not contract logic, so the caller
+        skips the journey instead of reporting findings. Returns (active, reason-if-not).
+        """
+        selector = bytes(Web3.keccak(text="isActivated(bytes32)")[:4])
+        for label, feature in (
+            ("base.b20_asset", config.FEATURE_B20_ASSET),
+            ("base.b20_stablecoin", config.FEATURE_B20_STABLECOIN),
+            ("base.policy_registry", config.FEATURE_POLICY_REGISTRY),
+        ):
+            try:
+                ret = bytes(
+                    self.w3.eth.call(
+                        {"to": config.ACTIVATION_REGISTRY, "from": self.DEPLOYER, "data": HexBytes(selector + bytes(feature))}
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 - reverting view => registry not intercepting
+                return False, f"ActivationRegistry not installed (isActivated errored: {type(exc).__name__}) — fork < Beryl?"
+            if len(ret) != 32:
+                return False, f"ActivationRegistry not installed (isActivated returned {len(ret)} bytes) — fork < Beryl?"
+            if int.from_bytes(ret, "big") == 0:
+                return False, f"feature '{label}' is not activated on this chain"
+        return True, ""
+
+    # ── faucet preflight ──────────────────────────────────────────────────────
+    def ensure_deployer_funded(self) -> None:
+        """Top up the deployer via the configured faucet if its balance is below the floor.
+
+        Internal dev chains (e.g. base-zeronet) are periodically nuked, which wipes the deployer's
+        balance. This is opt-in and idempotent: it checks the balance first and only calls the faucet
+        when underfunded, so it is a no-op on a persistently funded chain. URL + network come from
+        `.env` (`FAUCET_URL`, `FAUCET_NETWORK`); amount and floor default but are overridable.
+        """
+        bal = self.w3.eth.get_balance(self.DEPLOYER)
+        if bal >= self.cfg.faucet_min_wei:
+            return
+        if not (self.cfg.faucet_url and self.cfg.faucet_network):
+            die(
+                f"deployer {self.DEPLOYER} underfunded ({bal} wei < {self.cfg.faucet_min_wei}) and no "
+                "faucet configured (set FAUCET_URL + FAUCET_NETWORK in .env)"
+            )
+        step("faucet", f"deployer balance {bal} wei < floor; requesting {self.cfg.faucet_amount} ETH")
+        self._request_faucet(self.DEPLOYER, self.cfg.faucet_amount)
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            bal = self.w3.eth.get_balance(self.DEPLOYER)
+            if bal >= self.cfg.faucet_min_wei:
+                ok(f"deployer funded: {bal} wei")
+                return
+            time.sleep(2)
+        die(f"deployer still underfunded after faucet request ({bal} wei < {self.cfg.faucet_min_wei})")
+
+    def _request_faucet(self, address: ChecksumAddress, amount: str) -> None:
+        """POST the faucet a top-up request for `address`. Blocks until the HTTP call returns."""
+        payload = json.dumps(
+            {"network": self.cfg.faucet_network, "token": "eth", "amount": amount, "address": address}
+        ).encode()
+        req = urllib.request.Request(
+            self.cfg.faucet_url, data=payload, headers={"content-type": "application/json"}, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                log(f"faucet HTTP {resp.status}: {resp.read(500).decode('utf-8', 'replace')}")
+        except urllib.error.HTTPError as exc:
+            die(f"faucet request failed: HTTP {exc.code} {exc.read(500).decode('utf-8', 'replace')}")
+        except Exception as exc:  # noqa: BLE001 - network/timeout; surface clearly
+            die(f"faucet request error: {type(exc).__name__}: {exc}")
 
     # ── assertions ───────────────────────────────────────────────────────────
     def assert_eq(

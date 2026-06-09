@@ -2,8 +2,10 @@
 
 Journeys: factory, asset, stablecoin, policy, invariants — or `all` to run every
 journey in sequence. Env (RPC_URL / DEPLOYER_PK / USER2_PK) is sourced by the
-Makefile from .env; running directly requires it exported. The target chain is
-assumed to already have the b20 features activated.
+Makefile from .env; running directly requires it exported. A preflight liveness
+probe checks the b20 precompiles are actually active on the target chain (fork
+>= Beryl); if not, the journey is skipped rather than reporting environment state
+(inactive feature → account-state fall-through) as contract defects.
 
 Flags:
   -k, --keep-going   Run every selected journey even if one fails, print a summary,
@@ -60,31 +62,42 @@ def main(argv: list[str]) -> None:
     selected, keep_going = _plan(argv)
     cfg = config.Config.from_env()
 
-    results: list[tuple[str, bool, str]] = []
+    results: list[tuple[str, str, str]] = []  # (name, status: pass|fail|skip, detail)
     for name in selected:
         chain = Chain(cfg)
-        log(f"preflight ok \u2014 chain={chain.chain_id} deployer={chain.DEPLOYER}")
+        log(f"preflight ok \u2014 chain={chain.chain_id} block={chain.w3.eth.block_number} deployer={chain.DEPLOYER}")
         log(f"run nonce: {cfg.run_nonce}" + (" (pinned via SMOKE_SALT)" if cfg.salt_pinned else ""))
+        chain.ensure_deployer_funded()
+        active, why = chain.features_activated()
+        if not active:
+            log(f"b20 features NOT ACTIVE on chain {chain.chain_id}: {why}")
+            log("Chain/fork-activation state, NOT a contract defect \u2014 skipping (use the ActivationRegistry to enable).")
+            results.append((name, "skip", why))
+            continue
         module = importlib.import_module(JOURNEYS[name])
         try:
             module.run(chain)
-            results.append((name, True, ""))
+            results.append((name, "pass", ""))
         except SystemExit as exc:
             if not keep_going:
                 raise
-            results.append((name, False, str(exc.code or "").replace("[smoke] ERROR: ", "")))
+            results.append((name, "fail", str(exc.code or "").replace("[smoke] ERROR: ", "")))
         except Exception as exc:  # noqa: BLE001 - keep-going turns any journey crash into a recorded failure
             if not keep_going:
                 raise
-            results.append((name, False, f"{type(exc).__name__}: {exc}"))
+            results.append((name, "fail", f"{type(exc).__name__}: {exc}"))
 
     if not keep_going:
         return
 
-    failed = [r for r in results if not r[1]]
-    log(f"smoke summary: {len(results) - len(failed)}/{len(results)} journeys passed")
-    for name, _, detail in failed:
+    passed = sum(1 for _, status, _ in results if status == "pass")
+    failed = [(n, d) for n, status, d in results if status == "fail"]
+    skipped = [(n, d) for n, status, d in results if status == "skip"]
+    log(f"smoke summary: {passed} passed, {len(failed)} failed, {len(skipped)} skipped (of {len(results)})")
+    for name, detail in failed:
         log(f"  \u2717 {name} \u2014 {detail}")
+    for name, detail in skipped:
+        log(f"  \u2298 {name} \u2014 {detail}")
     # --keep-going asks the suite NOT to error on failure: report and exit 0.
 
 

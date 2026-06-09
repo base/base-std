@@ -17,6 +17,13 @@ from web3 import Web3
 # Precompile addresses (from StdPrecompiles.sol — public, stable singletons).
 B20_FACTORY: ChecksumAddress = Web3.to_checksum_address("0xB20f000000000000000000000000000000000000")
 POLICY_REGISTRY: ChecksumAddress = Web3.to_checksum_address("0x8453000000000000000000000000000000000002")
+ACTIVATION_REGISTRY: ChecksumAddress = Web3.to_checksum_address("0x8453000000000000000000000000000000000001")
+
+# Feature ids gating the b20 precompiles, queried via ActivationRegistry.isActivated (the authoritative
+# activation gate). Names mirror test/lib/mocks/ActivationRegistryFeatureList.sol.
+FEATURE_B20_ASSET = Web3.keccak(text="base.b20_asset")
+FEATURE_B20_STABLECOIN = Web3.keccak(text="base.b20_stablecoin")
+FEATURE_POLICY_REGISTRY = Web3.keccak(text="base.policy_registry")
 
 ZERO: ChecksumAddress = Web3.to_checksum_address("0x" + "00" * 20)
 
@@ -78,6 +85,10 @@ class Config:
     run_nonce: str
     salt_pinned: bool
     trace: bool
+    faucet_url: str
+    faucet_network: str
+    faucet_amount: str
+    faucet_min_wei: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -92,6 +103,9 @@ class Config:
         # Failure diagnostics emit a debug_traceCall/Transaction call tree. On by default (only fires on
         # failures); set SMOKE_TRACE=0 to print just the request + replayed revert data instead.
         trace = os.environ.get("SMOKE_TRACE", "1").strip().lower() not in ("0", "false", "off", "no", "")
+        # Optional faucet top-up for the deployer (internal dev chains get nuked, wiping its balance).
+        # Host/network stay in .env (gitignored) so no internal reference lands in committed code. Funding
+        # only fires when the balance is below FAUCET_MIN_ETHER and both URL + network are set.
         return cls(
             rpc_url=need("RPC_URL"),
             deployer_pk=need("DEPLOYER_PK"),
@@ -100,6 +114,10 @@ class Config:
             run_nonce=pinned or secrets.token_hex(16),
             salt_pinned=pinned is not None,
             trace=trace,
+            faucet_url=os.environ.get("FAUCET_URL", "").strip(),
+            faucet_network=os.environ.get("FAUCET_NETWORK", "").strip(),
+            faucet_amount=os.environ.get("FAUCET_AMOUNT", "0.05").strip(),
+            faucet_min_wei=Web3.to_wei(os.environ.get("FAUCET_MIN_ETHER", "0.02"), "ether"),
         )
 
     def salt_for(self, journey: str) -> bytes:

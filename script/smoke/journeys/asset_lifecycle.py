@@ -115,10 +115,19 @@ def _edges(c: Chain, tok) -> None:
     c.send(tok.functions.updateSupplyCap(total), c.deployer)
     c.expect_revert("SupplyCapExceeded", tok.functions.mint(c.ALICE, 1), c.DEPLOYER)
 
-    step(12, "pause TRANSFER: transfer reverts ContractPaused; unpause restores")
+    step("11b", "transfer insufficient balance -> InsufficientBalance (user2 holds 0 tokens)")
+    c.expect_revert("InsufficientBalance", tok.functions.transfer(c.BOB, config.amt(1, 18)), c.USER2)
+
+    step("11c", "transferFrom insufficient allowance -> InsufficientAllowance (allowance consumed in step 5)")
+    c.expect_revert("InsufficientAllowance", tok.functions.transferFrom(c.DEPLOYER, c.BOB, config.amt(1, 18)), c.USER2)
+
+    step(12, "pause TRANSFER: transfer AND transferFrom revert ContractPaused; unpause restores")
+    # Approve user2 first so transferFrom clears the allowance check and the pause gate is the binding revert.
+    c.send(tok.functions.approve(c.USER2, config.amt(5, 18)), c.deployer)
     c.send(tok.functions.pause([config.FEATURE_TRANSFER]), c.deployer)
     c.assert_eq(tok.functions.isPaused(config.FEATURE_TRANSFER).call(), True, "TRANSFER paused")
     c.expect_revert("ContractPaused", tok.functions.transfer(c.BOB, 1), c.DEPLOYER)
+    c.expect_revert("ContractPaused", tok.functions.transferFrom(c.DEPLOYER, c.BOB, config.amt(1, 18)), c.USER2)
     c.send(tok.functions.unpause([config.FEATURE_TRANSFER]), c.deployer)
     c.assert_eq(tok.functions.isPaused(config.FEATURE_TRANSFER).call(), False, "TRANSFER unpaused")
     c.send(tok.functions.transfer(c.BOB, config.amt(1, 18)), c.deployer)

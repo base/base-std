@@ -28,6 +28,7 @@ from web3 import Web3
 from .. import config
 from ..abis import probe_artifact
 from ..chain import Chain, log, ok, step
+from ..codec import AssetCreateParams, init_call
 
 FACTORY = config.B20_FACTORY
 POLICY = config.POLICY_REGISTRY
@@ -126,13 +127,27 @@ def _oog_contained(c: Chain, probe) -> None:
 
 
 def _atomicity(c: Chain, probe) -> None:
-    # Single-writer assumption: the smoke chain is driven by one deployer, so policy ids are sequential
-    # within this run. A reverted creation in between must NOT consume an id.
-    create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
-    id1 = c.create_policy(c.DEPLOYER, ALLOWLIST)
-    c.send_expecting_revert(probe.functions.callThenRevert(POLICY, create_data), c.deployer)
-    id2 = c.create_policy(c.DEPLOYER, ALLOWLIST)
-    c.assert_eq(id2 - id1, 1, "reverted createPolicy consumed no policy id")
+    # A reverted mint must leave totalSupply/balances untouched AND commit no Transfer log. Deploy a
+    # token, grant the probe MINT_ROLE (bootstrap window bypasses the role gate), then have the probe
+    # mint-then-revert in a single tx and assert nothing persisted.
+    salt = c.cfg.salt_for("invariants-atomicity")
+    params = AssetCreateParams("Atomic", "ATOM", c.DEPLOYER, config.ASSET_DECIMALS).encode()
+    tok_addr = c.predict_b20(config.VARIANT_ASSET, salt)
+    c.create_b20(
+        config.VARIANT_ASSET, salt, params, [init_call(c.asset_abi, "grantRole", config.MINT_ROLE, probe.address)]
+    )
+    tok = c.asset_at(tok_addr)
+
+    supply_before = tok.functions.totalSupply().call()
+    alice_before = tok.functions.balanceOf(c.ALICE).call()
+    mint_data = init_call(c.asset_abi, "mint", c.ALICE, config.amt(1000, 18))
+    receipt = c.send_expecting_revert(probe.functions.callThenRevert(tok_addr, mint_data), c.deployer)
+
+    transfer_topic = HexBytes(Web3.keccak(text="Transfer(address,address,uint256)"))
+    committed = any(lg["topics"] and HexBytes(lg["topics"][0]) == transfer_topic for lg in receipt["logs"])
+    c.assert_eq(committed, False, "reverted mint committed no Transfer log")
+    c.assert_eq(tok.functions.totalSupply().call(), supply_before, "totalSupply unchanged after reverted mint")
+    c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), alice_before, "alice balance unchanged after reverted mint")
 
 
 # Ordered audit checklist: (name, fn). `name` doubles as the INFORMATIONAL downgrade key.
@@ -147,7 +162,7 @@ CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
     ("value forwarding rejected through a contract", _value_forwarding_rejected),
     ("returndata fidelity (RETURNDATACOPY of revert payload)", _returndata_fidelity),
     ("OOG contained to sub-call", _oog_contained),
-    ("revert atomicity (no committed state on rollback)", _atomicity),
+    ("revert atomicity (reverted mint: no Transfer log, supply/balance unchanged)", _atomicity),
 ]
 
 

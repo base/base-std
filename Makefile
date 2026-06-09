@@ -1,4 +1,4 @@
-.PHONY: coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup smoke-bindings
+.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup
 
 # Generate an lcov coverage report and open it in the browser.
 # Scoped to src/ and test/lib/mocks/ (excludes test runner files and the smoke probe helper).
@@ -22,20 +22,16 @@ smoke-setup:
 	$(VENV)/bin/python -m pip install --upgrade pip
 	$(VENV)/bin/python -m pip install -r script/smoke/requirements.txt
 
-# Refresh the committed interface ABIs from the compiled artifacts. Only needed
-# when the interfaces change (the harness binds to these via plain web3). Also
-# emits the PrecompileProbe artifact (abi + bytecode) the invariants journey deploys.
-smoke-bindings:
+# Compile the contracts. The smoke harness binds to the interface ABIs and the
+# PrecompileProbe artifact straight from `out/` (gitignored), so every smoke
+# target depends on this — the ABIs always match the current source.
+build:
 	forge build
-	@for c in IB20Factory IB20Asset IB20Stablecoin IPolicyRegistry; do \
-	  jq '.abi' "out/$$c.sol/$$c.json" > "script/smoke/abi/$$c.json" && echo "refreshed $$c.json"; \
-	done
-	@jq '{abi: .abi, bytecode: .bytecode.object}' out/PrecompileProbe.sol/PrecompileProbe.json \
-	  > script/smoke/abi/PrecompileProbe.json && echo "refreshed PrecompileProbe.json"
 
-# b20 precompile bring-up smoketest (web3.py + committed interface ABIs). Sends
-# real txs to $RPC_URL; requires env RPC_URL, DEPLOYER_PK, USER2_PK and a venv
-# (`make smoke-setup`). `make smoke` runs every journey fail-fast.
+# b20 precompile bring-up smoketest (web3.py + the interface ABIs read from
+# `out/`). Sends real txs to $RPC_URL; requires env RPC_URL, DEPLOYER_PK,
+# USER2_PK and a venv (`make smoke-setup`). `make smoke` runs every journey
+# fail-fast.
 smoke: smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants
 
 # Run every journey in a single process. KEEP_GOING=1 runs them all and reports a
@@ -43,20 +39,20 @@ smoke: smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants
 # exits non-zero on the first failure (CI gating).
 #   make smoke-all                # fail-fast
 #   make smoke-all KEEP_GOING=1   # run all, report, exit 0
-smoke-all:
+smoke-all: build
 	@$(SMOKE_RUN) all $(if $(KEEP_GOING),--keep-going,)
 
-smoke-factory:
+smoke-factory: build
 	@$(SMOKE_RUN) factory
 
-smoke-asset:
+smoke-asset: build
 	@$(SMOKE_RUN) asset
 
-smoke-stablecoin:
+smoke-stablecoin: build
 	@$(SMOKE_RUN) stablecoin
 
-smoke-policy:
+smoke-policy: build
 	@$(SMOKE_RUN) policy
 
-smoke-invariants:
+smoke-invariants: build
 	@$(SMOKE_RUN) invariants
