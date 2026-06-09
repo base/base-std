@@ -7,7 +7,7 @@ under test/lib/mocks/ has at least one test calling it. Uses the lcov report
 as the source of truth rather than parsing Solidity files.
 
 Usage:
-  python3 scripts/check-coverage.py
+  python3 script/check-coverage.py
 """
 
 import subprocess

@@ -13,6 +13,12 @@ broadcast/
 .env.*
 !.env.example
 
+# Python smoketest (script/smoke): venv + bytecode caches. The interface ABIs
+# under script/smoke/abi/ ARE committed (refresh with `make smoke-bindings`).
+script/smoke/.venv/
+__pycache__/
+*.pyc
+
 # OS / editor
 .DS_Store
 *.swp

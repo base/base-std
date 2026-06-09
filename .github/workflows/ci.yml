@@ -170,7 +170,7 @@ jobs:
         id: check
         run: |
           set +e
-          output=$(python3 scripts/check-coverage.py 2>&1)
+          output=$(python3 script/check-coverage.py 2>&1)
           exit_code=$?
           echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
           {
