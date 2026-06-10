@@ -20,6 +20,9 @@ interface IB20Asset is IB20 {
     /// @notice `updateExtraMetadata` was called with an empty `key`.
     error InvalidMetadataKey();
 
+    /// @notice `updateMultiplier` was called with a zero multiplier.
+    error InvalidMultiplier();
+
     /// @notice A batched function was called with parallel arrays of differing lengths.
     ///
     /// @param leftLen  Length of the first array argument.
@@ -149,8 +152,9 @@ interface IB20Asset is IB20 {
     ///         derive from the new multiplier at read time. Emits `MultiplierUpdated`.
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
+    /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero.
     ///
-    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`.
+    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be non-zero.
     function updateMultiplier(uint256 newMultiplier) external;
 
     /*//////////////////////////////////////////////////////////////

@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
+import {MockB20AssetStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+
 contract B20AssetScaledBalanceOfTest is B20AssetTest {
     /// @notice Verifies scaledBalanceOf is zero for an account with no balance
     /// @dev Property: empty balance => zero scaled balance regardless of the multiplier.
@@ -47,17 +49,16 @@ contract B20AssetScaledBalanceOfTest is B20AssetTest {
         );
     }
 
-    /// @notice Verifies scaledBalanceOf applies the WAD fallback when the stored multiplier is explicitly zero
-    /// @dev A stored `multiplier` of zero is documented to resolve as `WAD_PRECISION` on the read
-    ///      surface, both pre-write (fresh slot) and post-explicit-zero-write. Tests the latter at
-    ///      the derived-function level so a refactor that reads the slot directly here would fail.
-    ///      See test_multiplier_success_zeroRestoresWadFallback for the base-level fallback assertion.
+    /// @notice Verifies scaledBalanceOf applies the WAD fallback when the stored multiplier is zero
+    /// @dev A stored `multiplier` of zero resolves as `WAD_PRECISION` on the read surface.
+    ///      `updateMultiplier(0)` now reverts (InvalidMultiplier), so we zero the slot via
+    ///      vm.store to isolate the read-path fallback from write-path validation.
     function test_scaledBalanceOf_success_explicitZeroMultiplierFallsBackToWad(address account, uint256 amount) public {
         _assumeValidActor(account);
         amount = bound(amount, 0, type(uint128).max);
         if (amount > 0) _mint(account, amount);
         _updateMultiplier(5e18); // seed a non-zero value first
-        _updateMultiplier(0); // then explicitly clear back to zero
+        vm.store(address(token), MockB20AssetStorage.multiplierSlot(), bytes32(0)); // zero the slot directly
         assertEq(
             asset().scaledBalanceOf(account), amount, "stored zero multiplier must produce identity (WAD fallback)"
         );

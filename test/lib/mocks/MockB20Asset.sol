@@ -133,6 +133,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     }
 
     function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
+        if (newMultiplier == 0) revert InvalidMultiplier();
         MockB20AssetStorage.layout().multiplier = newMultiplier;
         emit MultiplierUpdated(newMultiplier);
     }

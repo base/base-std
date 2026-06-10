@@ -33,12 +33,14 @@ contract B20AssetMultiplierTest is B20AssetTest {
         );
     }
 
-    /// @notice Verifies writing zero re-activates the WAD fallback
-    /// @dev Operator can revert to the default 1:1 multiplier by writing 0; the read surface's
-    ///      `stored == 0 ? WAD : stored` collapses zero back to WAD.
+    /// @notice Verifies the WAD fallback applies when the stored slot is zero after a prior write
+    /// @dev The read surface's `stored == 0 ? WAD : stored` sentinel applies regardless of whether
+    ///      zero was the initial value or was written directly to the slot. `updateMultiplier(0)`
+    ///      now reverts (InvalidMultiplier), so we zero the slot via vm.store to isolate the
+    ///      read-path fallback from the write-path validation.
     function test_multiplier_success_zeroRestoresWadFallback() public {
         _updateMultiplier(5e18);
-        _updateMultiplier(0);
+        vm.store(address(token), MockB20AssetStorage.multiplierSlot(), bytes32(0));
         assertEq(asset().multiplier(), asset().WAD_PRECISION(), "multiplier must collapse to WAD after zero");
     }
 }

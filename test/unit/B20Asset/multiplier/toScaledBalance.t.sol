@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
+import {MockB20AssetStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+
 contract B20AssetToScaledBalanceTest is B20AssetTest {
     /// @notice Verifies toScaledBalance is the identity on a fresh token (WAD multiplier)
     /// @dev Default multiplier is WAD, so rawBalance * WAD / WAD == rawBalance for every input.
@@ -33,16 +35,14 @@ contract B20AssetToScaledBalanceTest is B20AssetTest {
         assertEq(asset().toScaledBalance(0), 0, "zero rawBalance must produce zero scaled balance");
     }
 
-    /// @notice Verifies toScaledBalance applies the WAD fallback when the stored multiplier is explicitly zero
-    /// @dev A stored `multiplier` of zero is documented to resolve as `WAD_PRECISION` on the read
-    ///      surface, both pre-write (fresh slot) and post-explicit-zero-write. Tests the latter:
-    ///      after writing zero, toScaledBalance must behave as if the multiplier were WAD
-    ///      (identity). Cross-references test_multiplier_success_zeroRestoresWadFallback at the
-    ///      derived-function level so a refactor that reads the slot directly here would fail.
+    /// @notice Verifies toScaledBalance applies the WAD fallback when the stored multiplier is zero
+    /// @dev A stored `multiplier` of zero resolves as `WAD_PRECISION` on the read surface.
+    ///      `updateMultiplier(0)` now reverts (InvalidMultiplier), so we zero the slot via
+    ///      vm.store to isolate the read-path fallback from write-path validation.
     function test_toScaledBalance_success_explicitZeroMultiplierFallsBackToWad(uint256 rawBalance) public {
         rawBalance = bound(rawBalance, 0, type(uint128).max);
         _updateMultiplier(5e18); // seed a non-zero value first
-        _updateMultiplier(0); // then explicitly clear back to zero
+        vm.store(address(token), MockB20AssetStorage.multiplierSlot(), bytes32(0)); // zero the slot directly
         assertEq(
             asset().toScaledBalance(rawBalance),
             rawBalance,
