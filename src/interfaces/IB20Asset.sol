@@ -45,12 +45,7 @@ interface IB20Asset is IB20 {
     /// @param call Offending raw calldata blob.
     error InternalCallFailed(bytes call);
 
-    /// @notice `updateMultiplier` was called with a zero multiplier. Zero
-    ///         is the uninitialized-storage sentinel and normalizes to WAD
-    ///         on every read, so writing zero through the public mutation
-    ///         path would emit `MultiplierUpdated(0)` while `multiplier()`
-    ///         returns `1e18` — a read/event inconsistency. Callers must
-    ///         pass a nonzero value.
+    /// @notice `updateMultiplier` was called with a zero multiplier.
     error InvalidMultiplier();
 
     /*//////////////////////////////////////////////////////////////
