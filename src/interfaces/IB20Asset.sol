@@ -45,9 +45,6 @@ interface IB20Asset is IB20 {
     /// @param call Offending raw calldata blob.
     error InternalCallFailed(bytes call);
 
-    /// @notice `updateMultiplier` was called with a zero multiplier.
-    error InvalidMultiplier();
-
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
