@@ -26,6 +26,12 @@ interface IB20 {
                                 ERRORS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice ETH was attached to a call targeting a nonpayable token selector.
+    ///
+    /// @dev The precompile checks `msg.value != 0` at the top of dispatch before any other
+    ///      validation. All B-20 token selectors are nonpayable.
+    error NonPayable();
+
     /// @notice `account` does not hold `neededRole`.
     ///
     /// @param account    Account that failed the role check.

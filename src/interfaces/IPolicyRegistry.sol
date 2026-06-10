@@ -23,6 +23,12 @@ interface IPolicyRegistry {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice ETH was attached to a call targeting a nonpayable policy registry selector.
+    ///
+    /// @dev The precompile checks `msg.value != 0` at the top of dispatch before any other
+    ///      validation. All policy registry selectors are nonpayable.
+    error NonPayable();
+
     /// @notice Caller is not the admin required by the attempted operation.
     error Unauthorized();
 
