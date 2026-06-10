@@ -1,4 +1,4 @@
-.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup smoke-local
+.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup
 
 # Generate an lcov coverage report and open it in the browser.
 # Scoped to src/ and test/lib/mocks/ (excludes test runner files and the smoke probe helper).
@@ -56,11 +56,3 @@ smoke-policy: build
 
 smoke-invariants: build
 	@$(SMOKE_RUN) invariants
-
-# Zero-config local run: spins up a `--base` anvil, activates the b20 features,
-# and runs every journey against it using anvil's pre-funded dev accounts (no
-# .env, no manual funding). Needs a base-anvil binary (see FORK_TESTING.md); the
-# script creates the venv and builds for you. For a journey subset or a remote
-# chain, call the script / `make smoke-*` directly — see script/smoke/README.md.
-smoke-local:
-	@./script/smoke/run-smoke-local.sh
