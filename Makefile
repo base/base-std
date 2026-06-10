@@ -1,3 +1,11 @@
+# Source the gitignored .env for the smoke recipes.
+LOAD_ENV = pre=$$(export -p); set -a; [ -f .env ] && . ./.env; set +a; eval "$$pre";
+
+PYTHON ?= python3.13
+VENV = script/smoke/.venv
+# `smoke` is the package at script/smoke/, so its parent (script) is on the path.
+SMOKE_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m smoke
+
 .PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup
 
 # Generate an lcov coverage report and open it in the browser.
@@ -7,14 +15,6 @@ coverage:
 	genhtml lcov.info --branch-coverage -o coverage --dark-mode --ignore-errors inconsistent,corrupt
 	open coverage/index.html
 
-# Source the gitignored .env (shell-style, not Make-native) for the smoke
-# recipes. Existing env wins: snapshot exports, source, then re-apply.
-LOAD_ENV = pre=$$(export -p); set -a; [ -f .env ] && . ./.env; set +a; eval "$$pre";
-
-PYTHON ?= python3.13
-VENV = script/smoke/.venv
-# `smoke` is the package at script/smoke/, so its parent (script) is on the path.
-SMOKE_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m smoke
 
 # One-time setup: create the smoketest venv and install web3.
 smoke-setup:
@@ -22,9 +22,7 @@ smoke-setup:
 	$(VENV)/bin/python -m pip install --upgrade pip
 	$(VENV)/bin/python -m pip install -r script/smoke/requirements.txt
 
-# Compile the contracts. The smoke harness binds to the interface ABIs and the
-# PrecompileProbe artifact straight from `out/` (gitignored), so every smoke
-# target depends on this — the ABIs always match the current source.
+# Compile the contracts.
 build:
 	forge build
 

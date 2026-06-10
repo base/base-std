@@ -54,12 +54,5 @@ quote_style = "double"
 bracket_spacing = false
 int_types = "long"
 
-# forge lint runs on every `forge build`. The test runners intentionally
-# exercise raw behavior (e.g. ignoring ERC20 transfer return values), so linting
-# them is pure noise — but the mocks under test/lib/mocks/ are quasi-production
-# code where findings (unsafe casts, block.timestamp, etc.) matter. So ignore
-# the runners (test/unit, test/regression) and the test/lib base contracts, but
-# NOT test/lib/mocks/ — leaving src/ and the mocks fully linted. (forge lint's
-# `ignore` does not honor `!` re-includes, so the mocks are kept in by omission.)
 [lint]
 ignore = ["test/unit/**/*.sol", "test/regression/**/*.sol", "test/lib/*.sol"]

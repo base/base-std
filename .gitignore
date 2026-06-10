@@ -14,9 +14,6 @@ broadcast/
 !.env.example
 !.env.template
 
-# Python smoketest (script/smoke): venv + bytecode caches. Interface ABIs are
-# read from the (gitignored) forge `out/` dir at runtime, so nothing under
-# script/smoke/ needs committing beyond the harness sources.
 script/smoke/.venv/
 __pycache__/
 *.pyc
