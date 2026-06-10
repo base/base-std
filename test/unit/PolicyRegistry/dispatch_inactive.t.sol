@@ -60,6 +60,29 @@ contract PolicyRegistryDispatchInactiveTest is PolicyRegistryTest {
         ];
     }
 
+    /// @dev Well-formed (ABI-decodable) calldata for write selector `idx`, ordered to match
+    ///      `_writeSelectors()`. The activation gate sits behind selector routing and ABI decode and
+    ///      fires before any argument validation, so the concrete values are immaterial — what matters
+    ///      is that the payload decodes cleanly and therefore reaches the gate.
+    function _writeCalldata(uint8 idx) internal pure returns (bytes memory) {
+        address[] memory accounts = new address[](1);
+        accounts[0] = address(0xBEEF);
+        if (idx == 0) {
+            return abi.encodeCall(IPolicyRegistry.createPolicy, (address(0xBEEF), IPolicyRegistry.PolicyType.ALLOWLIST));
+        }
+        if (idx == 1) {
+            return abi.encodeCall(
+                IPolicyRegistry.createPolicyWithAccounts,
+                (address(0xBEEF), IPolicyRegistry.PolicyType.ALLOWLIST, accounts)
+            );
+        }
+        if (idx == 2) return abi.encodeCall(IPolicyRegistry.stageUpdateAdmin, (uint64(1), address(0xBEEF)));
+        if (idx == 3) return abi.encodeCall(IPolicyRegistry.finalizeUpdateAdmin, (uint64(1)));
+        if (idx == 4) return abi.encodeCall(IPolicyRegistry.renounceAdmin, (uint64(1)));
+        if (idx == 5) return abi.encodeCall(IPolicyRegistry.updateAllowlist, (uint64(1), true, accounts));
+        return abi.encodeCall(IPolicyRegistry.updateBlocklist, (uint64(1), true, accounts));
+    }
+
     function _isKnownSelector(bytes4 selector) internal pure returns (bool) {
         bytes4[4] memory views = _viewSelectors();
         for (uint256 i = 0; i < views.length; i++) {
@@ -108,15 +131,18 @@ contract PolicyRegistryDispatchInactiveTest is PolicyRegistryTest {
         assertFalse(_isFeatureNotActivated(ret), "malformed view must reach decode, not the gate");
     }
 
-    /// @notice Write selectors stay gated by `FeatureNotActivated` while inactive.
-    /// @dev Gate fires before arg decode, so a bare (malformed) write selector still hits it.
+    /// @notice Well-formed write calls stay gated by `FeatureNotActivated` while inactive.
+    /// @dev The gate sits behind selector routing and ABI decode, so the payload must be well-formed
+    ///      to reach it: a bare selector would revert in decode instead, which is exactly what the
+    ///      dispatch-ordering fix makes observable. Concrete arg values are immaterial because the gate
+    ///      fires before any argument validation.
     function test_dispatch_revert_writeGatedWhileInactive(uint8 writeIdx) public {
         vm.skip(!_forkMode());
         _ensureInactive();
 
-        bytes4 selector = _writeSelectors()[writeIdx % 7];
-        (bool ok, bytes memory ret) = StdPrecompiles.POLICY_REGISTRY_ADDRESS.call(abi.encodePacked(selector));
+        bytes memory payload = _writeCalldata(writeIdx % 7);
+        (bool ok, bytes memory ret) = StdPrecompiles.POLICY_REGISTRY_ADDRESS.call(payload);
         assertFalse(ok, "write call must revert while inactive");
-        assertTrue(_isFeatureNotActivated(ret), "malformed write must stay gated while inactive");
+        assertTrue(_isFeatureNotActivated(ret), "write must stay gated while inactive");
     }
 }
