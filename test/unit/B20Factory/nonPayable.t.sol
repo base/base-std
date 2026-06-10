@@ -14,9 +14,9 @@ import {B20FactoryTest} from "base-std-test/lib/B20FactoryTest.sol";
 ///         decoding, or any other validation — so value-bearing calls never advance past
 ///         the pre-flight check regardless of the calldata they carry.
 ///
-/// @dev Regression for BOP-324. Tests in this file are skipped in fork mode until
-///      base/base#3362 (the nonpayable guard implementation) is merged and deployed:
-///      before that PR the live precompile silently accepts ETH-bearing calls.
+/// @dev Tests in this file are skipped in fork mode until base/base#3362 (the nonpayable
+///      guard implementation) is merged and deployed: before that PR the live precompile
+///      silently accepts ETH-bearing calls.
 contract B20FactoryNonPayableTest is B20FactoryTest {
     function _deactivate(bytes32 feature) internal {
         vm.prank(StdPrecompiles.ACTIVATION_REGISTRY.admin());
