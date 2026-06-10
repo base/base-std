@@ -3,10 +3,12 @@ LOAD_ENV = pre=$$(export -p); set -a; [ -f .env ] && . ./.env; set +a; eval "$$p
 
 PYTHON ?= python3.13
 VENV = script/smoke/.venv
-# `smoke` is the package at script/smoke/, so its parent (script) is on the path.
+# `smoke` and `fork` are packages under script/, so script/ is on the path. Both share the one venv
+# (web3 is their only dependency); `make smoke-setup` provisions it.
 SMOKE_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m smoke
+FORK_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m fork
 
-.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup
+.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants smoke-setup fork-tests
 
 # Generate an lcov coverage report and open it in the browser.
 # Scoped to src/ and test/lib/mocks/ (excludes test runner files and the smoke probe helper).
@@ -21,6 +23,14 @@ smoke-setup:
 	$(PYTHON) -m venv $(VENV)
 	$(VENV)/bin/python -m pip install --upgrade pip
 	$(VENV)/bin/python -m pip install -r script/smoke/requirements.txt
+
+# Run the unit suite against a local anvil with Base's Rust precompiles, cross-validating the Solidity
+# reference against the live Rust impl. Needs the patched anvil+forge from the base-anvil fork (see
+# script/fork/__main__.py for env vars). Forward forge args via ARGS, e.g.
+#   make fork-tests ARGS="-vvvv --match-test test_transfer_success_debitsSender"
+#   make fork-tests ARGS="--match-contract PolicyRegistryDispatchInactive" SKIP_ACTIVATE=POLICY_REGISTRY
+fork-tests:
+	@$(FORK_RUN) $(ARGS)
 
 # Compile the contracts.
 build:

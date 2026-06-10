@@ -122,6 +122,12 @@ jobs:
           "$BASE_ANVIL_DIR/target/release/anvil" --version
           "$BASE_ANVIL_DIR/target/release/forge" --version
 
+      - name: Set up fork-test runner venv
+        shell: bash
+        # The runner is `python -m fork` (web3 only); reuse the smoke venv target with the
+        # runner's preinstalled python3 instead of the python3.13 default.
+        run: make smoke-setup PYTHON=python3
+
       - name: Run base-std fork tests
         id: fork_tests
         shell: bash
@@ -131,7 +137,7 @@ jobs:
           ANVIL_BIN="$BASE_ANVIL_DIR/target/release/anvil" \
             FORGE_BIN="$BASE_ANVIL_DIR/target/release/forge" \
             ANVIL_LOG="$RUNNER_TEMP/base-std-anvil.log" \
-            ./script/run-fork-tests.sh 2>&1 | tee "$RUNNER_TEMP/fork-test-output.txt"
+            make fork-tests 2>&1 | tee "$RUNNER_TEMP/fork-test-output.txt"
           echo "fork_tests_exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 

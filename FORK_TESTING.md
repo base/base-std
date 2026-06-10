@@ -57,14 +57,21 @@ Clone two repos as siblings (base/base is fetched automatically by cargo):
 ```
 
 If your layout differs, set `ANVIL_BIN` and `FORGE_BIN` env vars to
-override the script's defaults.
+override the runner's defaults.
 
 Install Rust + the fast linker, plus stock foundry (for `cast`):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
 brew install lld  # macOS; Linux uses mold per base-anvil's .cargo/config.toml
-curl -L https://foundry.paradigm.xyz | bash && foundryup  # stock foundry, for `cast` (used by run-fork-tests.sh)
+curl -L https://foundry.paradigm.xyz | bash && foundryup  # stock foundry, for `cast` (the manual probe below)
+```
+
+The runner itself is Python ([`script/fork/`](script/fork/)), driven by `web3`.
+Create its venv once (shared with the smoke suite):
+
+```bash
+make smoke-setup
 ```
 
 Build the patched forge + anvil (~30 min first build, incremental after).
@@ -79,10 +86,10 @@ cargo build --release -p anvil -p forge
 
 ```bash
 cd ~/code/base-std
-./script/run-fork-tests.sh
+make fork-tests
 ```
 
-The script:
+The runner ([`script/fork/`](script/fork/)):
 
 1. Launches `anvil --base --base-activation-admin 0x9965507D...` on port 8546.
 2. Funds + impersonates the activation admin, sends `activate(bytes32)` for
@@ -91,10 +98,10 @@ The script:
    http://localhost:8546`.
 4. Tears down anvil.
 
-Forward any `forge test` flag through the script:
+Forward any `forge test` flag through `ARGS`:
 
 ```bash
-./script/run-fork-tests.sh -vvvv --match-test test_transfer_success_debitsSender
+make fork-tests ARGS="-vvvv --match-test test_transfer_success_debitsSender"
 ```
 
 ## Exercising the inactive-feature dispatch path
@@ -106,8 +113,8 @@ feature is active), set `SKIP_ACTIVATE` to a comma-separated list of feature
 names (or raw `0x` ids) to leave un-activated:
 
 ```bash
-SKIP_ACTIVATE=POLICY_REGISTRY ./script/run-fork-tests.sh \
-    --match-contract PolicyRegistryDispatchInactive
+SKIP_ACTIVATE=POLICY_REGISTRY make fork-tests \
+    ARGS="--match-contract PolicyRegistryDispatchInactive"
 ```
 
 The inactive-dispatch tests (`test/unit/PolicyRegistry/dispatch_inactive.t.sol`)
@@ -118,8 +125,8 @@ activation gate rather than masked by `FeatureNotActivated`) encodes a fix that
 isn't in the Rust impl yet, so it's gated behind `POLICY_DISPATCH_FIX`:
 
 ```bash
-SKIP_ACTIVATE=POLICY_REGISTRY POLICY_DISPATCH_FIX=true ./script/run-fork-tests.sh \
-    --match-contract PolicyRegistryDispatchInactive
+SKIP_ACTIVATE=POLICY_REGISTRY POLICY_DISPATCH_FIX=true make fork-tests \
+    ARGS="--match-contract PolicyRegistryDispatchInactive"
 ```
 
 Run it that way against a build that carries the dispatch-ordering fix (e.g. via
@@ -149,10 +156,12 @@ Skim the new commits for new precompile addresses, feature IDs, or ABI
 changes (`crates/common/precompiles/src/activation/storage.rs` for
 `FEATURE_*` constants).
 
-**Step 2: if new feature IDs were added**, append them to the
-`FEATURE_IDS` array in `script/run-fork-tests.sh`. The script must activate
-every gated feature before tests run; otherwise the feature's calls revert
-`FeatureNotActivated`.
+**Step 2: if new feature IDs were added**, add them to the derived feature set
+the runner activates: the canonical `FEATURE_*` keccak constants in
+[`script/smoke/config.py`](script/smoke/config.py) and the `FEATURES` table in
+[`script/fork/__main__.py`](script/fork/__main__.py) (which reuses those
+constants). The runner must activate every gated feature before tests run;
+otherwise the feature's calls revert `FeatureNotActivated`.
 
 **Step 3: if new precompiles were added** (a new `*Precompile::install`
 call appeared in `base/crates/common/precompiles/src/provider.rs`):
@@ -170,7 +179,7 @@ Then rerun `./script/bump-base.sh <ref>` to rebuild against the new pin.
 
 ```bash
 cd ~/code/base-std
-./script/run-fork-tests.sh
+make fork-tests
 ```
 
 **Step 5: triage the deltas.** Compare against the last run's failure
@@ -223,10 +232,10 @@ block when you're done iterating.
 ## Common failure modes & fixes
 
 **`anvil binary not found`** — run `cargo build --release -p anvil` in
-`base-anvil/`. Or `ANVIL_BIN=/abs/path ./script/run-fork-tests.sh`.
+`base-anvil/`. Or `ANVIL_BIN=/abs/path make fork-tests`.
 
 **`port 8546 is already in use`** — `pkill -f "base-anvil/target/.*/anvil"`
-or `PORT=8547 ./script/run-fork-tests.sh`.
+or `PORT=8547 make fork-tests`.
 
 **`anvil exited during startup`** — check `/tmp/anvil.log`. Usual cause:
 rust build is stale after a base/base change; rebuild.
@@ -234,12 +243,13 @@ rust build is stale after a base/base change; rebuild.
 **Hundreds of `EvmError: Revert` with `gas: 0` in `setUp`** — either the
 `LIVE_PRECOMPILES` env var wasn't set (BaseTest etched the mocks over the
 precompile addresses) or `[profile.fork] base = true` is missing from
-`foundry.toml` (forge isn't installing the precompiles). The script sets
+`foundry.toml` (forge isn't installing the precompiles). The runner sets
 both, but if you're invoking forge directly, set both.
 
 **`FeatureNotActivated(bytes32)` revert payload** — a new gated feature
-landed in base/base. Add its ID to `FEATURE_IDS` in
-`script/run-fork-tests.sh`. The payload's 32-byte tail IS the feature ID
+landed in base/base. Add its ID to the derived feature set (see Step 2 above:
+`FEATURE_*` in `script/smoke/config.py` + the `FEATURES` table in
+`script/fork/__main__.py`). The payload's 32-byte tail IS the feature ID
 (grep `base/crates/common/precompiles/src/activation/storage.rs` for the
 matching `FEATURE_*` constant).
 
@@ -275,7 +285,7 @@ If this returns garbage / fails, the fork's build is broken or out of date.
 
 | Thing | Path | Notes |
 |---|---|---|
-| The test runner script | `script/run-fork-tests.sh` | bash; takes forge args through `$@` |
+| The test runner | `script/fork/` (`make fork-tests`) | Python + web3; forwards forge args through `ARGS` |
 | Forge profile config | `foundry.toml`, `[profile.fork]` | `base = true` enables Rust precompile dispatch |
 | Skip-etch logic | `test/lib/BaseTest.sol` | guarded by `LIVE_PRECOMPILES` env var |
 | Slot assertions | `test/unit/**/*.t.sol`, `test/lib/mocks/Mock*Storage.sol` | `vm.load`-based slot-layout assertions paired with surface tests |
