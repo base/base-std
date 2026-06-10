@@ -28,23 +28,26 @@ Custom policy IDs are assigned from a single global counter starting at `2`. The
 
 ## Activation
 
-The PolicyRegistry is gated by the [`ActivationRegistry`](../ActivationRegistry/README.md): the feature is either active or inactive, and the gate is applied per call by the precompile's dispatcher.
+The `PolicyRegistry` is gated by the [`ActivationRegistry`](../ActivationRegistry/README.md). The gate applies only to functions that change state; read-only functions are always callable, whether or not the feature is active.
 
-The gate covers **mutating** entry points only. The **view** entry points are always callable regardless of activation state:
+**Always callable:**
 
-| Always callable (views) | Gated while inactive (mutators) |
-|---|---|
-| `isAuthorized` | `createPolicy` |
-| `policyExists` | `createPolicyWithAccounts` |
-| `policyAdmin` | `stageUpdateAdmin` |
-| `pendingPolicyAdmin` | `finalizeUpdateAdmin` |
-| | `renounceAdmin` |
-| | `updateAllowlist` |
-| | `updateBlocklist` |
+- `isAuthorized`
+- `policyExists`
+- `policyAdmin`
+- `pendingPolicyAdmin`
 
-Keeping the views ungated means consumers — B20 tokens running `isAuthorized` on transfer, off-chain indexers reading membership and admin state — observe identical behavior whether or not the feature is active. Calling a gated mutator while the feature is inactive reverts with `FeatureNotActivated`.
+**Gated** — revert with `FeatureNotActivated` while the feature is inactive:
 
-> **Error classification is independent of activation state.** The dispatcher recognizes the selector and decodes arguments *before* it applies the activation gate. An unrecognized selector reverts `UnknownFunctionSelector` and malformed calldata reverts with an ABI-decode error whether the feature is active or not — the activation gate is reached only once a call has been resolved to a known mutating function with well-formed arguments. Clients, tests, and cross-environment simulations can therefore distinguish "feature inactive" from "bad call" reliably, and a given malformed call produces the same error on both sides of an activation boundary.
+- `createPolicy`
+- `createPolicyWithAccounts`
+- `stageUpdateAdmin`
+- `finalizeUpdateAdmin`
+- `renounceAdmin`
+- `updateAllowlist`
+- `updateBlocklist`
+
+Because reads are never gated, a consumer — a B20 token calling `isAuthorized` on transfer, or an indexer reading membership and admin state — sees the same behavior whether or not the feature is active.
 
 ## User Flows
 
