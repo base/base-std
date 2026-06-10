@@ -98,8 +98,14 @@ contract MockB20Factory is IB20Factory {
     /// @inheritdoc IB20Factory
     function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
+        payable
         returns (address token)
     {
+        // -- Pre-flight: reject any call that attaches ETH. Mirrors the Rust precompile's
+        //    nonpayable guard which fires before calldata-cost deduction — matched here so
+        //    mock and live-precompile surfaces behave identically.
+        if (msg.value != 0) revert NonPayable();
+
         // -- 0. Activation gates.
         //       Per-variant features gate which variants can be created at
         //       any moment. Variant-feature mapping:

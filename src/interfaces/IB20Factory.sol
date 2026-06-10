@@ -64,6 +64,9 @@ interface IB20Factory {
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice ETH was attached to a call targeting a nonpayable factory selector.
+    error NonPayable();
+
     /// @notice A token already exists at the deterministic address derived from
     ///         `(variant, msg.sender, salt)`. Caller must use a different salt.
     error TokenAlreadyExists(address token);
@@ -122,6 +125,7 @@ interface IB20Factory {
     ///         from `(variant, msg.sender, salt)`, then dispatches each entry in `initCalls` on
     ///         the new token. Emits `B20Created`.
     ///
+    /// @dev Reverts with `NonPayable` when ETH is attached to the call.
     /// @dev Reverts with IActivationRegistry.FeatureNotActivated when the variant feature is not activated.
     /// @dev Reverts with `InvalidVariant` when `variant` is outside the `B20Variant` range.
     /// @dev Reverts with `UnsupportedVersion` when the leading `version` byte in `params` is unrecognized for `variant`.
@@ -152,6 +156,7 @@ interface IB20Factory {
     /// @return token The address of the newly created token.
     function createB20(B20Variant variant, bytes32 salt, bytes calldata params, bytes[] calldata initCalls)
         external
+        payable
         returns (address token);
 
     /*//////////////////////////////////////////////////////////////
