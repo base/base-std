@@ -97,6 +97,35 @@ Forward any `forge test` flag through the script:
 ./script/run-fork-tests.sh -vvvv --match-test test_transfer_success_debitsSender
 ```
 
+## Exercising the inactive-feature dispatch path
+
+By default the script activates every gated feature before `forge test`, so the
+suite never sees a feature in its inactive state. To cross-validate the
+dispatcher's *inactive* behavior (error semantics must not depend on whether a
+feature is active), set `SKIP_ACTIVATE` to a comma-separated list of feature
+names (or raw `0x` ids) to leave un-activated:
+
+```bash
+SKIP_ACTIVATE=POLICY_REGISTRY ./script/run-fork-tests.sh \
+    --match-contract PolicyRegistryDispatchInactive
+```
+
+The inactive-dispatch tests (`test/unit/PolicyRegistry/dispatch_inactive.t.sol`)
+also normalize the feature to inactive themselves, so they're correct under the
+default run too; `SKIP_ACTIVATE` additionally validates the never-activated
+baseline. One assertion (that an unknown selector is classified *before* the
+activation gate rather than masked by `FeatureNotActivated`) encodes a fix that
+isn't in the Rust impl yet, so it's gated behind `POLICY_DISPATCH_FIX`:
+
+```bash
+SKIP_ACTIVATE=POLICY_REGISTRY POLICY_DISPATCH_FIX=true ./script/run-fork-tests.sh \
+    --match-contract PolicyRegistryDispatchInactive
+```
+
+Run it that way against a build that carries the dispatch-ordering fix (e.g. via
+the [patch] local-clone override below) to enforce the regression; leave it
+unset against stock builds so the default run stays green.
+
 ## When the precompiles update — the loop
 
 This is the main workflow. base/base's precompile crate changes; you want
