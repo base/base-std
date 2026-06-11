@@ -71,7 +71,6 @@ contract B20BurnBlockedTest is B20Test {
     ///      Paired slot assertion verifies `balances[from]` slot reflects the seizure.
     function test_burnBlocked_success_debitsTarget(address from, uint256 amount) public {
         _assumeValidActor(from);
-        amount = _boundBalanceAmount(amount);
         // Mint while no policy is set so the mint isn't blocked.
         _mint(from, amount);
         // Now block from via TRANSFER_SENDER_POLICY policy, then seize.
@@ -93,7 +92,6 @@ contract B20BurnBlockedTest is B20Test {
     ///      Paired slot assertion verifies `totalSupply` slot reflects the decrease.
     function test_burnBlocked_success_decreasesTotalSupply(address from, uint256 amount) public {
         _assumeValidActor(from);
-        amount = _boundBalanceAmount(amount);
         _mint(from, amount);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
@@ -113,7 +111,6 @@ contract B20BurnBlockedTest is B20Test {
     /// @dev Dual-event integrity: Transfer for accounting, BurnedBlocked for seizure audit trail
     function test_burnBlocked_success_emitsTransferAndBurnedBlocked(address from, uint256 amount) public {
         _assumeValidActor(from);
-        amount = _boundBalanceAmount(amount);
         _mint(from, amount);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);

@@ -29,7 +29,6 @@ contract MockB20SlotHelpersTest is B20Test {
     ///      assert `vm.load(token, balanceSlot(account)) == amount`.
     function test_balanceSlot_success_locatesBalance(address account, uint256 amount) public {
         _assumeValidActor(account);
-        amount = _boundBalanceAmount(amount);
 
         _mint(account, amount);
 

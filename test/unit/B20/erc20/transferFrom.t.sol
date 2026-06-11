@@ -156,7 +156,6 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(to);
         vm.assume(caller != from);
         vm.assume(from != to);
-        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         vm.prank(from);
@@ -259,7 +258,6 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
-        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         vm.prank(from);
@@ -278,7 +276,6 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
-        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         vm.prank(from);

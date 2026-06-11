@@ -14,7 +14,6 @@ contract B20BalanceOfTest is B20Test {
     /// @dev Mint readback; canonical mint test lives in mint.t.sol
     function test_balanceOf_success_reflectsMint(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = _boundBalanceAmount(amount);
         _mint(to, amount);
         assertEq(token.balanceOf(to), amount, "balance must equal minted amount");
     }
@@ -25,7 +24,6 @@ contract B20BalanceOfTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         vm.prank(from);

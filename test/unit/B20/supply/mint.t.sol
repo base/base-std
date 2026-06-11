@@ -75,19 +75,6 @@ contract B20MintTest is B20Test {
         token.mint(to, amount);
     }
 
-    /// @notice Verifies mint reverts when the recipient balance would exceed the per-account maximum
-    /// @dev Per-account balance cap: total supply may still fit under supplyCap, but the recipient
-    ///      cannot hold more than MAX_BALANCE.
-    function test_mint_revert_maxBalanceExceeded(address to, uint256 amount) public {
-        _assumeValidActor(to);
-        amount = bound(amount, MAX_BALANCE + 1, type(uint256).max);
-        _grantRole(B20Constants.MINT_ROLE, minter);
-
-        vm.prank(minter);
-        vm.expectRevert(abi.encodeWithSelector(IB20.MaxBalanceExceeded.selector, to, MAX_BALANCE, amount));
-        token.mint(to, amount);
-    }
-
     /// @notice Verifies MINT_RECEIVER_POLICY is enforced even for a privileged (factory bootstrap) mint
     /// @dev Mint-side counterpart to the transfer privileged-bypass tests (BOP-332): the bootstrap window
     ///      bypasses the transfer-side policies but ALWAYS enforces MINT_RECEIVER_POLICY, so new supply is
@@ -134,7 +121,6 @@ contract B20MintTest is B20Test {
     ///      Paired slot assertion verifies `balances[to]` slot reflects the credit.
     function test_mint_success_creditsRecipient(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = _boundBalanceAmount(amount);
         uint256 before = token.balanceOf(to);
 
         _mint(to, amount);
@@ -151,7 +137,6 @@ contract B20MintTest is B20Test {
     ///      Paired slot assertion verifies `totalSupply` slot reflects the increase.
     function test_mint_success_increasesTotalSupply(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = _boundBalanceAmount(amount);
         uint256 before = token.totalSupply();
 
         _mint(to, amount);
@@ -167,7 +152,6 @@ contract B20MintTest is B20Test {
     /// @dev Event integrity for the mint path; mint represented as transfer from the zero address
     function test_mint_success_emitsTransferFromZero(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = _boundBalanceAmount(amount);
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.expectEmit(true, true, false, true, address(token));
@@ -198,8 +182,8 @@ contract B20MintTest is B20Test {
     ///      balance and totalSupply by the sum of both amounts.
     function test_mint_success_accumulatesAcrossCalls(address to, uint256 first, uint256 second) public {
         _assumeValidActor(to);
-        first = _boundBalanceAmount(first);
-        second = bound(second, 0, MAX_BALANCE - first);
+        first = bound(first, 0, type(uint128).max);
+        second = bound(second, 0, type(uint128).max);
 
         _mint(to, first);
         _mint(to, second);
