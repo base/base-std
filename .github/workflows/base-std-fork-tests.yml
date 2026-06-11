@@ -122,10 +122,14 @@ jobs:
           "$BASE_ANVIL_DIR/target/release/anvil" --version
           "$BASE_ANVIL_DIR/target/release/forge" --version
 
+      - name: Set up Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+
       - name: Set up fork-test runner venv
         shell: bash
-        # The runner is `python -m fork` (web3 only); reuse the smoke venv target with the
-        # runner's preinstalled python3 instead of the python3.13 default.
+        # setup-python makes python3 == 3.13; make python-check enforces it.
         run: make smoke-setup PYTHON=python3
 
       - name: Run base-std fork tests

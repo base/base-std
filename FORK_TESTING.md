@@ -67,8 +67,10 @@ brew install lld  # macOS; Linux uses mold per base-anvil's .cargo/config.toml
 curl -L https://foundry.paradigm.xyz | bash && foundryup  # stock foundry, for `cast` (the manual probe below)
 ```
 
-The runner itself is Python ([`script/fork/`](script/fork/)), driven by `web3`.
-Create its venv once (shared with the smoke suite):
+The runner itself is Python ([`script/fork/`](script/fork/)), driven by `web3`
+and requiring **Python 3.13**. Create its venv once (shared with the smoke
+suite; `make smoke-setup` checks the version and prints install guidance if it's
+missing):
 
 ```bash
 make smoke-setup

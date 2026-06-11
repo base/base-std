@@ -1,44 +1,9 @@
 """python -m fork [forge test args...] — run the base-std unit suite against a
-local anvil that dispatches Base's Rust precompiles, validating the Solidity
-reference against the live Rust impl from base/base.
+local anvil that dispatches Base's Rust precompiles, cross-validating the
+Solidity reference against the live Rust impl.
 
-Both binaries (anvil + forge) come from the base-anvil fork of foundry-rs, which
-adds a single `--base` flag to NetworkConfigs that installs the B-20 precompile
-suite into the EVM. Stock foundry binaries will NOT work.
-
-Workflow:
-  1. Launch anvil on $PORT with --base (registers Base precompiles).
-  2. Fund + impersonate the activation admin, activate the gated features.
-  3. Run forge --fork-url against anvil + the `fork` profile (which sets
-     base = true so forge's own EVM also dispatches to Base precompiles).
-  4. Tear down anvil regardless of success / failure.
-
-Any extra arguments are forwarded to `forge test` (e.g. --match-contract,
---match-test, -vvvv).
-
-Env vars (with defaults):
-  ANVIL_BIN        path to the patched anvil binary
-                   (default: ../base-anvil/target/release/anvil, falling back to
-                   debug if release is missing)
-  FORGE_BIN        path to the patched forge binary (default: `forge` next to ANVIL_BIN)
-  PORT             local RPC port for anvil (default: 8546)
-  ACTIVATION_ADMIN address authorized to activate features
-                   (default: 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc, the
-                   canonical local-dev admin)
-  ANVIL_LOG        anvil stdout/stderr log path (default: /tmp/anvil.log)
-  SKIP_ACTIVATE    comma-separated feature names or 0x ids to leave un-activated
-                   (default: none, so every feature is activated). Use to exercise
-                   the inactive-feature dispatch path, e.g.
-                   SKIP_ACTIVATE=POLICY_REGISTRY to run the policy-registry
-                   inactive-dispatch regression tests. Names and ids are matched
-                   case-insensitively.
-
-Exit codes:
-  0   forge test exit 0 (all targeted tests pass)
-  1   forge test exit non-zero (at least one targeted test fails — the output is
-      the cross-validation signal)
-  2   environment problem (missing binary, port in use, anvil failed to start,
-      activation tx failed)
+Requires the patched anvil + forge from the base-anvil fork. Env vars, exit
+codes, and the full workflow are documented in README.md.
 """
 
 from __future__ import annotations
@@ -54,9 +19,7 @@ from typing import Iterator
 
 from web3 import Web3
 
-# Feature ids are derived (not hardcoded hex) from the smoke package's config, which keccaks the canonical
-# feature names — the same values the Solidity ActivationRegistryFeatureList and the Rust storage.rs use.
-# Reusing them deletes the hand-maintained hex table the bash runner carried, so there is one source of truth.
+# Feature ids: reuse the smoke package's derived keccak constants (one source of truth).
 from smoke.config import (
     ACTIVATION_REGISTRY,
     FEATURE_B20_ASSET,
@@ -64,13 +27,12 @@ from smoke.config import (
     FEATURE_POLICY_REGISTRY,
 )
 
-# __main__.py -> fork -> script -> project root, where forge writes `out/` and base-anvil sits alongside.
+# __main__.py -> fork -> script -> project root.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-ENV_ERROR = 2  # environment-problem exit code (matches the bash contract).
+ENV_ERROR = 2  # environment-problem exit code.
 
-# Canonical (name, id) order, mirroring the FEATURE_IDS array the bash runner activated in turn. Names are
-# the SKIP_ACTIVATE / log labels; ids gate each precompile via ActivationRegistry.activate(bytes32).
+# (name, id) in activation order; names are the SKIP_ACTIVATE / log labels.
 FEATURES: list[tuple[str, bytes]] = [
     ("B20_ASSET", bytes(FEATURE_B20_ASSET)),
     ("POLICY_REGISTRY", bytes(FEATURE_POLICY_REGISTRY)),
@@ -155,11 +117,7 @@ def assert_port_free(port: int) -> None:
 
 @contextmanager
 def anvil_running(anvil: Path, port: int, admin: str, log_path: Path) -> Iterator[Web3]:
-    """Launch anvil --base, yield a Web3 connected once the RPC is live, and always tear it down.
-
-    Cleanup lives in the `finally`, so anvil is terminated whether the suite passes, fails, or raises —
-    the context-manager equivalent of the bash `trap ... EXIT`, plus a hard kill if it ignores SIGTERM.
-    """
+    """Launch anvil --base, yield a Web3 once the RPC is live, and tear it down on exit (any outcome)."""
     with open(log_path, "w") as logf:
         proc = subprocess.Popen(
             [str(anvil), "--base", "--base-activation-admin", admin, "--port", str(port)],
@@ -194,12 +152,7 @@ def anvil_running(anvil: Path, port: int, admin: str, log_path: Path) -> Iterato
 
 
 def activate_features(w3: Web3, admin: str, skip: set[str]) -> None:
-    """Fund + impersonate the admin, then activate each gated feature not in SKIP_ACTIVATE.
-
-    Anvil's impersonation lets us send activate() calls from the admin without its private key (real-chain
-    forks would substitute a funded signer). Each tx is awaited and its receipt status checked — the
-    structured equivalent of the bash `cast send | grep '^status'`.
-    """
+    """Fund + impersonate the admin, then activate each gated feature not in SKIP_ACTIVATE."""
     log("funding + impersonating activation admin…")
     w3.provider.make_request("anvil_setBalance", [admin, hex(2**64 - 1)])
     w3.provider.make_request("anvil_impersonateAccount", [admin])
@@ -246,9 +199,7 @@ def main(forge_args: list[str]) -> int:
 
         rpc_url = f"http://localhost:{port}"
         log(f"running forge test --fork-url {rpc_url} {' '.join(forge_args)}")
-        # LIVE_PRECOMPILES skips BaseTest's vm.etch of the mocks at the precompile addresses (so calls
-        # dispatch to the real Rust impls). FOUNDRY_PROFILE=fork enables [profile.fork] base=true (so
-        # forge's EVM installs the Base precompile set).
+        # LIVE_PRECOMPILES: skip the mock etch; fork profile: base=true installs the precompiles.
         env = {**os.environ, "LIVE_PRECOMPILES": "true", "FOUNDRY_PROFILE": "fork"}
         result = subprocess.run(
             [str(forge), "test", "--fork-url", rpc_url, *forge_args],

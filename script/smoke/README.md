@@ -25,6 +25,8 @@ anyone for you: you supply the endpoint and two funded keys.
 
 ## Running
 
+Requires **Python 3.13** (`make smoke-setup` enforces it; override with `PYTHON=`).
+
 ```bash
 make smoke-setup                 # one-time: create the venv + install web3
 cp .env.template .env            # then set RPC_URL, DEPLOYER_PK, USER2_PK

@@ -29,6 +29,8 @@ hex table to drift from the Solidity `ActivationRegistryFeatureList` / Rust
 
 ## Running
 
+Requires **Python 3.13** (`make smoke-setup` enforces it; override with `PYTHON=`).
+
 ```bash
 make smoke-setup          # one-time: create the shared venv + install web3 (shared with `make smoke`)
 
