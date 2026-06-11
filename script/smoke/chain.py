@@ -238,6 +238,85 @@ class Chain:
         self._diagnose(f"expected revert {error_name} but call succeeded", repro_fn=fn, repro_overrides={"from": frm})
         die(f"expected revert {error_name} but call succeeded")
 
+    @staticmethod
+    def _revert_bytes(exc: ContractLogicError) -> bytes | None:
+        data = getattr(exc, "data", None)
+        if isinstance(data, str) and data.startswith("0x"):
+            return bytes(HexBytes(data))
+        if isinstance(data, (bytes, bytearray)):
+            return bytes(data)
+        return None
+
+    def expect_abi_decode_failed(self, desc: str, fn, frm: ChecksumAddress) -> None:
+        """Simulate `fn` via eth_call; assert Rust precompile AbiDecodeFailed revert shape.
+
+        Dispatch decode failures encode as `function_selector || utf8_error`, not a typed
+        custom error such as InvalidVariant().
+        """
+        fn_selector = bytes(HexBytes(fn.selector))
+        try:
+            fn.call({"from": frm})
+        except ContractLogicError as exc:
+            self._assert_abi_decode_revert(
+                self._revert_bytes(exc), fn_selector, desc, repro_fn=fn, repro_overrides={"from": frm}
+            )
+            ok(desc)
+            return
+        except Exception as exc:  # noqa: BLE001 - surface any non-revert failure
+            die(f"expected ABI decode failure for {desc} but call raised {type(exc).__name__}: {exc}")
+        self._diagnose(f"expected ABI decode failure: {desc}", repro_fn=fn, repro_overrides={"from": frm})
+        die(f"expected ABI decode failure for {desc} but call succeeded")
+
+    def _assert_abi_decode_revert(
+        self,
+        raw: bytes | None,
+        fn_selector: bytes,
+        desc: str,
+        *,
+        repro_fn=None,
+        repro_overrides: dict | None = None,
+        repro_call: dict | None = None,
+    ) -> None:
+        if raw is None:
+            self._diagnose(f"expected ABI decode failure: {desc}", repro_fn, repro_overrides, repro_call)
+            die(f"expected ABI decode failure for {desc} but revert had no data")
+        if len(raw) <= 4:
+            self._diagnose(f"expected ABI decode failure: {desc}", repro_fn, repro_overrides, repro_call)
+            die(f"expected ABI decode failure for {desc} but revert was only {len(raw)} byte(s): 0x{raw.hex()}")
+        if raw[:4] != fn_selector:
+            typed = ERROR_BY_SELECTOR.get(("0x" + raw[:4].hex()).lower())
+            self._diagnose(f"expected ABI decode failure: {desc}", repro_fn, repro_overrides, repro_call)
+            die(
+                f"expected ABI decode failure for {desc} "
+                f"(selector 0x{fn_selector.hex()}) but got 0x{raw[:4].hex()}"
+                f"{f' ({typed})' if typed else ''} (raw: 0x{raw.hex()})"
+            )
+
+    def expect_raw_abi_decode_failed(
+        self,
+        desc: str,
+        to: ChecksumAddress,
+        data: bytes,
+        *,
+        value: int = 0,
+        frm: ChecksumAddress | None = None,
+    ) -> None:
+        """Assert hand-built calldata reverts with AbiDecodeFailed (selector || utf8)."""
+        if len(data) < 4:
+            die(f"expected ABI decode failure for {desc} but calldata is shorter than 4 bytes")
+        fn_selector = data[:4]
+        tx = {"to": to, "from": frm or self.DEPLOYER, "data": HexBytes(data), "value": value}
+        try:
+            self.w3.eth.call(tx)
+        except ContractLogicError as exc:
+            self._assert_abi_decode_revert(self._revert_bytes(exc), fn_selector, desc, repro_call=tx)
+            ok(desc)
+            return
+        except Exception as exc:  # noqa: BLE001 - surface any non-revert failure
+            die(f"expected ABI decode failure for {desc} but call raised {type(exc).__name__}: {exc}")
+        self._diagnose(f"expected ABI decode failure: {desc}", repro_call=tx)
+        die(f"expected ABI decode failure for {desc} but call succeeded")
+
     def assert_log_order(self, receipt: TxReceipt, sig_a: str, sig_b: str, desc: str) -> None:
         """Assert event A is logged immediately before event B in the receipt."""
         a, b = topic0(sig_a), topic0(sig_b)

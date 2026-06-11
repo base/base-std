@@ -1,8 +1,8 @@
 """Precompile EVM-context invariant smoketest.
 
 Audits the behaviors Solidity grants for free that a precompile has no notion of and must implement
-explicitly: payable rejection, selector dispatch, calldata canonicalization, STATICCALL read-only
-enforcement, returndata fidelity, gas containment, and revert atomicity. Two layers:
+explicitly: payable rejection, selector dispatch, strict ABI decode (non-canonical calldata rejected),
+STATICCALL read-only enforcement, returndata fidelity, gas containment, and revert atomicity. Two layers:
 
   * raw `eth_call` with hand-built (often deliberately malformed) calldata, straight from web3 — for
     inputs the Solidity compiler would never emit (dirty high bits, unknown selectors, truncated args,
@@ -75,18 +75,13 @@ def _enum_out_of_range_reverts(c: Chain, _probe) -> None:
     c.expect_raw_revert("enum out of range", POLICY, bad_enum)
 
 
-def _dirty_high_bits_masked(c: Chain, _probe) -> None:
+def _dirty_high_bits_rejected(c: Chain, _probe) -> None:
     pid, acct = config.ALWAYS_BLOCK_ID, c.BOB
     sel = _selector("isAuthorized(uint64,address)")
     dirty = sel + (b"\xff" * 24 + pid.to_bytes(8, "big")) + (b"\xff" * 12 + bytes(HexBytes(acct)))
-    clean_ret = c.raw_call(POLICY, _clean(c.policy, "isAuthorized", pid, acct))
-    dirty_ret = c.raw_call(POLICY, dirty)
-    c.assert_eq(
-        "0x" + dirty_ret.hex(),
-        "0x" + clean_ret.hex(),
-        "dirty-bit and clean isAuthorized agree",
-        repro_call={"to": POLICY, "from": c.DEPLOYER, "data": dirty},
-    )
+    c.raw_call(POLICY, _clean(c.policy, "isAuthorized", pid, acct))
+    ok("clean isAuthorized succeeds")
+    c.expect_raw_abi_decode_failed("dirty high bits AbiDecodeFailed", POLICY, dirty)
 
 
 # ── caller-frame context (requires the deployed PrecompileProbe) ───────────────────────────────────
@@ -180,7 +175,7 @@ CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
     ("empty calldata reverts (no implicit receive/fallback)", _empty_calldata_reverts),
     ("truncated args revert (strict ABI decode)", _truncated_args_revert),
     ("out-of-range enum reverts", _enum_out_of_range_reverts),
-    ("dirty high bits masked (uint64 + address canonicalization)", _dirty_high_bits_masked),
+    ("dirty high bits rejected (strict ABI decode)", _dirty_high_bits_rejected),
     ("STATICCALL read-only enforced", _staticcall_read_only),
     ("value forwarding rejected through a contract", _value_forwarding_rejected),
     ("returndata fidelity (RETURNDATACOPY of revert payload)", _returndata_fidelity),

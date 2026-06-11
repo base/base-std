@@ -62,8 +62,12 @@ def _edges(c: Chain) -> None:
     c.expect_revert("InvalidCurrency", create(config.VARIANT_STABLECOIN, "factory-lc", params_lower_ccy), c.DEPLOYER)
     c.expect_revert("MissingRequiredField", create(config.VARIANT_STABLECOIN, "factory-ec", params_empty_ccy), c.DEPLOYER)
 
-    step(8, "unknown variant -> InvalidVariant")
-    c.expect_revert("InvalidVariant", create(2, "factory-bv", params_a), c.DEPLOYER)
+    step(8, "out-of-range variant -> ABI decode failure")
+    c.expect_abi_decode_failed(
+        "out-of-range variant AbiDecodeFailed",
+        create(2, "factory-bv", params_a),
+        c.DEPLOYER,
+    )
 
 
 def _events(c: Chain) -> None:

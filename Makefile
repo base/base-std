@@ -1,7 +1,7 @@
 # Source the gitignored .env for the smoke recipes.
 LOAD_ENV = pre=$$(export -p); set -a; [ -f .env ] && . ./.env; set +a; eval "$$pre";
 
-PYTHON ?= python3.13
+PYTHON ?= python3
 VENV = script/smoke/.venv
 # `smoke` is the package at script/smoke/, so its parent (script) is on the path.
 SMOKE_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m smoke
