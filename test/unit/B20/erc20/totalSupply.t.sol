@@ -9,6 +9,7 @@ contract B20TotalSupplyTest is B20Test {
     /// @dev Accounting invariant: totalSupply == sum of all balances == sum(mint) - sum(burn)
     function test_totalSupply_success_tracksMintAndBurn(address to, uint256 mintAmount, uint256 burnAmount) public {
         _assumeValidActor(to);
+        mintAmount = _boundBalanceAmount(mintAmount);
         // Bound burnAmount to <= mintAmount so we don't underflow.
         burnAmount = bound(burnAmount, 0, mintAmount);
 

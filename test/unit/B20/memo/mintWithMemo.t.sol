@@ -27,6 +27,7 @@ contract B20MintWithMemoTest is B20Test {
     ///      Paired slot assertions confirm balance and totalSupply slots reflect the mint.
     function test_mintWithMemo_success_creditsAndUpdatesSupply(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
+        amount = _boundBalanceAmount(amount);
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         uint256 supplyBefore = token.totalSupply();
@@ -53,6 +54,7 @@ contract B20MintWithMemoTest is B20Test {
     /// @dev Event ordering: Memo follows Transfer; canonical Memo test for the mint path
     function test_mintWithMemo_success_emitsTransferThenMemo(address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(to);
+        amount = _boundBalanceAmount(amount);
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.expectEmit(true, true, false, true, address(token));

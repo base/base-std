@@ -75,6 +75,13 @@ interface IB20 {
     /// @notice An amount argument was zero where a non-zero value is required. Not used for ERC-20 amount arguments.
     error InvalidAmount();
 
+    /// @notice The operation would push `account`'s balance above the maximum per-account balance.
+    ///
+    /// @param account          Account whose balance would exceed the maximum.
+    /// @param maxBalance       Maximum allowed balance for a single account.
+    /// @param attemptedBalance Balance the account would have after the operation.
+    error MaxBalanceExceeded(address account, uint256 maxBalance, uint256 attemptedBalance);
+
     /// @notice An empty array was passed to a function that requires at least one element.
     error EmptyFeatureSet();
 
@@ -287,6 +294,7 @@ interface IB20 {
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `InsufficientBalance` when `msg.sender`'s balance is below `amount`.
+    /// @dev Reverts with `MaxBalanceExceeded` when `to`'s resulting balance would exceed the per-account maximum.
     ///
     /// @param to     Destination address.
     /// @param amount Amount to transfer.
@@ -304,6 +312,7 @@ interface IB20 {
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `from` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
+    /// @dev Reverts with `MaxBalanceExceeded` when `to`'s resulting balance would exceed the per-account maximum.
     ///
     /// @param from   Source address.
     /// @param to     Destination address.
@@ -377,6 +386,7 @@ interface IB20 {
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
     /// @dev Reverts with `PolicyForbids(MINT_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `SupplyCapExceeded` when `totalSupply + amount > supplyCap`.
+    /// @dev Reverts with `MaxBalanceExceeded` when `to`'s resulting balance would exceed the per-account maximum.
     ///
     /// @param to     Mint recipient.
     /// @param amount Amount to mint.

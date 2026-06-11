@@ -95,6 +95,9 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
     bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
 
+    /// @notice Maximum balance a single account can hold.
+    uint256 public constant MAX_BALANCE = type(uint128).max;
+
     // ============================================================
     //                          MODIFIERS
     // ============================================================
@@ -731,9 +734,15 @@ abstract contract MockB20 is IB20 {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 fromBalance = $.balances[from];
         if (fromBalance < amount) revert InsufficientBalance(from, fromBalance, amount);
+        if (from == to) {
+            emit Transfer(from, to, amount);
+            return;
+        }
+        uint256 toBalance = $.balances[to];
+        uint256 newToBalance = _checkedAddBalance(to, toBalance, amount);
         unchecked {
             $.balances[from] = fromBalance - amount;
-            $.balances[to] += amount;
+            $.balances[to] = newToBalance;
         }
         emit Transfer(from, to, amount);
     }
@@ -762,11 +771,21 @@ abstract contract MockB20 is IB20 {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 newSupply = $.totalSupply + amount;
         if (newSupply > $.supplyCap) revert SupplyCapExceeded($.supplyCap, newSupply);
+        uint256 newBalance = _checkedAddBalance(to, $.balances[to], amount);
         $.totalSupply = newSupply;
-        unchecked {
-            $.balances[to] += amount;
-        }
+        $.balances[to] = newBalance;
         emit Transfer(address(0), to, amount);
+    }
+
+    /// @dev Mirrors the Rust precompile's saturating attempted-balance calculation.
+    function _checkedAddBalance(address account, uint256 balance, uint256 amount) internal pure returns (uint256) {
+        uint256 attempted;
+        unchecked {
+            attempted = balance + amount;
+        }
+        if (attempted < balance) attempted = type(uint256).max;
+        if (attempted > MAX_BALANCE) revert MaxBalanceExceeded(account, MAX_BALANCE, attempted);
+        return attempted;
     }
 
     /// @dev Pure mechanics: balance + effects. Pause and role gates are

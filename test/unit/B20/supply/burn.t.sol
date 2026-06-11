@@ -48,6 +48,7 @@ contract B20BurnTest is B20Test {
     /// @dev Accounting: balanceOf(caller) decreases by exactly amount.
     ///      Paired slot assertion verifies `balances[burner]` slot reflects the debit.
     function test_burn_success_debitsCaller(uint256 amount) public {
+        amount = _boundBalanceAmount(amount);
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
 
@@ -65,6 +66,7 @@ contract B20BurnTest is B20Test {
     /// @dev Accounting: totalSupply tracks cumulative minted-burned.
     ///      Paired slot assertion verifies `totalSupply` slot reflects the decrease.
     function test_burn_success_decreasesTotalSupply(uint256 amount) public {
+        amount = _boundBalanceAmount(amount);
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
         uint256 before = token.totalSupply();
@@ -82,6 +84,7 @@ contract B20BurnTest is B20Test {
     /// @notice Verifies burn emits Transfer(caller, address(0), amount)
     /// @dev Event integrity for the burn path; burn represented as transfer to the zero address
     function test_burn_success_emitsTransferToZero(uint256 amount) public {
+        amount = _boundBalanceAmount(amount);
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
 

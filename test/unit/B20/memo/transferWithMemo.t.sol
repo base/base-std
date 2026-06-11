@@ -30,6 +30,7 @@ contract B20TransferWithMemoTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         vm.prank(from);
@@ -56,6 +57,7 @@ contract B20TransferWithMemoTest is B20Test {
     {
         _assumeValidActor(from);
         _assumeValidActor(to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
 
@@ -72,6 +74,7 @@ contract B20TransferWithMemoTest is B20Test {
     function test_transferWithMemo_success_returnsTrue(address from, address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         vm.prank(from);

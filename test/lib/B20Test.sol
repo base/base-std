@@ -43,6 +43,9 @@ contract B20Test is B20FactoryTest {
     /// @notice Asset-variant `IB20` token deployed in `setUp`.
     IB20 internal token;
 
+    /// @notice Maximum balance a single B-20 account can hold.
+    uint256 internal constant MAX_BALANCE = type(uint128).max;
+
     // -- Setup --
     function setUp() public virtual override {
         super.setUp();
@@ -115,6 +118,11 @@ contract B20Test is B20FactoryTest {
         if (!token.hasRole(B20Constants.MINT_ROLE, minter)) _grantRole(B20Constants.MINT_ROLE, minter);
         vm.prank(minter);
         token.mint(to, amount);
+    }
+
+    /// @notice Bounds fuzzed values to the allowed per-account balance range.
+    function _boundBalanceAmount(uint256 amount) internal pure returns (uint256) {
+        return bound(amount, 0, MAX_BALANCE);
     }
 
     /// @notice Sets a policy slot on the token as the admin actor.

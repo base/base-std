@@ -96,6 +96,21 @@ contract B20TransferTest is B20Test {
         token.transfer(to, amount);
     }
 
+    /// @notice Verifies transfer reverts when the recipient balance would exceed the per-account maximum
+    /// @dev The sender can afford the transfer, but the receiver is already at MAX_BALANCE.
+    function test_transfer_revert_maxBalanceExceeded(address from, address to) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+
+        _mint(from, 1);
+        _mint(to, MAX_BALANCE);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.MaxBalanceExceeded.selector, to, MAX_BALANCE, MAX_BALANCE + 1));
+        token.transfer(to, 1);
+    }
+
     /// @notice Verifies transfer debits the sender balance by amount
     /// @dev Accounting half: balanceOf(from) decreases by exactly amount.
     ///      Paired slot assertion: `balances[from]` slot reflects the
@@ -105,6 +120,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         uint256 before = token.balanceOf(from);
@@ -126,6 +142,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
         uint256 before = token.balanceOf(to);
@@ -145,6 +162,7 @@ contract B20TransferTest is B20Test {
     function test_transfer_success_emitsTransfer(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
 
@@ -159,6 +177,7 @@ contract B20TransferTest is B20Test {
     function test_transfer_success_returnsTrue(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
+        amount = _boundBalanceAmount(amount);
 
         _mint(from, amount);
 
