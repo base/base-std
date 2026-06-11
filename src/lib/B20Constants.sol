@@ -30,4 +30,9 @@ library B20Constants {
     ///         ERC-20 community ceiling — every common wallet and indexer renders up to
     ///         18 decimals correctly; going higher risks integration breakage.
     uint8 internal constant MAX_ASSET_DECIMALS = 18;
+
+    /// @notice Inclusive upper bound for the supply cap, and therefore for `totalSupply`.
+    ///         `type(uint128).max` also serves as the unbounded ("no cap") sentinel: a cap
+    ///         set to this value imposes no practical limit while keeping supply within `uint128`.
+    uint256 internal constant MAX_SUPPLY_CAP = type(uint128).max;
 }

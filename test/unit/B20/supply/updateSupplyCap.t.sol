@@ -26,7 +26,7 @@ contract B20UpdateSupplyCapTest is B20Test {
     /// @notice Verifies updateSupplyCap reverts when newCap is below the current totalSupply
     /// @dev Invariant: never invalidate already-issued supply; checks InvalidSupplyCap(currentSupply, proposedCap)
     function test_updateSupplyCap_revert_belowCurrentSupply(uint256 mintedAmount, uint256 newCap) public {
-        mintedAmount = bound(mintedAmount, 2, type(uint128).max);
+        mintedAmount = bound(mintedAmount, 2, B20Constants.MAX_SUPPLY_CAP);
         newCap = bound(newCap, 0, mintedAmount - 1);
 
         _mint(alice, mintedAmount);
@@ -36,11 +36,23 @@ contract B20UpdateSupplyCapTest is B20Test {
         token.updateSupplyCap(newCap);
     }
 
+    /// @notice Verifies updateSupplyCap reverts when newCap exceeds the uint128.max ceiling
+    /// @dev Upper bound: the cap (and therefore totalSupply) can never exceed B20Constants.MAX_SUPPLY_CAP.
+    ///      Reuses InvalidSupplyCap(currentSupply, proposedCap); a fresh token has currentSupply == 0.
+    function test_updateSupplyCap_revert_aboveMaximum(uint256 newCap) public {
+        newCap = bound(newCap, B20Constants.MAX_SUPPLY_CAP + 1, type(uint256).max);
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSupplyCap.selector, 0, newCap));
+        token.updateSupplyCap(newCap);
+    }
+
     /// @notice Verifies updateSupplyCap raises the cap to a value above the current totalSupply
     /// @dev Read-after-write: supplyCap returns newCap. Fresh token has totalSupply == 0,
-    ///      so any cap is valid. Paired slot assertion verifies
+    ///      so any cap within the uint128.max ceiling is valid. Paired slot assertion verifies
     ///      `supplyCap` slot reflects the write.
     function test_updateSupplyCap_success_raisesCap(uint256 newCap) public {
+        newCap = bound(newCap, 0, B20Constants.MAX_SUPPLY_CAP);
         vm.prank(admin);
         token.updateSupplyCap(newCap);
         assertEq(token.supplyCap(), newCap, "supplyCap must equal newCap");
@@ -51,13 +63,22 @@ contract B20UpdateSupplyCapTest is B20Test {
         );
     }
 
+    /// @notice Verifies updateSupplyCap accepts the maximum permitted cap (B20Constants.MAX_SUPPLY_CAP)
+    /// @dev Boundary: the uint128.max ceiling is inclusive — setting the cap to exactly the
+    ///      maximum is the unbounded ("no cap") configuration and must succeed.
+    function test_updateSupplyCap_success_atMaximum() public {
+        vm.prank(admin);
+        token.updateSupplyCap(B20Constants.MAX_SUPPLY_CAP);
+        assertEq(token.supplyCap(), B20Constants.MAX_SUPPLY_CAP, "supplyCap must equal the maximum");
+    }
+
     /// @notice Verifies updateSupplyCap lowers the cap to a value at or above the current totalSupply
     /// @dev Cap may be lowered as long as totalSupply <= newCap.
     ///      Paired slot assertion verifies `supplyCap` slot reflects the lower.
     function test_updateSupplyCap_success_lowersCap(uint256 newCap) public {
-        // Mint some supply, then bound newCap >= mintedAmount.
+        // Mint some supply, then bound newCap into [mintedAmount, uint128.max].
         uint256 mintedAmount = 1000;
-        newCap = bound(newCap, mintedAmount, type(uint256).max);
+        newCap = bound(newCap, mintedAmount, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(alice, mintedAmount);
 
@@ -74,6 +95,7 @@ contract B20UpdateSupplyCapTest is B20Test {
     /// @notice Verifies updateSupplyCap emits SupplyCapUpdated(updater, oldCap, newCap)
     /// @dev Event integrity; canonical SupplyCapUpdated emission test
     function test_updateSupplyCap_success_emitsSupplyCapUpdated(uint256 newCap) public {
+        newCap = bound(newCap, 0, B20Constants.MAX_SUPPLY_CAP);
         uint256 oldCap = token.supplyCap();
 
         vm.expectEmit(true, false, false, true, address(token));

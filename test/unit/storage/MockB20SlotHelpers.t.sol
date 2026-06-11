@@ -29,6 +29,7 @@ contract MockB20SlotHelpersTest is B20Test {
     ///      assert `vm.load(token, balanceSlot(account)) == amount`.
     function test_balanceSlot_success_locatesBalance(address account, uint256 amount) public {
         _assumeValidActor(account);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(account, amount);
 
@@ -48,9 +49,10 @@ contract MockB20SlotHelpersTest is B20Test {
         _assumeValidActor(a);
         _assumeValidActor(b);
         vm.assume(a != b);
-        // Bound to avoid SupplyCapExceeded interactions.
-        amountA = bound(amountA, 0, type(uint128).max);
-        amountB = bound(amountB, 0, type(uint128).max);
+        // Bound the cumulative mint to the uint128.max supply ceiling so the
+        // second mint doesn't trip SupplyCapExceeded.
+        amountA = bound(amountA, 0, B20Constants.MAX_SUPPLY_CAP);
+        amountB = bound(amountB, 0, B20Constants.MAX_SUPPLY_CAP - amountA);
 
         _mint(a, amountA);
         _mint(b, amountB);
@@ -148,7 +150,7 @@ contract MockB20SlotHelpersTest is B20Test {
     /// @notice Verifies `totalSupplySlot()` returns the slot `_mint` updates.
     /// @dev Read-after-write: mint to alice, then `vm.load` the helper.
     function test_totalSupplySlot_success_locatesTotalSupply(uint256 amount) public {
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(alice, amount);
 
@@ -170,12 +172,13 @@ contract MockB20SlotHelpersTest is B20Test {
     }
 
     /// @notice Verifies `supplyCapSlot()` returns the slot updateSupplyCap writes to.
-    /// @dev Default-token bootstrap sets supplyCap = type(uint256).max; we lower it
+    /// @dev Default-token bootstrap sets supplyCap = B20Constants.MAX_SUPPLY_CAP; we lower it
     ///      and re-read both via surface and slot.
     function test_supplyCapSlot_success_locatesSupplyCap(uint256 cap) public {
         // Lower the cap to a value that won't violate the
-        // "cannot lower below totalSupply" invariant (totalSupply == 0).
-        cap = bound(cap, 0, type(uint256).max - 1);
+        // "cannot lower below totalSupply" invariant (totalSupply == 0)
+        // and stays within the uint128.max ceiling.
+        cap = bound(cap, 0, B20Constants.MAX_SUPPLY_CAP - 1);
 
         _grantRole(B20Constants.MINT_ROLE, admin);
         vm.prank(admin);

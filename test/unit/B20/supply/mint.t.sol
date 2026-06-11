@@ -47,7 +47,7 @@ contract B20MintTest is B20Test {
     ///      We set cap low and request more than it allows.
     function test_mint_revert_supplyCapExceeded(address to, uint256 cap, uint256 amount) public {
         _assumeValidActor(to);
-        cap = bound(cap, 0, type(uint128).max);
+        cap = bound(cap, 0, B20Constants.MAX_SUPPLY_CAP);
         amount = bound(amount, cap + 1, type(uint256).max - cap);
 
         vm.prank(admin);
@@ -86,7 +86,7 @@ contract B20MintTest is B20Test {
     ///      cheat, so it runs identically against the live precompile under LIVE_PRECOMPILES.
     function test_mint_revert_privilegedStillEnforcesReceiverPolicy(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         bytes32 salt = keccak256("privileged-mint-receiver-enforced");
         // The fuzzed recipient must not collide with the to-be-created token's own address.
@@ -121,6 +121,7 @@ contract B20MintTest is B20Test {
     ///      Paired slot assertion verifies `balances[to]` slot reflects the credit.
     function test_mint_success_creditsRecipient(address to, uint256 amount) public {
         _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         uint256 before = token.balanceOf(to);
 
         _mint(to, amount);
@@ -137,6 +138,7 @@ contract B20MintTest is B20Test {
     ///      Paired slot assertion verifies `totalSupply` slot reflects the increase.
     function test_mint_success_increasesTotalSupply(address to, uint256 amount) public {
         _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         uint256 before = token.totalSupply();
 
         _mint(to, amount);
@@ -152,6 +154,7 @@ contract B20MintTest is B20Test {
     /// @dev Event integrity for the mint path; mint represented as transfer from the zero address
     function test_mint_success_emitsTransferFromZero(address to, uint256 amount) public {
         _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.expectEmit(true, true, false, true, address(token));
@@ -166,7 +169,7 @@ contract B20MintTest is B20Test {
     ///      leaves totalSupply == cap.
     function test_mint_success_atSupplyCapBoundary(address to, uint256 cap) public {
         _assumeValidActor(to);
-        cap = bound(cap, 1, type(uint128).max);
+        cap = bound(cap, 1, B20Constants.MAX_SUPPLY_CAP);
 
         vm.prank(admin);
         token.updateSupplyCap(cap);
@@ -182,8 +185,10 @@ contract B20MintTest is B20Test {
     ///      balance and totalSupply by the sum of both amounts.
     function test_mint_success_accumulatesAcrossCalls(address to, uint256 first, uint256 second) public {
         _assumeValidActor(to);
-        first = bound(first, 0, type(uint128).max);
-        second = bound(second, 0, type(uint128).max);
+        // Cumulative supply must stay within the uint128.max cap, so the two
+        // amounts together cannot exceed the ceiling.
+        first = bound(first, 0, B20Constants.MAX_SUPPLY_CAP);
+        second = bound(second, 0, B20Constants.MAX_SUPPLY_CAP - first);
 
         _mint(to, first);
         _mint(to, second);

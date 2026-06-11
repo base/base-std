@@ -24,6 +24,7 @@ contract B20BurnWithMemoTest is B20Test {
     /// @dev Accounting unchanged from burn; the memo does not alter accounting.
     ///      Paired slot assertions confirm balance and totalSupply slots reflect the burn.
     function test_burnWithMemo_success_debitsAndDecreasesSupply(uint256 amount, bytes32 memo) public {
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
 
@@ -49,6 +50,7 @@ contract B20BurnWithMemoTest is B20Test {
     /// @notice Verifies burnWithMemo emits Transfer(caller, address(0), amount) then Memo(memo)
     /// @dev Event ordering: Memo follows Transfer; canonical Memo test for the burn path
     function test_burnWithMemo_success_emitsTransferThenMemo(uint256 amount, bytes32 memo) public {
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _grantRole(B20Constants.BURN_ROLE, burner);
         _mint(burner, amount);
 

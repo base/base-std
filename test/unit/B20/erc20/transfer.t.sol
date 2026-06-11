@@ -105,6 +105,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         uint256 before = token.balanceOf(from);
@@ -126,6 +127,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         uint256 before = token.balanceOf(to);
@@ -146,6 +148,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
 
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _mint(from, amount);
 
         vm.expectEmit(true, true, false, true, address(token));
@@ -160,6 +163,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
 
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _mint(from, amount);
 
         vm.prank(from);
@@ -172,7 +176,7 @@ contract B20TransferTest is B20Test {
     ///      leave both the balance and totalSupply exactly where they started.
     function test_transfer_success_selfTransferNoInflation(address account, uint256 amount) public {
         _assumeValidActor(account);
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(account, amount);
         uint256 balanceBefore = token.balanceOf(account);
@@ -195,7 +199,7 @@ contract B20TransferTest is B20Test {
     ///      identically against the live precompile under LIVE_PRECOMPILES.
     function test_transfer_success_privilegedBypassesSenderPolicy(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         bytes32 salt = keccak256("privileged-sender-bypass");
         // The fuzzed recipient must not collide with the to-be-created token's own address.
@@ -220,7 +224,7 @@ contract B20TransferTest is B20Test {
     ///      mirror, this drives the real factory bootstrap path and runs under LIVE_PRECOMPILES.
     function test_transfer_success_privilegedBypassesReceiverPolicy(address to, uint256 amount) public {
         _assumeValidActor(to);
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         bytes32 salt = keccak256("privileged-receiver-bypass");
         // The fuzzed recipient must not collide with the to-be-created token's own address.
@@ -248,7 +252,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         uint64 id = _createAllowlist(from, true);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, id);
@@ -266,7 +270,7 @@ contract B20TransferTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         uint64 id = _createAllowlist(to, true);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, id);

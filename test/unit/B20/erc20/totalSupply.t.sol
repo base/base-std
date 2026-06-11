@@ -9,7 +9,8 @@ contract B20TotalSupplyTest is B20Test {
     /// @dev Accounting invariant: totalSupply == sum of all balances == sum(mint) - sum(burn)
     function test_totalSupply_success_tracksMintAndBurn(address to, uint256 mintAmount, uint256 burnAmount) public {
         _assumeValidActor(to);
-        // Bound burnAmount to <= mintAmount so we don't underflow.
+        // Cap the mint at the supply ceiling, then bound burnAmount to <= mintAmount so we don't underflow.
+        mintAmount = bound(mintAmount, 0, B20Constants.MAX_SUPPLY_CAP);
         burnAmount = bound(burnAmount, 0, mintAmount);
 
         _mint(to, mintAmount);

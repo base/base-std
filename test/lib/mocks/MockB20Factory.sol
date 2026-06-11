@@ -319,7 +319,7 @@ contract MockB20Factory is IB20Factory {
     function _writeBaseStorage(address token, string memory name_, string memory symbol_) internal {
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.NAME_OFFSET), name_);
         _writeString(token, MockB20Storage.slotOf(MockB20Storage.SYMBOL_OFFSET), symbol_);
-        _writeUint(token, MockB20Storage.slotOf(MockB20Storage.SUPPLY_CAP_OFFSET), type(uint256).max);
+        _writeUint(token, MockB20Storage.slotOf(MockB20Storage.SUPPLY_CAP_OFFSET), B20Constants.MAX_SUPPLY_CAP);
         // Everything else (totalSupply, balances, allowances, roles,
         // roleAdmins, adminCount, transferPolicyIds, mintPolicyIds,
         // pausedVectors, nonces, contractURI, initialized) defaults to

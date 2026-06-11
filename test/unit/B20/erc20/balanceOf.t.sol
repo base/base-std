@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {B20Test} from "base-std-test/lib/B20Test.sol";
+import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 
 contract B20BalanceOfTest is B20Test {
     /// @notice Verifies balanceOf returns zero for any account that has never received tokens
@@ -14,6 +15,7 @@ contract B20BalanceOfTest is B20Test {
     /// @dev Mint readback; canonical mint test lives in mint.t.sol
     function test_balanceOf_success_reflectsMint(address to, uint256 amount) public {
         _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _mint(to, amount);
         assertEq(token.balanceOf(to), amount, "balance must equal minted amount");
     }
@@ -24,6 +26,7 @@ contract B20BalanceOfTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);

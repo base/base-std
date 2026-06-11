@@ -10,7 +10,8 @@ import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. ROLE (`onlyRole(DEFAULT_ADMIN_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         2. INVALID-SUPPLY-CAP (`newSupplyCap < currentSupply`) → `InvalidSupplyCap`
+///         2. INVALID-SUPPLY-CAP (`newSupplyCap < currentSupply` or `newSupplyCap > B20Constants.MAX_SUPPLY_CAP`)
+///            → `InvalidSupplyCap`
 ///
 ///         C(2, 2) = 1 pair.
 contract B20UpdateSupplyCapRevertOrderTest is B20Test {
@@ -20,7 +21,7 @@ contract B20UpdateSupplyCapRevertOrderTest is B20Test {
     function test_updateSupplyCap_revertOrder_role_beats_invalidCap(address caller, uint256 mintedAmount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
-        mintedAmount = bound(mintedAmount, 1, type(uint128).max);
+        mintedAmount = bound(mintedAmount, 1, B20Constants.MAX_SUPPLY_CAP);
         _mint(alice, mintedAmount);
 
         vm.prank(caller);

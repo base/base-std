@@ -27,7 +27,7 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
         _assumeValidCaller(caller);
         _assumeValidActor(to);
         vm.assume(caller != admin);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         // Activate all five violations simultaneously: MINT paused, caller has no
         // MINT_ROLE, address(0) receiver, receiver policy blocks, supply cap = 0.
@@ -72,7 +72,7 @@ contract B20MintWithMemoRevertOrderTest is B20Test {
         vm.expectRevert(abi.encodeWithSelector(IB20.SupplyCapExceeded.selector, 0, amount));
         token.mintWithMemo(to, amount, memo);
         vm.prank(admin);
-        token.updateSupplyCap(type(uint256).max);
+        token.updateSupplyCap(B20Constants.MAX_SUPPLY_CAP);
 
         // Success — all conditions satisfied.
         vm.prank(caller);

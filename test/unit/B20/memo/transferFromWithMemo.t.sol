@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IB20} from "base-std/interfaces/IB20.sol";
 
 import {B20Test} from "base-std-test/lib/B20Test.sol";
+import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 contract B20TransferFromWithMemoTest is B20Test {
@@ -47,7 +48,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         vm.assume(from != to);
         // Include amount = 0: the balance/allowance invariants must hold across the full
         // valid input domain, including the no-op zero-transfer case.
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -89,6 +90,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -115,6 +117,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -160,7 +163,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -209,8 +212,8 @@ contract B20TransferFromWithMemoTest is B20Test {
         vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);
-        allowanceAmount = bound(allowanceAmount, 0, type(uint128).max - 1);
-        spendAmount = bound(spendAmount, allowanceAmount + 1, type(uint128).max);
+        allowanceAmount = bound(allowanceAmount, 0, B20Constants.MAX_SUPPLY_CAP - 1);
+        spendAmount = bound(spendAmount, allowanceAmount + 1, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, spendAmount);
         vm.prank(from);
@@ -244,7 +247,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
+        allowanceAmount = bound(allowanceAmount, 1, B20Constants.MAX_SUPPLY_CAP);
         vm.assume(allowanceAmount != type(uint256).max);
         spendAmount = bound(spendAmount, 0, allowanceAmount);
 

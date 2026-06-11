@@ -298,6 +298,23 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         );
     }
 
+    /// @notice Verifies asset createToken initializes the supply cap to the maximum (uint128.max).
+    /// @dev The factory writes `B20Constants.MAX_SUPPLY_CAP` at bootstrap — the unbounded
+    ///      ("no cap") sentinel and the highest value the cap may ever hold. Pinning this on the
+    ///      factory-creation path (fuzzed caller/salt) means fork mode catches a precompile that
+    ///      fails to seed the cap at creation. Paired surface + slot assertions.
+    function test_createB20_success_assetSupplyCapDefaultsToMax(address caller, bytes32 salt) public {
+        _assumeValidCaller(caller);
+        address token = _createAsset(caller, salt, _assetParams(), new bytes[](0));
+
+        assertEq(IB20(token).supplyCap(), B20Constants.MAX_SUPPLY_CAP, "fresh token supply cap must be MAX_SUPPLY_CAP");
+        assertEq(
+            uint256(vm.load(token, MockB20Storage.supplyCapSlot())),
+            B20Constants.MAX_SUPPLY_CAP,
+            "supplyCap slot must hold MAX_SUPPLY_CAP at creation"
+        );
+    }
+
     /// @notice Verifies asset createToken executes with admin == address(0)
     /// @dev Same zero-admin success behavior on the asset variant. Paired slot assertions
     ///      cross-check the base namespace (adminCount=0, initialized=true).

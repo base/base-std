@@ -78,7 +78,8 @@ interface IB20 {
     /// @notice An empty array was passed to a function that requires at least one element.
     error EmptyFeatureSet();
 
-    /// @notice The proposed supply cap is below the current `totalSupply`.
+    /// @notice The proposed supply cap is outside the permitted range: below the current
+    ///         `totalSupply`, or above the maximum (`type(uint128).max`).
     ///
     /// @param currentSupply Current `totalSupply`.
     /// @param proposedCap   Rejected proposed cap.
@@ -549,17 +550,19 @@ interface IB20 {
                               SUPPLY CAP
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice The maximum total supply enforced on `mint`. `type(uint256).max` indicates no cap.
+    /// @notice The maximum total supply enforced on `mint`. Capped at `type(uint128).max`, which
+    ///         indicates no cap (the unbounded sentinel). `totalSupply` can therefore never exceed
+    ///         `type(uint128).max`.
     /// @return Current supply cap.
     function supplyCap() external view returns (uint256);
 
     /// @notice Sets a new supply cap. May be raised or lowered freely, but never below current
-    ///         `totalSupply`. Emits `SupplyCapUpdated`.
+    ///         `totalSupply` and never above `type(uint128).max`. Emits `SupplyCapUpdated`.
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `DEFAULT_ADMIN_ROLE`.
-    /// @dev Reverts with `InvalidSupplyCap` when `newSupplyCap < totalSupply()`.
+    /// @dev Reverts with `InvalidSupplyCap` when `newSupplyCap < totalSupply()` or `newSupplyCap > type(uint128).max`.
     ///
-    /// @param newSupplyCap New supply cap.
+    /// @param newSupplyCap New supply cap. Must not exceed `type(uint128).max`.
     function updateSupplyCap(uint256 newSupplyCap) external;
 
     /*//////////////////////////////////////////////////////////////

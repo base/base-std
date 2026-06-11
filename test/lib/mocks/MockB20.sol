@@ -95,6 +95,13 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
     bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
 
+    /// @notice Maximum value the supply cap may be set to. Because `mint`
+    ///         rejects any `totalSupply` above the cap, this also bounds
+    ///         `totalSupply` to `type(uint128).max`. The Rust precompile
+    ///         enforces the same ceiling. Mirrors `B20Constants` so the
+    ///         single source of truth lives in one library.
+    uint256 public constant MAX_SUPPLY_CAP = B20Constants.MAX_SUPPLY_CAP;
+
     // ============================================================
     //                          MODIFIERS
     // ============================================================
@@ -510,7 +517,9 @@ abstract contract MockB20 is IB20 {
 
     function updateSupplyCap(uint256 newSupplyCap) external onlyRole(DEFAULT_ADMIN_ROLE) {
         uint256 currentSupply = MockB20Storage.layout().totalSupply;
-        if (newSupplyCap < currentSupply) revert InvalidSupplyCap(currentSupply, newSupplyCap);
+        if (newSupplyCap < currentSupply || newSupplyCap > MAX_SUPPLY_CAP) {
+            revert InvalidSupplyCap(currentSupply, newSupplyCap);
+        }
         uint256 oldSupplyCap = MockB20Storage.layout().supplyCap;
         MockB20Storage.layout().supplyCap = newSupplyCap;
         emit SupplyCapUpdated(msg.sender, oldSupplyCap, newSupplyCap);

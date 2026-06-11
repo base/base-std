@@ -20,7 +20,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from); // skip the consume-allowance bypass when caller == from
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         vm.prank(from);
         token.approve(caller, amount);
@@ -40,7 +40,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         vm.prank(from);
         token.approve(caller, amount);
@@ -66,7 +66,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         vm.prank(from);
         token.approve(caller, amount);
@@ -92,7 +92,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         vm.prank(from);
         token.approve(caller, amount);
@@ -135,7 +135,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
         // from has zero balance, but allowance is set high enough to clear the allowance gate.
 
         vm.prank(from);
@@ -156,6 +156,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(to);
         vm.assume(caller != from);
         vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -194,7 +195,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(to);
         vm.assume(caller != from);
         vm.assume(from != to);
-        allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
+        allowanceAmount = bound(allowanceAmount, 1, B20Constants.MAX_SUPPLY_CAP);
         // Cap below type(uint256).max so we exercise the consume path (not the infinite-allowance bypass).
         vm.assume(allowanceAmount != type(uint256).max);
         // spendAmount includes 0 so the assertion (allowance decreases by spendAmount) is
@@ -234,7 +235,7 @@ contract B20TransferFromTest is B20Test {
         vm.assume(from != to);
         // Include amount = 0: the infinite-allowance invariant must hold across the full
         // valid input domain, including the no-op zero-transfer case.
-        amount = bound(amount, 0, type(uint128).max);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -258,6 +259,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -276,6 +278,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(caller != from);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -322,7 +325,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
+        allowanceAmount = bound(allowanceAmount, 1, B20Constants.MAX_SUPPLY_CAP);
         vm.assume(allowanceAmount != type(uint256).max);
         spendAmount = bound(spendAmount, 1, allowanceAmount);
 
@@ -352,7 +355,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
@@ -403,8 +406,8 @@ contract B20TransferFromTest is B20Test {
         vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
         _assumeValidActor(from);
         _assumeValidActor(to);
-        allowanceAmount = bound(allowanceAmount, 0, type(uint128).max - 1);
-        spendAmount = bound(spendAmount, allowanceAmount + 1, type(uint128).max);
+        allowanceAmount = bound(allowanceAmount, 0, B20Constants.MAX_SUPPLY_CAP - 1);
+        spendAmount = bound(spendAmount, allowanceAmount + 1, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, spendAmount);
         vm.prank(from);
@@ -437,7 +440,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        allowanceAmount = bound(allowanceAmount, 1, type(uint128).max);
+        allowanceAmount = bound(allowanceAmount, 1, B20Constants.MAX_SUPPLY_CAP);
         vm.assume(allowanceAmount != type(uint256).max);
         spendAmount = bound(spendAmount, 0, allowanceAmount);
 
@@ -479,7 +482,7 @@ contract B20TransferFromTest is B20Test {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
-        amount = bound(amount, 1, type(uint128).max);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
         vm.prank(from);
