@@ -5,6 +5,10 @@ API. Every mutating call goes through `send`, which signs, broadcasts to the
 live node, waits for the receipt, asserts success, and records it for the
 flow-level `assert_events_emitted` check. Reads and expected-revert simulations
 use `eth_call` against the node, so the real precompiles execute (no local EVM).
+
+The transport is `ConsistentHTTPProvider` (see `provider.py`), which gives the whole run a single
+read-your-writes view over a load-balanced pool of nodes. Without it, a read routed to a backend
+that lags the one that accepted the preceding write observes pre-write state.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ from . import config
 from .abis import ASSET_ABI, FACTORY_ABI, POLICY_ABI, STABLECOIN_ABI
 from .codec import topic0
 from .errors import ERROR_BY_SELECTOR
+from .provider import ConsistentHTTPProvider
 
 
 def log(msg: str) -> None:
@@ -52,7 +57,7 @@ class Chain:
 
     def __init__(self, cfg: config.Config) -> None:
         self.cfg = cfg
-        self.w3 = Web3(Web3.HTTPProvider(cfg.rpc_url))
+        self.w3 = Web3(ConsistentHTTPProvider(cfg.rpc_url))
         if not self.w3.is_connected():
             die(f"RPC_URL did not answer: {cfg.rpc_url}")
         self.chain_id = self.w3.eth.chain_id
@@ -73,6 +78,23 @@ class Chain:
         self._receipts: list[TxReceipt] = []
         self._user2_funded = False
         self.trace = cfg.trace
+        self._nonces: dict[ChecksumAddress, int] = {}
+
+    # ── nonce ─────────────────────────────────────────────────────────────────
+    def next_nonce(self, address: ChecksumAddress) -> int:
+        """Next nonce to sign with, robust against a load-balanced pool.
+
+        Across backends a `latest`/`pending` count can come back stale-low (a backend lagging the one
+        that mined our last tx) and a reused value collides. We take the max of the node's pending count
+        and a local monotonic counter, then advance the counter — so every signed tx in the run gets a
+        unique, forward-only nonce regardless of which backend answered. The nonce is intentionally read
+        from the head (not the consistency high-water block): it must reflect the account's latest state,
+        not a historical snapshot, or the broadcast is rejected as "nonce too low".
+        """
+        pending = self.w3.eth.get_transaction_count(address, "pending")
+        nonce = max(pending, self._nonces.get(address, 0))
+        self._nonces[address] = nonce + 1
+        return nonce
 
     # ── contracts at an address ─────────────────────────────────────────────
     def asset_at(self, address: ChecksumAddress) -> Contract:
@@ -85,7 +107,7 @@ class Chain:
     def send(self, fn, account: LocalAccount) -> TxReceipt:
         """Sign + broadcast a contract function, wait, assert success, record it."""
         tx = fn.build_transaction(
-            {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
+            {"from": account.address, "nonce": self.next_nonce(account.address)}
         )
         signed = account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -107,7 +129,7 @@ class Chain:
             "value": self.cfg.gas_float_wei,
             "gas": 21000,
             "gasPrice": self.w3.eth.gas_price,
-            "nonce": self.w3.eth.get_transaction_count(self.DEPLOYER),
+            "nonce": self.next_nonce(self.DEPLOYER),
             "chainId": self.chain_id,
         }
         signed = self.deployer.sign_transaction(tx)
@@ -347,7 +369,7 @@ class Chain:
         """
         account = account or self.deployer
         factory = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        overrides = {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
+        overrides = {"from": account.address, "nonce": self.next_nonce(account.address)}
         if value:
             overrides["value"] = value
         tx = factory.constructor(*args).build_transaction(overrides)
@@ -401,7 +423,7 @@ class Chain:
         tx = fn.build_transaction(
             {
                 "from": account.address,
-                "nonce": self.w3.eth.get_transaction_count(account.address),
+                "nonce": self.next_nonce(account.address),
                 "gas": gas,
             }
         )

@@ -23,6 +23,12 @@ precompiles are deployed and the features are switched on in the
 ActivationRegistry. The suite does not stand a node up for you and does not fund
 anyone for you: you supply the endpoint and two funded keys.
 
+`RPC_URL` may point at a **single node or a load-balanced pool of many nodes** (a
+live network typically fronts dozens of backends at slightly different heights).
+The harness handles the multi-node case transparently — see
+[Multi-node consistency](#multi-node-consistency) — so you can run the same suite
+against a local single node and a live pooled endpoint without changes.
+
 ## Running
 
 ```bash
@@ -115,6 +121,44 @@ test. To accept a known divergence, add its check name to the `INFORMATIONAL` se
 in `journeys/precompile_invariants.py` — it stays reported but no longer fails the
 run.
 
+## Multi-node consistency
+
+A live RPC endpoint is usually a **load balancer in front of many nodes** that sit
+at slightly different block heights (we measured ~1–2 blocks of spread on a live
+pool). The pool is sticky *per connection* but routes *new* connections to
+arbitrary backends. The journeys are serial — write, then immediately read the
+result — so a naive harness can confirm a write on one backend and then have the
+follow-up read routed to a backend that hasn't imported that block yet, observing
+**pre-write state**. The classic symptom is `isB20Initialized == false`
+immediately after a `createB20` that already succeeded.
+
+`ConsistentHTTPProvider` (in `chain.py`) gives the whole run a single
+read-your-writes view over the pool, with two layered mechanisms:
+
+1. **Sticky connection (steady state).** The provider holds one keep-alive
+   connection open for the run, pinning every request to a single backend that is
+   trivially consistent with its own writes — no waiting, no retries.
+2. **High-water safety net (on reconnect).** It tracks the highest block any
+   confirmed receipt / head query revealed and pins every **state read**
+   (`eth_call`, `eth_getBalance`, `eth_getCode`, `eth_getStorageAt`, gas
+   estimation) to that block. If the connection drops and the pool re-pins us to a
+   lagging backend, that backend answers `block not found` (rather than silently
+   serving stale state); the provider drops the connection to force a re-route and
+   retries until a synced backend answers, or it gives up after ~30s and surfaces
+   the node's error.
+
+The **nonce is deliberately not pinned** — it must reflect the account's *latest*
+head, not a historical snapshot, or the broadcast is rejected as `nonce too low`.
+Instead `Chain.next_nonce` reads the pending count and takes the max with a local
+monotonic counter, so every signed tx gets a unique, forward-only nonce regardless
+of which backend answered.
+
+The net effect: a read never observes state older than a write the suite has
+already confirmed, and nonces never collide or regress, no matter which backend any
+individual request lands on. This is invisible to journeys — they keep calling
+`.call()` and `send()` as before — and it is a no-op against a single node (the
+high-water block is always present).
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |
@@ -123,6 +167,7 @@ run.
 | `RPC_URL did not answer` | Endpoint unreachable. Check the node is up and the URL/port. |
 | Everything **skipped** | Target node doesn't have the b20 features active. Activate them in the ActivationRegistry, or point `RPC_URL` at a node that has them. |
 | `deployer ... underfunded ... no faucet configured` | Fund `DEPLOYER_PK`, or set `FAUCET_URL` + `FAUCET_NETWORK`. |
+| Reads disagree with a write that just landed / `block not found` after ~30s | A pool backend is lagging far behind (or stuck). The provider retries for ~30s; if it still fails, the pool has a badly desynced node — check backend health. |
 
 ## Package layout
 
@@ -131,6 +176,7 @@ script/smoke/
   __main__.py         # CLI: python -m smoke <journey ...> [-k]; preflight + dispatch
   config.py           # addresses, enum/role/feature constants, env -> Config
   chain.py            # web3 harness: send/read, revert + event assertions, RPC tracing
+  provider.py         # ConsistentHTTPProvider: read-your-writes over a multi-node (load-balanced) pool
   abis.py             # interface ABIs + probe/feeder artifacts, read from out/
   codec.py            # the one hand-written encode: createB20 params + initCalls
   errors.py           # selector -> custom-error-name map (from the ABIs)
