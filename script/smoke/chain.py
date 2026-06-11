@@ -85,7 +85,7 @@ class Chain:
     def send(self, fn, account: LocalAccount) -> TxReceipt:
         """Sign + broadcast a contract function, wait, assert success, record it."""
         tx = fn.build_transaction(
-            {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
+            {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address, "pending")}
         )
         signed = account.sign_transaction(tx)
         tx_hash = self.w3.eth.send_raw_transaction(signed.raw_transaction)
@@ -107,7 +107,7 @@ class Chain:
             "value": self.cfg.gas_float_wei,
             "gas": 21000,
             "gasPrice": self.w3.eth.gas_price,
-            "nonce": self.w3.eth.get_transaction_count(self.DEPLOYER),
+            "nonce": self.w3.eth.get_transaction_count(self.DEPLOYER, "pending"),
             "chainId": self.chain_id,
         }
         signed = self.deployer.sign_transaction(tx)
@@ -347,7 +347,7 @@ class Chain:
         """
         account = account or self.deployer
         factory = self.w3.eth.contract(abi=abi, bytecode=bytecode)
-        overrides = {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address)}
+        overrides = {"from": account.address, "nonce": self.w3.eth.get_transaction_count(account.address, "pending")}
         if value:
             overrides["value"] = value
         tx = factory.constructor(*args).build_transaction(overrides)
@@ -401,7 +401,7 @@ class Chain:
         tx = fn.build_transaction(
             {
                 "from": account.address,
-                "nonce": self.w3.eth.get_transaction_count(account.address),
+                "nonce": self.w3.eth.get_transaction_count(account.address, "pending"),
                 "gas": gas,
             }
         )
