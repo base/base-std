@@ -40,6 +40,8 @@ FEATURES: list[tuple[str, bytes]] = [
 ]
 
 ACTIVATE_SELECTOR = bytes(Web3.keccak(text="activate(bytes32)")[:4])
+DEACTIVATE_SELECTOR = bytes(Web3.keccak(text="deactivate(bytes32)")[:4])
+ISACTIVATED_SELECTOR = bytes(Web3.keccak(text="isActivated(bytes32)")[:4])
 
 
 def log(msg: str) -> None:
@@ -151,25 +153,41 @@ def anvil_running(anvil: Path, port: int, admin: str, log_path: Path) -> Iterato
 # ── Activation ───────────────────────────────────────────────────────────────────
 
 
-def activate_features(w3: Web3, admin: str, skip: set[str]) -> None:
-    """Fund + impersonate the admin, then activate each gated feature not in SKIP_ACTIVATE."""
+def _is_activated(w3: Web3, fid: bytes) -> bool:
+    """Read ActivationRegistry.isActivated(fid) via eth_call (no tx)."""
+    ret = w3.eth.call({"to": ACTIVATION_REGISTRY, "data": Web3.to_hex(ISACTIVATED_SELECTOR + fid)})
+    return int.from_bytes(bytes(ret), "big") != 0
+
+
+def reconcile_feature_state(w3: Web3, admin: str, skip: set[str]) -> None:
+    """Bring each gated feature to the state this run needs, idempotently.
+
+    Works whether the node boots with features inactive (plain `anvil --base`)
+    or already seeded active (`anvil --base` once base-anvil BOP-375 lands):
+    non-skipped features are ensured active, SKIP_ACTIVATE features are ensured
+    inactive so the inactive-dispatch path is exercised either way. Activating
+    an already-active feature reverts AlreadyActivated, so we check first.
+    """
     log("funding + impersonating activation admin…")
     w3.provider.make_request("anvil_setBalance", [admin, hex(2**64 - 1)])
     w3.provider.make_request("anvil_impersonateAccount", [admin])
 
     for name, fid in FEATURES:
-        if should_skip(name, fid, skip):
-            log(f"leaving feature un-activated: {name} 0x{fid.hex()} [SKIP_ACTIVATE]")
+        want_active = not should_skip(name, fid, skip)
+        if _is_activated(w3, fid) == want_active:
+            log(f"feature {name} 0x{fid.hex()} already {'active' if want_active else 'inactive'}")
             continue
-        log(f"activating feature {name} 0x{fid.hex()}")
-        data = Web3.to_hex(ACTIVATE_SELECTOR + fid)
+        selector = ACTIVATE_SELECTOR if want_active else DEACTIVATE_SELECTOR
+        verb = "activating" if want_active else "deactivating"
+        log(f"{verb} feature {name} 0x{fid.hex()}")
+        data = Web3.to_hex(selector + fid)
         try:
             tx_hash = w3.eth.send_transaction({"from": admin, "to": ACTIVATION_REGISTRY, "data": data})
             receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=30)
         except Exception as exc:  # noqa: BLE001 - any RPC/tx failure is an environment problem
-            die(f"activation tx failed for {name} 0x{fid.hex()}: {type(exc).__name__}: {exc}")
+            die(f"{verb} tx failed for {name} 0x{fid.hex()}: {type(exc).__name__}: {exc}")
         if receipt["status"] != 1:
-            die(f"activation tx reverted for {name} 0x{fid.hex()} (status {receipt['status']})")
+            die(f"{verb} tx reverted for {name} 0x{fid.hex()} (status {receipt['status']})")
 
 
 # ── Orchestration ────────────────────────────────────────────────────────────────
@@ -195,7 +213,7 @@ def main(forge_args: list[str]) -> int:
 
     log("starting anvil…")
     with anvil_running(anvil, port, admin, log_path) as w3:
-        activate_features(w3, admin, skip)
+        reconcile_feature_state(w3, admin, skip)
 
         rpc_url = f"http://localhost:{port}"
         log(f"running forge test --fork-url {rpc_url} {' '.join(forge_args)}")
