@@ -1,0 +1,154 @@
+name: Conformance (base/base main)
+
+# ADVISORY EARLY-WARNING. Builds base-anvil from source against base/base *main*
+# HEAD and runs the base-std suite against it, to catch divergences in
+# bleeding-edge base/base before it ships. Slow (compiles Foundry), so it runs
+# on a schedule rather than per-PR. Divergences here are expected while base/base
+# is mid-development — this is a monitor, not a gate, and never runs on PRs.
+# The fast per-PR check against the *shipped* build lives in conformance-beryl.yml.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+env:
+  BASE_REF: main
+  BASE_ANVIL_BRANCH: base-anvil-fork
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  conformance-main:
+    name: "Conformance: base/base main (advisory)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    continue-on-error: true
+    steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout base-std
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Install native dependencies
+        uses: awalsh128/cache-apt-pkgs-action@5902b33ae29014e6ca012c5d8025d4346556bd40 # v1.4.3
+        with:
+          packages: libsqlite3-dev clang libclang-dev llvm llvm-dev build-essential pkg-config protobuf-compiler
+          version: 1.4
+
+      - name: Install Rust
+        shell: bash
+        run: rustup default stable && rustup show active-toolchain
+
+      - name: Set LIBCLANG_PATH
+        shell: bash
+        run: |
+          LLVM_BIN=$(command -v llvm-config || ls /usr/bin/llvm-config-* 2>/dev/null | sort -V | tail -1)
+          LLVM_VERSION=$($LLVM_BIN --version | cut -d. -f1)
+          echo "LIBCLANG_PATH=/usr/lib/llvm-${LLVM_VERSION}/lib" >> "$GITHUB_ENV"
+
+      - name: Install mold
+        uses: rui314/setup-mold@725a8794d15fc7563f59595bd9556495c0564878 # v1
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
+
+      - name: Clone base/base + base-anvil
+        shell: bash
+        run: |
+          set -euo pipefail
+          workdir="$RUNNER_TEMP/conformance-main"
+          rm -rf "$workdir"; mkdir -p "$workdir"
+          git clone --depth 1 --single-branch --branch "$BASE_REF" \
+            https://github.com/base/base.git "$workdir/base"
+          git clone --depth 1 --single-branch --branch "$BASE_ANVIL_BRANCH" \
+            https://github.com/base/base-anvil.git "$workdir/base-anvil"
+          echo "BASE_DIR=$workdir/base" >> "$GITHUB_ENV"
+          echo "BASE_ANVIL_DIR=$workdir/base-anvil" >> "$GITHUB_ENV"
+          echo "BASE_SHA=$(git -C "$workdir/base" rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - name: Build base-anvil against base/base main
+        shell: bash
+        env:
+          CARGO_PROFILE_RELEASE_LTO: "false"
+          RUSTC_WRAPPER: "sccache"
+          SCCACHE_GHA_ENABLED: "true"
+        run: |
+          set -euo pipefail
+          cd "$BASE_ANVIL_DIR"
+          cargo \
+            --config "patch.\"https://github.com/base/base.git\".base-common-precompiles.path=\"$BASE_DIR/crates/common/precompiles\"" \
+            --config "patch.\"https://github.com/base/base.git\".base-common-chains.path=\"$BASE_DIR/crates/common/chains\"" \
+            build --release --no-default-features --features anvil/cli -p anvil -p forge
+          "$BASE_ANVIL_DIR/target/release/anvil" --version
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+
+      - name: Set up fork-test runner venv
+        shell: bash
+        run: make smoke-setup PYTHON=python3
+
+      - name: Run conformance suite against base/base main (advisory)
+        shell: bash
+        run: |
+          set +e
+          ANVIL_BIN="$BASE_ANVIL_DIR/target/release/anvil" \
+            FORGE_BIN="$BASE_ANVIL_DIR/target/release/forge" \
+            ANVIL_LOG="$RUNNER_TEMP/anvil.log" \
+            make fork-tests 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          exit 0
+
+      - name: Report results (step summary)
+        if: always()
+        shell: bash
+        run: |
+          out="$RUNNER_TEMP/out.txt"
+          passed=$(grep -c '\[PASS\]' "$out" 2>/dev/null || true); passed=${passed:-0}
+          failed=$(grep -c '\[FAIL' "$out" 2>/dev/null || true); failed=${failed:-0}
+          {
+            echo "## Conformance: base/base main"
+            echo ""
+            echo "Built base-anvil against base/base \`${BASE_SHA}\` (main HEAD)."
+            echo ""
+            if [ "$((passed + failed))" -eq 0 ]; then
+              echo "Did not run — see logs (build/setup issue, not a divergence)."
+            elif [ "$failed" -eq 0 ]; then
+              echo "✅ All ${passed} passed — base/base main is in sync with the base-std reference."
+            else
+              echo "⚠️ ${failed} diverged, ${passed} passed. These are points where base/base **main** has drifted from the base-std reference — an early warning for base/base to catch up before shipping. Advisory only."
+              echo ""
+              echo '```'
+              grep '\[FAIL' "$out" | sed 's/\x1B\[[0-9;]*m//g' || true
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload anvil log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conformance-main-anvil-log
+          path: ${{ runner.temp }}/anvil.log
+          if-no-files-found: ignore
