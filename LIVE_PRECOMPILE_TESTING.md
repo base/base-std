@@ -4,6 +4,49 @@
 > against base/base's Rust precompile impls. Read this when the precompile
 > code in `base/base` changes (or when you're picking the workflow up cold).
 
+## Quick start (installed binaries)
+
+Most devs don't need to build base-anvil from source. Install it alongside your
+stock Foundry (it never touches your existing `forge`/`anvil`) to get
+`base-forge` and `base-anvil`:
+
+```bash
+curl -L https://raw.githubusercontent.com/base/base-anvil/HEAD/foundryup/install | bash
+base-foundryup
+```
+
+**In-process, no node — the common case.** `base-forge` hosts the precompiles
+in `forge`'s own EVM and seeds the gated features active, so the suite just runs
+and `BaseTest` auto-detects the live world:
+
+```bash
+base-forge test
+```
+
+`setUp` logs which world ran: **LIVE PRECOMPILE mode** (under `base-forge`) or
+**REFERENCE mode** (stock `forge test`, exercising the Solidity mocks).
+
+**Against a real base-anvil node — genuine fork testing.** Point the Python
+runner at your installed binaries; it boots `anvil --base`, activates the gated
+features, and runs `forge test --fork-url` against the node:
+
+```bash
+make smoke-setup   # one-time: Python 3.13 venv + web3
+ANVIL_BIN="$HOME/.foundry/versions/base-nightly/anvil" \
+FORGE_BIN="$HOME/.foundry/versions/base-nightly/forge" \
+  make fork-tests
+```
+
+> A base-anvil **node** starts with the gated features **inactive** — it mirrors
+> a real chain, where only the activation admin flips features on. (Forge's
+> in-process `--base` is the exception: it seeds them active for the no-node
+> path above.) `make fork-tests` activates them for you; if you start a node by
+> hand, activate via the admin first or calls revert `FeatureNotActivated` (see
+> "When the precompiles update" below).
+
+Build base-anvil from source only if you're changing base-anvil itself — see
+the from-source setup below.
+
 ## What this does
 
 Runs base-std's existing unit test suite (~346 tests with paired
@@ -46,7 +89,10 @@ base-std/                  base-anvil/                base/
   if you want to iterate on an unpushed branch (see "Local-iteration
   override" below).
 
-## Prerequisites (first-time setup)
+## Building base-anvil from source (contributors)
+
+> Only needed if you're modifying base-anvil itself. Most devs should use the
+> installed binaries from [Quick start](#quick-start-installed-binaries) above.
 
 Clone two repos as siblings (base/base is fetched automatically by cargo):
 
