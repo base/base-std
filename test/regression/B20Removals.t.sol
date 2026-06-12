@@ -16,7 +16,7 @@ import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 ///         surface — fails here.
 ///
 /// @dev    These are *selector-absence* assertions: the token mock (and the live precompile in
-///         fork mode) carries no fallback, so a call to a removed selector cannot succeed. The
+///         live precompile mode) carries no fallback, so a call to a removed selector cannot succeed. The
 ///         same test body is meaningful against the mock (proves the Solidity reference dropped
 ///         the surface) and against the live precompile under `LIVE_PRECOMPILES=true ... --fork-url`
 ///         (proves `base/base` dropped it too). Args are irrelevant — dispatch fails before decoding

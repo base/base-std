@@ -17,7 +17,7 @@ import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationR
 ///         authority split, and the `base.b20_asset` activation namespace. Each test asserts the
 ///         new surface is present and correct AND the old surface is gone, so the rename cannot
 ///         silently regress in either the Solidity reference or the `base/base` Rust precompile
-///         (under fork mode).
+///         (under live precompile mode).
 ///
 /// @dev    Old-selector absence is checked with low-level calls (the token carries no fallback, so
 ///         a retired selector cannot resolve); new surface is checked with typed calls that only

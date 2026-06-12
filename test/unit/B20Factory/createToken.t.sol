@@ -301,7 +301,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
     /// @notice Verifies asset createToken initializes the supply cap to the maximum (uint128.max).
     /// @dev The factory writes `B20Constants.MAX_SUPPLY_CAP` at bootstrap — the unbounded
     ///      ("no cap") sentinel and the highest value the cap may ever hold. Pinning this on the
-    ///      factory-creation path (fuzzed caller/salt) means fork mode catches a precompile that
+    ///      factory-creation path (fuzzed caller/salt) means live precompile mode catches a precompile that
     ///      fails to seed the cap at creation. Paired surface + slot assertions.
     function test_createB20_success_assetSupplyCapDefaultsToMax(address caller, bytes32 salt) public {
         _assumeValidCaller(caller);

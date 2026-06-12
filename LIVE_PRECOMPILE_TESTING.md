@@ -1,4 +1,4 @@
-# Fork testing: base-std vs Base Rust precompiles
+# Live precompile testing: base-std vs Base Rust precompiles
 
 > Agent / engineer handoff for revalidating base-std's Solidity reference
 > against base/base's Rust precompile impls. Read this when the precompile
@@ -85,6 +85,24 @@ cargo build --release -p anvil -p forge
 ```
 
 ## Run the tests
+
+The simplest path needs no node and no flags — `base-forge` (from the
+base-anvil fork) hosts the live precompiles in-process and `BaseTest`
+auto-detects them:
+
+```bash
+base-forge test
+```
+
+`setUp` prints which world it ran in: **LIVE PRECOMPILE mode** (checking
+base/base against the Solidity reference) under `base-forge`, or **REFERENCE
+mode** (exercising the Solidity mocks; base/base not under test) under stock
+`forge test`. No `LIVE_PRECOMPILES` or `FOUNDRY_PROFILE=fork` needed —
+detection is a behavioral probe of the precompile addresses.
+
+To cross-validate against a **real base-anvil node** (the original harness,
+used in CI), use the Python runner, which boots `anvil --base`, activates the
+gated features, and runs `forge test --fork-url` against it:
 
 ```bash
 cd ~/code/base-std
@@ -242,11 +260,12 @@ or `PORT=8547 make fork-tests`.
 **`anvil exited during startup`** — check `/tmp/anvil.log`. Usual cause:
 rust build is stale after a base/base change; rebuild.
 
-**Hundreds of `EvmError: Revert` with `gas: 0` in `setUp`** — either the
-`LIVE_PRECOMPILES` env var wasn't set (BaseTest etched the mocks over the
-precompile addresses) or `[profile.fork] base = true` is missing from
-`foundry.toml` (forge isn't installing the precompiles). The runner sets
-both, but if you're invoking forge directly, set both.
+**Hundreds of `EvmError: Revert` / `cannot use precompile ... as an argument`
+in `setUp`** — `BaseTest` tried to etch the mocks over live precompile
+addresses. Auto-detection prevents this under `base-forge` or a `--fork-url`
+node; if you still hit it, the precompiles aren't actually present (e.g.
+`base = true` / `--base` missing, so forge isn't installing them). Force the
+intended world with `LIVE_PRECOMPILES=true` if detection is ever wrong.
 
 **`FeatureNotActivated(bytes32)` revert payload** — a new gated feature
 landed in base/base. Add its ID to the derived feature set (see Step 2 above:
@@ -289,7 +308,7 @@ If this returns garbage / fails, the fork's build is broken or out of date.
 |---|---|---|
 | The test runner | `script/fork/` (`make fork-tests`) | Python + web3; forwards forge args through `ARGS` |
 | Forge profile config | `foundry.toml`, `[profile.fork]` | `base = true` enables Rust precompile dispatch |
-| Skip-etch logic | `test/lib/BaseTest.sol` | guarded by `LIVE_PRECOMPILES` env var |
+| Mode detection / skip-etch | `test/lib/BaseTest.sol` | auto-probes for live precompiles; `LIVE_PRECOMPILES=true` forces live |
 | Slot assertions | `test/unit/**/*.t.sol`, `test/lib/mocks/Mock*Storage.sol` | `vm.load`-based slot-layout assertions paired with surface tests |
 | Storage helpers | `test/lib/mocks/MockB20Storage.sol`, `MockPolicyRegistryStorage.sol` | the slot-derivation library every assertion uses |
 | Patched forge + anvil | `~/code/base-anvil/target/.../{forge,anvil}` | built by `cargo build -p forge -p anvil` |

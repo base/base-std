@@ -220,7 +220,7 @@ contract B20FullLayoutTest is B20Test {
         // The other slot-by-slot assertions in this test are NOT
         // dual-backend; they pin the Solidity layout exactly. Per-slot
         // divergence against the Rust impl is the cross-validation
-        // signal documented in FORK_TESTING.md's bucket table.
+        // signal documented in LIVE_PRECOMPILE_TESTING.md's bucket table.
         _assertInitialized(tokenAddr, "initialized marker must be set");
     }
 

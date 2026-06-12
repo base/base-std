@@ -18,7 +18,7 @@ import {B20Constants} from "base-std/lib/B20Constants.sol";
 ///
 ///         Mock mode gets this for free from revm's journaled storage —
 ///         a passing test there just confirms revm works. The
-///         signal is in fork mode against the real Rust precompile,
+///         signal is in live precompile mode against the real Rust precompile,
 ///         where any break in the `precompile-storage` journal hookup
 ///         would leave the earlier writes persisted across the revert.
 ///         Companion to the Rust-side unit tests.

@@ -65,12 +65,24 @@ Solidity version: `0.8.30` for reference implementations. Interfaces are
 written for broader compatibility (`>=0.8.20 <0.9.0`) so consumers can
 import them without forcing a specific compiler.
 
-### Fork testing against live precompiles
+### Live precompile testing
 
-The unit suite can run against a chain hosting the live Rust precompile
-implementations to verify the Rust impls match the Solidity reference's
-behavior and storage layout. The same test bodies are reused — only the
-backend changes.
+The same unit suite runs against the live Rust precompiles to verify they
+match the Solidity reference's behavior and storage layout — only the backend
+changes. The simplest way is `base-forge` (from
+[base-anvil](https://github.com/base/base-anvil)), which hosts the precompiles
+in-process; `BaseTest` auto-detects them, so no flags are needed:
+
+```bash
+base-forge test
+```
+
+Stock `forge test` runs the same suite against the Solidity mocks instead
+(reference mode); `setUp` logs which mode ran. See
+[LIVE_PRECOMPILE_TESTING.md](./LIVE_PRECOMPILE_TESTING.md) for the full
+workflow, including running against a real base-anvil node.
+
+To run against a forked chain that already hosts the precompiles:
 
 ```bash
 LIVE_PRECOMPILES=true FOUNDRY_PROFILE=fork forge test --fork-url vibenet

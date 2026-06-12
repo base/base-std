@@ -32,7 +32,7 @@ contract PolicyRegistryCreatePolicyWithAccountsRollbackTest is PolicyRegistryTes
     /// @dev    Reads the relevant slots with `vm.load` before and after
     ///         the reverting call — the test's signal is the byte-level
     ///         equality, which is the strictest possible "state
-    ///         unchanged" assertion across both mock and fork modes.
+    ///         unchanged" assertion across both mock and live precompile modes.
     function test_createPolicyWithAccounts_rollback_batchSizeTooLarge(
         address caller,
         address admin_,
