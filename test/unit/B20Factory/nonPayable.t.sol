@@ -26,7 +26,7 @@ contract B20FactoryNonPayableTest is B20FactoryTest {
     /// @notice Verifies `createB20` reverts with `NonPayable` when ETH is attached.
     /// @dev Arbitrary value, variant, and calldata: the guard fires before decoding.
     function test_createB20_revert_nonPayable(address caller, uint256 value, bytes32 salt) public {
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         _assumeValidCaller(caller);
         vm.assume(value != 0);
         vm.deal(caller, value);
@@ -44,7 +44,7 @@ contract B20FactoryNonPayableTest is B20FactoryTest {
     function test_createB20_revertOrder_nonPayable_beats_activation(address caller, uint256 value, bytes32 salt)
         public
     {
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         _assumeValidCaller(caller);
         vm.assume(value != 0);
         vm.deal(caller, value);

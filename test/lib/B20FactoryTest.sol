@@ -147,10 +147,10 @@ contract B20FactoryTest is BaseTest {
     ///         the same test body is meaningful under both backends.
     ///         Tests that specifically pin the SOLIDITY MOCK's slot
     ///         layout (e.g. `MockB20SlotHelpers.t.sol`) should
-    ///         `vm.skip(vm.envOr("LIVE_PRECOMPILES", false))` instead —
+    ///         `vm.skip(livePrecompiles)` instead —
     ///         those assertions are inherently mock-world invariants.
     function _assertInitialized(address token, string memory err) internal view {
-        if (vm.envOr("LIVE_PRECOMPILES", false)) {
+        if (livePrecompiles) {
             assertGt(token.code.length, 0, err);
         } else {
             assertEq(uint256(vm.load(token, MockB20Storage.initializedSlot())), 1, err);

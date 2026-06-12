@@ -19,7 +19,7 @@ import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegis
 contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
     /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
     function test_createPolicy_revertOrder(address caller, address admin_, uint8 typeIdx) public {
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
 
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));

@@ -21,7 +21,7 @@ contract PolicyRegistryDispatchInactiveTest is PolicyRegistryTest {
     bytes32 internal constant FEATURE = ActivationRegistryFeatureList.POLICY_REGISTRY;
 
     function _forkMode() internal view returns (bool) {
-        return vm.envOr("LIVE_PRECOMPILES", false);
+        return livePrecompiles;
     }
 
     /// @dev Deactivate the feature if active; no-op otherwise (idempotent across both run modes).

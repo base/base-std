@@ -3,12 +3,14 @@ pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
+import {console2} from "forge-std/console2.sol";
 
 import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationRegistryFeatureList.sol";
 import {MockActivationRegistry} from "base-std-test/lib/mocks/MockActivationRegistry.sol";
 import {MockPolicyRegistry} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 import {MockB20Factory} from "base-std-test/lib/mocks/MockB20Factory.sol";
 
+import {IActivationRegistry} from "base-std/interfaces/IActivationRegistry.sol";
 import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
@@ -19,23 +21,23 @@ import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 /// (`B20FactoryTest`, `PolicyRegistryTest`, ...) extend this and
 /// layer on their own helpers and any test-class-specific state.
 ///
-/// **Mock-vs-live.** `setUp` etches each precompile mock at its
-/// canonical address by default. Set the `LIVE_PRECOMPILES`
-/// environment variable to `true` to skip etching so calls dispatch
-/// to whatever's deployed at the precompile addresses on the forked
-/// chain. The canonical fork-test invocation is:
+/// **Reference vs. live precompiles.** The suite runs in one of two
+/// worlds, detected automatically (no flag to remember):
+///   - **Reference mode** (stock `forge test`): the precompile
+///     addresses are empty, so `setUp` etches the Solidity mocks — you
+///     are testing the reference implementation itself.
+///   - **Live precompile mode** (`base-forge test`, or `forge test
+///     --fork-url <base-anvil node>`): base-anvil's `--base` mode makes
+///     the real Rust precompiles present, so `setUp` skips the etch —
+///     you are checking base/base against the reference (conformance).
 ///
-///     LIVE_PRECOMPILES=true FOUNDRY_PROFILE=fork forge test --fork-url vibenet
-///
-/// Why an explicit env var rather than auto-detecting whether the
-/// live precompile is deployed? Native EVM precompiles (which is what
-/// the Rust impls are deployed as on vibenet) return zero code via
-/// `eth_getCode` even when they respond to calls. The previous
-/// `code.length == 0` check was unreliable for that reason and would
-/// silently clobber a live precompile with the mock, producing
-/// false-pass results that mask layout / behavior mismatches between
-/// the Solidity reference and the Rust impl. An explicit opt-in is
-/// the surface that makes the intent unambiguous.
+/// Detection is a behavioral probe (STATICCALL `ActivationRegistry.admin()`
+/// before any etch), not an `extcodesize` check: native precompiles
+/// report zero code even when they respond to calls, so a code-size
+/// check is unreliable and would silently clobber a live precompile
+/// with a mock. `LIVE_PRECOMPILES=true` forces live mode as an escape
+/// hatch. The detected world is recorded in `livePrecompiles` and
+/// announced via a `setUp` log line.
 ///
 /// **Cross-precompile dependency model.** Every test gets all three
 /// precompile mocks etched. Token tests need the factory mock to
@@ -79,6 +81,12 @@ abstract contract BaseTest is Test {
     address internal bob = makeAddr("bob");
     address internal attacker = makeAddr("attacker");
 
+    /// @notice True when the live base/base precompiles are present
+    ///         (`base-forge` / base-anvil), false when the Solidity mocks are
+    ///         etched (stock `forge`). Set in setUp; read by tests that are
+    ///         only meaningful in one world.
+    bool internal livePrecompiles;
+
     // -- Setup --
     function setUp() public virtual {
         vm.label(admin, "admin");
@@ -90,29 +98,49 @@ abstract contract BaseTest is Test {
         vm.label(StdPrecompiles.POLICY_REGISTRY_ADDRESS, "PolicyRegistry");
         vm.label(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, "ActivationRegistry");
 
-        // Etch the mocks unless the user explicitly opts into
-        // running against the live precompiles. See the contract-
-        // level NatSpec for the rationale on the env var rather than
-        // auto-detection.
-        if (!vm.envOr("LIVE_PRECOMPILES", false)) {
-            vm.etch(StdPrecompiles.B20_FACTORY_ADDRESS, type(MockB20Factory).runtimeCode);
-            vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
-            vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
-
-            // Activate every B-20 feature so the bulk of the suite — which
-            // exercises behaviors orthogonal to the activation gate — doesn't
-            // have to repeat the bootstrap. Tests that pin the gating
-            // behavior itself (`B20Factory/activation.t.sol`) deactivate the
-            // specific feature under test before exercising it.
-            // In fork mode (LIVE_PRECOMPILES=true) the features are already
-            // active on the live chain, so this bootstrap is skipped.
-            address activationAdmin = StdPrecompiles.ACTIVATION_REGISTRY.admin();
-            vm.startPrank(activationAdmin);
-            StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_ASSET);
-            StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_STABLECOIN);
-            StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.POLICY_REGISTRY);
-            vm.stopPrank();
+        // Pick the world by detecting whether the live precompiles are
+        // present (see contract NatSpec), then announce it so a run is never
+        // ambiguous about what it validated.
+        livePrecompiles = _detectLivePrecompiles();
+        if (livePrecompiles) {
+            console2.log("[base-std] LIVE PRECOMPILE mode: exercising base/base's precompiles (conformance check)");
+            // The precompiles are present and base-anvil's --base mode seeds
+            // their features, so there is nothing to etch or bootstrap.
+            return;
         }
+
+        console2.log("[base-std] REFERENCE mode: exercising the Solidity mocks; base/base is NOT under test");
+
+        vm.etch(StdPrecompiles.B20_FACTORY_ADDRESS, type(MockB20Factory).runtimeCode);
+        vm.etch(StdPrecompiles.POLICY_REGISTRY_ADDRESS, type(MockPolicyRegistry).runtimeCode);
+        vm.etch(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, type(MockActivationRegistry).runtimeCode);
+
+        // Activate every B-20 feature so the bulk of the suite — which
+        // exercises behaviors orthogonal to the activation gate — doesn't
+        // have to repeat the bootstrap. Tests that pin the gating behavior
+        // itself (`B20Factory/activation.t.sol`) deactivate the specific
+        // feature under test before exercising it.
+        address activationAdmin = StdPrecompiles.ACTIVATION_REGISTRY.admin();
+        vm.startPrank(activationAdmin);
+        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_ASSET);
+        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.B20_STABLECOIN);
+        StdPrecompiles.ACTIVATION_REGISTRY.activate(ActivationRegistryFeatureList.POLICY_REGISTRY);
+        vm.stopPrank();
+    }
+
+    /// @notice Detect whether the live precompiles are present in this EVM.
+    ///
+    /// @dev Behavioral probe rather than `extcodesize`: native precompiles
+    ///      report zero code even when they respond, so a code-size check is
+    ///      unreliable. We STATICCALL `ActivationRegistry.admin()` before any
+    ///      mock is etched — a live precompile returns a 32-byte address; an
+    ///      empty address (stock forge) returns zero-length returndata.
+    ///      `LIVE_PRECOMPILES=true` forces live as an escape hatch.
+    function _detectLivePrecompiles() private view returns (bool) {
+        if (vm.envOr("LIVE_PRECOMPILES", false)) return true;
+        (bool ok, bytes memory ret) =
+            StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS.staticcall(abi.encodeCall(IActivationRegistry.admin, ()));
+        return ok && ret.length >= 32;
     }
 
     /// @notice Filters out addresses that are unsafe to use as a fuzzed

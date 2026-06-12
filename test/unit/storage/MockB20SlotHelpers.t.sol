@@ -268,7 +268,7 @@ contract MockB20SlotHelpersTest is B20Test {
     ///      slot pinned here is a Solidity-mock invariant with no
     ///      counterpart on the live precompile. Skip under LIVE_PRECOMPILES.
     function test_initializedSlot_success_decodesAfterBootstrap() public {
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         assertEq(
             uint256(vm.load(address(token), MockB20Storage.initializedSlot())),
             1,
@@ -285,7 +285,7 @@ contract MockB20SlotHelpersTest is B20Test {
     ///      layout doesn't have an `initialized` slot at all, so disjointness
     ///      from `adminCountSlot` is a Solidity-mock invariant.
     function test_adminCountSlot_success_disjointFromInitializedSlot() public {
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         assertTrue(
             MockB20Storage.adminCountSlot() != MockB20Storage.initializedSlot(),
             "adminCount and initialized must live in disjoint slots"

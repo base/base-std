@@ -209,7 +209,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         // the window OPEN (during which the factory is the only caller). The two states are mutually
         // exclusive in any real sequence, so there is no fork-reachable construction. The mock
         // observes it only by reopening the window via vm.store, which has no live-precompile analog.
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         _assumeValidActor(from);
         _assumeValidActor(to);
         allowanceAmount = bound(allowanceAmount, 0, B20Constants.MAX_SUPPLY_CAP - 1);
@@ -243,7 +243,7 @@ contract B20TransferFromWithMemoTest is B20Test {
         // Mock-only by necessity: see test_transferFromWithMemo_revert_privileged_insufficientAllowance.
         // The privileged path needs a pre-existing allowance[from][factory] that cannot be
         // established inside the atomic bootstrap window, so there is no fork-reachable construction.
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);

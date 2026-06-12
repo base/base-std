@@ -132,7 +132,7 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     ///         test is skipped when running against live precompiles.
     ///         Matches the Rust precompile which reverts with Panic(UnderOverflow) = Panic(0x11).
     function test_createPolicy_revert_counterOverflow(address caller, address admin_, uint8 typeIdx) public {
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
 
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));

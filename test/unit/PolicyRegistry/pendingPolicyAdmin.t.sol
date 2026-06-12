@@ -80,7 +80,7 @@ contract PolicyRegistryPendingPolicyAdminTest is PolicyRegistryTest {
     ///         test is skipped when running against live precompiles.
     function test_pendingPolicyAdmin_success_zeroForBuiltinsEvenWithStoragePoison() public {
         // Skip when running against live precompiles — vm.store cannot target native precompiles.
-        vm.skip(vm.envOr("LIVE_PRECOMPILES", false));
+        vm.skip(livePrecompiles);
         address poison = address(0xDEAD);
         vm.store(
             address(policyRegistry),
