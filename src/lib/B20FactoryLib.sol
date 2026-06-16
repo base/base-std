@@ -135,7 +135,7 @@ library B20FactoryLib {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Encodes a bootstrap initCall to `IB20.updateSupplyCap`.
-    /// @param newSupplyCap New supply cap (`type(uint256).max` for no cap).
+    /// @param newSupplyCap New supply cap (`type(uint128).max` for no cap).
     function encodeUpdateSupplyCap(uint256 newSupplyCap) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20.updateSupplyCap, (newSupplyCap));
     }
