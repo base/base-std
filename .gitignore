@@ -2,6 +2,7 @@
 out/
 cache/
 broadcast/
+lcov.info
 
 # Dependencies (we explicitly do NOT vendor third-party libs;
 # this is here only for any future Foundry-managed installs).
