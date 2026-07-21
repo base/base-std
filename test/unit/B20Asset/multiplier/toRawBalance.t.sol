@@ -30,7 +30,7 @@ contract B20AssetToRawBalanceTest is B20AssetTest {
     /// @notice Verifies toRawBalance of zero scaled balance is zero regardless of the multiplier
     /// @dev Degenerate input edge: any multiplier divided into zero is zero.
     function test_toRawBalance_success_zeroScaledBalance(uint256 newMultiplier) public {
-        newMultiplier = bound(newMultiplier, 1, type(uint256).max);
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _updateMultiplier(newMultiplier);
         assertEq(asset().toRawBalance(0), 0, "zero scaled balance must produce zero raw balance");
     }

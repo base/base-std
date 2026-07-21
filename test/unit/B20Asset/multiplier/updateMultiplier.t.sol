@@ -5,6 +5,7 @@ import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
 import {IB20} from "base-std/interfaces/IB20.sol";
 import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
+import {IScaledUIAmount} from "base-std/interfaces/IScaledUIAmount.sol";
 
 import {MockB20AssetStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
@@ -33,12 +34,21 @@ contract B20AssetUpdateMultiplierTest is B20AssetTest {
         asset().updateMultiplier(0);
     }
 
+    /// @notice Verifies updateMultiplier reverts when newMultiplier exceeds the uint128 ceiling
+    function test_updateMultiplier_revert_aboveUint128Ceiling(uint256 newMultiplier) public {
+        newMultiplier = bound(newMultiplier, uint256(type(uint128).max) + 1, type(uint256).max);
+        _grantOperator();
+        vm.prank(operator);
+        vm.expectRevert(IB20Asset.InvalidMultiplier.selector);
+        asset().updateMultiplier(newMultiplier);
+    }
+
     /// @notice Verifies updateMultiplier writes the new value to the stored slot
     /// @dev State invariant: the stored slot holds the supplied multiplier verbatim (no clamping,
     ///      no scaling). Paired slot assertion verifies the storage write lands at the
     ///      multiplier slot.
     function test_updateMultiplier_success_writesSlot(uint256 newMultiplier) public {
-        vm.assume(newMultiplier != 0);
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _updateMultiplier(newMultiplier);
         assertEq(
             uint256(vm.load(address(token), MockB20AssetStorage.multiplierSlot())),
@@ -47,14 +57,15 @@ contract B20AssetUpdateMultiplierTest is B20AssetTest {
         );
     }
 
-    /// @notice Verifies updateMultiplier emits MultiplierUpdated with the new value
-    /// @dev Event integrity for the rotation; subscribers depend on this event to
-    ///      re-derive holder scaled balances off-chain.
+    /// @notice Verifies updateMultiplier emits UIMultiplierUpdated(old, new, block.timestamp)
+    /// @dev Event integrity for the instant failsafe: ERC-8056 requires the multiplier-change
+    ///      event on every update.
     function test_updateMultiplier_success_emitsEvent(uint256 newMultiplier) public {
-        vm.assume(newMultiplier != 0);
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
+        uint256 oldMultiplier = asset().multiplier();
         vm.expectEmit(false, false, false, true, address(token));
-        emit IB20Asset.MultiplierUpdated(newMultiplier);
+        emit IScaledUIAmount.UIMultiplierUpdated(oldMultiplier, newMultiplier, block.timestamp);
         vm.prank(operator);
         asset().updateMultiplier(newMultiplier);
     }

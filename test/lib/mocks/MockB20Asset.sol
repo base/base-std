@@ -3,6 +3,12 @@ pragma solidity ^0.8.20;
 
 import {IB20} from "base-std/interfaces/IB20.sol";
 import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
+import {IERC165} from "base-std/interfaces/IERC165.sol";
+import {
+    IScaledUIAmount,
+    IScaledUIAmountNewUIMultiplier,
+    IScaledUIAmountBalances
+} from "base-std/interfaces/IScaledUIAmount.sol";
 
 import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20AssetStorage, MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
@@ -120,6 +126,23 @@ contract MockB20Asset is MockB20, IB20Asset {
         return _multiplier();
     }
 
+    /// @dev ERC-8056 alias of `multiplier()`.
+    function uiMultiplier() external view returns (uint256) {
+        return _multiplier();
+    }
+
+    /// @dev ERC-8056 pending target view function
+    function newUIMultiplier() external view returns (uint256) {
+        MockB20AssetStorage.PendingMultiplier storage pending = MockB20AssetStorage.layout().pending;
+        if (pending.effectiveAt > block.timestamp) return pending.multiplier;
+        return _multiplier();
+    }
+
+    /// @dev ERC-8056 pending effective time
+    function effectiveAt() external view returns (uint256) {
+        return MockB20AssetStorage.layout().pending.effectiveAt;
+    }
+
     function toScaledBalance(uint256 rawBalance) external view returns (uint256) {
         return (rawBalance * _multiplier()) / WAD_PRECISION;
     }
@@ -132,10 +155,80 @@ contract MockB20Asset is MockB20, IB20Asset {
         return (MockB20Storage.layout().balances[account] * _multiplier()) / WAD_PRECISION;
     }
 
+    /// @dev ERC-8056 Balances extension. Alias of `scaledBalanceOf`.
+    function balanceOfUI(address account) external view returns (uint256) {
+        return (MockB20Storage.layout().balances[account] * _multiplier()) / WAD_PRECISION;
+    }
+
+    /// @dev ERC-8056 Balances extension. View function for scaled total supply.
+    function totalSupplyUI() external view returns (uint256) {
+        return (MockB20Storage.layout().totalSupply * _multiplier()) / WAD_PRECISION;
+    }
+
+    /// @notice Schedules a single pending multiplier update. Standard corporate-action path.
+    /// @dev Factors a matured-but-uncancelled pending into the current multiplier first, so a
+    ///      scheduled change is never silently lost (deliberately unlike the ERC-8056 reference
+    ///      setter, which overwrites). A *live* pending (`effectiveAt > block.timestamp`) blocks and
+    ///      must be cancelled first.
+    function setUIMultiplier(uint256 newMultiplier, uint256 effectiveAt_) external onlyRole(OPERATOR_ROLE) {
+        if (newMultiplier == 0 || newMultiplier > type(uint128).max) revert InvalidMultiplier();
+        if (effectiveAt_ <= block.timestamp) revert EffectiveAtInPast(effectiveAt_);
+        if (effectiveAt_ > type(uint64).max) revert EffectiveAtTooFar(effectiveAt_);
+
+        MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
+        uint256 pendingEff = $.pending.effectiveAt;
+        // A live pending blocks a new schedule.
+        if (pendingEff > block.timestamp) revert ScheduleOverlap(pendingEff);
+        // A matured-but-uncancelled pending is folded into the current multiplier before the
+        // overwrite below so it is never lost.
+        if (pendingEff != 0) $.multiplier = $.pending.multiplier;
+
+        uint256 old = _currentMultiplier();
+        $.pending = MockB20AssetStorage.PendingMultiplier({
+            multiplier: uint128(newMultiplier), effectiveAt: uint64(effectiveAt_)
+        });
+
+        emit UIMultiplierUpdated(old, newMultiplier, effectiveAt_);
+    }
+
+    /// @notice Cancels the single live pending update, restoring the no-pending state.
+    function cancelScheduledMultiplier() external onlyRole(OPERATOR_ROLE) {
+        MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
+        uint256 pendingMult = $.pending.multiplier;
+        uint256 pendingEff = $.pending.effectiveAt;
+        // Only a live pending can be cancelled
+        if (pendingEff <= block.timestamp) revert NoScheduledMultiplier();
+        delete $.pending;
+
+        emit MultiplierUpdateCancelled(pendingMult, pendingEff);
+    }
+
+    /// @notice Sets the current multiplier immediately and clears any pending.
     function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
-        if (newMultiplier == 0) revert InvalidMultiplier();
-        MockB20AssetStorage.layout().multiplier = newMultiplier;
-        emit MultiplierUpdated(newMultiplier);
+        if (newMultiplier == 0 || newMultiplier > type(uint128).max) revert InvalidMultiplier();
+        MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
+        uint256 pendingMult = $.pending.multiplier;
+        uint256 pendingEff = $.pending.effectiveAt;
+        bool livePending = pendingEff > block.timestamp;
+
+        uint256 old = _multiplier();
+        $.multiplier = newMultiplier;
+        if (pendingEff != 0) delete $.pending;
+        if (livePending) emit MultiplierUpdateCancelled(pendingMult, pendingEff);
+        emit UIMultiplierUpdated(old, newMultiplier, block.timestamp);
+    }
+
+    // ============================================================
+    //                          ERC-165
+    // ============================================================
+
+    /// @dev Advertises ERC-165 itself plus the three claimed ERC-8056 interfaces. The Conversion
+    ///      extension (`0x57854fc3`) is deliberately NOT advertised — the native
+    ///      `toScaledBalance` / `toRawBalance` names are kept unaliased.
+    function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
+        return interfaceId == type(IERC165).interfaceId || interfaceId == type(IScaledUIAmount).interfaceId
+            || interfaceId == type(IScaledUIAmountNewUIMultiplier).interfaceId
+            || interfaceId == type(IScaledUIAmountBalances).interfaceId;
     }
 
     // ============================================================
@@ -177,9 +270,19 @@ contract MockB20Asset is MockB20, IB20Asset {
     //                       INTERNAL HELPERS
     // ============================================================
 
-    /// @dev Stored `0` resolves to `WAD_PRECISION` so a freshly-etched
-    ///      token (no factory write yet) reports a 1:1 multiplier.
+    /// @dev The effective multiplier: returns the pending slot's value if live,
+    ///      otherwise returns the current multiplier.
     function _multiplier() internal view returns (uint256) {
+        MockB20AssetStorage.PendingMultiplier storage pending = MockB20AssetStorage.layout().pending;
+        if (pending.effectiveAt != 0 && block.timestamp >= pending.effectiveAt) {
+            return pending.multiplier;
+        }
+        return _currentMultiplier();
+    }
+
+    /// @dev The current multiplier. If `multiplier` is unset, stored `0` resolves to `WAD_PRECISION`
+    ///      so a fresh deploy reports a 1:1 multiplier.
+    function _currentMultiplier() internal view returns (uint256) {
         uint256 stored = MockB20AssetStorage.layout().multiplier;
         return stored == 0 ? WAD_PRECISION : stored;
     }

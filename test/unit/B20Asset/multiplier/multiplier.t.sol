@@ -20,10 +20,11 @@ contract B20AssetMultiplierTest is B20AssetTest {
     }
 
     /// @notice Verifies the multiplier reads back the stored value after a write
-    /// @dev Fuzz over arbitrary non-zero multipliers; the read surface returns the stored value
-    ///      verbatim (no rescaling, no clamping).
+    /// @dev Fuzz over the valid multiplier range; the read surface returns the stored value
+    ///      verbatim (no rescaling, no clamping). The setter caps the multiplier at
+    ///      `type(uint128).max`, so the fuzz range mirrors that.
     function test_multiplier_success_returnsStoredValue(uint256 newMultiplier) public {
-        newMultiplier = bound(newMultiplier, 1, type(uint256).max);
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _updateMultiplier(newMultiplier);
         assertEq(asset().multiplier(), newMultiplier, "multiplier must equal the last written value");
         assertEq(

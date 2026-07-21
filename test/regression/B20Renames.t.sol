@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import {Vm} from "forge-std/Vm.sol";
+
 import {IB20} from "base-std/interfaces/IB20.sol";
 import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 import {B20Constants} from "base-std/lib/B20Constants.sol";
@@ -75,6 +77,47 @@ contract B20RenamesTest is B20AssetTest {
             abi.encodeWithSignature("updateShareRatio(uint256)", rawBalance),
             "updateShareRatio(uint256) must not resolve (renamed to updateMultiplier)"
         );
+    }
+
+    // ============================================================
+    //             MULTIPLIER EVENT + ERC-8056 SURFACE
+    // ============================================================
+
+    bytes32 internal constant UI_MULTIPLIER_UPDATED_SIG = keccak256("UIMultiplierUpdated(uint256,uint256,uint256)");
+    bytes32 internal constant LEGACY_MULTIPLIER_UPDATED_SIG = keccak256("MultiplierUpdated(uint256)");
+
+    /// @notice Verifies the multiplier-change event was widened/renamed to the ERC-8056
+    ///         `UIMultiplierUpdated(old, new, effectiveAt)` and the legacy `MultiplierUpdated(uint256)`
+    ///         is gone
+    /// @dev `updateMultiplier` must emit the ERC-8056 topic and never the legacy topic. Regression: BOP-431.
+    function test_multiplierEvent_success_widenedToUIMultiplierUpdated(uint256 newMultiplier) public {
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
+        _grantOperator();
+        vm.recordLogs();
+        vm.prank(operator);
+        asset().updateMultiplier(newMultiplier);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertGt(
+            _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG), -1, "UIMultiplierUpdated(old,new,effAt) must be emitted"
+        );
+        assertEq(
+            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG), -1, "legacy MultiplierUpdated(uint256) must be gone"
+        );
+    }
+
+    /// @notice Verifies the ERC-8056 surface resolves and aliases the native B20 names
+    /// @dev `uiMultiplier` aliases `multiplier`; `balanceOfUI` aliases `scaledBalanceOf`; the pending
+    ///      surface, `totalSupplyUI`, and `supportsInterface` all resolve. These typed calls only
+    ///      compile against the current interface, so their presence is the guard. Regression: BOP-431.
+    function test_erc8056Surface_success_aliasesResolve(uint256 amount) public {
+        amount = bound(amount, 0, type(uint128).max);
+        if (amount > 0) _mint(alice, amount);
+        assertEq(asset().uiMultiplier(), asset().multiplier(), "uiMultiplier must alias multiplier");
+        assertEq(asset().balanceOfUI(alice), asset().scaledBalanceOf(alice), "balanceOfUI must alias scaledBalanceOf");
+        assertEq(asset().newUIMultiplier(), asset().uiMultiplier(), "no-pending: newUIMultiplier == uiMultiplier");
+        assertEq(asset().effectiveAt(), 0, "no-pending: effectiveAt == 0");
+        assertEq(asset().totalSupplyUI(), token.totalSupply(), "default multiplier: totalSupplyUI == totalSupply");
+        assertTrue(asset().supportsInterface(0xa60bf13d), "IScaledUIAmount (0xa60bf13d) must be advertised");
     }
 
     // ============================================================
