@@ -60,7 +60,7 @@ interface IPolicyRegistry {
     error EmptyOperandSet();
 
     /// @notice A composite operand is not a flat leaf. Operands must be existing ALLOWLIST or
-    ///         BLOCKLIST policies; composites of composites are rejected (flat-only).
+    ///         BLOCKLIST policies; a composite may not reference another composite (flat-only).
     /// @param operandId The offending operand policy ID.
     error InvalidOperand(uint64 operandId);
 
@@ -208,15 +208,15 @@ interface IPolicyRegistry {
     /// @param accounts Accounts to update.
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external;
 
-    /// @notice Replaces a composite policy's operand set in full with `operands`. This is a whole-set
-    ///         overwrite, not an incremental edit: the caller sends the complete desired operand list
-    ///         and it is re-validated exactly as at creation. The gate (UNION or INTERSECT) is fixed in
-    ///         the policy ID and cannot change; a different gate requires a new composite.
+    /// @notice Replaces a composite policy's operand set in full with `operands`. The caller sends the
+    ///         complete desired operand list, and it is re-validated as at creation. The gate (UNION or
+    ///         INTERSECT) is fixed in the policy ID and cannot change; a different gate requires a new
+    ///         composite.
     ///
     /// @dev Overwrite semantics are last-write-wins. The function carries no expected-version guard, so
-    ///      concurrent full-set submissions by shared admins silently clobber one another; serialize
-    ///      edits through the governing multisig or approval flow. Read the current operands before
-    ///      editing.
+    ///      concurrent full-set submissions by shared admins overwrite one another with no conflict
+    ///      signal; serialize edits through the governing multisig or approval flow, and read the
+    ///      current operands before editing.
     /// @dev Guard order: `PolicyNotFound` -> `IncompatiblePolicyType` -> `Unauthorized` ->
     ///      `EmptyOperandSet` / `BatchSizeTooLarge` -> per-operand `PolicyNotFound` / `InvalidOperand`.
     /// @dev Reverts with `PolicyNotFound` when `policyId` does not exist.
