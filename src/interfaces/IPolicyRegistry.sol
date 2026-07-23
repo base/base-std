@@ -14,8 +14,8 @@ interface IPolicyRegistry {
     ///
     /// @param BLOCKLIST Leaf. Authorized unless in the policy's set.
     /// @param ALLOWLIST Leaf. Authorized only if in the policy's set.
-    /// @param UNION     Authorized if ANY operand policy is authorized (logical OR).
-    /// @param INTERSECT Authorized only if EVERY operand policy is authorized (logical AND).
+    /// @param UNION     Authorized if ANY child policy is authorized (logical OR).
+    /// @param INTERSECT Authorized only if EVERY child policy is authorized (logical AND).
     enum PolicyType {
         BLOCKLIST,
         ALLOWLIST,
@@ -52,14 +52,19 @@ interface IPolicyRegistry {
     /// @notice `finalizeUpdateAdmin` was called with no pending admin staged.
     error NoPendingAdmin();
 
-    /// @notice A composite policy was created or updated with an empty operand set. A composite must
-    ///         reference at least one operand, so the never-revert fold evaluator need not define
-    ///         empty-UNION / empty-INTERSECT semantics.
-    error EmptyOperandSet();
+    /// @notice A composite policy was created or updated with an empty child set.
+    error EmptyChildSet();
 
-    /// @notice Operands must be existing ALLOWLIST or BLOCKLIST policies.
-    /// @param operandId The offending operand policy ID.
-    error InvalidOperand(uint64 operandId);
+    /// @notice A composite policy was created or updated with fewer than the minimum number of
+    ///         children. A composite must reference at least two leaf child policies.
+    /// @param provided Number of child policy IDs supplied.
+    /// @param minimum  Minimum required (2).
+    error TooFewChildren(uint256 provided, uint256 minimum);
+
+    /// @notice A composite child is not a flat leaf. Children must be existing ALLOWLIST or
+    ///         BLOCKLIST policies; a composite may not reference another composite (flat-only).
+    /// @param childPolicyId The offending child policy ID.
+    error InvalidChildPolicy(uint64 childPolicyId);
 
     /*//////////////////////////////////////////////////////////////
                                  EVENTS
@@ -81,15 +86,15 @@ interface IPolicyRegistry {
     /// @notice One or more accounts had their BLOCKLIST membership set to `blocked` in a single batch.
     event BlocklistUpdated(uint64 indexed policyId, address indexed updater, bool blocked, address[] accounts);
 
-    /// @notice A composite policy (UNION or INTERSECT) was created over `operands`.
+    /// @notice A composite policy (UNION or INTERSECT) was created over `childPolicyIds`.
     event CompositePolicyCreated(
-        uint64 indexed policyId, address indexed creator, PolicyType policyType, uint64[] operands
+        uint64 indexed policyId, address indexed creator, PolicyType policyType, uint64[] childPolicyIds
     );
 
-    /// @notice A composite policy's operand set was replaced in full with `operands`. The event
+    /// @notice A composite policy's child set was replaced in full with `childPolicyIds`. The event
     ///         carries the complete post-update set, so an indexer reconstructs current state from a
     ///         single log with no delta folding.
-    event CompositeOperandsUpdated(uint64 indexed policyId, address indexed updater, uint64[] operands);
+    event CompositeChildrenUpdated(uint64 indexed policyId, address indexed updater, uint64[] childPolicyIds);
 
     /*//////////////////////////////////////////////////////////////
                             POLICY CREATION
@@ -126,26 +131,27 @@ interface IPolicyRegistry {
         returns (uint64 newPolicyId);
 
     /// @notice Creates a new composite policy that combines existing leaf policies under a logic gate.
-    ///         Permissionless. A UNION authorizes an account if ANY operand authorizes it; an INTERSECT
-    ///         authorizes only if EVERY operand does. `isAuthorized` folds the operands and never reverts.
+    ///         Permissionless. A UNION authorizes an account if ANY child authorizes it; an INTERSECT
+    ///         authorizes only if EVERY child does. `isAuthorized` folds the children and never reverts.
     ///
-    /// @dev Operands are flat-only: each must be an existing ALLOWLIST or BLOCKLIST policy, never another
-    ///      composite. Because operands reference smaller, already-assigned IDs, the reference graph is a
-    ///      DAG and cannot cycle. The operand set is capped at the composite operand limit.
+    /// @dev Children are flat-only: each must be an existing ALLOWLIST or BLOCKLIST policy, never another
+    ///      composite. Because children reference smaller, already-assigned IDs, the reference graph is a
+    ///      DAG and cannot cycle. The child set is capped at the composite child limit.
     /// @dev Reverts with `IncompatiblePolicyType` when `gate` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
-    /// @dev Reverts with `EmptyOperandSet` when `operands` is empty.
-    /// @dev Reverts with `BatchSizeTooLarge` when `operands.length` exceeds the composite operand limit.
-    /// @dev Reverts with `PolicyNotFound` when any operand does not exist.
-    /// @dev Reverts with `InvalidOperand` when any operand is itself a composite (not a flat leaf).
+    /// @dev Reverts with `EmptyChildSet` when `childPolicyIds` is empty.
+    /// @dev Reverts with `TooFewChildren` when `childPolicyIds.length == 1`.
+    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite child limit.
+    /// @dev Reverts with `PolicyNotFound` when any child does not exist.
+    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a flat leaf).
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
-    /// @param admin    Initial admin authorized to update operands and transfer or renounce administration.
-    /// @param gate     UNION or INTERSECT.
-    /// @param operands Existing leaf policy IDs to combine.
+    /// @param admin          Initial admin authorized to update children and transfer or renounce administration.
+    /// @param gate           UNION or INTERSECT.
+    /// @param childPolicyIds Existing leaf policy IDs to combine.
     ///
     /// @return newPolicyId The newly assigned composite policy ID.
-    function createCompositePolicy(address admin, PolicyType policyType, uint64[] calldata operandPolicies)
+    function createCompositePolicy(address admin, PolicyType policyType, uint64[] calldata childPolicyIds)
         external
         returns (uint64 newPolicyId);
 
@@ -205,29 +211,31 @@ interface IPolicyRegistry {
     /// @param accounts Accounts to update.
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external;
 
-    /// @notice Replaces a composite policy's operand set in full with `operands`. The caller sends the
-    ///         complete desired operand list, and it is re-validated as at creation. The gate (UNION or
-    ///         INTERSECT) is fixed in the policy ID and cannot change; a different gate requires a new
-    ///         composite.
+    /// @notice Replaces a composite policy's child set in full with `childPolicyIds`. The caller sends
+    ///         the complete desired child list, and it is re-validated as at creation. The gate (UNION
+    ///         or INTERSECT) is fixed in the policy ID and cannot change; a different gate requires a
+    ///         new composite.
     ///
     /// @dev Overwrite semantics are last-write-wins. The function carries no expected-version guard, so
     ///      concurrent full-set submissions by shared admins overwrite one another with no conflict
     ///      signal; serialize edits through the governing multisig or approval flow, and read the
-    ///      current operands before editing.
+    ///      current children before editing.
     /// @dev Guard order: `PolicyNotFound` -> `IncompatiblePolicyType` -> `Unauthorized` ->
-    ///      `EmptyOperandSet` / `BatchSizeTooLarge` -> per-operand `PolicyNotFound` / `InvalidOperand`.
+    ///      `EmptyChildSet` / `TooFewChildren` / `BatchSizeTooLarge` ->
+    ///      per-child `PolicyNotFound` / `InvalidChildPolicy`.
     /// @dev Reverts with `PolicyNotFound` when `policyId` does not exist.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyId` is not a composite (UNION or INTERSECT).
     /// @dev Reverts with `Unauthorized` when the caller is not the current admin. A renounced composite
     ///      (admin `address(0)`) can never be updated.
-    /// @dev Reverts with `EmptyOperandSet` when `operands` is empty; there is no clear-the-list path.
-    /// @dev Reverts with `BatchSizeTooLarge` when `operands.length` exceeds the composite operand limit.
-    /// @dev Reverts with `PolicyNotFound` when any operand does not exist.
-    /// @dev Reverts with `InvalidOperand` when any operand is itself a composite (not a flat leaf).
+    /// @dev Reverts with `EmptyChildSet` when `childPolicyIds` is empty; there is no clear-the-list path.
+    /// @dev Reverts with `TooFewChildren` when `childPolicyIds.length == 1`.
+    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite child limit.
+    /// @dev Reverts with `PolicyNotFound` when any child does not exist.
+    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a flat leaf).
     ///
-    /// @param policyId Composite policy to update.
-    /// @param operands Complete new operand set of existing leaf policy IDs.
-    function updateCompositeOperands(uint64 policyId, uint64[] calldata operands) external;
+    /// @param policyId       Composite policy to update.
+    /// @param childPolicyIds Complete new child set of existing leaf policy IDs.
+    function updateCompositeChildren(uint64 policyId, uint64[] calldata childPolicyIds) external;
 
     /*//////////////////////////////////////////////////////////////
                          AUTHORIZATION QUERIES
