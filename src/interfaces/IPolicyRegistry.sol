@@ -94,9 +94,7 @@ interface IPolicyRegistry {
 
     /// @notice A composite policy's child set was replaced in full with `childPolicyIds`. The event
     ///         carries the complete post-update set.
-    event CompositeChildPoliciesUpdated(
-        uint64 indexed policyId, address indexed updater, uint64[] childPolicyIds
-    );
+    event CompositePolicyUpdated(uint64 indexed policyId, address indexed updater, uint64[] childPolicyIds);
 
     /*//////////////////////////////////////////////////////////////
                             POLICY CREATION
@@ -225,7 +223,7 @@ interface IPolicyRegistry {
     ///
     /// @param policyId       Composite policy to update.
     /// @param childPolicyIds Complete new set of existing simple policy IDs.
-    function updateCompositeChildPolicies(uint64 policyId, uint64[] calldata childPolicyIds) external;
+    function updateComposite(uint64 policyId, uint64[] calldata childPolicyIds) external;
 
     /*//////////////////////////////////////////////////////////////
                          AUTHORIZATION QUERIES
