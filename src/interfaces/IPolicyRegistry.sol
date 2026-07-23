@@ -98,8 +98,7 @@ interface IPolicyRegistry {
     /// @notice Creates a new simple policy with no initial members. Permissionless.
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
-    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate (UNION or
-    ///      INTERSECT); use `createCompositePolicy` for those.
+    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin      Initial admin authorized to modify membership and transfer or renounce administration.
