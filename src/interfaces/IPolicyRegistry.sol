@@ -14,8 +14,8 @@ interface IPolicyRegistry {
     ///
     /// @param BLOCKLIST Leaf. Authorized unless in the policy's set.
     /// @param ALLOWLIST Leaf. Authorized only if in the policy's set.
-    /// @param UNION     Composite. Authorized if authorized under ANY operand (logical OR).
-    /// @param INTERSECT Composite. Authorized only if authorized under EVERY operand (logical AND).
+    /// @param UNION     Authorized if ANY operand policy is authorized (logical OR).
+    /// @param INTERSECT Authorized only if EVERY operand policy is authorized (logical AND).
     enum PolicyType {
         BLOCKLIST,
         ALLOWLIST,
