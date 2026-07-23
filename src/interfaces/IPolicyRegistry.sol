@@ -111,8 +111,7 @@ interface IPolicyRegistry {
     /// @notice Creates a new simple policy seeded with `accounts` as initial members. Permissionless.
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. Takes precedence over `BatchSizeTooLarge`.
-    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate (UNION or
-    ///      INTERSECT); use `createCompositePolicy` for those. Takes precedence over `BatchSizeTooLarge`.
+    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite policyType.
     /// @dev Reverts with `BatchSizeTooLarge` when `accounts.length` exceeds the registry limit.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
