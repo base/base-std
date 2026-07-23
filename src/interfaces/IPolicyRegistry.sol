@@ -98,8 +98,7 @@ interface IPolicyRegistry {
     /// @notice Creates a new simple policy with no initial members. Permissionless.
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
-    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate (UNION or
-    ///      INTERSECT); use `createCompositePolicy` for those.
+    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin      Initial admin authorized to modify membership and transfer or renounce administration.
@@ -111,8 +110,7 @@ interface IPolicyRegistry {
     /// @notice Creates a new simple policy seeded with `accounts` as initial members. Permissionless.
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. Takes precedence over `BatchSizeTooLarge`.
-    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate (UNION or
-    ///      INTERSECT); use `createCompositePolicy` for those. Takes precedence over `BatchSizeTooLarge`.
+    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite policyType.
     /// @dev Reverts with `BatchSizeTooLarge` when `accounts.length` exceeds the registry limit.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
@@ -127,6 +125,7 @@ interface IPolicyRegistry {
 
     /// @notice Creates a new composite policy that combines existing simple policies under a logic
     ///         gate.
+    ///
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite.
     ///      The child-policy set is capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
