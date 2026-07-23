@@ -87,13 +87,8 @@ interface IPolicyRegistry {
     /// @notice One or more accounts had their BLOCKLIST membership set to `blocked` in a single batch.
     event BlocklistUpdated(uint64 indexed policyId, address indexed updater, bool blocked, address[] accounts);
 
-    /// @notice A composite policy (UNION or INTERSECT) was created over `childPolicyIds`.
-    event CompositePolicyCreated(
-        uint64 indexed policyId, address indexed creator, PolicyType policyType, uint64[] childPolicyIds
-    );
-
-    /// @notice A composite policy's child set was replaced in full with `childPolicyIds`. The event
-    ///         carries the complete post-update set.
+    /// @notice A composite policy's child set was set or replaced in full with `childPolicyIds`. Emitted
+    ///         on composite creation and on every subsequent update; carries the complete post-update set.
     event CompositePolicyUpdated(uint64 indexed policyId, address indexed updater, uint64[] childPolicyIds);
 
     /*//////////////////////////////////////////////////////////////
