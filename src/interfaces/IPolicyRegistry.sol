@@ -12,10 +12,14 @@ interface IPolicyRegistry {
 
     /// @notice Policy type discriminator. Discriminants are append-only.
     ///
-    /// @param BLOCKLIST Leaf. Authorized unless in the policy's set.
-    /// @param ALLOWLIST Leaf. Authorized only if in the policy's set.
-    /// @param UNION     Authorized if ANY child policy is authorized (logical OR).
-    /// @param INTERSECT Authorized only if EVERY child policy is authorized (logical AND).
+    /// @dev Two kinds of policy:
+    ///      - Membership (BLOCKLIST, ALLOWLIST): decide from an address set.
+    ///      - Composite (UNION, INTERSECT): decide by combining child membership policies.
+    ///
+    /// @param BLOCKLIST Membership. Account is authorized unless it is in the set.
+    /// @param ALLOWLIST Membership. Account is authorized only if it is in the set.
+    /// @param UNION     Composite (OR). Account is authorized if any child policy authorizes it.
+    /// @param INTERSECT Composite (AND). Account is authorized only if every child policy authorizes it.
     enum PolicyType {
         BLOCKLIST,
         ALLOWLIST,
@@ -56,13 +60,13 @@ interface IPolicyRegistry {
     error EmptyChildSet();
 
     /// @notice A composite policy was created or updated with fewer than the minimum number of
-    ///         children. A composite must reference at least two leaf child policies.
+    ///         children. A composite must reference at least two membership policies.
     /// @param provided Number of child policy IDs supplied.
     /// @param minimum  Minimum required (2).
     error TooFewChildren(uint256 provided, uint256 minimum);
 
-    /// @notice A composite child is not a flat leaf. Children must be existing ALLOWLIST or
-    ///         BLOCKLIST policies; a composite may not reference another composite (flat-only).
+    /// @notice A composite child is not a membership policy. Children must be existing ALLOWLIST or
+    ///         BLOCKLIST policies; a composite may not reference another composite.
     /// @param childPolicyId The offending child policy ID.
     error InvalidChildPolicy(uint64 childPolicyId);
 
@@ -100,7 +104,7 @@ interface IPolicyRegistry {
                             POLICY CREATION
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Creates a new leaf policy with no initial members. Permissionless.
+    /// @notice Creates a new membership policy with no initial members. Permissionless.
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate (UNION or
@@ -113,7 +117,7 @@ interface IPolicyRegistry {
     /// @return newPolicyId The newly assigned policy ID.
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId);
 
-    /// @notice Creates a new leaf policy seeded with `accounts` as initial members. Permissionless.
+    /// @notice Creates a new membership policy seeded with `accounts` as initial members. Permissionless.
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. Takes precedence over `BatchSizeTooLarge`.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate (UNION or
@@ -130,25 +134,26 @@ interface IPolicyRegistry {
         external
         returns (uint64 newPolicyId);
 
-    /// @notice Creates a new composite policy that combines existing leaf policies under a logic gate.
-    ///         Permissionless. A UNION authorizes an account if ANY child authorizes it; an INTERSECT
-    ///         authorizes only if EVERY child does. `isAuthorized` folds the children and never reverts.
+    /// @notice Creates a new composite policy that combines existing membership policies under a logic
+    ///         gate. Permissionless. A UNION authorizes an account if any child authorizes it; an
+    ///         INTERSECT authorizes only if every child does. `isAuthorized` folds the children and
+    ///         never reverts.
     ///
-    /// @dev Children are flat-only: each must be an existing ALLOWLIST or BLOCKLIST policy, never another
-    ///      composite. Because children reference smaller, already-assigned IDs, the reference graph is a
-    ///      DAG and cannot cycle. The child set is capped at the composite child limit.
+    /// @dev Children must be membership policies (ALLOWLIST or BLOCKLIST), never another composite.
+    ///      Because children reference smaller, already-assigned IDs, the reference graph is a DAG and
+    ///      cannot cycle. The child set is capped at the composite child limit.
     /// @dev Reverts with `IncompatiblePolicyType` when `gate` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `EmptyChildSet` when `childPolicyIds` is empty.
     /// @dev Reverts with `TooFewChildren` when `childPolicyIds.length == 1`.
     /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite child limit.
     /// @dev Reverts with `PolicyNotFound` when any child does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a flat leaf).
+    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a membership policy).
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin          Initial admin authorized to update children and transfer or renounce administration.
     /// @param gate           UNION or INTERSECT.
-    /// @param childPolicyIds Existing leaf policy IDs to combine.
+    /// @param childPolicyIds Existing membership policy IDs to combine.
     ///
     /// @return newPolicyId The newly assigned composite policy ID.
     function createCompositePolicy(address admin, PolicyType policyType, uint64[] calldata childPolicyIds)
@@ -231,10 +236,10 @@ interface IPolicyRegistry {
     /// @dev Reverts with `TooFewChildren` when `childPolicyIds.length == 1`.
     /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite child limit.
     /// @dev Reverts with `PolicyNotFound` when any child does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a flat leaf).
+    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a membership policy).
     ///
     /// @param policyId       Composite policy to update.
-    /// @param childPolicyIds Complete new child set of existing leaf policy IDs.
+    /// @param childPolicyIds Complete new child set of existing membership policy IDs.
     function updateCompositeChildren(uint64 policyId, uint64[] calldata childPolicyIds) external;
 
     /*//////////////////////////////////////////////////////////////
