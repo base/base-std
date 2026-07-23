@@ -145,7 +145,7 @@ interface IPolicyRegistry {
     /// @param operands Existing leaf policy IDs to combine.
     ///
     /// @return newPolicyId The newly assigned composite policy ID.
-    function createCompositePolicy(address admin, PolicyType gate, uint64[] calldata operands)
+    function createCompositePolicy(address admin, PolicyType policyType, uint64[] calldata operandPolicies)
         external
         returns (uint64 newPolicyId);
 
