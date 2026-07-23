@@ -127,6 +127,7 @@ interface IPolicyRegistry {
 
     /// @notice Creates a new composite policy that combines existing simple policies under a logic
     ///         gate.
+    ///
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite.
     ///      The child-policy set is capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
