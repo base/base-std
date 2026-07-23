@@ -127,12 +127,12 @@ interface IPolicyRegistry {
 
     /// @notice Creates a new composite policy that combines existing simple policies under a logic
     ///         gate.
-    /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite. The child-policy set is capped at the composite child-policy limit.
+    /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite.
+    ///      The child-policy set is capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. 
     /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2` (including empty).
-    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite
-    ///      child-policy limit.
+    /// @dev Reverts with `BatchSizeTooLarge(4)` when `childPolicyIds.length > 4`
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
     /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
     ///      (not a simple policy).
@@ -210,8 +210,8 @@ interface IPolicyRegistry {
     /// @dev Reverts with `Unauthorized` when the caller is not the current admin. A renounced composite
     ///      (admin `address(0)`) can never be updated.
     /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2`; there is no clear-the-list path.
-    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite
-    ///      child-policy limit.
+    /// @dev Reverts with `BatchSizeTooLarge(4)` when `childPolicyIds.length > 4`
+    ///      (composite child-policy cap; not the account membership batch limit of 64).
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
     /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
     ///      (not a simple policy).
