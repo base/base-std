@@ -56,17 +56,17 @@ interface IPolicyRegistry {
     /// @notice `finalizeUpdateAdmin` was called with no pending admin staged.
     error NoPendingAdmin();
 
-    /// @notice A composite policy was created or updated with an empty child set.
-    error EmptyChildSet();
+    /// @notice A composite policy was created or updated with an empty child-policy set.
+    error EmptyChildPolicySet();
 
     /// @notice A composite policy was created or updated with fewer than the minimum number of
-    ///         children. A composite must reference at least two membership policies.
+    ///         child policies. A composite must reference at least two membership policies.
     /// @param provided Number of child policy IDs supplied.
     /// @param minimum  Minimum required (2).
-    error TooFewChildren(uint256 provided, uint256 minimum);
+    error TooFewChildPolicies(uint256 provided, uint256 minimum);
 
-    /// @notice A composite child is not a membership policy. Children must be existing ALLOWLIST or
-    ///         BLOCKLIST policies; a composite may not reference another composite.
+    /// @notice A composite child is not a membership policy. Child policies must be existing
+    ///         ALLOWLIST or BLOCKLIST policies; a composite may not reference another composite.
     /// @param childPolicyId The offending child policy ID.
     error InvalidChildPolicy(uint64 childPolicyId);
 
@@ -96,9 +96,10 @@ interface IPolicyRegistry {
     );
 
     /// @notice A composite policy's child set was replaced in full with `childPolicyIds`. The event
-    ///         carries the complete post-update set, so an indexer reconstructs current state from a
-    ///         single log with no delta folding.
-    event CompositeChildrenUpdated(uint64 indexed policyId, address indexed updater, uint64[] childPolicyIds);
+    ///         carries the complete post-update set.
+    event CompositeChildPoliciesUpdated(
+        uint64 indexed policyId, address indexed updater, uint64[] childPolicyIds
+    );
 
     /*//////////////////////////////////////////////////////////////
                             POLICY CREATION
@@ -135,24 +136,22 @@ interface IPolicyRegistry {
         returns (uint64 newPolicyId);
 
     /// @notice Creates a new composite policy that combines existing membership policies under a logic
-    ///         gate. Permissionless. A UNION authorizes an account if any child authorizes it; an
-    ///         INTERSECT authorizes only if every child does. `isAuthorized` folds the children and
-    ///         never reverts.
-    ///
-    /// @dev Children must be membership policies (ALLOWLIST or BLOCKLIST), never another composite.
-    ///      Because children reference smaller, already-assigned IDs, the reference graph is a DAG and
-    ///      cannot cycle. The child set is capped at the composite child limit.
-    /// @dev Reverts with `IncompatiblePolicyType` when `gate` is not UNION or INTERSECT.
-    /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
-    /// @dev Reverts with `EmptyChildSet` when `childPolicyIds` is empty.
-    /// @dev Reverts with `TooFewChildren` when `childPolicyIds.length == 1`.
-    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite child limit.
-    /// @dev Reverts with `PolicyNotFound` when any child does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a membership policy).
+    ///         gate.
+    /// @dev Child policies must be membership policies (ALLOWLIST or BLOCKLIST), never another composite. The child-policy set is capped at the composite child-policy limit.
+    /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
+    /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. 
+    /// @dev Reverts with `EmptyChildPolicySet` when `childPolicyIds` is empty.
+    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length == 1`.
+    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite
+    ///      child-policy limit.
+    /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
+    /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
+    ///      (not a membership policy).
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
-    /// @param admin          Initial admin authorized to update children and transfer or renounce administration.
-    /// @param gate           UNION or INTERSECT.
+    /// @param admin          Initial admin authorized to update child policies and transfer or renounce
+    ///                       administration.
+    /// @param policyType     UNION or INTERSECT.
     /// @param childPolicyIds Existing membership policy IDs to combine.
     ///
     /// @return newPolicyId The newly assigned composite policy ID.
@@ -216,31 +215,23 @@ interface IPolicyRegistry {
     /// @param accounts Accounts to update.
     function updateBlocklist(uint64 policyId, bool blocked, address[] calldata accounts) external;
 
-    /// @notice Replaces a composite policy's child set in full with `childPolicyIds`. The caller sends
-    ///         the complete desired child list, and it is re-validated as at creation. The gate (UNION
-    ///         or INTERSECT) is fixed in the policy ID and cannot change; a different gate requires a
-    ///         new composite.
-    ///
-    /// @dev Overwrite semantics are last-write-wins. The function carries no expected-version guard, so
-    ///      concurrent full-set submissions by shared admins overwrite one another with no conflict
-    ///      signal; serialize edits through the governing multisig or approval flow, and read the
-    ///      current children before editing.
-    /// @dev Guard order: `PolicyNotFound` -> `IncompatiblePolicyType` -> `Unauthorized` ->
-    ///      `EmptyChildSet` / `TooFewChildren` / `BatchSizeTooLarge` ->
-    ///      per-child `PolicyNotFound` / `InvalidChildPolicy`.
+    /// @notice Replaces a composite policy's child-policy set in full with `childPolicyIds`.
     /// @dev Reverts with `PolicyNotFound` when `policyId` does not exist.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyId` is not a composite (UNION or INTERSECT).
     /// @dev Reverts with `Unauthorized` when the caller is not the current admin. A renounced composite
     ///      (admin `address(0)`) can never be updated.
-    /// @dev Reverts with `EmptyChildSet` when `childPolicyIds` is empty; there is no clear-the-list path.
-    /// @dev Reverts with `TooFewChildren` when `childPolicyIds.length == 1`.
-    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite child limit.
-    /// @dev Reverts with `PolicyNotFound` when any child does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child is itself a composite (not a membership policy).
+    /// @dev Reverts with `EmptyChildPolicySet` when `childPolicyIds` is empty; there is no clear-the-list
+    ///      path.
+    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length == 1`.
+    /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite
+    ///      child-policy limit.
+    /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
+    /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
+    ///      (not a membership policy).
     ///
     /// @param policyId       Composite policy to update.
-    /// @param childPolicyIds Complete new child set of existing membership policy IDs.
-    function updateCompositeChildren(uint64 policyId, uint64[] calldata childPolicyIds) external;
+    /// @param childPolicyIds Complete new set of existing membership policy IDs.
+    function updateCompositeChildPolicies(uint64 policyId, uint64[] calldata childPolicyIds) external;
 
     /*//////////////////////////////////////////////////////////////
                          AUTHORIZATION QUERIES
