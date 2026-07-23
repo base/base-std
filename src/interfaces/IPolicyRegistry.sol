@@ -56,9 +56,6 @@ interface IPolicyRegistry {
     /// @notice `finalizeUpdateAdmin` was called with no pending admin staged.
     error NoPendingAdmin();
 
-    /// @notice A composite policy was created or updated with an empty child-policy set.
-    error EmptyChildPolicySet();
-
     /// @notice A composite policy was created or updated with fewer than the minimum number of
     ///         child policies. A composite must reference at least two simple policies.
     /// @param provided Number of child policy IDs supplied.
@@ -140,8 +137,7 @@ interface IPolicyRegistry {
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite. The child-policy set is capped at the composite child-policy limit.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. 
-    /// @dev Reverts with `EmptyChildPolicySet` when `childPolicyIds` is empty.
-    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length == 1`.
+    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2` (including empty).
     /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite
     ///      child-policy limit.
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
@@ -220,9 +216,7 @@ interface IPolicyRegistry {
     /// @dev Reverts with `IncompatiblePolicyType` when `policyId` is not a composite (UNION or INTERSECT).
     /// @dev Reverts with `Unauthorized` when the caller is not the current admin. A renounced composite
     ///      (admin `address(0)`) can never be updated.
-    /// @dev Reverts with `EmptyChildPolicySet` when `childPolicyIds` is empty; there is no clear-the-list
-    ///      path.
-    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length == 1`.
+    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2`; there is no clear-the-list path.
     /// @dev Reverts with `BatchSizeTooLarge` when `childPolicyIds.length` exceeds the composite
     ///      child-policy limit.
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
