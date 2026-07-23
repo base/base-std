@@ -57,8 +57,7 @@ interface IPolicyRegistry {
     ///         empty-UNION / empty-INTERSECT semantics.
     error EmptyOperandSet();
 
-    /// @notice A composite operand is not a flat leaf. Operands must be existing ALLOWLIST or
-    ///         BLOCKLIST policies; a composite may not reference another composite (flat-only).
+    /// @notice Operands must be existing ALLOWLIST or BLOCKLIST policies.
     /// @param operandId The offending operand policy ID.
     error InvalidOperand(uint64 operandId);
 
