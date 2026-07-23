@@ -10,9 +10,7 @@ interface IPolicyRegistry {
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Policy type discriminator. Discriminants are append-only: BLOCKLIST and ALLOWLIST
-    ///         keep values 0 and 1, so the composite gates ride the policy ID top byte without
-    ///         shifting the existing leaf types.
+    /// @notice Policy type discriminator. Discriminants are append-only.
     ///
     /// @param BLOCKLIST Leaf. Authorized unless in the policy's set.
     /// @param ALLOWLIST Leaf. Authorized only if in the policy's set.
