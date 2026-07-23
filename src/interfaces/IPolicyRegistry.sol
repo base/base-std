@@ -131,7 +131,7 @@ interface IPolicyRegistry {
     ///      The child-policy set is capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. 
-    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2` (including empty).
+    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2`.
     /// @dev Reverts with `BatchSizeTooLarge(4)` when `childPolicyIds.length > 4`
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
     /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy.
