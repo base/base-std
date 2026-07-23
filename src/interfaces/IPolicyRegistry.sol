@@ -10,7 +10,7 @@ interface IPolicyRegistry {
                                   TYPES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Policy type discriminator. Discriminants are append-only.
+    /// @notice Policy type discriminator.
     ///
     /// @dev Two kinds of policy:
     ///      - Simple (BLOCKLIST, ALLOWLIST): decide from an address set.
