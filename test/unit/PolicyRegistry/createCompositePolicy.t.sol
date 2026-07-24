@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegistryStorage.sol";
 
 contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
@@ -120,6 +121,35 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, compositeChild));
         vm.prank(caller);
         policyRegistry.createCompositePolicy(admin_, pt, children);
+    }
+
+    /// @notice Verifies createCompositePolicy reverts when a child is a built-in sentinel
+    /// @dev Built-in sentinels (ALWAYS_ALLOW_ID / ALWAYS_BLOCK_ID) are reserved and may not be
+    ///      composed; each reverts with InvalidChildPolicy(childPolicyId) carrying the offending ID.
+    function test_createCompositePolicy_revert_builtinChild(address caller, address admin_, uint8 typeIdx) public {
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
+
+        // A valid simple sibling; creating it also lazily initializes the built-in sentinels so
+        // they pass the existence check and the built-in guard is the sole offending entry.
+        uint64 simpleChild = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+
+        // ALWAYS_ALLOW_ID as a child.
+        uint64[] memory withAllow = _childIds(simpleChild, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+        vm.expectRevert(
+            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, PolicyRegistryConstants.ALWAYS_ALLOW_ID)
+        );
+        vm.prank(caller);
+        policyRegistry.createCompositePolicy(admin_, pt, withAllow);
+
+        // ALWAYS_BLOCK_ID as a child.
+        uint64[] memory withBlock = _childIds(simpleChild, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        vm.expectRevert(
+            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, PolicyRegistryConstants.ALWAYS_BLOCK_ID)
+        );
+        vm.prank(caller);
+        policyRegistry.createCompositePolicy(admin_, pt, withBlock);
     }
 
     /// @notice Verifies createCompositePolicy panics with arithmetic overflow at the counter max

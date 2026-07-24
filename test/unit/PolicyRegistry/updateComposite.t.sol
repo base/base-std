@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 
 import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
 contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     // ============================================================
@@ -113,6 +114,28 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, otherComposite));
         vm.prank(admin);
         policyRegistry.updateComposite(composite, children);
+    }
+
+    /// @notice Verifies updateComposite reverts when a new child is a built-in sentinel
+    /// @dev Built-in sentinels (ALWAYS_ALLOW_ID / ALWAYS_BLOCK_ID) are reserved and may not be
+    ///      composed; each reverts with InvalidChildPolicy(childPolicyId) carrying the offending ID.
+    function test_updateComposite_revert_builtinChild(uint8 typeIdx) public {
+        uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
+        uint64 simpleChild = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+
+        uint64[] memory withAllow = _childIds(simpleChild, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+        vm.expectRevert(
+            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, PolicyRegistryConstants.ALWAYS_ALLOW_ID)
+        );
+        vm.prank(admin);
+        policyRegistry.updateComposite(composite, withAllow);
+
+        uint64[] memory withBlock = _childIds(simpleChild, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        vm.expectRevert(
+            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, PolicyRegistryConstants.ALWAYS_BLOCK_ID)
+        );
+        vm.prank(admin);
+        policyRegistry.updateComposite(composite, withBlock);
     }
 
     // ============================================================

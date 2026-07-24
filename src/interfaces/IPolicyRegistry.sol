@@ -130,7 +130,7 @@ interface IPolicyRegistry {
     /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2`.
     /// @dev Reverts with `BatchSizeTooLarge(4)` when `childPolicyIds.length > 4`
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy.
+    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy or a built-in policy.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin          Initial admin authorized to update child policies and transfer or renounce
