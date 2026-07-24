@@ -79,4 +79,96 @@ contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
         uint64 policyId = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         assertTrue(policyRegistry.isAuthorized(policyId, account));
     }
+
+    // ============================================================
+    //                  COMPOSITE POLICY SEMANTICS
+    // ============================================================
+    // UNION is OR: authorized if ANY child authorizes.
+    // INTERSECT is AND: authorized only if EVERY child authorizes.
+    // Composites reference their children live — evaluation reads current
+    // child membership, not a snapshot taken at composite-creation time.
+
+    /// @notice Sets membership of a single `account` on a simple policy, as `admin`.
+    function _setAllowlistMember(uint64 policyId, address account, bool member) private {
+        address[] memory accounts = new address[](1);
+        accounts[0] = account;
+        vm.prank(admin);
+        policyRegistry.updateAllowlist(policyId, member, accounts);
+    }
+
+    /// @notice Verifies UNION authorizes an account that is a member of any single child
+    /// @dev OR semantics: `account` is on allowlist A only, yet the UNION authorizes it.
+    function test_isAuthorized_success_union_anyChildAuthorizes(address account) public {
+        uint64 childA = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 childB = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 composite =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.UNION, _childIds(childA, childB));
+        _setAllowlistMember(childA, account, true);
+        assertTrue(policyRegistry.isAuthorized(composite, account));
+    }
+
+    /// @notice Verifies UNION denies an account that no child authorizes
+    /// @dev OR semantics: `account` is on neither empty allowlist, so the UNION denies it.
+    function test_isAuthorized_success_union_noChildAuthorizes(address account) public {
+        uint64 childA = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 childB = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 composite =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.UNION, _childIds(childA, childB));
+        assertFalse(policyRegistry.isAuthorized(composite, account));
+    }
+
+    /// @notice Verifies INTERSECT authorizes an account only when every child authorizes it
+    /// @dev AND semantics: `account` is on both allowlists, so the INTERSECT authorizes it.
+    function test_isAuthorized_success_intersect_allChildrenAuthorize(address account) public {
+        uint64 childA = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 childB = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 composite = policyRegistry.createCompositePolicy(
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(childA, childB)
+        );
+        _setAllowlistMember(childA, account, true);
+        _setAllowlistMember(childB, account, true);
+        assertTrue(policyRegistry.isAuthorized(composite, account));
+    }
+
+    /// @notice Verifies INTERSECT denies an account when even one child denies it
+    /// @dev AND semantics: `account` is on allowlist A only, so the INTERSECT denies it.
+    function test_isAuthorized_success_intersect_oneChildDenies(address account) public {
+        uint64 childA = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 childB = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 composite = policyRegistry.createCompositePolicy(
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(childA, childB)
+        );
+        _setAllowlistMember(childA, account, true);
+        assertFalse(policyRegistry.isAuthorized(composite, account));
+    }
+
+    /// @notice Verifies composite gates combine mixed ALLOWLIST + BLOCKLIST children correctly
+    /// @dev With `account` absent from both children, the allowlist denies and the blocklist allows:
+    ///      UNION → true (OR), INTERSECT → false (AND). Exercises both simple semantics under a gate.
+    function test_isAuthorized_success_composite_mixedChildTypes(address account) public {
+        uint64 allow = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 block_ = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        uint64 union =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.UNION, _childIds(allow, block_));
+        uint64 intersect =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(allow, block_));
+
+        // account absent: allowlist denies, blocklist allows.
+        assertTrue(policyRegistry.isAuthorized(union, account), "UNION(deny, allow) must be true");
+        assertFalse(policyRegistry.isAuthorized(intersect, account), "INTERSECT(deny, allow) must be false");
+    }
+
+    /// @notice Verifies composite evaluation tracks live child membership changes
+    /// @dev A UNION over two empty allowlists denies `account`; adding `account` to a child
+    ///      flips the composite to authorize — composites reference children, not snapshots.
+    function test_isAuthorized_success_composite_reflectsChildMembershipChange(address account) public {
+        uint64 childA = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 childB = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 composite =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.UNION, _childIds(childA, childB));
+
+        assertFalse(policyRegistry.isAuthorized(composite, account));
+        _setAllowlistMember(childB, account, true);
+        assertTrue(policyRegistry.isAuthorized(composite, account));
+    }
 }
