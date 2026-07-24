@@ -40,6 +40,10 @@ library MockPolicyRegistryStorage {
         // into counters 0 and 1 before consuming counter 2 for the new
         // custom policy.
         uint56 nextCounter;
+        // Child policy IDs of a composite (UNION/INTERSECT); empty for simple policies.
+        // The full set is replaced on every `createCompositePolicy` / `updateComposite`;
+        // capped at MAX_CHILD_POLICIES entries.
+        mapping(uint64 policyId => uint64[] childPolicyIds) children;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.policy_registry")) - 1)) & ~bytes32(uint256(0xff))
@@ -58,6 +62,7 @@ library MockPolicyRegistryStorage {
     uint256 internal constant MEMBERS_OFFSET = 1;
     uint256 internal constant PENDING_ADMINS_OFFSET = 2;
     uint256 internal constant NEXT_COUNTER_OFFSET = 3;
+    uint256 internal constant CHILDREN_OFFSET = 4;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {
@@ -88,6 +93,7 @@ library MockPolicyRegistryStorage {
     function membersBaseSlot() internal pure returns (bytes32) { return slotOf(MEMBERS_OFFSET); }
     function pendingAdminsBaseSlot() internal pure returns (bytes32) { return slotOf(PENDING_ADMINS_OFFSET); }
     function nextCounterSlot() internal pure returns (bytes32) { return slotOf(NEXT_COUNTER_OFFSET); }
+    function childrenBaseSlot() internal pure returns (bytes32) { return slotOf(CHILDREN_OFFSET); }
 
         // forgefmt: disable-end
 
@@ -114,6 +120,15 @@ library MockPolicyRegistryStorage {
     /// @notice Slot of `pendingAdmins[policyId]`.
     function pendingAdminSlot(uint64 policyId) internal pure returns (bytes32) {
         return keccak256(abi.encode(policyId, pendingAdminsBaseSlot()));
+    }
+
+    /// @notice Slot of the length word of the dynamic array `children[policyId]`.
+    /// @dev    The `childPolicyIds` elements are packed contiguously starting at
+    ///         `keccak256(childrenSlot(policyId))`, 4 `uint64` entries per 32-byte
+    ///         slot (Solidity dynamic-array element layout). The Rust impl mirrors
+    ///         this: length here, elements at the hashed base.
+    function childrenSlot(uint64 policyId) internal pure returns (bytes32) {
+        return keccak256(abi.encode(policyId, childrenBaseSlot()));
     }
 
     // ============================================================

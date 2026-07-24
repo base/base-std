@@ -43,12 +43,18 @@ contract PolicyRegistryTest is BaseTest {
     // ============================================================
     //                    POLICY-TYPE FUZZ HELPERS
     // ============================================================
-    // The `PolicyType` enum has two values (BLOCKLIST = 0, ALLOWLIST = 1),
-    // both creatable. The helper picks one from a fuzz seed.
+    // The `PolicyType` enum has two SIMPLE values (BLOCKLIST = 0,
+    // ALLOWLIST = 1) and two COMPOSITE gates (UNION = 2, INTERSECT = 3).
+    // The helpers below pick one from a fuzz seed.
 
     /// @notice Maps a fuzz seed to ALLOWLIST or BLOCKLIST.
     function _creatablePolicyType(uint8 idx) internal pure returns (IPolicyRegistry.PolicyType) {
         return idx % 2 == 0 ? IPolicyRegistry.PolicyType.ALLOWLIST : IPolicyRegistry.PolicyType.BLOCKLIST;
+    }
+
+    /// @notice Maps a fuzz seed to a composite gate: UNION or INTERSECT.
+    function _creatableCompositeType(uint8 idx) internal pure returns (IPolicyRegistry.PolicyType) {
+        return idx % 2 == 0 ? IPolicyRegistry.PolicyType.UNION : IPolicyRegistry.PolicyType.INTERSECT;
     }
 
     /// @notice Predict the ID the next `createPolicy(_, policyType)` would assign.
@@ -106,5 +112,63 @@ contract PolicyRegistryTest is BaseTest {
         for (uint256 i = 0; i < n; ++i) {
             accounts[i] = address(uint160(0x1000 + i));
         }
+    }
+
+    // ============================================================
+    //                    COMPOSITE-POLICY HELPERS
+    // ============================================================
+
+    /// @notice Minimum number of child policies a composite must reference.
+    /// @dev    Mirrors the registry's composite child-policy floor. Kept as a
+    ///         test-side literal so fork tests against the real precompile use
+    ///         the same compile-time constant.
+    uint256 internal constant MIN_CHILD_POLICIES = 2;
+
+    /// @notice Maximum number of child policies a composite may reference.
+    /// @dev    Mirrors the registry's composite child-policy cap. Distinct
+    ///         from `MAX_BATCH_SIZE` (64), which caps account membership
+    ///         batches; a composite created or updated with a child count
+    ///         outside `[MIN_CHILD_POLICIES, MAX_CHILD_POLICIES]` reverts with
+    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`.
+    ///         Kept as a test-side literal so fork tests against the real
+    ///         precompile use the same compile-time constant.
+    uint256 internal constant MAX_CHILD_POLICIES = 4;
+
+    /// @notice Create `n` simple ALLOWLIST policies (admin = `admin`) and
+    ///         return their IDs. Used to seed valid child sets for
+    ///         composite creation / update tests.
+    function _makeSimpleChildren(uint256 n) internal returns (uint64[] memory childPolicyIds) {
+        childPolicyIds = new uint64[](n);
+        for (uint256 i = 0; i < n; ++i) {
+            childPolicyIds[i] = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        }
+    }
+
+    /// @notice Create a composite policy with explicit caller, admin, gate
+    ///         type, and child set.
+    function _createComposite(
+        address caller,
+        address policyAdmin,
+        IPolicyRegistry.PolicyType policyType,
+        uint64[] memory childPolicyIds
+    ) internal returns (uint64 policyId) {
+        vm.prank(caller);
+        policyId = policyRegistry.createCompositePolicy(policyAdmin, policyType, childPolicyIds);
+    }
+
+    /// @notice Create a composite policy as the default admin over a fresh
+    ///         set of `n` simple ALLOWLIST children. Returns the composite
+    ///         ID; use `_makeSimpleChildren` directly when the child IDs
+    ///         are needed at the call site.
+    function _createComposite(IPolicyRegistry.PolicyType policyType, uint256 n) internal returns (uint64 policyId) {
+        uint64[] memory childPolicyIds = _makeSimpleChildren(n);
+        policyId = policyRegistry.createCompositePolicy(admin, policyType, childPolicyIds);
+    }
+
+    /// @notice Pack two policy IDs into a length-2 `uint64[]`.
+    function _childIds(uint64 a, uint64 b) internal pure returns (uint64[] memory ids) {
+        ids = new uint64[](2);
+        ids[0] = a;
+        ids[1] = b;
     }
 }

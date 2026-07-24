@@ -108,6 +108,28 @@ contract MockPolicyRegistrySlotHelpersTest is PolicyRegistryTest {
         );
     }
 
+    /// @notice Verifies `childrenSlot(id)` locates a composite's child-policy array.
+    /// @dev    The dynamic array's length lives at `childrenSlot(id)`; its elements
+    ///         pack four `uint64` per 32-byte slot starting at
+    ///         `keccak256(childrenSlot(id))`, so a length-2 set occupies the low
+    ///         128 bits of that first element slot (elem0 low, elem1 next).
+    function test_childrenSlot_success_locatesChildArray(uint8 typeIdx) public {
+        IPolicyRegistry.PolicyType gate = _creatableCompositeType(typeIdx);
+        uint64[] memory children = _makeSimpleChildren(2);
+        uint64 composite = _createComposite(admin, admin, gate, children);
+
+        bytes32 lengthSlot = MockPolicyRegistryStorage.childrenSlot(composite);
+        assertEq(
+            uint256(vm.load(address(policyRegistry), lengthSlot)),
+            children.length,
+            "childrenSlot must hold the child-array length"
+        );
+
+        uint256 packed = uint256(vm.load(address(policyRegistry), keccak256(abi.encode(lengthSlot))));
+        assertEq(uint64(packed), children[0], "childrenSlot element 0 must match");
+        assertEq(uint64(packed >> 64), children[1], "childrenSlot element 1 must match");
+    }
+
     /// @notice Verifies `nextCounterSlot()` advances by exactly 1 per
     ///         createPolicy in the steady state.
     /// @dev    The very first `createPolicy` also lazily writes the two
