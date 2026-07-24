@@ -58,9 +58,7 @@ interface IPolicyRegistry {
 
     /// @notice A composite policy was created or updated with fewer than the minimum number of
     ///         child policies. A composite must reference at least two simple policies.
-    /// @param provided Number of child policy IDs supplied.
-    /// @param minimum  Minimum required (2).
-    error TooFewChildPolicies(uint256 provided, uint256 minimum);
+    error TooFewChildPolicies();
 
     /// @notice Composite policies are not simple policies. Child policies must be existing
     ///         ALLOWLIST or BLOCKLIST policies;
@@ -99,7 +97,6 @@ interface IPolicyRegistry {
     ///
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is a composite gate.
-    /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin      Initial admin authorized to modify membership and transfer or renounce administration.
     /// @param policyType BLOCKLIST or ALLOWLIST.
