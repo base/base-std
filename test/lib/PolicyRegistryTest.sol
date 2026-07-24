@@ -118,14 +118,20 @@ contract PolicyRegistryTest is BaseTest {
     //                    COMPOSITE-POLICY HELPERS
     // ============================================================
 
+    /// @notice Minimum number of child policies a composite must reference.
+    /// @dev    Mirrors the registry's composite child-policy floor. Kept as a
+    ///         test-side literal so fork tests against the real precompile use
+    ///         the same compile-time constant.
+    uint256 internal constant MIN_CHILD_POLICIES = 2;
+
     /// @notice Maximum number of child policies a composite may reference.
     /// @dev    Mirrors the registry's composite child-policy cap. Distinct
     ///         from `MAX_BATCH_SIZE` (64), which caps account membership
-    ///         batches; a composite created or updated with more than
-    ///         `MAX_CHILD_POLICIES` children reverts with
-    ///         `BatchSizeTooLarge(MAX_CHILD_POLICIES)`. Kept as a
-    ///         test-side literal so fork tests against the real precompile
-    ///         use the same compile-time constant.
+    ///         batches; a composite created or updated with a child count
+    ///         outside `[MIN_CHILD_POLICIES, MAX_CHILD_POLICIES]` reverts with
+    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`.
+    ///         Kept as a test-side literal so fork tests against the real
+    ///         precompile use the same compile-time constant.
     uint256 internal constant MAX_CHILD_POLICIES = 4;
 
     /// @notice Create `n` simple ALLOWLIST policies (admin = `admin`) and

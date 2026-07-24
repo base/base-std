@@ -62,31 +62,33 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
         policyRegistry.updateComposite(composite, children);
     }
 
-    /// @notice Verifies updateComposite reverts when given fewer than two children
-    /// @dev A composite must reference at least two simple policies; checks TooFewChildPolicies().
-    ///      There is no clear-the-list path. Exercises both the empty (0) and single-child (1) cases.
-    function test_updateComposite_revert_tooFewChildPolicies(uint8 typeIdx) public {
+    /// @notice Verifies updateComposite reverts when the new child count is outside [2, 4]
+    /// @dev A composite must reference between MIN_CHILD_POLICIES (2) and MAX_CHILD_POLICIES (4)
+    ///      simple policies, inclusive; checks ChildPoliciesOutsideOfRange(2, 4). There is no
+    ///      clear-the-list path. Exercises both under-range (0 and 1 children) and over-range
+    ///      (5..8 children) cases.
+    function test_updateComposite_revert_childPoliciesOutsideOfRange(uint8 typeIdx, uint8 overflow) public {
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
+        bytes memory expectedRevert = abi.encodeWithSelector(
+            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
+        );
 
+        // Under range: 0 children.
         uint64[] memory none = new uint64[](0);
-        vm.expectRevert(IPolicyRegistry.TooFewChildPolicies.selector);
+        vm.expectRevert(expectedRevert);
         vm.prank(admin);
         policyRegistry.updateComposite(composite, none);
 
+        // Under range: 1 child.
         uint64[] memory one = _makeSimpleChildren(1);
-        vm.expectRevert(IPolicyRegistry.TooFewChildPolicies.selector);
+        vm.expectRevert(expectedRevert);
         vm.prank(admin);
         policyRegistry.updateComposite(composite, one);
-    }
 
-    /// @notice Verifies updateComposite reverts when given more than the child cap
-    /// @dev Composite child-policy cap is MAX_CHILD_POLICIES (4), distinct from the 64-account
-    ///      membership limit; checks BatchSizeTooLarge(MAX_CHILD_POLICIES).
-    function test_updateComposite_revert_batchSizeTooLarge(uint8 typeIdx, uint8 overflow) public {
-        uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
+        // Over range: 5..8 valid simple children.
         uint256 n = MAX_CHILD_POLICIES + 1 + (uint256(overflow) % 4); // 5..8
         uint64[] memory tooMany = _makeSimpleChildren(n);
-        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_CHILD_POLICIES));
+        vm.expectRevert(expectedRevert);
         vm.prank(admin);
         policyRegistry.updateComposite(composite, tooMany);
     }

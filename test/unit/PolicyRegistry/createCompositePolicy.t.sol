@@ -38,34 +38,12 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         policyRegistry.createCompositePolicy(admin_, pt, children);
     }
 
-    /// @notice Verifies createCompositePolicy reverts when given fewer than two children
-    /// @dev A composite must reference at least two simple policies; checks TooFewChildPolicies().
-    ///      Exercises both the empty (0) and single-child (1) cases.
-    function test_createCompositePolicy_revert_tooFewChildPolicies(address caller, address admin_, uint8 typeIdx)
-        public
-    {
-        _assumeValidCaller(caller);
-        vm.assume(admin_ != address(0));
-        IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
-
-        // 0 children.
-        uint64[] memory none = new uint64[](0);
-        vm.expectRevert(IPolicyRegistry.TooFewChildPolicies.selector);
-        vm.prank(caller);
-        policyRegistry.createCompositePolicy(admin_, pt, none);
-
-        // 1 child (a real, existing simple policy) — still below the minimum.
-        uint64[] memory one = _makeSimpleChildren(1);
-        vm.expectRevert(IPolicyRegistry.TooFewChildPolicies.selector);
-        vm.prank(caller);
-        policyRegistry.createCompositePolicy(admin_, pt, one);
-    }
-
-    /// @notice Verifies createCompositePolicy reverts when given more than the child cap
-    /// @dev Composite child-policy cap is MAX_CHILD_POLICIES (4), distinct from the 64-account
-    ///      membership limit; checks BatchSizeTooLarge(MAX_CHILD_POLICIES). All children are valid
-    ///      simple policies, so only the size condition is broken.
-    function test_createCompositePolicy_revert_batchSizeTooLarge(
+    /// @notice Verifies createCompositePolicy reverts when the child count is outside [2, 4]
+    /// @dev A composite must reference between MIN_CHILD_POLICIES (2) and MAX_CHILD_POLICIES (4)
+    ///      simple policies, inclusive; checks ChildPoliciesOutsideOfRange(2, 4). Exercises both
+    ///      under-range (0 and 1 children) and over-range (5..8 children) cases. The composite
+    ///      child-policy range is distinct from the 64-account membership limit.
+    function test_createCompositePolicy_revert_childPoliciesOutsideOfRange(
         address caller,
         address admin_,
         uint8 typeIdx,
@@ -74,9 +52,26 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
+        bytes memory expectedRevert = abi.encodeWithSelector(
+            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
+        );
+
+        // Under range: 0 children.
+        uint64[] memory none = new uint64[](0);
+        vm.expectRevert(expectedRevert);
+        vm.prank(caller);
+        policyRegistry.createCompositePolicy(admin_, pt, none);
+
+        // Under range: 1 child (a real, existing simple policy) — still below the minimum.
+        uint64[] memory one = _makeSimpleChildren(1);
+        vm.expectRevert(expectedRevert);
+        vm.prank(caller);
+        policyRegistry.createCompositePolicy(admin_, pt, one);
+
+        // Over range: 5..8 valid simple children — only the count condition is broken.
         uint256 n = MAX_CHILD_POLICIES + 1 + (uint256(overflow) % 4); // 5..8
         uint64[] memory tooMany = _makeSimpleChildren(n);
-        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_CHILD_POLICIES));
+        vm.expectRevert(expectedRevert);
         vm.prank(caller);
         policyRegistry.createCompositePolicy(admin_, pt, tooMany);
     }

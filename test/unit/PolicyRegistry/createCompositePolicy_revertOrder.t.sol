@@ -10,10 +10,9 @@ import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 /// @notice **Canonical order:**
 ///         1. ZERO-ADMIN (`admin == address(0)`) → `ZeroAddress`
 ///         2. INCOMPATIBLE-TYPE (`policyType` not UNION/INTERSECT) → `IncompatiblePolicyType`
-///         3. TOO-FEW-CHILDREN (`childPolicyIds.length < 2`) → `TooFewChildPolicies`
-///         4. BATCH-SIZE (`childPolicyIds.length > MAX_CHILD_POLICIES`) → `BatchSizeTooLarge(4)`
-///         5. CHILD-NOT-FOUND (a child does not exist) → `PolicyNotFound`
-///         6. INVALID-CHILD (a child is itself a composite) → `InvalidChildPolicy`
+///         3. COUNT-OUTSIDE-RANGE (`childPolicyIds.length` not in `[2, 4]`) → `ChildPoliciesOutsideOfRange(2, 4)`
+///         4. CHILD-NOT-FOUND (a child does not exist) → `PolicyNotFound`
+///         5. INVALID-CHILD (a child is itself a composite) → `InvalidChildPolicy`
 ///
 ///         Walks from all conditions broken to success, fixing one per step. ZeroAddress-first
 ///         precedence mirrors `createPolicy` / `createPolicyWithAccounts`.
@@ -53,23 +52,23 @@ contract PolicyRegistryCreateCompositePolicyRevertOrderTest is PolicyRegistryTes
 
         // Fix: use a composite gate.
 
-        // 3. TOO-FEW-CHILDREN: composite type, but a single (nonexistent) child → TooFewChildPolicies
-        //    fires before the existence check.
+        // 3. COUNT-OUTSIDE-RANGE: composite type, but a child count outside [2, 4] (all nonexistent)
+        //    → ChildPoliciesOutsideOfRange fires before the existence check. Exercises both the
+        //    under-range (1 child) and over-range (> MAX_CHILD_POLICIES) ends.
+        bytes memory outsideRange = abi.encodeWithSelector(
+            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
+        );
         uint64[] memory one = new uint64[](1);
         one[0] = neverCreatedWellFormedPolicy;
-        vm.expectRevert(IPolicyRegistry.TooFewChildPolicies.selector);
+        vm.expectRevert(outsideRange);
         policyRegistry.createCompositePolicy(admin, composite, one);
 
-        // Fix: supply at least two children.
-
-        // 4. BATCH-SIZE: composite type, but > MAX_CHILD_POLICIES (all nonexistent) → BatchSizeTooLarge
-        //    fires before the existence check.
-        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_CHILD_POLICIES));
+        vm.expectRevert(outsideRange);
         policyRegistry.createCompositePolicy(admin, composite, tooManyNeverCreatedWellFormedPolicyList);
 
-        // Fix: bring the child set within the cap.
+        // Fix: bring the child count within [2, 4].
 
-        // 5. CHILD-NOT-FOUND: in-range child set, but one child never existed → PolicyNotFound
+        // 4. CHILD-NOT-FOUND: in-range child set, but one child never existed → PolicyNotFound
         //    fires before the simple-vs-composite check.
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         policyRegistry.createCompositePolicy(
@@ -80,7 +79,7 @@ contract PolicyRegistryCreateCompositePolicyRevertOrderTest is PolicyRegistryTes
 
         // Fix: replace the ghost with an existing simple policy.
 
-        // 6. INVALID-CHILD: all children exist, but one is itself a composite → InvalidChildPolicy.
+        // 5. INVALID-CHILD: all children exist, but one is itself a composite → InvalidChildPolicy.
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, compositeChild));
         policyRegistry.createCompositePolicy(admin, composite, _childIds(validSimpleA, compositeChild));
 

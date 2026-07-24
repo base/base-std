@@ -11,13 +11,12 @@ import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 ///         1. POLICY-NOT-FOUND (composite `policyId` does not exist) → `PolicyNotFound`
 ///         2. INCOMPATIBLE-TYPE (`policyId` is a simple policy) → `IncompatiblePolicyType`
 ///         3. UNAUTHORIZED (caller is not the admin) → `Unauthorized`
-///         4. TOO-FEW-CHILDREN (`childPolicyIds.length < 2`) → `TooFewChildPolicies`
-///         5. BATCH-SIZE (`childPolicyIds.length > MAX_CHILD_POLICIES`) → `BatchSizeTooLarge(4)`
-///         6. CHILD-NOT-FOUND (a child does not exist) → `PolicyNotFound`
-///         7. INVALID-CHILD (a child is itself a composite) → `InvalidChildPolicy`
+///         4. COUNT-OUTSIDE-RANGE (`childPolicyIds.length` not in `[2, 4]`) → `ChildPoliciesOutsideOfRange(2, 4)`
+///         5. CHILD-NOT-FOUND (a child does not exist) → `PolicyNotFound`
+///         6. INVALID-CHILD (a child is itself a composite) → `InvalidChildPolicy`
 ///
 ///         Walks from all conditions broken to success, fixing one per step. `PolicyNotFound`
-///         appears twice: for the composite itself (step 1) and for a child (step 6).
+///         appears twice: for the composite itself (step 1) and for a child (step 5).
 contract PolicyRegistryUpdateCompositeRevertOrderTest is PolicyRegistryTest {
     /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
     function test_updateComposite_revertOrder(uint8 typeIdx) public {
@@ -60,23 +59,25 @@ contract PolicyRegistryUpdateCompositeRevertOrderTest is PolicyRegistryTest {
 
         // Fix: call as the admin (alice).
 
-        // 4. TOO-FEW-CHILDREN: admin, but a single (nonexistent) child; fires before the existence check.
+        // 4. COUNT-OUTSIDE-RANGE: admin, but a child count outside [2, 4] (all nonexistent); fires
+        //    before the existence check. Exercises both the under-range (1 child) and over-range
+        //    (> MAX_CHILD_POLICIES) ends.
+        bytes memory outsideRange = abi.encodeWithSelector(
+            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
+        );
         uint64[] memory one = new uint64[](1);
         one[0] = ghostChild;
         vm.prank(alice);
-        vm.expectRevert(IPolicyRegistry.TooFewChildPolicies.selector);
+        vm.expectRevert(outsideRange);
         policyRegistry.updateComposite(composite, one);
 
-        // Fix: supply at least two children.
-
-        // 5. BATCH-SIZE: admin, but > MAX_CHILD_POLICIES (all nonexistent); fires before the existence check.
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_CHILD_POLICIES));
+        vm.expectRevert(outsideRange);
         policyRegistry.updateComposite(composite, tooManyGhosts);
 
-        // Fix: bring the child set within the cap.
+        // Fix: bring the child count within [2, 4].
 
-        // 6. CHILD-NOT-FOUND: in-range child set, but one child never existed; fires before the
+        // 5. CHILD-NOT-FOUND: in-range child set, but one child never existed; fires before the
         //    simple-vs-composite check.
         vm.prank(alice);
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
@@ -84,7 +85,7 @@ contract PolicyRegistryUpdateCompositeRevertOrderTest is PolicyRegistryTest {
 
         // Fix: replace the ghost with an existing simple policy.
 
-        // 7. INVALID-CHILD: all children exist, but one is itself a composite → InvalidChildPolicy.
+        // 6. INVALID-CHILD: all children exist, but one is itself a composite → InvalidChildPolicy.
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, otherComposite));
         policyRegistry.updateComposite(composite, _childIds(validSimple[0], otherComposite));

@@ -77,11 +77,18 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///         precompile.
     uint256 internal constant MAX_BATCH_SIZE = 64;
 
+    /// @notice Minimum number of child policies a composite must reference.
+    ///         `createCompositePolicy` and `updateComposite` revert with
+    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`
+    ///         when `childPolicyIds.length` is below this value.
+    uint256 internal constant MIN_CHILD_POLICIES = 2;
+
     /// @notice Maximum number of child policies a composite may reference.
     ///         `createCompositePolicy` and `updateComposite` revert with
-    ///         `BatchSizeTooLarge(MAX_CHILD_POLICIES)` when `childPolicyIds.length`
-    ///         exceeds this value. Distinct from `MAX_BATCH_SIZE` (64), which caps
-    ///         account-membership batches. Mirrors the Rust PolicyRegistry precompile.
+    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`
+    ///         when `childPolicyIds.length` is outside `[MIN_CHILD_POLICIES, MAX_CHILD_POLICIES]`.
+    ///         Distinct from `MAX_BATCH_SIZE` (64), which caps account-membership batches.
+    ///         Mirrors the Rust PolicyRegistry precompile.
     uint256 internal constant MAX_CHILD_POLICIES = 4;
 
     // ============================================================
@@ -120,8 +127,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
     {
         if (admin == address(0)) revert ZeroAddress();
         if (policyType != PolicyType.UNION && policyType != PolicyType.INTERSECT) revert IncompatiblePolicyType();
-        if (childPolicyIds.length < 2) revert TooFewChildPolicies();
-        if (childPolicyIds.length > MAX_CHILD_POLICIES) revert BatchSizeTooLarge(MAX_CHILD_POLICIES);
+        if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
+            revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
+        }
         _requireCreatedSimplePolicies(childPolicyIds);
 
         newPolicyId = _create(admin, policyType);
@@ -195,8 +203,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
         uint256 packed = _requireCustom(policyId);
         if (!_isComposite(policyId)) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        if (childPolicyIds.length < 2) revert TooFewChildPolicies();
-        if (childPolicyIds.length > MAX_CHILD_POLICIES) revert BatchSizeTooLarge(MAX_CHILD_POLICIES);
+        if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
+            revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
+        }
         _requireCreatedSimplePolicies(childPolicyIds);
 
         // Full replacement: assigning a memory array to the storage array resets its
