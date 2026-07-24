@@ -77,6 +77,20 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///         precompile.
     uint256 internal constant MAX_BATCH_SIZE = 64;
 
+    /// @notice Minimum number of child policies a composite must reference.
+    ///         `createCompositePolicy` and `updateComposite` revert with
+    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`
+    ///         when `childPolicyIds.length` is below this value.
+    uint256 internal constant MIN_CHILD_POLICIES = 2;
+
+    /// @notice Maximum number of child policies a composite may reference.
+    ///         `createCompositePolicy` and `updateComposite` revert with
+    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`
+    ///         when `childPolicyIds.length` is outside `[MIN_CHILD_POLICIES, MAX_CHILD_POLICIES]`.
+    ///         Distinct from `MAX_BATCH_SIZE` (64), which caps account-membership batches.
+    ///         Mirrors the Rust PolicyRegistry precompile.
+    uint256 internal constant MAX_CHILD_POLICIES = 4;
+
     // ============================================================
     //                       POLICY CREATION
     // ============================================================
@@ -104,6 +118,23 @@ contract MockPolicyRegistry is IPolicyRegistry {
         if (accounts.length > MAX_BATCH_SIZE) revert BatchSizeTooLarge(MAX_BATCH_SIZE);
         newPolicyId = _create(admin, policyType);
         _batchSetMembers({policyId: newPolicyId, policyType: policyType, value: true, accounts: accounts});
+    }
+
+    /// @inheritdoc IPolicyRegistry
+    function createCompositePolicy(address admin, PolicyType policyType, uint64[] calldata childPolicyIds)
+        external
+        returns (uint64 newPolicyId)
+    {
+        if (admin == address(0)) revert ZeroAddress();
+        if (policyType != PolicyType.UNION && policyType != PolicyType.INTERSECT) revert IncompatiblePolicyType();
+        if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
+            revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
+        }
+        _requireCreatedSimplePolicies(childPolicyIds);
+
+        newPolicyId = _create(admin, policyType);
+        MockPolicyRegistryStorage.layout().children[newPolicyId] = childPolicyIds;
+        emit CompositePolicyUpdated(newPolicyId, msg.sender, childPolicyIds);
     }
 
     // ============================================================
@@ -163,24 +194,34 @@ contract MockPolicyRegistry is IPolicyRegistry {
         _batchSetMembers({policyId: policyId, policyType: PolicyType.BLOCKLIST, value: blocked, accounts: accounts});
     }
 
+    /// @inheritdoc IPolicyRegistry
+    function updateComposite(uint64 policyId, uint64[] calldata childPolicyIds) external {
+        // Canonical check precedence (see updateComposite_revertOrder test):
+        //   self-not-found → incompatible-type → unauthorized → too-few → batch-size →
+        //   child-not-found → invalid-child. The type guard precedes the auth guard, and
+        //   a renounced composite (admin zero) fails the auth guard for every caller.
+        uint256 packed = _requireCustom(policyId);
+        if (!_isComposite(policyId)) revert IncompatiblePolicyType();
+        if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
+        if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
+            revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
+        }
+        _requireCreatedSimplePolicies(childPolicyIds);
+
+        // Full replacement: assigning a memory array to the storage array resets its
+        // length and overwrites elements. Child sets are ≤ MAX_CHILD_POLICIES, so there
+        // is no stale-tail concern.
+        MockPolicyRegistryStorage.layout().children[policyId] = childPolicyIds;
+        emit CompositePolicyUpdated(policyId, msg.sender, childPolicyIds);
+    }
+
     // ============================================================
     //                    AUTHORIZATION QUERIES
     // ============================================================
 
     /// @inheritdoc IPolicyRegistry
     function isAuthorized(uint64 policyId, address account) external view returns (bool) {
-        // Built-in short-circuits precede any SLOAD; sentinels have no
-        // storage entry.
-        if (policyId == ALWAYS_ALLOW_ID) return true;
-        if (policyId == ALWAYS_BLOCK_ID) return false;
-        // Short-circuit malformed IDs so the `_typeOf` enum cast can't panic.
-        if (!_isWellFormed(policyId)) return false;
-        // Hot path: one SLOAD (the membership bit). No existence check —
-        // callers pre-validate via `policyExists` at write time. For
-        // non-existent IDs the result collapses to empty-member-set
-        // semantics (ALLOWLIST → false, BLOCKLIST → true).
-        bool member = MockPolicyRegistryStorage.layout().members[policyId][account];
-        return _typeOf(policyId) == PolicyType.ALLOWLIST ? member : !member;
+        return _isAuthorized(policyId, account);
     }
 
     // ============================================================
@@ -290,6 +331,87 @@ contract MockPolicyRegistry is IPolicyRegistry {
     function _requireCustom(uint64 policyId) internal view returns (uint256 packed) {
         packed = MockPolicyRegistryStorage.layout().policies[policyId];
         if (packed == 0) revert PolicyNotFound();
+    }
+
+    /// @dev Core authorization logic shared by the external view and composite
+    ///      child evaluation. Never reverts.
+    ///
+    ///      Composites evaluate their children LIVE (reading each child's current
+    ///      membership, not a snapshot). Children are validated to be simple at
+    ///      write time, so the recursion terminates at depth 1: a composite calls
+    ///      `_isAuthorized` per child, each of which resolves via the simple path
+    ///      (or a built-in short-circuit).
+    function _isAuthorized(uint64 policyId, address account) internal view returns (bool) {
+        // Built-in short-circuits precede any SLOAD; sentinels have no
+        // storage entry.
+        if (policyId == ALWAYS_ALLOW_ID) return true;
+        if (policyId == ALWAYS_BLOCK_ID) return false;
+        // Short-circuit malformed IDs so the `_typeOf` enum cast can't panic.
+        if (!_isWellFormed(policyId)) return false;
+
+        PolicyType policyType = _typeOf(policyId);
+        if (policyType == PolicyType.UNION) return _isAuthorizedUnion(policyId, account);
+        if (policyType == PolicyType.INTERSECT) return _isAuthorizedIntersect(policyId, account);
+
+        // Simple hot path: one SLOAD (the membership bit). No existence check —
+        // callers pre-validate via `policyExists` at write time. For non-existent
+        // IDs the result collapses to empty-member-set semantics (ALLOWLIST →
+        // false, BLOCKLIST → true).
+        bool member = MockPolicyRegistryStorage.layout().members[policyId][account];
+        return policyType == PolicyType.ALLOWLIST ? member : !member;
+    }
+
+    /// @dev Evaluates a UNION (OR) composite over its LIVE child set: authorized if ANY
+    ///      child authorizes;
+    function _isAuthorizedUnion(uint64 policyId, address account) internal view returns (bool) {
+        uint64[] storage childPolicyIds = MockPolicyRegistryStorage.layout().children[policyId];
+        uint256 childCount = childPolicyIds.length;
+        for (uint256 i = 0; i < childCount; ++i) {
+            if (_isAuthorized(childPolicyIds[i], account)) return true;
+        }
+        return false;
+    }
+
+    /// @dev Evaluates an INTERSECT (AND) composite over its LIVE child set: authorized only
+    ///      if EVERY child authorizes;
+    function _isAuthorizedIntersect(uint64 policyId, address account) internal view returns (bool) {
+        uint64[] storage childPolicyIds = MockPolicyRegistryStorage.layout().children[policyId];
+        uint256 childCount = childPolicyIds.length;
+        for (uint256 i = 0; i < childCount; ++i) {
+            if (!_isAuthorized(childPolicyIds[i], account)) return false;
+        }
+        return true;
+    }
+
+    /// @dev Requires every composite child to be a created, custom, SIMPLE policy:
+    ///      it must exist, must not be a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK),
+    ///      and must not itself be a composite. Two passes so `PolicyNotFound` takes
+    ///      precedence over `InvalidChildPolicy` across the whole set (matches the
+    ///      canonical revert order the Rust precompile mirrors).
+    function _requireCreatedSimplePolicies(uint64[] calldata childPolicyIds) internal view {
+        MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
+        // Pass 1: existence.
+        for (uint256 i = 0; i < childPolicyIds.length; ++i) {
+            if ($.policies[childPolicyIds[i]] == 0) revert PolicyNotFound();
+        }
+        // Pass 2: must be a simple policy
+        for (uint256 i = 0; i < childPolicyIds.length; ++i) {
+            uint64 child = childPolicyIds[i];
+            if (_isBuiltin(child) || _isComposite(child)) revert InvalidChildPolicy(child);
+        }
+    }
+
+    /// @dev True iff `policyId`'s top byte encodes a composite gate (UNION or INTERSECT).
+    ///      Assumes a well-formed ID; composite children come from stored/created policies.
+    function _isComposite(uint64 policyId) internal pure returns (bool) {
+        PolicyType policyType = _typeOf(policyId);
+        return policyType == PolicyType.UNION || policyType == PolicyType.INTERSECT;
+    }
+
+    /// @dev True iff `policyId` is a built-in (ALWAYS_ALLOW / ALWAYS_BLOCK).
+    ///      Sentinels are reserved and may not be used as composite children.
+    function _isBuiltin(uint64 policyId) internal pure returns (bool) {
+        return policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID;
     }
 
     function _makeId(PolicyType policyType, uint56 counter) internal pure returns (uint64) {

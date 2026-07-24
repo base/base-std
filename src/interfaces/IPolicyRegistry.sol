@@ -56,9 +56,12 @@ interface IPolicyRegistry {
     /// @notice `finalizeUpdateAdmin` was called with no pending admin staged.
     error NoPendingAdmin();
 
-    /// @notice A composite policy was created or updated with fewer than the minimum number of
-    ///         child policies. A composite must reference at least two simple policies.
-    error TooFewChildPolicies();
+    /// @notice A composite policy was created or updated with a child-policy count outside the
+    ///         permitted range. A composite must reference between `min` and `max` simple policies,
+    ///         inclusive.
+    /// @param min Minimum number of child policies permitted.
+    /// @param max Maximum number of child policies permitted.
+    error ChildPoliciesOutsideOfRange(uint256 min, uint256 max);
 
     /// @notice Composite policies are not simple policies. Child policies must be existing
     ///         ALLOWLIST or BLOCKLIST policies;
@@ -126,11 +129,10 @@ interface IPolicyRegistry {
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite.
     ///      The child-policy set is capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
-    /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`. 
-    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2`.
-    /// @dev Reverts with `BatchSizeTooLarge(4)` when `childPolicyIds.length > 4`
+    /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
+    /// @dev Reverts with `ChildPoliciesOutsideOfRange(2, 4)` when `childPolicyIds.length` is not in `[2, 4]`.
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy.
+    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy or a built-in policy.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin          Initial admin authorized to update child policies and transfer or renounce
@@ -204,9 +206,8 @@ interface IPolicyRegistry {
     /// @dev Reverts with `IncompatiblePolicyType` when `policyId` is not a composite (UNION or INTERSECT).
     /// @dev Reverts with `Unauthorized` when the caller is not the current admin. A renounced composite
     ///      (admin `address(0)`) can never be updated.
-    /// @dev Reverts with `TooFewChildPolicies` when `childPolicyIds.length < 2`; there is no clear-the-list path.
-    /// @dev Reverts with `BatchSizeTooLarge(4)` when `childPolicyIds.length > 4`
-    ///      (composite child-policy cap; not the account membership batch limit of 64).
+    /// @dev Reverts with `ChildPoliciesOutsideOfRange(2, 4)` when `childPolicyIds.length` is not in `[2, 4]`;
+    ///      there is no clear-the-list path (the composite child-policy range, not the 64-account batch limit).
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
     /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
     ///      (not a simple policy).
