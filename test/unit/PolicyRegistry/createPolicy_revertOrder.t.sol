@@ -10,7 +10,8 @@ import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegis
 ///
 /// @notice **Canonical order:**
 ///         1. ZERO-ADMIN (`admin == address(0)`) → `ZeroAddress`
-///         2. COUNTER-OVERFLOW (nextCounter == type(uint56).max) → `Panic(0x11)`
+///         2. INCOMPATIBLE-TYPE (`policyType` is a composite gate) → `IncompatiblePolicyType`
+///         3. COUNTER-OVERFLOW (nextCounter == type(uint56).max) → `Panic(0x11)`
 ///
 ///         Walks from the first failing condition to success.
 ///
@@ -35,7 +36,15 @@ contract PolicyRegistryCreatePolicyRevertOrderTest is PolicyRegistryTest {
 
         // Fix: use a non-zero admin.
 
-        // 2. COUNTER-OVERFLOW: nextCounter == type(uint56).max → Panic(0x11)
+        // 2. INCOMPATIBLE-TYPE: valid admin, but a composite gate → IncompatiblePolicyType
+        //    (fires before any counter use, so it beats the seeded overflow).
+        vm.prank(caller);
+        vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
+        policyRegistry.createPolicy(admin_, _creatableCompositeType(typeIdx));
+
+        // Fix: use a simple policy type.
+
+        // 3. COUNTER-OVERFLOW: nextCounter == type(uint56).max → Panic(0x11)
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
         policyRegistry.createPolicy(admin_, pt);

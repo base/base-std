@@ -9,7 +9,8 @@ import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 ///
 /// @notice **Canonical order:**
 ///         1. ZERO-ADMIN (`admin == address(0)`) → `ZeroAddress`
-///         2. BATCH-SIZE (`accounts.length > MAX_BATCH_SIZE`) → `BatchSizeTooLarge`
+///         2. INCOMPATIBLE-TYPE (`policyType` is a composite gate) → `IncompatiblePolicyType`
+///         3. BATCH-SIZE (`accounts.length > MAX_BATCH_SIZE`) → `BatchSizeTooLarge`
 ///
 ///         Walks from all conditions broken to success, fixing one per step.
 contract PolicyRegistryCreatePolicyWithAccountsRevertOrderTest is PolicyRegistryTest {
@@ -24,14 +25,22 @@ contract PolicyRegistryCreatePolicyWithAccountsRevertOrderTest is PolicyRegistry
         address[] memory tooMany = _makeAccounts(n);
         address[] memory valid = new address[](0);
 
-        // 1. ZERO-ADMIN: admin==address(0) AND batch oversized → ZeroAddress fires first.
+        // 1. ZERO-ADMIN: admin==address(0) AND composite type AND batch oversized → ZeroAddress fires first.
         vm.prank(caller);
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
-        policyRegistry.createPolicyWithAccounts(address(0), pt, tooMany);
+        policyRegistry.createPolicyWithAccounts(address(0), _creatableCompositeType(typeIdx), tooMany);
 
         // Fix: use a non-zero admin.
 
-        // 2. BATCH-SIZE: valid admin, but accounts.length > MAX_BATCH_SIZE → BatchSizeTooLarge.
+        // 2. INCOMPATIBLE-TYPE: valid admin, but a composite gate AND batch oversized →
+        //    IncompatiblePolicyType fires before the batch-size check.
+        vm.prank(caller);
+        vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
+        policyRegistry.createPolicyWithAccounts(admin_, _creatableCompositeType(typeIdx), tooMany);
+
+        // Fix: use a simple policy type.
+
+        // 3. BATCH-SIZE: valid admin and simple type, but accounts.length > MAX_BATCH_SIZE → BatchSizeTooLarge.
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.BatchSizeTooLarge.selector, MAX_BATCH_SIZE));
         policyRegistry.createPolicyWithAccounts(admin_, pt, tooMany);
