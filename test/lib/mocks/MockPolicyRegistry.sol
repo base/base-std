@@ -385,7 +385,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         for (uint256 i = 0; i < childPolicyIds.length; ++i) {
             if ($.policies[childPolicyIds[i]] == 0) revert PolicyNotFound();
         }
-        // Pass 2: must be a simple policy 
+        // Pass 2: must be a simple policy
         for (uint256 i = 0; i < childPolicyIds.length; ++i) {
             uint64 child = childPolicyIds[i];
             if (_isBuiltin(child) || _isComposite(child)) revert InvalidChildPolicy(child);

@@ -28,22 +28,28 @@ contract PolicyRegistryCreateCompositePolicyRevertOrderTest is PolicyRegistryTes
         uint64 compositeChild = _createComposite(IPolicyRegistry.PolicyType.UNION, 2);
 
         // Ghost (well-formed, never-created) child IDs at counters far above anything created.
-        uint64 neverCreatedWellFormedPolicy = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(2_000_000);
+        uint64 neverCreatedWellFormedPolicy =
+            (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(2_000_000);
         uint64[] memory tooManyNeverCreatedWellFormedPolicyList = new uint64[](MAX_CHILD_POLICIES + 1); // 5, all nonexistent
         for (uint256 i = 0; i < tooManyNeverCreatedWellFormedPolicyList.length; ++i) {
-            tooManyNeverCreatedWellFormedPolicyList[i] = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(1_000_000 + i);
+            tooManyNeverCreatedWellFormedPolicyList[i] =
+                (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(1_000_000 + i);
         }
 
         // 1. ZERO-ADMIN: admin==0 AND type simple AND oversized child set → ZeroAddress fires first.
         vm.expectRevert(IPolicyRegistry.ZeroAddress.selector);
-        policyRegistry.createCompositePolicy(address(0), IPolicyRegistry.PolicyType.ALLOWLIST, tooManyNeverCreatedWellFormedPolicyList);
+        policyRegistry.createCompositePolicy(
+            address(0), IPolicyRegistry.PolicyType.ALLOWLIST, tooManyNeverCreatedWellFormedPolicyList
+        );
 
         // Fix: use a non-zero admin.
-        
+
         // 2. INCOMPATIBLE-TYPE: valid admin, but simple type (ALLOWLIST) AND oversized child set
         //    → IncompatiblePolicyType fires before the count/size checks.
         vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
-        policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST, tooManyNeverCreatedWellFormedPolicyList);
+        policyRegistry.createCompositePolicy(
+            admin, IPolicyRegistry.PolicyType.ALLOWLIST, tooManyNeverCreatedWellFormedPolicyList
+        );
 
         // Fix: use a composite gate.
 
@@ -66,7 +72,11 @@ contract PolicyRegistryCreateCompositePolicyRevertOrderTest is PolicyRegistryTes
         // 5. CHILD-NOT-FOUND: in-range child set, but one child never existed → PolicyNotFound
         //    fires before the simple-vs-composite check.
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
-        policyRegistry.createCompositePolicy(admin, composite, _childIds(tooManyNeverCreatedWellFormedPolicyList[0], tooManyNeverCreatedWellFormedPolicyList[1]));
+        policyRegistry.createCompositePolicy(
+            admin,
+            composite,
+            _childIds(tooManyNeverCreatedWellFormedPolicyList[0], tooManyNeverCreatedWellFormedPolicyList[1])
+        );
 
         // Fix: replace the ghost with an existing simple policy.
 
