@@ -97,6 +97,10 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @inheritdoc IPolicyRegistry
     function createPolicy(address admin, PolicyType policyType) external returns (uint64 newPolicyId) {
+        // ZeroAddress precedes IncompatiblePolicyType (see interface natspec). `_create`
+        // re-checks zero-admin, but the hoisted copy pins the precedence.
+        if (admin == address(0)) revert ZeroAddress();
+        if (_isCompositeType(policyType)) revert IncompatiblePolicyType();
         newPolicyId = _create(admin, policyType);
     }
 
@@ -106,15 +110,17 @@ contract MockPolicyRegistry is IPolicyRegistry {
         returns (uint64 newPolicyId)
     {
         // Match the Rust precompile's check precedence:
-        //   validate_create_policy_inputs (zero-admin) → require_account_batch_size →
+        //   validate_create_policy_inputs (zero-admin → composite-type) → require_account_batch_size →
         //   create_policy_inner → write members
-        // Both checks are duplicated downstream (`_create` re-checks zero-admin for
-        // direct `createPolicy` callers, `_batchSetMembers` re-checks batch size for
-        // `updateAllowlist` / `updateBlocklist` callers). The hoisted entry-point
-        // copies ensure we revert before any `_create` mutation on the failing path
-        // AND pin the same revert-selector precedence Rust enforces (see Rust test
-        // `create_policy_with_accounts_zero_admin_precedes_batch_size_revert`).
+        // Both zero-admin and batch-size are duplicated downstream (`_create` re-checks
+        // zero-admin for direct `createPolicy` callers, `_batchSetMembers` re-checks batch
+        // size for `updateAllowlist` / `updateBlocklist` callers). The hoisted entry-point
+        // copies ensure we revert before any `_create` mutation on the failing path AND pin
+        // the same revert-selector precedence Rust enforces (see Rust test
+        // `create_policy_with_accounts_zero_admin_precedes_batch_size_revert`). A composite
+        // `policyType` is rejected here — this is a simple-policy constructor.
         if (admin == address(0)) revert ZeroAddress();
+        if (_isCompositeType(policyType)) revert IncompatiblePolicyType();
         if (accounts.length > MAX_BATCH_SIZE) revert BatchSizeTooLarge(MAX_BATCH_SIZE);
         newPolicyId = _create(admin, policyType);
         _batchSetMembers({policyId: newPolicyId, policyType: policyType, value: true, accounts: accounts});
@@ -126,7 +132,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         returns (uint64 newPolicyId)
     {
         if (admin == address(0)) revert ZeroAddress();
-        if (policyType != PolicyType.UNION && policyType != PolicyType.INTERSECT) revert IncompatiblePolicyType();
+        if (!_isCompositeType(policyType)) revert IncompatiblePolicyType();
         if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
             revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
         }
@@ -401,11 +407,15 @@ contract MockPolicyRegistry is IPolicyRegistry {
         }
     }
 
+    /// @dev True iff `policyType` is a composite gate (UNION or INTERSECT).
+    function _isCompositeType(PolicyType policyType) internal pure returns (bool) {
+        return policyType == PolicyType.UNION || policyType == PolicyType.INTERSECT;
+    }
+
     /// @dev True iff `policyId`'s top byte encodes a composite gate (UNION or INTERSECT).
     ///      Assumes a well-formed ID; composite children come from stored/created policies.
     function _isComposite(uint64 policyId) internal pure returns (bool) {
-        PolicyType policyType = _typeOf(policyId);
-        return policyType == PolicyType.UNION || policyType == PolicyType.INTERSECT;
+        return _isCompositeType(_typeOf(policyId));
     }
 
     /// @dev True iff `policyId` is a built-in (ALWAYS_ALLOW / ALWAYS_BLOCK).
