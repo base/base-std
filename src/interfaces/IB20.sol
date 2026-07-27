@@ -441,7 +441,7 @@ interface IB20 {
     function burnBlocked(address from, uint256 amount) external;
 
     /// @notice Same as `burnBlocked`, plus emits `Memo` after the standard `Transfer` and `BurnedBlocked` events.
-    ///         A memo of `bytes32(0)` is permitted. Part of the seize operation class.
+    ///         A memo of `bytes32(0)` is permitted.
     ///
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_BLOCKED_ROLE`.
