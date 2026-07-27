@@ -457,9 +457,9 @@ interface IB20 {
     ///         Emits `Transfer(from, to, amount)`, `TransferredFromBlocked(caller, from, to, amount)`, and
     ///         `Memo(caller, memo)`. A memo of `bytes32(0)` is permitted.
     ///
-    /// @dev Admin operation: skips allowance and does NOT consult `TRANSFER_SENDER_POLICY`,
-    ///      `TRANSFER_RECEIVER_POLICY`, or `TRANSFER_EXECUTOR_POLICY`. The only membership check is that `from`
-    ///      is blocked under `SEIZABLE_POLICY`; `to` is not policy-checked (the destination need not be allowlisted).
+    /// @dev Admin operation: skips allowance and the transfer policies. The only membership check is that
+    ///      `from` is blocked under `SEIZABLE_POLICY`.
+    /// @dev `to` is not policy-checked; the destination need not be allowlisted.
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `TRANSFER_FROM_BLOCKED_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
