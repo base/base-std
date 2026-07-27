@@ -72,9 +72,8 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Base-local companion to ERC-8056's `UIMultiplierUpdated`. Fills the standard's
-    ///         cancellation gap: emitted by `cancelScheduledMultiplier`, and by `updateMultiplier`
-    ///         whenever it clears a live pending update.
+    /// @notice A scheduled multiplier update was cancelled. Emitted by `cancelScheduledMultiplier`,
+    ///         and by `updateMultiplier` when it clears a live pending update.
     ///
     /// @param cancelledMultiplier  The pending multiplier that was cleared.
     /// @param cancelledEffectiveAt The `effectiveAt` of the pending update that was cleared.
