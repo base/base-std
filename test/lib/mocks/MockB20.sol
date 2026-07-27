@@ -778,11 +778,7 @@ abstract contract MockB20 is IB20 {
     }
 
     /// @dev Shared balance mover: debit `from`, credit `to`, emit `Transfer`.
-    ///      No policy, allowance, or pause checks — callers (`_transfer`,
-    ///      `transferFromBlockedWithMemo`) apply their own guards first. This
-    ///      is the single balance-move primitive so the seize path does not
-    ///      have to reuse the policy-bearing `_transfer` (nor the factory
-    ///      privileged bypass).
+    ///      No guards; callers apply their own first.
     function _moveBalance(address from, address to, uint256 amount) internal {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 fromBalance = $.balances[from];

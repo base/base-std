@@ -16,7 +16,7 @@ interface IB20 {
     /// @param TRANSFER `transfer`, `transferFrom`, and memo'd variants.
     /// @param MINT     `mint` and `mintWithMemo`.
     /// @param BURN     `burn`, `burnWithMemo`, and `burnBlocked`.
-    /// @param SEIZE    `transferFromBlockedWithMemo` and `burnBlockedWithMemo` (the seize operation class).
+    /// @param SEIZE    `transferFromBlockedWithMemo` and `burnBlockedWithMemo`
     enum PausableFeature {
         TRANSFER,
         MINT,
@@ -450,7 +450,7 @@ interface IB20 {
     ///
     /// @param from   Account whose balance is being seized.
     /// @param amount Amount to burn.
-    /// @param memo   Off-chain memo payload.
+    /// @param memo   Memo payload.
     function burnBlockedWithMemo(address from, uint256 amount, bytes32 memo) external;
 
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation.
@@ -470,7 +470,7 @@ interface IB20 {
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
-    /// @param memo   Off-chain memo payload.
+    /// @param memo   Memo payload.
     ///
     /// @return Always `true` on success.
     function transferFromBlockedWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool);
