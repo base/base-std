@@ -15,8 +15,8 @@ interface IB20 {
     ///
     /// @param TRANSFER `transfer`, `transferFrom`, and memo'd variants.
     /// @param MINT     `mint` and `mintWithMemo`.
-    /// @param BURN     `burn`, `burnWithMemo`, and `burnBlocked`.
-    /// @param SEIZE    `transferFromBlockedWithMemo` and `burnBlockedWithMemo`
+    /// @param BURN     `burn` and `burnWithMemo`.
+    /// @param SEIZE    `burnBlocked`, `burnBlockedWithMemo`, and `transferFromBlockedWithMemo`
     enum PausableFeature {
         TRANSFER,
         MINT,
@@ -105,9 +105,8 @@ interface IB20 {
     /// @notice `policyScope` is not a slot this token (or its variant) supports.
     error UnsupportedPolicyType(bytes32 policyScope);
 
-    /// @notice A seize operation was called against a `from` that is not currently blocked by the gating policy:
-    ///         `burnBlocked` (authorized under `TRANSFER_SENDER_POLICY`), or `transferFromBlockedWithMemo` /
-    ///         `burnBlockedWithMemo` (authorized under `SEIZABLE_POLICY`).
+    /// @notice A seize operation (`burnBlocked`, `burnBlockedWithMemo`, or `transferFromBlockedWithMemo`) was
+    ///         called against a `from` that is currently authorized under `SEIZABLE_POLICY` (i.e. not blocked).
     error AccountNotBlocked(address account);
 
     /// @notice An EIP-2612 `permit` was submitted with a `deadline` strictly less than `block.timestamp`.
@@ -429,11 +428,11 @@ interface IB20 {
     function burnWithMemo(uint256 amount, bytes32 memo) external;
 
     /// @notice Destroys `amount` of `from`'s balance. Emits `Transfer(from, address(0), amount)` and
-    ///         `BurnedBlocked(caller, from, amount)`.
+    ///         `BurnedBlocked(caller, from, amount)`. Part of the seize operation class.
     ///
-    /// @dev Reverts with `ContractPaused(BURN)` when `BURN` is paused.
+    /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_BLOCKED_ROLE`.
-    /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `TRANSFER_SENDER_POLICY`.
+    /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `SEIZABLE_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///
     /// @param from   Account whose balance is being seized.

@@ -310,20 +310,13 @@ abstract contract MockB20 is IB20 {
 
     function burnBlocked(address from, uint256 amount)
         external
-        whenNotPaused(PausableFeature.BURN)
+        whenNotPaused(PausableFeature.SEIZE)
         onlyRole(BURN_BLOCKED_ROLE)
     {
-        // The point of burnBlocked is to seize from policy-blocked
-        // accounts. Read the transfer-sender policy ID out of the
-        // transfer-side packed slot and reject if the target is
-        // currently authorized. Enforced unconditionally — including
-        // for factory-originated calls during the bootstrap window —
-        // matching the Rust precompile, which carves no `privileged`
-        // exception for this guard.
-        uint64 senderPolicyId = MockB20Storage.layout().transferPolicyIds.sender;
-        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
-            revert AccountNotBlocked(from);
-        }
+        // Part of the seize operation class: gated on SEIZABLE_POLICY (not the
+        // transfer-sender policy) and the SEIZE pause vector, same as
+        // burnBlockedWithMemo and transferFromBlockedWithMemo.
+        _requireSeizable(from);
         _burnRaw(from, amount);
         emit BurnedBlocked(msg.sender, from, amount);
     }
