@@ -83,7 +83,7 @@ contract B20BurnBlockedWithMemoTest is B20Test {
         );
     }
 
-    /// @notice Emits Transfer(from, 0, amount), BurnedBlocked(caller, from, amount), then Memo(caller, memo).
+    /// @notice Emits Transfer(from, 0, amount), then Memo(caller, memo), then BurnedBlocked(caller, from, amount).
     function test_burnBlockedWithMemo_success_emitsTransferBurnedBlockedAndMemo(
         address from,
         uint256 amount,
@@ -98,9 +98,9 @@ contract B20BurnBlockedWithMemoTest is B20Test {
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(from, address(0), amount);
         vm.expectEmit(true, true, false, true, address(token));
-        emit IB20.BurnedBlocked(burnBlocker, from, amount);
-        vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Memo(burnBlocker, memo);
+        vm.expectEmit(true, true, false, true, address(token));
+        emit IB20.BurnedBlocked(burnBlocker, from, amount);
         vm.prank(burnBlocker);
         token.burnBlockedWithMemo(from, amount, memo);
     }

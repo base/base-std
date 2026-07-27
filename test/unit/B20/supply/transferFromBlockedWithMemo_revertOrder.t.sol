@@ -12,7 +12,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 /// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(TRANSFER_FROM_BLOCKED_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. ZERO-ACTORS (`_requireNonZeroActors`) → `InvalidReceiver` then `InvalidSender`
+///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver` (`from` is not zero-checked)
 ///         4. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotBlocked`
 ///         5. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20TransferFromBlockedWithMemoRevertOrderTest is B20Test {

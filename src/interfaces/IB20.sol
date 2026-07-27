@@ -439,8 +439,8 @@ interface IB20 {
     /// @param amount Amount to burn.
     function burnBlocked(address from, uint256 amount) external;
 
-    /// @notice Same as `burnBlocked`, plus emits `Memo` after the standard `Transfer` and `BurnedBlocked` events.
-    ///         A memo of `bytes32(0)` is permitted.
+    /// @notice Same as `burnBlocked`, plus emits `Memo(caller, memo)` immediately after the `Transfer` event
+    ///         (i.e. before `BurnedBlocked`). A memo of `bytes32(0)` is permitted.
     ///
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_BLOCKED_ROLE`.
@@ -453,8 +453,8 @@ interface IB20 {
     function burnBlockedWithMemo(address from, uint256 amount, bytes32 memo) external;
 
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation.
-    ///         Emits `Transfer(from, to, amount)`, `TransferredFromBlocked(caller, from, to, amount)`, and
-    ///         `Memo(caller, memo)`. A memo of `bytes32(0)` is permitted.
+    ///         Emits, in order, `Transfer(from, to, amount)`, `Memo(caller, memo)`, and
+    ///         `TransferredFromBlocked(caller, from, to, amount)`. A memo of `bytes32(0)` is permitted.
     ///
     /// @dev Admin operation: skips allowance and the transfer policies. The only membership check is that
     ///      `from` is blocked under `SEIZABLE_POLICY`.
@@ -462,7 +462,6 @@ interface IB20 {
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `TRANSFER_FROM_BLOCKED_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
-    /// @dev Reverts with `InvalidSender` when `from == address(0)`.
     /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `SEIZABLE_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///

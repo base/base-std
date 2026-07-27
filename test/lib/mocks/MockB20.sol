@@ -328,8 +328,10 @@ abstract contract MockB20 is IB20 {
     {
         _requireSeizable(from);
         _burnRaw(from, amount);
-        emit BurnedBlocked(msg.sender, from, amount);
+        // `Memo` must immediately follow the `Transfer` (emitted by `_burnRaw`),
+        // per the IB20 `Memo` invariant, so it precedes `BurnedBlocked`.
         emit Memo(msg.sender, memo);
+        emit BurnedBlocked(msg.sender, from, amount);
     }
 
     function transferFromBlockedWithMemo(address from, address to, uint256 amount, bytes32 memo)
@@ -338,18 +340,23 @@ abstract contract MockB20 is IB20 {
         onlyRole(TRANSFER_FROM_BLOCKED_ROLE)
         returns (bool)
     {
-        // Admin seize: reassign a blocked account's balance. `to` is validated
-        // for non-zero, but — unlike a normal transfer — no sender/receiver/
-        // executor policy is consulted and no allowance is spent. The only
-        // membership check is that `from` is blocked under SEIZABLE_POLICY.
-        // Deliberately does NOT reuse the factory-bootstrap privileged path
-        // (which would silently skip the receiver policy); every skip here is
-        // explicit.
-        _requireNonZeroActors(from, to);
+        // Admin seize: reassign a blocked account's balance. `to` must be
+        // non-zero (otherwise this would be a burn), but — unlike a normal
+        // transfer — no sender/receiver/executor policy is consulted, no
+        // allowance is spent, and `from` is not zero-checked (consistent with
+        // the burn-blocked family; a zero/empty `from` fails the seizable or
+        // balance check anyway). The only membership check is that `from` is
+        // blocked under SEIZABLE_POLICY. Deliberately does NOT reuse the
+        // factory-bootstrap privileged path (which would silently skip the
+        // receiver policy); every skip here is explicit.
+        if (to == address(0)) revert InvalidReceiver(to);
         _requireSeizable(from);
         _moveBalance(from, to, amount);
-        emit TransferredFromBlocked(msg.sender, from, to, amount);
+        // `Memo` must immediately follow the `Transfer` (emitted by
+        // `_moveBalance`), per the IB20 `Memo` invariant, so it precedes
+        // `TransferredFromBlocked`.
         emit Memo(msg.sender, memo);
+        emit TransferredFromBlocked(msg.sender, from, to, amount);
         return true;
     }
 

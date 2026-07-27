@@ -60,16 +60,6 @@ contract B20TransferFromBlockedWithMemoTest is B20Test {
         token.transferFromBlockedWithMemo(from, address(0), amount, bytes32(0));
     }
 
-    /// @notice Reverts with InvalidSender when `from == address(0)`.
-    function test_transferFromBlockedWithMemo_revert_invalidSender(address to, uint256 amount) public {
-        _assumeValidActor(to);
-        _grantRole(B20Constants.TRANSFER_FROM_BLOCKED_ROLE, seizer);
-
-        vm.prank(seizer);
-        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
-        token.transferFromBlockedWithMemo(address(0), to, amount, bytes32(0));
-    }
-
     /// @notice Reverts AccountNotBlocked when `from` is authorized under SEIZABLE_POLICY.
     /// @dev Default SEIZABLE_POLICY is ALWAYS_ALLOW (0) → every account authorized → not seizable.
     function test_transferFromBlockedWithMemo_revert_accountNotBlocked(address from, address to, uint256 amount)
@@ -161,7 +151,7 @@ contract B20TransferFromBlockedWithMemoTest is B20Test {
         assertEq(token.allowance(from, seizer), 0, "no allowance should be consumed");
     }
 
-    /// @notice Emits Transfer, TransferredFromBlocked, and Memo.
+    /// @notice Emits, in order, Transfer, Memo (immediately after Transfer per the IB20 invariant), then TransferredFromBlocked.
     function test_transferFromBlockedWithMemo_success_emitsEvents(
         address from,
         address to,
@@ -177,10 +167,10 @@ contract B20TransferFromBlockedWithMemoTest is B20Test {
 
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Transfer(from, to, amount);
-        vm.expectEmit(true, true, true, true, address(token));
-        emit IB20.TransferredFromBlocked(seizer, from, to, amount);
         vm.expectEmit(true, true, false, true, address(token));
         emit IB20.Memo(seizer, memo);
+        vm.expectEmit(true, true, true, true, address(token));
+        emit IB20.TransferredFromBlocked(seizer, from, to, amount);
         vm.prank(seizer);
         token.transferFromBlockedWithMemo(from, to, amount, memo);
     }
