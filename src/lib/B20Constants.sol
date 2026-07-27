@@ -20,8 +20,8 @@ library B20Constants {
     bytes32 internal constant MINT_RECEIVER_POLICY = keccak256("MINT_RECEIVER_POLICY");
     bytes32 internal constant SEIZABLE_POLICY = keccak256("SEIZABLE_POLICY");
 
-    /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN | SEIZE).
-    uint8 internal constant ALL_FEATURES_PAUSED = 0x0F;
+    /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN | SEIZE); 15 = 0b1111.
+    uint8 internal constant ALL_FEATURES_PAUSED = 15;
 
     /// @notice Inclusive lower bound for `B20AssetCreateParams.decimals`. `6` is the
     ///         floor most stablecoin-grade integrations expect; values below it lose
