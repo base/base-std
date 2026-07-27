@@ -56,6 +56,7 @@ contract B20FullLayoutTest is B20Test {
     uint64 internal transferSenderMarker;
     uint64 internal transferReceiverMarker;
     uint64 internal transferExecutorMarker;
+    uint64 internal transferSeizableMarker;
     uint64 internal mintReceiverMarker;
 
     /// @notice Cross-cuts every field of MockB20Storage.Layout in a single
@@ -177,7 +178,11 @@ contract B20FullLayoutTest is B20Test {
             uint256(transferExecutorMarker),
             "slot 9 bits 128..191: transfer EXECUTOR lane"
         );
-        assertEq(packedTransfer >> 192, 0, "slot 9 bits 192..255: reserved lane must be zero");
+        assertEq(
+            (packedTransfer >> 192) & 0xFFFFFFFFFFFFFFFF,
+            uint256(transferSeizableMarker),
+            "slot 9 bits 192..255: transfer SEIZABLE lane"
+        );
 
         uint256 packedMint = uint256(vm.load(tokenAddr, MockB20Storage.mintPolicyIdsSlot()));
         assertEq(packedMint & 0xFFFFFFFFFFFFFFFF, uint256(mintReceiverMarker), "slot 10 bits 0..63: mint RECEIVER lane");
@@ -190,8 +195,9 @@ contract B20FullLayoutTest is B20Test {
         // features" detectable.
         uint256 pausedRaw = uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot()));
         uint256 expectedPaused = (uint256(1) << uint8(IB20.PausableFeature.TRANSFER))
-            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN));
-        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the three defined bits");
+            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN))
+            | (uint256(1) << uint8(IB20.PausableFeature.SEIZE));
+        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the four defined bits");
         // No bits set outside the defined PausableFeature range. Computed
         // as the complement of the union of all defined bits.
         assertEq(
@@ -268,10 +274,13 @@ contract B20FullLayoutTest is B20Test {
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         transferExecutorMarker =
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        transferSeizableMarker =
+            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         mintReceiverMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
+        _setPolicy(B20Constants.SEIZABLE_POLICY, transferSeizableMarker);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------
@@ -282,6 +291,7 @@ contract B20FullLayoutTest is B20Test {
         _pause(IB20.PausableFeature.TRANSFER);
         _pause(IB20.PausableFeature.MINT);
         _pause(IB20.PausableFeature.BURN);
+        _pause(IB20.PausableFeature.SEIZE);
 
         // ---------- Nonce ----------
         // Permit increments alice's nonce. To sign a valid permit we

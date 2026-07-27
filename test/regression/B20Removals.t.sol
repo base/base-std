@@ -74,25 +74,25 @@ contract B20RemovalsTest is B20AssetTest {
         );
     }
 
-    /// @notice Verifies the `PausableFeature` enum has no fourth (`REDEEM`) member
-    /// @dev `isPaused(PausableFeature)` ABI-decodes its arg as the enum; an out-of-range value (3)
-    ///      reverts (Panic 0x21). Index 2 (`BURN`) still decodes, bracketing the enum at exactly
-    ///      {TRANSFER, MINT, BURN}.
-    function test_isPaused_revert_noRedeemFeature() public {
+    /// @notice Verifies the `PausableFeature` enum is exactly {TRANSFER, MINT, BURN, SEIZE}
+    /// @dev `isPaused(PausableFeature)` ABI-decodes its arg as the enum; an out-of-range value (4)
+    ///      reverts (Panic 0x21). Index 3 (`SEIZE`) still decodes, bracketing the enum at exactly
+    ///      {TRANSFER, MINT, BURN, SEIZE}. The removed REDEEM feature never reappears.
+    function test_isPaused_revert_noFifthFeature() public {
         _assertSelectorRemoved(
-            abi.encodeWithSignature("isPaused(uint8)", uint8(3)),
-            "isPaused must reject enum index 3 (out of PausableFeature range)"
+            abi.encodeWithSignature("isPaused(uint8)", uint8(4)),
+            "isPaused must reject enum index 4 (out of PausableFeature range)"
         );
 
-        (bool ok,) = address(token).call(abi.encodeWithSignature("isPaused(uint8)", uint8(2)));
-        assertTrue(ok, "isPaused must still accept enum index 2 (BURN)");
+        (bool ok,) = address(token).call(abi.encodeWithSignature("isPaused(uint8)", uint8(3)));
+        assertTrue(ok, "isPaused must still accept enum index 3 (SEIZE)");
     }
 
-    /// @notice Verifies the all-features-paused bitmask covers exactly three features
-    /// @dev `ALL_FEATURES_PAUSED == 7` is `TRANSFER | MINT | BURN` (0b111); a fourth feature would
-    ///      push it to 15. Pins the feature count at the library source-of-truth.
-    function test_allFeaturesPaused_success_threeFeatureBitmask() public pure {
-        assertEq(B20Constants.ALL_FEATURES_PAUSED, 7, "ALL_FEATURES_PAUSED must be TRANSFER|MINT|BURN (0b111)");
+    /// @notice Verifies the all-features-paused bitmask covers exactly four features
+    /// @dev `ALL_FEATURES_PAUSED == 15` is `TRANSFER | MINT | BURN | SEIZE` (0b1111). Pins the feature
+    ///      count at the library source-of-truth.
+    function test_allFeaturesPaused_success_fourFeatureBitmask() public pure {
+        assertEq(B20Constants.ALL_FEATURES_PAUSED, 15, "ALL_FEATURES_PAUSED must be TRANSFER|MINT|BURN|SEIZE (0b1111)");
     }
 
     // ============================================================

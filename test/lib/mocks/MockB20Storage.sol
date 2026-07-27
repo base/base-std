@@ -49,17 +49,20 @@ library MockB20Storage {
     // not declared as a field is simply uninitialized (zero) and the
     // struct cannot accidentally write to it.
 
-    /// @notice Transfer-side policy IDs (read by `_transfer`,
-    ///         `transferFrom*`, and the seize check in `burnBlocked`).
+    /// @notice Transfer-side + seize policy IDs (read by `_transfer`,
+    ///         `transferFrom*`, the seize check in `burnBlocked`, and the
+    ///         seize operations `transferFromBlockedWithMemo` /
+    ///         `burnBlockedWithMemo`).
     /// @dev    Bit layout (Solidity LSB-first):
     ///           bits   0.. 63 : sender
     ///           bits  64..127 : receiver
     ///           bits 128..191 : executor
-    ///           bits 192..255 : reserved (implicit, no field declared)
+    ///           bits 192..255 : seizable (`SEIZABLE_POLICY`)
     struct TransferPolicyIds {
         uint64 sender;
         uint64 receiver;
         uint64 executor;
+        uint64 seizable;
     }
 
     /// @notice Mint-side policy IDs (read by `_mint`). Only the
@@ -299,14 +302,19 @@ library MockB20Storage {
         return uint64(packed >> 128);
     }
 
-    /// @notice Composes the transfer-side packed slot from its three lanes.
-    /// @dev Lane 3 (bits 192..255) is reserved and pinned to zero.
-    function packTransferPolicyIds(uint64 senderId, uint64 receiverId, uint64 executorId)
+    /// @notice Extracts the SEIZABLE policy id (lane 3) from the packed slot.
+    function transferSeizablePolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed >> 192);
+    }
+
+    /// @notice Composes the transfer-side packed slot from its four lanes.
+    function packTransferPolicyIds(uint64 senderId, uint64 receiverId, uint64 executorId, uint64 seizableId)
         internal
         pure
         returns (uint256)
     {
-        return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128);
+        return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128)
+            | (uint256(seizableId) << 192);
     }
 
     /// @notice Extracts the MINT_RECEIVER policy id (lane 0) from the packed slot.

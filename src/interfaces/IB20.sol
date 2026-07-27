@@ -16,10 +16,12 @@ interface IB20 {
     /// @param TRANSFER `transfer`, `transferFrom`, and memo'd variants.
     /// @param MINT     `mint` and `mintWithMemo`.
     /// @param BURN     `burn`, `burnWithMemo`, and `burnBlocked`.
+    /// @param SEIZE    `transferFromBlockedWithMemo` and `burnBlockedWithMemo` (the seize operation class).
     enum PausableFeature {
         TRANSFER,
         MINT,
-        BURN
+        BURN,
+        SEIZE
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -103,7 +105,9 @@ interface IB20 {
     /// @notice `policyScope` is not a slot this token (or its variant) supports.
     error UnsupportedPolicyType(bytes32 policyScope);
 
-    /// @notice `burnBlocked` was called against a `from` that is currently authorized under `TRANSFER_SENDER_POLICY`.
+    /// @notice A seize operation was called against a `from` that is not currently blocked by the gating policy:
+    ///         `burnBlocked` (authorized under `TRANSFER_SENDER_POLICY`), or `transferFromBlockedWithMemo` /
+    ///         `burnBlockedWithMemo` (authorized under `SEIZABLE_POLICY`).
     error AccountNotBlocked(address account);
 
     /// @notice An EIP-2612 `permit` was submitted with a `deadline` strictly less than `block.timestamp`.
@@ -139,8 +143,13 @@ interface IB20 {
     ///         immediately after the underlying `Transfer` event. `caller` is the `msg.sender` of the memo'd call.
     event Memo(address indexed caller, bytes32 indexed memo);
 
-    /// @notice Emitted by `burnBlocked` in addition to `Transfer(from, address(0), amount)`.
+    /// @notice Emitted by `burnBlocked` and `burnBlockedWithMemo` in addition to `Transfer(from, address(0), amount)`.
     event BurnedBlocked(address indexed caller, address indexed from, uint256 amount);
+
+    /// @notice Emitted by `transferFromBlockedWithMemo` in addition to `Transfer(from, to, amount)` (and the
+    ///         standard `Memo(caller, memo)`). Records a transfer-based seizure: `caller` is the `msg.sender`
+    ///         (holder of `TRANSFER_FROM_BLOCKED_ROLE`), `from` the seized account, `to` the destination.
+    event TransferredFromBlocked(address indexed caller, address indexed from, address indexed to, uint256 amount);
 
     /// @notice Emitted when `account` is granted `role`. `sender` is the originating caller.
     event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
@@ -199,9 +208,13 @@ interface IB20 {
     /// @return Role constant.
     function BURN_ROLE() external view returns (bytes32);
 
-    /// @notice Required to call `burnBlocked`.
+    /// @notice Required to call `burnBlocked` and `burnBlockedWithMemo`.
     /// @return Role constant.
     function BURN_BLOCKED_ROLE() external view returns (bytes32);
+
+    /// @notice Required to call `transferFromBlockedWithMemo`.
+    /// @return Role constant.
+    function TRANSFER_FROM_BLOCKED_ROLE() external view returns (bytes32);
 
     /// @notice Required to call `pause`.
     /// @return Role constant.
@@ -244,6 +257,13 @@ interface IB20 {
     ///      issued to a policy-denied recipient even at creation. See `IB20Factory.createB20`.
     /// @return Policy scope constant.
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
+
+    /// @notice Policy slot consulted against `from` by the seize operations (`transferFromBlockedWithMemo`,
+    ///         `burnBlockedWithMemo`). A `from` is seizable only when it is NOT authorized by this policy
+    ///         (mirroring the `burnBlocked` "blocked" semantics). An unset slot reads as `0` (always-allow),
+    ///         which makes no account seizable until an issuer configures the slot.
+    /// @return Policy scope constant.
+    function SEIZABLE_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                                   ERC-20
@@ -419,6 +439,41 @@ interface IB20 {
     /// @param from   Account whose balance is being seized.
     /// @param amount Amount to burn.
     function burnBlocked(address from, uint256 amount) external;
+
+    /// @notice Same as `burnBlocked`, plus emits `Memo` after the standard `Transfer` and `BurnedBlocked` events.
+    ///         A memo of `bytes32(0)` is permitted. Part of the seize operation class.
+    ///
+    /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_BLOCKED_ROLE`.
+    /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `SEIZABLE_POLICY`.
+    /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
+    ///
+    /// @param from   Account whose balance is being seized.
+    /// @param amount Amount to burn.
+    /// @param memo   Off-chain memo payload.
+    function burnBlockedWithMemo(address from, uint256 amount, bytes32 memo) external;
+
+    /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation.
+    ///         Emits `Transfer(from, to, amount)`, `TransferredFromBlocked(caller, from, to, amount)`, and
+    ///         `Memo(caller, memo)`. A memo of `bytes32(0)` is permitted.
+    ///
+    /// @dev Admin operation: skips allowance and does NOT consult `TRANSFER_SENDER_POLICY`,
+    ///      `TRANSFER_RECEIVER_POLICY`, or `TRANSFER_EXECUTOR_POLICY`. The only membership check is that `from`
+    ///      is blocked under `SEIZABLE_POLICY`; `to` is not policy-checked (the destination need not be allowlisted).
+    /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `TRANSFER_FROM_BLOCKED_ROLE`.
+    /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
+    /// @dev Reverts with `InvalidSender` when `from == address(0)`.
+    /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `SEIZABLE_POLICY`.
+    /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
+    ///
+    /// @param from   Account whose balance is being seized.
+    /// @param to     Destination address for the seized balance.
+    /// @param amount Amount to seize.
+    /// @param memo   Off-chain memo payload.
+    ///
+    /// @return Always `true` on success.
+    function transferFromBlockedWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool);
 
     /*//////////////////////////////////////////////////////////////
                                   ROLES

@@ -33,10 +33,13 @@ contract B20UpdatePolicyTest is B20Test {
         if (policyScope == B20Constants.TRANSFER_RECEIVER_POLICY) {
             return MockB20Storage.transferReceiverPolicyId(transferPacked);
         }
-        // TRANSFER_EXECUTOR — the four supported types are exhaustive
-        // for this helper; callers always pass a known policy type via
+        if (policyScope == B20Constants.TRANSFER_EXECUTOR_POLICY) {
+            return MockB20Storage.transferExecutorPolicyId(transferPacked);
+        }
+        // SEIZABLE — the five supported types are exhaustive for this
+        // helper; callers always pass a known policy type via
         // `_knownPolicyType` or the named constants.
-        return MockB20Storage.transferExecutorPolicyId(transferPacked);
+        return MockB20Storage.transferSeizablePolicyId(transferPacked);
     }
 
     /// @notice Verifies updatePolicy reverts when caller lacks DEFAULT_ADMIN_ROLE

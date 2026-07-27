@@ -134,10 +134,11 @@ contract B20Test is B20FactoryTest {
     ///         extends the codomain when they add variant-specific
     ///         policy slots.
     function _knownPolicyType(uint8 idx) internal pure returns (bytes32) {
-        uint8 i = idx % 4;
+        uint8 i = idx % 5;
         if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;
         if (i == 1) return B20Constants.TRANSFER_RECEIVER_POLICY;
         if (i == 2) return B20Constants.TRANSFER_EXECUTOR_POLICY;
+        if (i == 3) return B20Constants.SEIZABLE_POLICY;
         return B20Constants.MINT_RECEIVER_POLICY;
     }
 
@@ -147,7 +148,8 @@ contract B20Test is B20FactoryTest {
     ///         base-token policy types.
     function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
         return policyType == B20Constants.TRANSFER_SENDER_POLICY || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
-            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.MINT_RECEIVER_POLICY;
+            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.SEIZABLE_POLICY
+            || policyType == B20Constants.MINT_RECEIVER_POLICY;
     }
 
     /// @notice Pauses a single `PausableFeature`, lazily granting `PAUSE_ROLE`
