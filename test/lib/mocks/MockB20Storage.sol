@@ -358,6 +358,12 @@ library MockB20Storage {
 ///           directly on the raw `key` string (e.g. `"category"`);
 ///           empty value means unset/removed.
 library MockB20AssetStorage {
+    /// @notice The single scheduled multiplier update (ERC-8056 pending).
+    struct PendingMultiplier {
+        uint128 multiplier;
+        uint64 effectiveAt;
+    }
+
     /// @custom:storage-location erc7201:base.b20.asset
     struct Layout {
         // ---------- Decimals ----------
@@ -382,6 +388,9 @@ library MockB20AssetStorage {
         // (e.g. `category`, `region`, `reference`). Empty string means
         // unset/removed.
         mapping(string key => string value) extraMetadata;
+        // ---------- Pending multiplier (ERC-8056 schedule) ----------
+        // Single scheduled multiplier update, packed into one slot.
+        PendingMultiplier pending;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20.asset")) - 1)) & ~bytes32(uint256(0xff))
@@ -400,6 +409,7 @@ library MockB20AssetStorage {
     uint256 internal constant MULTIPLIER_OFFSET = 1;
     uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 2;
     uint256 internal constant EXTRA_METADATA_OFFSET = 3;
+    uint256 internal constant PENDING_OFFSET = 4;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {
@@ -428,6 +438,7 @@ library MockB20AssetStorage {
     function multiplierSlot() internal pure returns (bytes32) { return slotOf(MULTIPLIER_OFFSET); }
     function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
     function extraMetadataBaseSlot() internal pure returns (bytes32) { return slotOf(EXTRA_METADATA_OFFSET); }
+    function pendingSlot() internal pure returns (bytes32) { return slotOf(PENDING_OFFSET); }
 
             // forgefmt: disable-end
 
@@ -450,6 +461,30 @@ library MockB20AssetStorage {
     ///         Solidity's short/long encoding convention).
     function extraMetadataSlot(string memory key) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(key, extraMetadataBaseSlot()));
+    }
+
+    // ============================================================
+    //                     PACKED-SLOT CODECS
+    // ============================================================
+    // Production code accesses the pending slot via the `PendingMultiplier`
+    // struct, meaning Solidity handles the bit math automatically.
+    // These pure codecs exist for test-side use only (operating on vm.load outputs)
+    // The roundtrip test in `MockB20AssetSlotHelpers.t.sol` verifies this bit math matches
+    // Solidity's struct packing, enshrining it in CI.
+
+    /// @notice Extracts the pending multiplier (bits 0..127) from the packed slot.
+    function pendingMultiplierValue(uint256 packed) internal pure returns (uint128) {
+        return uint128(packed);
+    }
+
+    /// @notice Extracts the pending `effectiveAt` (bits 128..191) from the packed slot.
+    function pendingEffectiveAt(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed >> 128);
+    }
+
+    /// @notice Composes the pending slot from its two lanes.
+    function packPendingMultiplier(uint128 multiplier, uint64 effectiveAt) internal pure returns (uint256) {
+        return uint256(multiplier) | (uint256(effectiveAt) << 128);
     }
 }
 

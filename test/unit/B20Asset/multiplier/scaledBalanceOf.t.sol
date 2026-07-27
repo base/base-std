@@ -10,7 +10,7 @@ contract B20AssetScaledBalanceOfTest is B20AssetTest {
     /// @dev Property: empty balance => zero scaled balance regardless of the multiplier.
     function test_scaledBalanceOf_success_zeroForEmptyAccount(address account, uint256 newMultiplier) public {
         _assumeValidActor(account);
-        newMultiplier = bound(newMultiplier, 1, type(uint256).max);
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _updateMultiplier(newMultiplier);
         assertEq(asset().scaledBalanceOf(account), 0, "empty account must have zero scaled balance");
     }

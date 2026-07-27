@@ -24,17 +24,23 @@ contract B20AssetFullLayoutTest is B20AssetTest {
     ///      both zero (the "unwritten = WAD" default) and WAD itself.
     uint256 internal constant MULTIPLIER_MARKER = 2.5e18;
 
+    /// @dev Distinct pending multiplier + a future delay so slot 4 packs an observably
+    ///      non-zero `(multiplier, effectiveAt)`.
+    uint128 internal constant PENDING_MULTIPLIER = 3e18;
+    uint256 internal constant PENDING_DELAY = 365 days;
+
     string internal constant REFERENCE_VALUE = "REF-2024-001";
     string internal constant ANNOUNCEMENT_ID = "layout-pin-announcement";
 
     /// @notice Cross-cuts every field of the asset-variant namespace in
     ///         one populated snapshot.
-    /// @dev    Field coverage for `base.b20.asset` (slots 0..3):
+    /// @dev    Field coverage for `base.b20.asset` (slots 0..4):
     ///         - 0: decimals (factory-written at creation)
     ///         - 1: multiplier
     ///         - 2: usedAnnouncementIds[id]
     ///         - 3: extraMetadata[key]  (one example key mutated; the other
     ///              left empty to confirm the factory seeds no entries)
+    ///         - 4: pending (packed uint128 multiplier | uint64 effectiveAt)
     function test_b20AssetLayout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -80,6 +86,14 @@ contract B20AssetFullLayoutTest is B20AssetTest {
             _expectedStringFieldSlot(REFERENCE_VALUE),
             "asset slot 3: extraMetadata[example_3] must hold the post-creation short-string encoding"
         );
+
+        // ---------- pending (slot 4, packed) ----------
+        // uint128 multiplier in the low 128 bits; uint64 effectiveAt in the next 64.
+        assertEq(
+            uint256(vm.load(tokenAddr, MockB20AssetStorage.pendingSlot())),
+            MockB20AssetStorage.packPendingMultiplier(PENDING_MULTIPLIER, uint64(block.timestamp + PENDING_DELAY)),
+            "asset slot 4: pending must hold the packed (multiplier, effectiveAt)"
+        );
     }
 
     /// @notice Populates the asset variant with non-default values
@@ -89,6 +103,9 @@ contract B20AssetFullLayoutTest is B20AssetTest {
     function _populate() internal {
         // multiplier: write the non-WAD marker via the public surface.
         _updateMultiplier(MULTIPLIER_MARKER);
+        // pending: schedule a live pending via the public surface. `updateMultiplier` above cleared
+        // any pending, so this leaves slot 1 (current) at MULTIPLIER_MARKER and populates slot 4.
+        _setUIMultiplier(PENDING_MULTIPLIER, block.timestamp + PENDING_DELAY);
         // extraMetadata[example_3]: post-creation metadata-admin write. The
         // factory does not seed any entry at creation; every other key
         // defaults to empty.
