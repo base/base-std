@@ -280,7 +280,7 @@ contract B20FullLayoutTest is B20Test {
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
-        _setPolicy(B20Constants.SEIZABLE_POLICY, transferSeizableMarker);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, transferSeizableMarker);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------

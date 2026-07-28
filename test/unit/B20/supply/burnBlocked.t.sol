@@ -29,10 +29,10 @@ contract B20BurnBlockedTest is B20Test {
     function test_burnBlocked_revert_whenSeizePaused(address from, uint256 amount) public {
         _assumeValidActor(from);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        // We also need SEIZABLE_POLICY set to ALWAYS_BLOCK_ID so the from-not-authorized
+        // We also need SEIZABLE_ACCOUNT_POLICY set to ALWAYS_BLOCK_ID so the from-not-authorized
         // path is satisfied; otherwise the policy check inside burnBlocked fires
         // with AccountNotBlocked first.
-        _setPolicy(B20Constants.SEIZABLE_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _pause(IB20.PausableFeature.SEIZE);
 
         vm.prank(burnBlocker);
@@ -40,12 +40,12 @@ contract B20BurnBlockedTest is B20Test {
         token.burnBlocked(from, amount);
     }
 
-    /// @notice Verifies burnBlocked reverts when the target is authorized under SEIZABLE_POLICY
+    /// @notice Verifies burnBlocked reverts when the target is authorized under SEIZABLE_ACCOUNT_POLICY
     /// @dev Seizure is only permitted against policy-blocked addresses; checks AccountNotBlocked(from)
     function test_burnBlocked_revert_accountNotBlocked(address from, uint256 amount) public {
         _assumeValidActor(from);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        // Default SEIZABLE_POLICY is ALWAYS_ALLOW_ID (0), so every address is "authorized" → not blocked.
+        // Default SEIZABLE_ACCOUNT_POLICY is ALWAYS_ALLOW_ID (0), so every address is "authorized" → not blocked.
 
         vm.prank(burnBlocker);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotBlocked.selector, from));
@@ -58,7 +58,7 @@ contract B20BurnBlockedTest is B20Test {
         _assumeValidActor(from);
         amount = bound(amount, 1, type(uint256).max);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        _setPolicy(B20Constants.SEIZABLE_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID); // from is policy-blocked
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID); // from is policy-blocked
 
         // from has zero balance.
         vm.prank(burnBlocker);
@@ -74,8 +74,8 @@ contract B20BurnBlockedTest is B20Test {
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         // Mint while no policy is set so the mint isn't blocked.
         _mint(from, amount);
-        // Now block from via SEIZABLE_POLICY policy, then seize.
-        _setPolicy(B20Constants.SEIZABLE_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        // Now block from via SEIZABLE_ACCOUNT_POLICY policy, then seize.
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
 
         vm.prank(burnBlocker);
@@ -95,7 +95,7 @@ contract B20BurnBlockedTest is B20Test {
         _assumeValidActor(from);
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _mint(from, amount);
-        _setPolicy(B20Constants.SEIZABLE_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
         uint256 before = token.totalSupply();
 
@@ -115,7 +115,7 @@ contract B20BurnBlockedTest is B20Test {
         _assumeValidActor(from);
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _mint(from, amount);
-        _setPolicy(B20Constants.SEIZABLE_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
 
         vm.expectEmit(true, true, false, true, address(token));

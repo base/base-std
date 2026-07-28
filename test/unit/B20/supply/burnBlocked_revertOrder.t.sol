@@ -44,7 +44,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidCaller(caller);
         _assumeValidActor(from);
         vm.assume(caller != admin);
-        // SEIZABLE_POLICY left at ALWAYS_ALLOW default → `from` is "not blocked".
+        // SEIZABLE_ACCOUNT_POLICY left at ALWAYS_ALLOW default → `from` is "not blocked".
         // No BURN_BLOCKED_ROLE granted.
 
         vm.prank(caller);
@@ -80,7 +80,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidActor(from);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
         _pause(IB20.PausableFeature.SEIZE);
-        // SEIZABLE_POLICY left at ALWAYS_ALLOW → `from` is "not blocked".
+        // SEIZABLE_ACCOUNT_POLICY left at ALWAYS_ALLOW → `from` is "not blocked".
 
         vm.prank(burnBlocker);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
@@ -94,7 +94,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
         _pause(IB20.PausableFeature.SEIZE);
         // Need `from` blocked so BLOCKED would pass; set seizable policy to ALWAYS_BLOCK.
-        _setPolicy(B20Constants.SEIZABLE_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(burnBlocker);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
@@ -109,7 +109,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidActor(from);
         amount = bound(amount, 1, type(uint128).max);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        // Default SEIZABLE_POLICY is ALWAYS_ALLOW → `from` is NOT blocked.
+        // Default SEIZABLE_ACCOUNT_POLICY is ALWAYS_ALLOW → `from` is NOT blocked.
         // `from` has zero balance → balance check WOULD fail if BLOCKED didn't fire first.
 
         vm.prank(burnBlocker);

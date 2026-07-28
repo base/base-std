@@ -32,7 +32,7 @@ contract B20BurnBlockedWithMemoRevertOrderTest is B20Test {
         _assumeValidCaller(caller);
         _assumeValidActor(from);
         vm.assume(caller != admin);
-        // SEIZABLE_POLICY left at ALWAYS_ALLOW → `from` is "not blocked". No role granted.
+        // SEIZABLE_ACCOUNT_POLICY left at ALWAYS_ALLOW → `from` is "not blocked". No role granted.
 
         vm.prank(caller);
         vm.expectRevert(
@@ -48,7 +48,7 @@ contract B20BurnBlockedWithMemoRevertOrderTest is B20Test {
         _assumeValidActor(from);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
         _pause(IB20.PausableFeature.SEIZE);
-        // SEIZABLE_POLICY left at ALWAYS_ALLOW → `from` "not blocked", but pause fires first.
+        // SEIZABLE_ACCOUNT_POLICY left at ALWAYS_ALLOW → `from` "not blocked", but pause fires first.
 
         vm.prank(burnBlocker);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
@@ -59,7 +59,7 @@ contract B20BurnBlockedWithMemoRevertOrderTest is B20Test {
     function test_burnBlockedWithMemo_revertOrder_blocked_beats_balance(address from) public {
         _assumeValidActor(from);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        // Default SEIZABLE_POLICY is ALWAYS_ALLOW → `from` NOT blocked; zero balance too.
+        // Default SEIZABLE_ACCOUNT_POLICY is ALWAYS_ALLOW → `from` NOT blocked; zero balance too.
 
         vm.prank(burnBlocker);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotBlocked.selector, from));

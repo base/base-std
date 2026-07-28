@@ -51,13 +51,13 @@ library MockB20Storage {
 
     /// @notice Transfer-side + seize policy IDs (read by `_transfer`,
     ///         `transferFrom*`, the seize check in `burnBlocked`, and the
-    ///         seize operations `transferFromBlockedWithMemo` /
+    ///         seize operations `transferFromSeizableWithMemo` /
     ///         `burnBlockedWithMemo`).
     /// @dev    Bit layout (Solidity LSB-first):
     ///           bits   0.. 63 : sender
     ///           bits  64..127 : receiver
     ///           bits 128..191 : executor
-    ///           bits 192..255 : seizable (`SEIZABLE_POLICY`)
+    ///           bits 192..255 : seizable (`SEIZABLE_ACCOUNT_POLICY`)
     struct TransferPolicyIds {
         uint64 sender;
         uint64 receiver;
