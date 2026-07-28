@@ -147,12 +147,13 @@ def _observe_lazy_flip(c: Chain, tok) -> None:
             return
         time.sleep(3)
 
-    # ponytail: real-time coupling — on a slow/variable-block chain the flip may not land inside the budget.
-    # Soft-skip (log, don't fail) so the advisory run stays green; the read-only pending assertions above
-    # already prove scheduling works. Upgrade path: raise SMOKE_FLIP_TIMEOUT_S, or assert via a fork test.
+    # ponytail: real-time coupling — the flip only materializes as wall-clock passes effectiveAt, which
+    # needs the chain to keep producing blocks. A live chain will; an idle dev node (e.g. anvil, whose
+    # block clock only advances when a block is mined) may not within the budget. Soft-skip (log, don't
+    # fail) so the advisory run stays green — the read-only pending assertions above already prove
+    # scheduling works. The pending is left in place (throwaway token); no cleanup, since a cancel here
+    # would race the maturation and revert. Upgrade path: raise SMOKE_FLIP_TIMEOUT_S, or use a fork test.
     log(f"lazy flip not observed within {timeout}s (effectiveAt={sched}) — soft skip (chain block time)")
-    if _now(c) < sched:
-        c.send(tok.functions.cancelScheduledMultiplier(), c.deployer)
 
 
 def _events(c: Chain) -> None:
