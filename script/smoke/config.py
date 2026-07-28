@@ -53,6 +53,16 @@ FEATURE_BURN = 2
 ASSET_DECIMALS = 18
 STABLECOIN_DECIMALS = 6
 
+# ERC-165 + ERC-8056 interface ids advertised by the Asset variant (AssetV2 @ Cobalt). See
+# src/interfaces/IScaledUIAmount.sol; `supportsInterface(SCALED_UI_AMOUNT_ID)` doubles as the
+# probe that tells a Cobalt (ERC-8056 scheduled multiplier) chain apart from a pre-Cobalt one.
+ERC165_ID = bytes.fromhex("01ffc9a7")
+SCALED_UI_AMOUNT_ID = bytes.fromhex("a60bf13d")
+NEW_UI_MULTIPLIER_ID = bytes.fromhex("4bd27648")
+BALANCES_ID = bytes.fromhex("d890fd71")
+# ERC-165 mandates 0xffffffff always reads false; any never-advertised id works as the negative probe.
+UNADVERTISED_ID = bytes.fromhex("ffffffff")
+
 
 def _role(name: str) -> bytes:
     """keccak256(name) for a role / policy-scope constant (B20Constants)."""
@@ -89,6 +99,9 @@ class Config:
     faucet_network: str
     faucet_amount: str
     faucet_min_wei: int
+    observe_flip: bool
+    flip_window_s: int
+    flip_timeout_s: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -100,6 +113,11 @@ class Config:
 
         pinned = os.environ.get("SMOKE_SALT")
         gas_ether = os.environ.get("GAS_FLOAT_ETHER", "0.01")
+        # The scheduled-multiplier journey asserts the pending state read-only by default (no time
+        # travel on a live chain). SMOKE_OBSERVE_FLIP=1 additionally schedules a near-future update
+        # and polls until it matures, to observe the lazy flip. Off by default: real-time coupling
+        # would make the advisory run flap on a chain with slow/variable block times.
+        observe_flip = os.environ.get("SMOKE_OBSERVE_FLIP", "0").strip().lower() in ("1", "true", "on", "yes")
         # Failure diagnostics emit a debug_traceCall/Transaction call tree. On by default (only fires on
         # failures); set SMOKE_TRACE=0 to print just the request + replayed revert data instead.
         trace = os.environ.get("SMOKE_TRACE", "1").strip().lower() not in ("0", "false", "off", "no", "")
@@ -118,6 +136,9 @@ class Config:
             faucet_network=os.environ.get("FAUCET_NETWORK", "").strip(),
             faucet_amount=os.environ.get("FAUCET_AMOUNT", "0.05").strip(),
             faucet_min_wei=Web3.to_wei(os.environ.get("FAUCET_MIN_ETHER", "0.02"), "ether"),
+            observe_flip=observe_flip,
+            flip_window_s=int(os.environ.get("SMOKE_FLIP_WINDOW_S", "30")),
+            flip_timeout_s=int(os.environ.get("SMOKE_FLIP_TIMEOUT_S", "150")),
         )
 
     def salt_for(self, journey: str) -> bytes:

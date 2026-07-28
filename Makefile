@@ -12,7 +12,7 @@ VENV = script/smoke/.venv
 SMOKE_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m smoke
 FORK_RUN = $(LOAD_ENV) PYTHONPATH=script $(VENV)/bin/python -m fork
 
-.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants python-check smoke-setup fork-tests
+.PHONY: build coverage smoke smoke-all smoke-factory smoke-asset smoke-multiplier smoke-stablecoin smoke-policy smoke-invariants python-check smoke-setup fork-tests
 
 # Generate an lcov coverage report and open it in the browser.
 # Scoped to src/ and test/lib/mocks/ (excludes test runner files and the smoke probe helper).
@@ -62,7 +62,7 @@ build:
 # `out/`). Sends real txs to $RPC_URL; requires env RPC_URL, DEPLOYER_PK,
 # USER2_PK and a venv (`make smoke-setup`). `make smoke` runs every journey
 # fail-fast.
-smoke: smoke-factory smoke-asset smoke-stablecoin smoke-policy smoke-invariants
+smoke: smoke-factory smoke-asset smoke-multiplier smoke-stablecoin smoke-policy smoke-invariants
 
 # Run every journey in a single process. KEEP_GOING=1 runs them all and reports a
 # summary without erroring on failure (audit/triage mode); default fails fast and
@@ -77,6 +77,11 @@ smoke-factory: build
 
 smoke-asset: build
 	@$(SMOKE_RUN) asset
+
+# ERC-8056 scheduled multiplier (AssetV2 @ Cobalt). Cleanly skips on a pre-Cobalt chain. Set
+# SMOKE_OBSERVE_FLIP=1 to also observe the lazy flip via a bounded real-time poll (off by default).
+smoke-multiplier: build
+	@$(SMOKE_RUN) multiplier
 
 smoke-stablecoin: build
 	@$(SMOKE_RUN) stablecoin

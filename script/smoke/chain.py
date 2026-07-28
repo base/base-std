@@ -36,6 +36,15 @@ from .errors import ERROR_BY_SELECTOR
 from .provider import ConsistentHTTPProvider
 
 
+class Skip(Exception):
+    """Raised by a journey to signal it does not apply to this chain (recorded as a skip, not a fail).
+
+    Mirrors the runner's activation-gate skip: a journey whose surface only exists on a later fork
+    (e.g. the ERC-8056 scheduled multiplier at Cobalt) raises this on a pre-fork chain so the run
+    reports chain/fork state rather than a contract defect.
+    """
+
+
 def log(msg: str) -> None:
     print(f"[smoke] {msg}", file=sys.stderr)
 
@@ -50,6 +59,11 @@ def ok(desc: str) -> None:
 
 def die(msg: str) -> None:
     raise SystemExit(f"[smoke] ERROR: {msg}")
+
+
+def skip(msg: str) -> None:
+    """Abort the current journey as not-applicable to this chain (recorded as skip)."""
+    raise Skip(msg)
 
 
 class Chain:
@@ -346,6 +360,35 @@ class Chain:
         if not any(tops[i] == a and tops[i + 1] == b for i in range(len(tops) - 1)):
             die(f"log order [{desc}]: expected {sig_a} immediately before {sig_b}")
         ok(desc)
+
+    @staticmethod
+    def _emitted(receipt: TxReceipt, sig: str) -> bool:
+        """Whether an event with signature `sig` appears in this receipt's logs."""
+        want = topic0(sig)
+        return any(lg["topics"] and HexBytes(lg["topics"][0]) == want for lg in receipt["logs"])
+
+    def assert_log(self, receipt: TxReceipt, sig: str, desc: str) -> None:
+        """Assert this receipt emitted an event with signature `sig`."""
+        if not self._emitted(receipt, sig):
+            die(f"expected event not emitted [{desc}]: {sig}")
+        ok(desc)
+
+    def assert_no_log(self, receipt: TxReceipt, sig: str, desc: str) -> None:
+        """Assert this receipt did NOT emit an event with signature `sig` (e.g. the superseded V1 event)."""
+        if self._emitted(receipt, sig):
+            die(f"unexpected event emitted [{desc}]: {sig}")
+        ok(desc)
+
+    def supports_erc165(self, token: Contract, interface_id: bytes) -> bool:
+        """ERC-165 `supportsInterface(interface_id)` on `token`, treating an absent/reverting selector as False.
+
+        A pre-ERC-165 fork's Asset has no `supportsInterface` selector, so the call reverts; that (and a
+        clean `false`) both mean "interface not advertised", which the caller uses to gate fork-specific flow.
+        """
+        try:
+            return bool(token.functions.supportsInterface(interface_id).call())
+        except Exception:  # noqa: BLE001 - a reverting/absent selector means "not supported"
+            return False
 
     def assert_events_emitted(self, desc: str, *signatures: str) -> None:
         """Flow-level check: each signature's topic0 appears across recorded txs."""
