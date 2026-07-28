@@ -98,7 +98,14 @@ def _schedule_and_cancel(c: Chain, tok) -> None:
     target = config.amt(3, 18)
     step(5, f"setUIMultiplier({target}, now+3600) schedules a pending update (read-only assertions; no time travel)")
     receipt = c.send(tok.functions.setUIMultiplier(target, sched), c.deployer)
-    c.assert_log(receipt, UI_UPDATED, "setUIMultiplier emits UIMultiplierUpdated")
+    # Decode the receipt (not just presence): the scheduled target + effectiveAt are exactly what a
+    # presence-only check can't verify.
+    ui = c.event_args(receipt, tok, "UIMultiplierUpdated")
+    c.assert_eq(
+        [ui["oldMultiplier"], ui["newMultiplier"], ui["effectiveAtTimestamp"]],
+        [old, target, sched],
+        "UIMultiplierUpdated payload == (old, scheduled target, effectiveAt)",
+    )
     c.assert_eq(tok.functions.newUIMultiplier().call(), target, "newUIMultiplier() == scheduled target")
     c.assert_eq(tok.functions.effectiveAt().call(), sched, "effectiveAt() == schedule time")
     c.assert_eq(tok.functions.uiMultiplier().call(), old, "uiMultiplier() still reads the old value while pending is future")
@@ -108,7 +115,12 @@ def _schedule_and_cancel(c: Chain, tok) -> None:
 
     step(7, "cancelScheduledMultiplier clears the live pending -> MultiplierUpdateCancelled, effectiveAt() == 0")
     receipt = c.send(tok.functions.cancelScheduledMultiplier(), c.deployer)
-    c.assert_log(receipt, CANCELLED, "cancel emits MultiplierUpdateCancelled")
+    cancelled = c.event_args(receipt, tok, "MultiplierUpdateCancelled")
+    c.assert_eq(
+        [cancelled["cancelledMultiplier"], cancelled["cancelledEffectiveAt"]],
+        [target, sched],
+        "MultiplierUpdateCancelled payload == (cancelled target, cancelled effectiveAt)",
+    )
     c.assert_eq(tok.functions.effectiveAt().call(), 0, "effectiveAt() resets to 0 after cancel")
     c.assert_eq(tok.functions.newUIMultiplier().call(), tok.functions.uiMultiplier().call(),
                 "no-live-pending: newUIMultiplier() == uiMultiplier()")
@@ -120,10 +132,17 @@ def _schedule_and_cancel(c: Chain, tok) -> None:
 
 def _failsafe_clears_pending(c: Chain, tok) -> None:
     step(9, "updateMultiplier instant-failsafe clears a live pending: UIMultiplierUpdated + MultiplierUpdateCancelled, not MultiplierUpdated")
-    c.send(tok.functions.setUIMultiplier(config.amt(5, 18), _now(c) + 3600), c.deployer)
+    cleared_target, cleared_sched = config.amt(5, 18), _now(c) + 3600
+    c.send(tok.functions.setUIMultiplier(cleared_target, cleared_sched), c.deployer)
     receipt = c.send(tok.functions.updateMultiplier(config.amt(6, 18)), c.deployer)
     c.assert_log(receipt, UI_UPDATED, "updateMultiplier emits UIMultiplierUpdated")
-    c.assert_log(receipt, CANCELLED, "updateMultiplier clearing a live pending emits MultiplierUpdateCancelled")
+    # Decode the cancel: it must carry the pending it cleared, not any live pending.
+    cancelled = c.event_args(receipt, tok, "MultiplierUpdateCancelled")
+    c.assert_eq(
+        [cancelled["cancelledMultiplier"], cancelled["cancelledEffectiveAt"]],
+        [cleared_target, cleared_sched],
+        "MultiplierUpdateCancelled payload == the pending that updateMultiplier cleared",
+    )
     c.assert_no_log(receipt, V1_UPDATED, "V2 updateMultiplier does NOT emit the V1 MultiplierUpdated")
     c.assert_eq(tok.functions.multiplier().call(), config.amt(6, 18), "updateMultiplier sets the current multiplier immediately")
     c.assert_eq(tok.functions.effectiveAt().call(), 0, "updateMultiplier cleared the pending (effectiveAt() == 0)")

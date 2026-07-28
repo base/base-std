@@ -379,6 +379,17 @@ class Chain:
             die(f"unexpected event emitted [{desc}]: {sig}")
         ok(desc)
 
+    def event_args(self, receipt: TxReceipt, contract: Contract, event_name: str) -> dict:
+        """Decode a single occurrence of `event_name` from THIS receipt and return its args.
+
+        `assert_events_emitted` and `assert_log` are presence-only — an event with the right name but a
+        WRONG payload passes them. Decode the specific receipt to assert on the emitted values.
+        """
+        decoded = getattr(contract.events, event_name)().process_receipt(receipt, errors=DISCARD)
+        if not decoded:
+            die(f"{event_name} not found in receipt")
+        return dict(decoded[0]["args"])
+
     def supports_erc165(self, token: Contract, interface_id: bytes) -> bool:
         """ERC-165 `supportsInterface(interface_id)` on `token`, treating an absent/reverting selector as False.
 
