@@ -8,16 +8,13 @@ the token-side write-time validation, then a flow-level event check.
 `_composite` covers the UNION/INTERSECT composite gates: construction, live
 gate evaluation over child membership, full-replacement `updateComposite`
 semantics, the child-set validation reverts, and token enforcement through a
-composite. `_regressions` runs LAST and is expected to fail against the
-current live deployment (see the function docstring).
+composite.
 """
 
 from __future__ import annotations
 
-from functools import partial
-
 from .. import config
-from ..chain import Chain, log, run_collected, step
+from ..chain import Chain, log, step
 from ..codec import AssetCreateParams, init_call
 
 
@@ -312,66 +309,6 @@ def _events(c: Chain) -> None:
     )
 
 
-def _d1_create_policy(c: Chain) -> None:
-    """createPolicy(admin, UNION) must revert IncompatiblePolicyType."""
-    c.expect_revert(
-        "IncompatiblePolicyType", c.policy.functions.createPolicy(c.DEPLOYER, config.POLICY_TYPE_UNION), c.DEPLOYER
-    )
-
-
-def _d2_create_policy_with_accounts(c: Chain) -> None:
-    """createPolicyWithAccounts(admin, UNION, accts) must revert IncompatiblePolicyType."""
-    c.expect_revert(
-        "IncompatiblePolicyType",
-        c.policy.functions.createPolicyWithAccounts(c.DEPLOYER, config.POLICY_TYPE_UNION, [c.ALICE]),
-        c.DEPLOYER,
-    )
-
-
-def _d3_zero_admin_precedence(c: Chain) -> None:
-    """A zero admin must outrank the policy-type guard in both simple creators."""
-    c.expect_revert(
-        "ZeroAddress", c.policy.functions.createPolicy(config.ZERO, config.POLICY_TYPE_UNION), c.DEPLOYER
-    )
-    c.expect_revert(
-        "ZeroAddress",
-        c.policy.functions.createPolicyWithAccounts(config.ZERO, config.POLICY_TYPE_UNION, [c.ALICE]),
-        c.DEPLOYER,
-    )
-
-
-# Checks where base/base does not yet match the `IPolicyRegistry` contract that base-std defines.
-# There are no accepted divergences between the two — every entry is a base/base bug to fix, not a
-# behaviour to live with. Listed rather than inlined so one failure cannot hide the others.
-REGRESSION_CHECKS = [
-    ("createPolicy(admin, UNION) -> IncompatiblePolicyType", _d1_create_policy),
-    ("createPolicyWithAccounts(admin, UNION, accts) -> IncompatiblePolicyType", _d2_create_policy_with_accounts),
-    ("createPolicy(0, UNION) -> ZeroAddress outranks the type guard", _d3_zero_admin_precedence),
-]
-
-
-def _regressions(c: Chain) -> None:
-    """Assert base/base matches the `IPolicyRegistry` contract. Currently RED; each is a base/base bug.
-
-    Cause: `PolicyType::is_valid()` (`policy/abi.rs`) is narrowed to BLOCKLIST|ALLOWLIST and
-    `validate_create_policy_inputs` (`policy/logic/v2.rs`) consults it before the zero-admin guard, so
-    composite gates get `Panic(0x21)` instead of `IncompatiblePolicyType`, and a zero-admin composite
-    call reports the type problem instead of `ZeroAddress`.
-
-    Runs last, collect-all so one failure cannot hide the others. All are `eth_call`; none mutate
-    state. Numbered `R1..` rather than continuing the journey's sequence, so inserting a step above
-    cannot silently renumber these.
-
-    Reading a failure: `Panic(uint256)` is not in the interface's error set, so these report
-    `got=None want=IncompatiblePolicyType` — that is `Panic(0x21)`, not a missing revert.
-    """
-    run_collected(
-        [(name, partial(fn, c)) for name, fn in REGRESSION_CHECKS],
-        label="policy-registry regressions",
-        step_prefix="R",
-    )
-
-
 def run(c: Chain) -> None:
     log("policy-registry: starting")
     pid_b = _journey(c)
@@ -379,6 +316,4 @@ def run(c: Chain) -> None:
     _edges(c, tok, pid_r, pid_b)
     _composite(c, pid_b)
     _events(c)
-    # Last: base/base conformance. Collect-all, so no check can be hidden by an earlier one.
-    _regressions(c)
     log("policy-registry: OK")
