@@ -56,6 +56,7 @@ contract B20FullLayoutTest is B20Test {
     uint64 internal transferSenderMarker;
     uint64 internal transferReceiverMarker;
     uint64 internal transferExecutorMarker;
+    uint64 internal seizableMarker;
     uint64 internal mintReceiverMarker;
 
     /// @notice Cross-cuts every field of MockB20Storage.Layout in a single
@@ -83,7 +84,8 @@ contract B20FullLayoutTest is B20Test {
     ///         - 11: pausedVectors (TRANSFER + MINT bits)
     ///         - 12: supplyCap
     ///         - 13: nonces (advanced via permit)
-    ///         - 14: initialized (own slot at end of layout)
+    ///         - 14: seizePolicyIds (seizable lane)
+    ///         - 15: initialized (mock-only bootstrap flag, kept last)
     function test_b20Layout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -190,8 +192,9 @@ contract B20FullLayoutTest is B20Test {
         // features" detectable.
         uint256 pausedRaw = uint256(vm.load(tokenAddr, MockB20Storage.pausedVectorsSlot()));
         uint256 expectedPaused = (uint256(1) << uint8(IB20.PausableFeature.TRANSFER))
-            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN));
-        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the three defined bits");
+            | (uint256(1) << uint8(IB20.PausableFeature.MINT)) | (uint256(1) << uint8(IB20.PausableFeature.BURN))
+            | (uint256(1) << uint8(IB20.PausableFeature.SEIZE));
+        assertEq(pausedRaw, expectedPaused, "slot 11: pausedVectors must hold exactly the four defined bits");
         // No bits set outside the defined PausableFeature range. Computed
         // as the complement of the union of all defined bits.
         assertEq(
@@ -208,14 +211,21 @@ contract B20FullLayoutTest is B20Test {
             uint256(vm.load(tokenAddr, MockB20Storage.nonceSlot(alice))), token.nonces(alice), "slot 13: nonces[alice]"
         );
 
+        // ---------- seizePolicyIds (slot 14) ----------
+        // Its own per-operation packed slot, placed before the mock-only
+        // `initialized` flag so the Rust precompile mirrors it without a filler.
+        uint256 packedSeize = uint256(vm.load(tokenAddr, MockB20Storage.seizePolicyIdsSlot()));
+        assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 14 bits 0..63: SEIZABLE_ACCOUNT lane");
+        assertEq(packedSeize >> 64, 0, "slot 14 bits 64..255: three reserved lanes must be zero");
+
         // ---------- initialized ----------
-        // Mock world: pinned at the end of the layout in its own slot
-        // (slot 14); the factory flips this to true at the end of
+        // Mock world: the mock-only bootstrap flag, kept last in its own slot
+        // (slot 15); the factory flips this to true at the end of
         // createToken; any non-zero word means the bootstrap window is
         // closed. Live world: the Rust factory plants a 0xef bytecode
         // stub at the token address instead; the dedicated mock slot
-        // doesn't exist (would alias to a different field in the Rust
-        // layout). The helper picks the right check per backend.
+        // doesn't exist in the Rust layout. The helper picks the right check
+        // per backend.
         //
         // The other slot-by-slot assertions in this test are NOT
         // dual-backend; they pin the Solidity layout exactly. Per-slot
@@ -268,10 +278,12 @@ contract B20FullLayoutTest is B20Test {
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         transferExecutorMarker =
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        seizableMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         mintReceiverMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, seizableMarker);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------
@@ -282,6 +294,7 @@ contract B20FullLayoutTest is B20Test {
         _pause(IB20.PausableFeature.TRANSFER);
         _pause(IB20.PausableFeature.MINT);
         _pause(IB20.PausableFeature.BURN);
+        _pause(IB20.PausableFeature.SEIZE);
 
         // ---------- Nonce ----------
         // Permit increments alice's nonce. To sign a valid permit we

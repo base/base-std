@@ -26,6 +26,10 @@ contract B20UpdatePolicyTest is B20Test {
                     uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()))
                 );
         }
+        if (policyScope == B20Constants.SEIZABLE_ACCOUNT_POLICY) {
+            return
+                MockB20Storage.seizablePolicyId(uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot())));
+        }
         uint256 transferPacked = uint256(vm.load(address(token), MockB20Storage.transferPolicyIdsSlot()));
         if (policyScope == B20Constants.TRANSFER_SENDER_POLICY) {
             return MockB20Storage.transferSenderPolicyId(transferPacked);
@@ -33,8 +37,8 @@ contract B20UpdatePolicyTest is B20Test {
         if (policyScope == B20Constants.TRANSFER_RECEIVER_POLICY) {
             return MockB20Storage.transferReceiverPolicyId(transferPacked);
         }
-        // TRANSFER_EXECUTOR — the four supported types are exhaustive
-        // for this helper; callers always pass a known policy type via
+        // TRANSFER_EXECUTOR — the five supported types are exhaustive for this
+        // helper; callers always pass a known policy type via
         // `_knownPolicyType` or the named constants.
         return MockB20Storage.transferExecutorPolicyId(transferPacked);
     }

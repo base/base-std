@@ -85,6 +85,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant MINT_ROLE = B20Constants.MINT_ROLE;
     bytes32 public constant BURN_ROLE = B20Constants.BURN_ROLE;
     bytes32 public constant BURN_BLOCKED_ROLE = B20Constants.BURN_BLOCKED_ROLE;
+    bytes32 public constant TRANSFER_FROM_SEIZABLE_ROLE = B20Constants.TRANSFER_FROM_SEIZABLE_ROLE;
     bytes32 public constant PAUSE_ROLE = B20Constants.PAUSE_ROLE;
     bytes32 public constant UNPAUSE_ROLE = B20Constants.UNPAUSE_ROLE;
     bytes32 public constant METADATA_ROLE = B20Constants.METADATA_ROLE;
@@ -94,6 +95,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant TRANSFER_RECEIVER_POLICY = B20Constants.TRANSFER_RECEIVER_POLICY;
     bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
     bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
+    bytes32 public constant SEIZABLE_ACCOUNT_POLICY = B20Constants.SEIZABLE_ACCOUNT_POLICY;
 
     /// @notice Maximum value the supply cap may be set to. Because `mint`
     ///         rejects any `totalSupply` above the cap, this also bounds
@@ -308,22 +310,54 @@ abstract contract MockB20 is IB20 {
 
     function burnBlocked(address from, uint256 amount)
         external
-        whenNotPaused(PausableFeature.BURN)
+        whenNotPaused(PausableFeature.SEIZE)
         onlyRole(BURN_BLOCKED_ROLE)
     {
-        // The point of burnBlocked is to seize from policy-blocked
-        // accounts. Read the transfer-sender policy ID out of the
-        // transfer-side packed slot and reject if the target is
-        // currently authorized. Enforced unconditionally — including
-        // for factory-originated calls during the bootstrap window —
-        // matching the Rust precompile, which carves no `privileged`
-        // exception for this guard.
-        uint64 senderPolicyId = MockB20Storage.layout().transferPolicyIds.sender;
-        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
-            revert AccountNotBlocked(from);
-        }
+        // Part of the seize operation class: gated on SEIZABLE_ACCOUNT_POLICY (not the
+        // transfer-sender policy) and the SEIZE pause vector, same as
+        // burnBlockedWithMemo and transferFromSeizableWithMemo.
+        _requireSeizable(from);
         _burnRaw(from, amount);
         emit BurnedBlocked(msg.sender, from, amount);
+    }
+
+    function burnBlockedWithMemo(address from, uint256 amount, bytes32 memo)
+        external
+        whenNotPaused(PausableFeature.SEIZE)
+        onlyRole(BURN_BLOCKED_ROLE)
+    {
+        _requireSeizable(from);
+        _burnRaw(from, amount);
+        // `Memo` must immediately follow the `Transfer` (emitted by `_burnRaw`),
+        // per the IB20 `Memo` invariant, so it precedes `BurnedBlocked`.
+        emit Memo(msg.sender, memo);
+        emit BurnedBlocked(msg.sender, from, amount);
+    }
+
+    function transferFromSeizableWithMemo(address from, address to, uint256 amount, bytes32 memo)
+        external
+        whenNotPaused(PausableFeature.SEIZE)
+        onlyRole(TRANSFER_FROM_SEIZABLE_ROLE)
+        returns (bool)
+    {
+        // Admin seize: reassign a blocked account's balance. `to` must be
+        // non-zero (otherwise this would be a burn), but — unlike a normal
+        // transfer — no sender/receiver/executor policy is consulted, no
+        // allowance is spent, and `from` is not zero-checked (consistent with
+        // the burn-blocked family; a zero/empty `from` fails the seizable or
+        // balance check anyway). The only membership check is that `from` is
+        // blocked under SEIZABLE_ACCOUNT_POLICY. Deliberately does NOT reuse the
+        // factory-bootstrap privileged path (which would silently skip the
+        // receiver policy); every skip here is explicit.
+        if (to == address(0)) revert InvalidReceiver(to);
+        _requireSeizable(from);
+        _moveBalance(from, to, amount);
+        // `Memo` must immediately follow the `Transfer` (emitted by
+        // `_moveBalance`), per the IB20 `Memo` invariant, so it precedes
+        // `TransferredFromSeizable`.
+        emit Memo(msg.sender, memo);
+        emit TransferredFromSeizable(msg.sender, from, to, amount);
+        return true;
     }
 
     // ============================================================
@@ -480,6 +514,7 @@ abstract contract MockB20 is IB20 {
         if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.sender;
         if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;
         if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;
+        if (policyScope == SEIZABLE_ACCOUNT_POLICY) return $.seizePolicyIds.seizable;
         if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;
         revert UnsupportedPolicyType(policyScope);
     }
@@ -502,6 +537,8 @@ abstract contract MockB20 is IB20 {
             $.transferPolicyIds.receiver = newPolicyId;
         } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds.executor = newPolicyId;
+        } else if (policyScope == SEIZABLE_ACCOUNT_POLICY) {
+            $.seizePolicyIds.seizable = newPolicyId;
         } else {
             $.mintPolicyIds.receiver = newPolicyId;
         }
@@ -737,6 +774,12 @@ abstract contract MockB20 is IB20 {
             }
         }
 
+        _moveBalance(from, to, amount);
+    }
+
+    /// @dev Shared balance mover: debit `from`, credit `to`, emit `Transfer`.
+    ///      No guards; callers apply their own first.
+    function _moveBalance(address from, address to, uint256 amount) internal {
         MockB20Storage.Layout storage $ = MockB20Storage.layout();
         uint256 fromBalance = $.balances[from];
         if (fromBalance < amount) revert InsufficientBalance(from, fromBalance, amount);
@@ -745,6 +788,17 @@ abstract contract MockB20 is IB20 {
             $.balances[to] += amount;
         }
         emit Transfer(from, to, amount);
+    }
+
+    /// @dev Seize gate: reverts `AccountNotBlocked(from)` unless `from` is
+    ///      blocked under `SEIZABLE_ACCOUNT_POLICY` (i.e. NOT authorized). Enforced
+    ///      unconditionally, including in the factory bootstrap window,
+    ///      mirroring the `burnBlocked` sender-policy check.
+    function _requireSeizable(address from) internal view {
+        uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
+        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
+            revert AccountNotBlocked(from);
+        }
     }
 
     /// @dev Pure mechanics: policy + supply cap + effects. Pause, role,

@@ -8,6 +8,7 @@ library B20Constants {
     bytes32 internal constant MINT_ROLE = keccak256("MINT_ROLE");
     bytes32 internal constant BURN_ROLE = keccak256("BURN_ROLE");
     bytes32 internal constant BURN_BLOCKED_ROLE = keccak256("BURN_BLOCKED_ROLE");
+    bytes32 internal constant TRANSFER_FROM_SEIZABLE_ROLE = keccak256("TRANSFER_FROM_SEIZABLE_ROLE");
     bytes32 internal constant PAUSE_ROLE = keccak256("PAUSE_ROLE");
     bytes32 internal constant UNPAUSE_ROLE = keccak256("UNPAUSE_ROLE");
     bytes32 internal constant METADATA_ROLE = keccak256("METADATA_ROLE");
@@ -17,9 +18,10 @@ library B20Constants {
     bytes32 internal constant TRANSFER_RECEIVER_POLICY = keccak256("TRANSFER_RECEIVER_POLICY");
     bytes32 internal constant TRANSFER_EXECUTOR_POLICY = keccak256("TRANSFER_EXECUTOR_POLICY");
     bytes32 internal constant MINT_RECEIVER_POLICY = keccak256("MINT_RECEIVER_POLICY");
+    bytes32 internal constant SEIZABLE_ACCOUNT_POLICY = keccak256("SEIZABLE_ACCOUNT_POLICY");
 
-    /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN).
-    uint8 internal constant ALL_FEATURES_PAUSED = 7;
+    /// @notice Bitmask with all `PausableFeature` bits set (TRANSFER | MINT | BURN | SEIZE); 15 = 0b1111.
+    uint8 internal constant ALL_FEATURES_PAUSED = 15;
 
     /// @notice Inclusive lower bound for `B20AssetCreateParams.decimals`. `6` is the
     ///         floor most stablecoin-grade integrations expect; values below it lose
