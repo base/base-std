@@ -20,6 +20,7 @@ import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 contract PolicyRegistryUpdateCompositeRevertOrderTest is PolicyRegistryTest {
     /// @notice Walks through every revert in canonical order, fixing one per step, ending at success.
     function test_updateComposite_revertOrder(uint8 typeIdx) public {
+        _skipIfNoComposite();
         IPolicyRegistry.PolicyType gate = _creatableCompositeType(typeIdx);
 
         // Fixtures.

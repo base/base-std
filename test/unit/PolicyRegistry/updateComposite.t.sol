@@ -14,6 +14,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @notice Verifies updateComposite reverts for an unknown composite id
     /// @dev The target policy must exist; checks PolicyNotFound(). Fires before any child validation.
     function test_updateComposite_revert_policyNotFound(address caller, uint64 seed) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         uint64 ghostComposite = _wellFormedUncreatedPolicyId(seed);
         uint64[] memory children =
@@ -27,6 +28,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @dev Type guard: updateComposite only operates on UNION/INTERSECT policies; a simple
     ///      ALLOWLIST/BLOCKLIST target reverts with IncompatiblePolicyType().
     function test_updateComposite_revert_incompatiblePolicyType(uint8 typeIdx) public {
+        _skipIfNoComposite();
         IPolicyRegistry.PolicyType simple = _creatablePolicyType(typeIdx);
         uint64 simpleId = policyRegistry.createPolicy(admin, simple);
         uint64[] memory children = _makeSimpleChildren(2);
@@ -39,6 +41,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @notice Verifies updateComposite reverts when called by a non-admin
     /// @dev Access control: only the current admin may replace the child set; checks Unauthorized().
     function test_updateComposite_revert_unauthorized(address caller, uint8 typeIdx) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
@@ -52,6 +55,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @dev After renounceAdmin the admin lane is zero, so every updateComposite reverts with
     ///      Unauthorized() — the policy is frozen but still observable.
     function test_updateComposite_revert_renouncedComposite(uint8 typeIdx) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         vm.prank(admin);
         policyRegistry.renounceAdmin(composite);
@@ -68,6 +72,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     ///      clear-the-list path. Exercises both under-range (0 and 1 children) and over-range
     ///      (5..8 children) cases.
     function test_updateComposite_revert_childPoliciesOutsideOfRange(uint8 typeIdx, uint8 overflow) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         bytes memory expectedRevert = abi.encodeWithSelector(
             IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
@@ -96,6 +101,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @notice Verifies updateComposite reverts when a new child policy does not exist
     /// @dev Checks PolicyNotFound() for a well-formed but never-created child.
     function test_updateComposite_revert_policyNotFoundChild(uint8 typeIdx, uint64 seed) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         uint64[] memory children =
             _childIds(_wellFormedUncreatedPolicyId(seed), _wellFormedUncreatedPolicyId(seed ^ 0xbeef));
@@ -108,6 +114,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @dev Child policies must be simple; a composite child reverts with
     ///      InvalidChildPolicy(childPolicyId) carrying the offending ID.
     function test_updateComposite_revert_invalidChildPolicy(uint8 typeIdx) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         uint64 otherComposite = _createComposite(IPolicyRegistry.PolicyType.INTERSECT, 2);
         uint64 simpleChild = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
@@ -122,6 +129,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @dev Built-in sentinels (ALWAYS_ALLOW_ID / ALWAYS_BLOCK_ID) are reserved and may not be
     ///      composed; each reverts with InvalidChildPolicy(childPolicyId) carrying the offending ID.
     function test_updateComposite_revert_builtinChild(uint8 typeIdx) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         uint64 simpleChild = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
 
@@ -147,6 +155,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @notice Verifies updateComposite emits CompositePolicyUpdated with the full new child set
     /// @dev One event per call carrying the complete post-update set; topic args match policyId / updater.
     function test_updateComposite_success_emitsCompositePolicyUpdated(uint8 typeIdx) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         uint64[] memory newChildren = _makeSimpleChildren(2);
         vm.expectEmit(address(policyRegistry));
@@ -158,6 +167,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @notice Verifies updateComposite accepts a new child set exactly at the cap
     /// @dev Boundary check: MAX_CHILD_POLICIES (4) children is inclusive.
     function test_updateComposite_success_atMaxChildren(uint8 typeIdx) public {
+        _skipIfNoComposite();
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
         uint64[] memory newChildren = _makeSimpleChildren(MAX_CHILD_POLICIES);
         vm.prank(admin);
@@ -169,6 +179,7 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
     /// @dev Behavioral proof via isAuthorized: an account authorized under the OLD child set is no
     ///      longer authorized once the set is swapped for children it does not belong to.
     function test_updateComposite_success_replacesChildSet(address account) public {
+        _skipIfNoComposite();
         // UNION over two allowlists; `account` is a member of the first only.
         uint64 childA = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
         uint64 childB = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);

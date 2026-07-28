@@ -18,6 +18,7 @@ contract PolicyRegistryCreatePolicyWithAccountsRevertOrderTest is PolicyRegistry
     function test_createPolicyWithAccounts_revertOrder(address caller, address admin_, uint8 typeIdx, uint8 overflow)
         public
     {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx);

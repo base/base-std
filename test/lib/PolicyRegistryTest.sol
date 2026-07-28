@@ -171,4 +171,43 @@ contract PolicyRegistryTest is BaseTest {
         ids[0] = a;
         ids[1] = b;
     }
+
+    // ============================================================
+    //                  COMPOSITE AVAILABILITY PROBE
+    // ============================================================
+
+    /// @notice Whether the registry backing this run implements composite policies.
+    ///
+    /// @dev Composites are a `PolicyRegistry` V2 feature, activated at the Cobalt hardfork. The
+    ///      `MockPolicyRegistry` implements V2 unconditionally, so REFERENCE mode always reports
+    ///      true and the composite suite keeps running under plain `forge test`. The live lane is
+    ///      the variable one: `base-anvil` pins `BaseUpgrade::Beryl` (V1) until `--base-fork`
+    ///      (BOP-428) makes the fork selectable, and V1's dispatcher short-circuits both composite
+    ///      selectors to `UnknownFunctionSelector` before routing or decoding.
+    ///
+    ///      Behavioral probe rather than a version read: the precompile exposes no version getter.
+    ///      We call `createCompositePolicy` with a zero admin, which BOTH worlds reject, so the
+    ///      probe writes nothing and is safe to call from any test. The revert data discriminates:
+    ///      - V2 reaches the logic and the zero-admin guard fires first -> `ZeroAddress()`.
+    ///      - V1 never reaches the logic -> revert data is the bare 4-byte selector.
+    ///
+    ///      Prefer `_skipIfNoComposite()` at the top of a test over calling this directly.
+    function _compositeSupported() internal returns (bool) {
+        (bool ok, bytes memory ret) = address(policyRegistry)
+            .call(
+                abi.encodeCall(
+                    IPolicyRegistry.createCompositePolicy,
+                    (address(0), IPolicyRegistry.PolicyType.UNION, new uint64[](0))
+                )
+            );
+        if (ok) return false;
+        return keccak256(ret) == keccak256(abi.encodeWithSelector(IPolicyRegistry.ZeroAddress.selector));
+    }
+
+    /// @notice Skip the calling test unless the backing registry implements composite policies.
+    /// @dev    Call as the first statement of the test body, matching the per-test skip style used
+    ///         by `test/unit/PolicyRegistry/dispatch_inactive.t.sol`. A no-op in REFERENCE mode.
+    function _skipIfNoComposite() internal {
+        vm.skip(!_compositeSupported());
+    }
 }

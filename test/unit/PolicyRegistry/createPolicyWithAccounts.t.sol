@@ -20,12 +20,19 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
     /// @notice Verifies createPolicyWithAccounts reverts when given a composite policy type
     /// @dev createPolicyWithAccounts is a simple-policy constructor; a UNION/INTERSECT gate reverts
     ///      with IncompatiblePolicyType(). Fires after the zero-admin check and before the batch-size check.
+    /// @dev Spec CS-2. KNOWN LIVE DIVERGENCE (D2): the live Cobalt precompile passes the same weak
+    ///      `validate_create_policy_inputs`, runs the batch-size check, creates the policy, and only
+    ///      then rejects at the event-emit `match` with `enum_conversion_error()` — wrong error type
+    ///      AND wrong precedence (batch-size is checked before the type). State still rolls back, so
+    ///      nothing leaks. This test is the detector for that defect: expected to FAIL against a live
+    ///      V2 registry until base/base is fixed. It skips on V1, which has no composite surface.
     function test_createPolicyWithAccounts_revert_incompatiblePolicyType(
         address caller,
         address admin_,
         uint8 typeIdx,
         address[] memory accounts
     ) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         accounts = _boundAccounts(accounts);

@@ -20,7 +20,15 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
     /// @notice Verifies createPolicy reverts when given a composite policy type
     /// @dev createPolicy is a simple-policy constructor; a UNION/INTERSECT gate reverts with
     ///      IncompatiblePolicyType() (composites are created via createCompositePolicy).
+    /// @dev Spec CS-1. KNOWN LIVE DIVERGENCE (D1): `PolicyRegistryV2::validate_create_policy_inputs`
+    ///      only checks `is_valid()` and zero-admin, and all four `PolicyType` variants are valid —
+    ///      so the live Cobalt precompile ACCEPTS a composite gate here and mints a 0-child
+    ///      composite, bypassing the [2,4] child-range invariant. A childless INTERSECT then
+    ///      authorizes everyone (vacuous AND). This test is the detector for that defect: it is
+    ///      expected to FAIL against a live V2 registry until base/base is fixed. It skips on V1,
+    ///      where the composite surface does not exist at all.
     function test_createPolicy_revert_incompatiblePolicyType(address caller, address admin_, uint8 typeIdx) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx); // UNION or INTERSECT
