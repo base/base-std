@@ -257,10 +257,10 @@ interface IB20 {
     /// @return Policy scope constant.
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
 
-    /// @notice Policy slot consulted against `from` by the seize operations (`transferFromSeizableWithMemo`,
-    ///         `burnBlockedWithMemo`). A `from` is seizable only when it is NOT authorized by this policy
-    ///         (mirroring the `burnBlocked` "blocked" semantics). An unset slot reads as `0` (always-allow),
-    ///         which makes no account seizable until an issuer configures the slot.
+    /// @notice Policy slot consulted against `from` by the seize operations.
+    /// @dev Consulted by `transferFromSeizableWithMemo`, `burnBlocked`, and `burnBlockedWithMemo`. A `from`
+    ///      is seizable only when it is NOT authorized by this policy. An unset slot reads as `0`
+    ///      (always-allow), so no account is seizable until an issuer configures the slot.
     /// @return Policy scope constant.
     function SEIZABLE_ACCOUNT_POLICY() external view returns (bytes32);
 

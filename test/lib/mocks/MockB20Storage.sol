@@ -154,9 +154,7 @@ library MockB20Storage {
         bool initialized;
         // ---------- Seize policies (PACKED, per-operation) ----------
         // Appended after `initialized` so no pre-existing field offset shifts
-        // on already-deployed tokens. Distinct per-operation group (seize is
-        // cold-path and spans transfer + burn), mirroring how mint policies are
-        // grouped separately from transfer policies.
+        // on already-deployed tokens.
         SeizePolicyIds seizePolicyIds;
     }
 
