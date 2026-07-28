@@ -1,34 +1,20 @@
 name: Base Std Smoke Tests (Vibenet)
 
-# Advisory, MANUALLY-triggered smoke run against a LIVE Base network (Vibenet by default).
+# Advisory, MANUALLY-triggered smoke run of the FULL b20 suite against a LIVE Base network
+# (Vibenet by default).
 #
 # workflow_dispatch ONLY — deliberately not pull_request / merge_group / schedule. Vibenet is a
 # live chain, manually deployed per hardfork; CI cannot guarantee which precompile set is live, so
 # an automated run would flap. This job never gates merges: it is a bring-up check you run by hand
-# (e.g. after a hardfork ships to Vibenet) to confirm the b20 surface behaves against the real
-# Rust precompiles. The branch-per-fork model applies: pick the base-std ref that matches the fork
-# live on the target chain (latest = main; a prior hardfork = its pinned ref). There is no runtime
-# fork selector. If the chain is not yet on the expected fork, the harness SKIPS (not fails).
+# (e.g. after a hardfork ships to Vibenet) to confirm the b20 surface behaves against the real Rust
+# precompiles. It always runs the whole suite against the ref you dispatch from (latest = main) —
+# there is no journey picker and no fork/ref selector (branch-per-fork: dispatch from the branch/tag
+# that matches the fork you want). Each journey self-skips when the live chain is not yet on the fork
+# that ships its surface (e.g. the ERC-8056 multiplier journey on a pre-Cobalt chain).
 
 on:
   workflow_dispatch:
     inputs:
-      journey:
-        description: "Smoke journey to run (e.g. multiplier, asset, all)"
-        required: true
-        default: multiplier
-      fork:
-        description: "Fork the target chain is expected to be on (informational; pick base-std ref to match)"
-        required: true
-        type: choice
-        default: cobalt
-        options:
-          - cobalt
-          - beryl
-      base_std_ref:
-        description: "base-std ref to run (latest = main; pin a prior hardfork's ref to match an older fork)"
-        required: true
-        default: main
       rpc_url:
         description: "JSON-RPC endpoint of the live chain"
         required: true
@@ -43,7 +29,7 @@ permissions:
 
 jobs:
   smoke:
-    name: Vibenet smoke (${{ inputs.journey }} @ ${{ inputs.fork }})
+    name: Vibenet smoke
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -55,7 +41,6 @@ jobs:
       - name: Checkout base-std
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ inputs.base_std_ref }}
           fetch-depth: 1
           submodules: recursive
 
@@ -78,13 +63,13 @@ jobs:
         shell: bash
         run: forge build
 
-      - name: Run Vibenet smoke journey
+      - name: Run the full Vibenet smoke suite
         id: smoke
         shell: bash
-        # RPC_URL comes from the dispatch input; the two keys are repo secrets (never echoed). Fail-fast
-        # (no -k): a genuine contract defect exits non-zero; a chain not on the expected fork exits 0 via
-        # the harness skip. continue-on-error keeps the (advisory) job from going red on either outcome —
-        # the summary below reports the real status.
+        # RPC_URL comes from the dispatch input; the two keys are repo secrets (never echoed). `-k`
+        # (keep-going) runs every journey and prints a summary, so one journey's failure/skip never
+        # masks the rest; it always exits 0, so the (advisory) job stays green and the summary below
+        # reports the real per-journey status. continue-on-error still guards against an infra crash.
         continue-on-error: true
         env:
           RPC_URL: ${{ inputs.rpc_url }}
@@ -92,46 +77,41 @@ jobs:
           USER2_PK: ${{ secrets.SMOKE_USER2_PK }}
         run: |
           set -o pipefail
-          PYTHONPATH=script script/smoke/.venv/bin/python -m smoke "${{ inputs.journey }}" \
+          PYTHONPATH=script script/smoke/.venv/bin/python -m smoke all -k \
             2>&1 | tee "$RUNNER_TEMP/smoke-output.txt"
-          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
 
       - name: Summarize smoke results
         if: always()
         shell: bash
-        env:
-          EXIT_CODE: ${{ steps.smoke.outputs.exit_code }}
         run: |
           output="$RUNNER_TEMP/smoke-output.txt"
           # Vibenet chain id, as logged by the harness preflight ("preflight ok — chain=<id> ...").
           chain_id=$(grep -oE 'chain=[0-9]+' "$output" 2>/dev/null | head -1 | cut -d= -f2)
           chain_id=${chain_id:-unknown}
 
-          # Non-zero exit => a real contract defect (fail-fast). Exit 0 + a skip marker => chain not on
-          # the expected fork (harness skip). Exit 0 + a journey "…: OK" line => pass.
-          status="fail"
-          if [ "${EXIT_CODE:-1}" = "0" ]; then
-            if grep -qE 'not applicable|NOT ACTIVE|skipping' "$output" 2>/dev/null; then
-              status="skip"
-            elif grep -qE ': OK$' "$output" 2>/dev/null; then
-              status="pass"
-            fi
-          fi
+          # The -k runner prints "smoke summary: P passed, F failed, S skipped (of N)".
+          summary=$(grep -oE 'smoke summary: [0-9]+ passed, [0-9]+ failed, [0-9]+ skipped' "$output" 2>/dev/null | tail -1)
+          passed=$(echo "$summary" | grep -oE '[0-9]+ passed' | grep -oE '[0-9]+'); passed=${passed:-0}
+          failed=$(echo "$summary" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+'); failed=${failed:-0}
+          skipped=$(echo "$summary" | grep -oE '[0-9]+ skipped' | grep -oE '[0-9]+'); skipped=${skipped:-0}
 
           {
             echo "## Vibenet Smoke Results"
             echo ""
             echo "| Field | Value |"
             echo "|---|---|"
-            echo "| Journey | \`${{ inputs.journey }}\` |"
-            echo "| Expected fork | \`${{ inputs.fork }}\` |"
-            echo "| base-std ref | \`${{ inputs.base_std_ref }}\` |"
+            echo "| Ref | \`${{ github.ref_name }}\` |"
             echo "| RPC endpoint | \`${{ inputs.rpc_url }}\` |"
             echo "| Chain id | \`${chain_id}\` |"
+            echo "| Passed / Failed / Skipped | ${passed} / ${failed} / ${skipped} |"
             echo ""
-            case "$status" in
-              pass) echo "✅ **Passed** — the b20 surface behaved against the live precompiles." ;;
-              skip) echo "⏭️ **Skipped** — Vibenet is not on \`${{ inputs.fork }}\` yet (feature inactive or pre-fork). This is chain/fork state, not a defect." ;;
-              *)    echo "❌ **Failed** — an assertion or expected revert did not match. Advisory only; does not gate merges. Check the run log." ;;
-            esac
+            if [ -z "$summary" ]; then
+              echo "❓ **Did not run** — no summary produced (likely an infra error before the suite ran, e.g. RPC unreachable). Check the run log."
+            elif [ "$failed" -ne 0 ]; then
+              echo "❌ **${failed} journey(s) failed** — an assertion or expected revert did not match. Advisory only; does not gate merges. See the run log for the failing journey and its trace."
+            elif [ "$passed" -ne 0 ]; then
+              echo "✅ **${passed} passed** (${skipped} skipped) — the b20 surface behaved against the live precompiles."
+            else
+              echo "⏭️ **All ${skipped} skipped** — Vibenet is not on the expected fork yet (feature inactive or pre-fork). Chain/fork state, not a defect."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

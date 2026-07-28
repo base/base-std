@@ -36,7 +36,7 @@ Requires **Python 3.13** (`make smoke-setup` enforces it; override with `PYTHON=
 ```bash
 make smoke-setup                 # one-time: create the venv + install web3
 cp .env.template .env            # then set RPC_URL, DEPLOYER_PK, USER2_PK
-make smoke-all KEEP_GOING=1      # all journeys, audit summary; or one: make smoke-factory
+make smoke KEEP_GOING=1          # run the full suite, audit summary
 ```
 
 `DEPLOYER_PK` must hold enough ether to sign the setup and admin txs (it also
@@ -53,17 +53,25 @@ shell env wins over `.env` values.
 ### Make targets
 
 ```bash
-make smoke            # run every journey, fail-fast (CI gating default)
-make smoke-all        # all journeys, single process, fail-fast
-make smoke-all KEEP_GOING=1   # all journeys, summarize, exit 0 regardless
-make smoke-factory    # one journey at a time: factory|asset|multiplier|stablecoin|policy|invariants
-make smoke-setup      # create the venv + install web3 (one-time)
+make smoke                 # run the FULL suite, fail-fast (CI gating default)
+make smoke KEEP_GOING=1    # full suite, summarize, exit 0 regardless (audit/triage)
+make smoke-all             # alias of `make smoke` (also honors KEEP_GOING)
+make smoke-setup           # create the venv + install web3 (one-time)
 ```
 
-> The `smoke-*` targets set `PYTHONPATH=script` for you. Running `python -m smoke`
-> by hand needs that too (and the env exported), else you get `No module named
-> smoke` — prefer the Make targets. The raw CLI takes an arbitrary subset and a
-> fail-fast/keep-going flag, e.g. `python -m smoke asset policy -k`.
+The suite always runs as a whole — there are deliberately **no per-journey `make`
+targets**, so you can't get false confidence from a partial run. For ad-hoc
+single-journey debugging (cheaper and faster on a live chain, where every journey
+spends real gas and time), call the CLI directly — it takes an arbitrary subset and
+a fail-fast/keep-going flag:
+
+```bash
+PYTHONPATH=script python -m smoke asset            # one journey
+PYTHONPATH=script python -m smoke asset policy -k  # a subset, keep-going
+```
+
+> `PYTHONPATH=script` is required (the Make targets set it for you); without it you
+> get `No module named smoke`.
 
 ### Environment / config knobs
 
@@ -82,21 +90,21 @@ make smoke-setup      # create the venv + install web3 (one-time)
 
 ### Advisory CI against Vibenet
 
-`.github/workflows/smoke-tests.yml` runs a journey against a live Base network on demand. It is
-**`workflow_dispatch` only** — deliberately not wired to pull requests, merge groups, or a schedule.
-Vibenet is a live chain that is manually deployed per hardfork, so CI can't guarantee which
-precompile set is live; an automated run would flap. The workflow is **advisory and never gates
-merges**: run it by hand (Actions → *Base Std Smoke Tests (Vibenet)* → *Run workflow*) after a
-hardfork ships, choosing the journey, the expected `fork`, the `base_std_ref` to run (latest = `main`;
-pin a prior hardfork's ref to match an older live fork — branch-per-fork, no runtime selector), and
-the RPC endpoint (default `https://rpc.vibes.base.org/`). It exports `RPC_URL` from the input and
-`DEPLOYER_PK` / `USER2_PK` from repo secrets (`SMOKE_DEPLOYER_PK` / `SMOKE_USER2_PK`), then reports
-**pass / skip / fail** plus the chain id, fork, and base-std ref in the run summary. A chain not yet
-on the expected fork is reported as *skipped*, not failed.
+`.github/workflows/smoke-tests.yml` runs the **full suite** against a live Base network on demand. It
+is **`workflow_dispatch` only** — deliberately not wired to pull requests, merge groups, or a schedule.
+Vibenet is a live chain that is manually deployed per hardfork, so CI can't guarantee which precompile
+set is live; an automated run would flap. The workflow is **advisory and never gates merges**: run it
+by hand (Actions → *Base Std Smoke Tests (Vibenet)* → *Run workflow*) after a hardfork ships. Its only
+input is the RPC endpoint (default `https://rpc.vibes.base.org/`); it always runs every journey (`-k`)
+against the ref you dispatch from — latest is `main`, and to run an older fork you dispatch from the
+matching branch/tag (branch-per-fork; there is no journey picker and no fork/ref selector). It exports
+`RPC_URL` from the input and `DEPLOYER_PK` / `USER2_PK` from repo secrets (`SMOKE_DEPLOYER_PK` /
+`SMOKE_USER2_PK`), then reports per-journey **passed / failed / skipped** plus the chain id in the run
+summary. A journey whose surface the live chain does not yet ship is reported as *skipped*, not failed.
 
 ## What it checks
 
-Five "journeys", each runnable on its own or all together:
+Six "journeys", run as a whole suite (a single journey can still be run via the CLI for debugging):
 
 | Journey | What it exercises |
 |---|---|
