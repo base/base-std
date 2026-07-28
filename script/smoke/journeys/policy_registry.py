@@ -8,16 +8,16 @@ the token-side write-time validation, then a flow-level event check.
 `_composite` covers the UNION/INTERSECT composite gates: construction, live
 gate evaluation over child membership, full-replacement `updateComposite`
 semantics, the child-set validation reverts, and token enforcement through a
-composite. `_known_divergences` runs LAST and is expected to fail against the
+composite. `_regressions` runs LAST and is expected to fail against the
 current live deployment (see the function docstring).
 """
 
 from __future__ import annotations
 
-import sys
+from functools import partial
 
 from .. import config
-from ..chain import Chain, log, step
+from ..chain import Chain, log, run_collected, step
 from ..codec import AssetCreateParams, init_call
 
 
@@ -340,18 +340,17 @@ def _d3_zero_admin_precedence(c: Chain) -> None:
     )
 
 
-# Conformance checks where base/base does not yet match the `IPolicyRegistry` contract that base-std
-# defines. There are no ACCEPTED divergences between the two — every entry here is a base/base bug to
-# fix, not a behaviour to live with. They are listed rather than inlined only so one failure cannot
-# hide the others.
-CONFORMANCE_DETECTORS = [
-    ("D1 createPolicy(admin, UNION) -> IncompatiblePolicyType", _d1_create_policy),
-    ("D2 createPolicyWithAccounts(admin, UNION, accts) -> IncompatiblePolicyType", _d2_create_policy_with_accounts),
-    ("D3 createPolicy(0, UNION) -> ZeroAddress outranks the type guard", _d3_zero_admin_precedence),
+# Checks where base/base does not yet match the `IPolicyRegistry` contract that base-std defines.
+# There are no accepted divergences between the two — every entry is a base/base bug to fix, not a
+# behaviour to live with. Listed rather than inlined so one failure cannot hide the others.
+REGRESSION_CHECKS = [
+    ("createPolicy(admin, UNION) -> IncompatiblePolicyType", _d1_create_policy),
+    ("createPolicyWithAccounts(admin, UNION, accts) -> IncompatiblePolicyType", _d2_create_policy_with_accounts),
+    ("createPolicy(0, UNION) -> ZeroAddress outranks the type guard", _d3_zero_admin_precedence),
 ]
 
 
-def _conformance(c: Chain) -> None:
+def _regressions(c: Chain) -> None:
     """Assert base/base matches the `IPolicyRegistry` contract. Currently RED; each is a base/base bug.
 
     Cause: `PolicyType::is_valid()` (`policy/abi.rs`) is narrowed to BLOCKLIST|ALLOWLIST and
@@ -359,34 +358,18 @@ def _conformance(c: Chain) -> None:
     composite gates get `Panic(0x21)` instead of `IncompatiblePolicyType`, and a zero-admin composite
     call reports the type problem instead of `ZeroAddress`.
 
-    Collect-all, mirroring `precompile_invariants.run`: `die()` raises SystemExit, so a plain sequence
-    would abort at the first check and hide the rest. Runs last; all are `eth_call`, none mutate state.
+    Runs last, collect-all so one failure cannot hide the others. All are `eth_call`; none mutate
+    state. Numbered `R1..` rather than continuing the journey's sequence, so inserting a step above
+    cannot silently renumber these.
 
     Reading a failure: `Panic(uint256)` is not in the interface's error set, so these report
     `got=None want=IncompatiblePolicyType` — that is `Panic(0x21)`, not a missing revert.
     """
-    findings: list[tuple[str, str]] = []
-    for i, (name, fn) in enumerate(CONFORMANCE_DETECTORS, 33):
-        step(i, f"[conformance | RED until base/base is fixed] {name}")
-        try:
-            fn(c)
-        except SystemExit as exc:
-            detail = str(exc).replace("[smoke] ERROR: ", "")
-            print(f"  \u2717 FINDING: {detail}", file=sys.stderr)
-            findings.append((name, detail))
-        except Exception as exc:  # noqa: BLE001 - harness/RPC error, surface as a finding
-            detail = f"{type(exc).__name__}: {exc}"
-            print(f"  \u2717 ERROR: {detail}", file=sys.stderr)
-            findings.append((name, detail))
-
-    held = len(CONFORMANCE_DETECTORS) - len(findings)
-    log(f"policy-registry conformance: {held}/{len(CONFORMANCE_DETECTORS)} checks held")
-    for name, detail in findings:
-        log(f"  \u2717 {name} \u2014 {detail}")
-    if findings:
-        raise SystemExit(
-            f"[smoke] policy-registry: {len(findings)} base/base conformance finding(s) need fixing"
-        )
+    run_collected(
+        [(name, partial(fn, c)) for name, fn in REGRESSION_CHECKS],
+        label="policy-registry regressions",
+        step_prefix="R",
+    )
 
 
 def run(c: Chain) -> None:
@@ -396,6 +379,6 @@ def run(c: Chain) -> None:
     _edges(c, tok, pid_r, pid_b)
     _composite(c, pid_b)
     _events(c)
-    # Last: base/base conformance. Collect-all, so no detector can be hidden by an earlier one.
-    _conformance(c)
+    # Last: base/base conformance. Collect-all, so no check can be hidden by an earlier one.
+    _regressions(c)
     log("policy-registry: OK")
