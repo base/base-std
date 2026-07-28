@@ -33,6 +33,7 @@ from ..codec import AssetCreateParams, init_call
 FACTORY = config.B20_FACTORY
 POLICY = config.POLICY_REGISTRY
 ALLOWLIST = config.POLICY_TYPE_ALLOWLIST
+UNION = config.POLICY_TYPE_UNION
 
 # Check names that are known/accepted divergences: reported, but do not fail the run.
 INFORMATIONAL: set[str] = set()
@@ -52,9 +53,31 @@ def _addr_word(address: str) -> bytes:
 
 
 # ── raw calldata edges (no helper contract; web3 emits bytes Solidity wouldn't) ────────────────────
+def _composite_write_calldata(c: Chain) -> list[tuple[str, bytes]]:
+    """Canonical calldata for the two composite (V2) write selectors.
+
+    Argument values are immaterial: `msg.value != 0` is the FIRST check in policy dispatch, ahead of
+    calldata-gas accounting, hardfork/version resolution and selector matching alike. That ordering is
+    also why these two need no composite-support gating — on a pre-Cobalt node the selectors are
+    unknown, but the value guard still fires before dispatch ever looks at them. Payloads are canonical
+    anyway so a failure can never be blamed on ABI decoding.
+    """
+    children = [(ALLOWLIST << 56) | 2, (ALLOWLIST << 56) | 3]
+    return [
+        ("createCompositePolicy", _clean(c.policy, "createCompositePolicy", c.DEPLOYER, UNION, children)),
+        ("updateComposite", _clean(c.policy, "updateComposite", (UNION << 56) | 4, children)),
+    ]
+
+
 def _payable_rejected(c: Chain, _probe) -> None:
     create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
     c.expect_raw_revert("value on createPolicy", POLICY, create_data, value=1)
+    # Every policy-registry selector is nonpayable (IPolicyRegistry: the check runs at the top of
+    # dispatch), but only createPolicy was ever covered. `error_name` is pinned for these two because
+    # `expect_raw_revert` treats ANY non-ContractLogicError exception as a pass — without it, a
+    # node-level rejection (insufficient funds, bad gas estimate) would masquerade as NonPayable.
+    for name, data in _composite_write_calldata(c):
+        c.expect_raw_revert(f"value on {name}", POLICY, data, value=1, error_name="NonPayable")
 
 
 def _unknown_selector_reverts(c: Chain, _probe) -> None:
@@ -93,11 +116,17 @@ def _staticcall_read_only(c: Chain, probe) -> None:
 
 
 def _value_forwarding_rejected(c: Chain, probe) -> None:
-    create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
     overrides = {"from": c.DEPLOYER, "value": 1}
+    create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
     fn = probe.functions.probeCall(POLICY, create_data)
     res = fn.call(overrides)
     c.assert_eq(res[0], False, "createPolicy rejects forwarded value", repro_fn=fn, repro_overrides=overrides)
+    # Same guard, reached from a real contract frame, for the two composite write selectors.
+    for name, data in _composite_write_calldata(c):
+        fn = probe.functions.probeCall(POLICY, data)
+        c.assert_eq(
+            fn.call(overrides)[0], False, f"{name} rejects forwarded value", repro_fn=fn, repro_overrides=overrides
+        )
 
 
 def _returndata_fidelity(c: Chain, probe) -> None:
@@ -170,7 +199,7 @@ def _create_gas_independent_of_prefunded_balance(c: Chain, _probe) -> None:
 
 # Ordered audit checklist: (name, fn). `name` doubles as the INFORMATIONAL downgrade key.
 CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
-    ("payable rejected (value on non-payable createPolicy)", _payable_rejected),
+    ("payable rejected (value on non-payable createPolicy + composite writes)", _payable_rejected),
     ("unknown selector reverts (no silent fallthrough)", _unknown_selector_reverts),
     ("empty calldata reverts (no implicit receive/fallback)", _empty_calldata_reverts),
     ("truncated args revert (strict ABI decode)", _truncated_args_revert),
