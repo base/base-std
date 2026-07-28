@@ -142,20 +142,20 @@ library MockB20Storage {
         uint256 supplyCap;
         // ---------- Permit (EIP-2612) ----------
         mapping(address owner => uint256 nonce) nonces;
-        // ---------- Bootstrap flag ----------
-        // False from etch until the factory sets it true at the end of
-        // createToken. The EVM impl uses this flag as the demarcation between
-        // the privileged bootstrap window and post-init state, while the Rust
-        // impl distinguishes those phases through a different mechanism and
-        // does not need a storage slot for the flag at all. It kept its
-        // original offset when `seizePolicyIds` was appended after it, so the
-        // Rust layout omits `initialized` by leaving its slot as an unused hole
-        // and placing `seizePolicyIds` at the same offset as here.
-        bool initialized;
         // ---------- Seize policies (PACKED, per-operation) ----------
-        // Appended after `initialized` so no pre-existing field offset shifts
-        // on already-deployed tokens.
+        // Placed before the mock-only `initialized` flag so the Rust precompile
+        // — which stores no `initialized` field — lands `seizable_policy_id` at
+        // this same offset with no filler slot. Distinct per-operation group
+        // (seize is cold-path and spans transfer + burn), mirroring how mint
+        // policies are grouped separately from transfer policies.
         SeizePolicyIds seizePolicyIds;
+        // ---------- Bootstrap flag (mock-only) ----------
+        // False from etch until the factory sets it true at the end of
+        // createToken; the mock uses it to demarcate the privileged bootstrap
+        // window. The Rust precompile stores no such flag (it checks
+        // factory-init via deployed marker bytecode), so it omits this trailing
+        // slot entirely — which is why `seizePolicyIds` is placed before it.
+        bool initialized;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20")) - 1)) & ~bytes32(uint256(0xff))
@@ -193,10 +193,11 @@ library MockB20Storage {
     uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;
-    // `initialized` sits alone in its own slot; see the field-level natspec above for why.
-    uint256 internal constant INITIALIZED_OFFSET = 14;
-    // Appended after `initialized` so existing offsets stay stable.
-    uint256 internal constant SEIZE_POLICY_IDS_OFFSET = 15;
+    // Placed before the mock-only `initialized` flag so the Rust precompile lands its seizable
+    // slot at this offset with no filler; see the field-level natspec above.
+    uint256 internal constant SEIZE_POLICY_IDS_OFFSET = 14;
+    // Mock-only bootstrap flag, kept last so the Rust precompile omits it.
+    uint256 internal constant INITIALIZED_OFFSET = 15;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the

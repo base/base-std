@@ -84,8 +84,8 @@ contract B20FullLayoutTest is B20Test {
     ///         - 11: pausedVectors (TRANSFER + MINT bits)
     ///         - 12: supplyCap
     ///         - 13: nonces (advanced via permit)
-    ///         - 14: initialized (own slot)
-    ///         - 15: seizePolicyIds (seizable lane, appended after initialized)
+    ///         - 14: seizePolicyIds (seizable lane)
+    ///         - 15: initialized (mock-only bootstrap flag, kept last)
     function test_b20Layout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -211,26 +211,27 @@ contract B20FullLayoutTest is B20Test {
             uint256(vm.load(tokenAddr, MockB20Storage.nonceSlot(alice))), token.nonces(alice), "slot 13: nonces[alice]"
         );
 
+        // ---------- seizePolicyIds (slot 14) ----------
+        // Its own per-operation packed slot, placed before the mock-only
+        // `initialized` flag so the Rust precompile mirrors it without a filler.
+        uint256 packedSeize = uint256(vm.load(tokenAddr, MockB20Storage.seizePolicyIdsSlot()));
+        assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 14 bits 0..63: SEIZABLE_ACCOUNT lane");
+        assertEq(packedSeize >> 64, 0, "slot 14 bits 64..255: three reserved lanes must be zero");
+
         // ---------- initialized ----------
-        // Mock world: pinned at the end of the layout in its own slot
-        // (slot 14); the factory flips this to true at the end of
+        // Mock world: the mock-only bootstrap flag, kept last in its own slot
+        // (slot 15); the factory flips this to true at the end of
         // createToken; any non-zero word means the bootstrap window is
         // closed. Live world: the Rust factory plants a 0xef bytecode
         // stub at the token address instead; the dedicated mock slot
-        // doesn't exist (would alias to a different field in the Rust
-        // layout). The helper picks the right check per backend.
+        // doesn't exist in the Rust layout. The helper picks the right check
+        // per backend.
         //
         // The other slot-by-slot assertions in this test are NOT
         // dual-backend; they pin the Solidity layout exactly. Per-slot
         // divergence against the Rust impl is the cross-validation
         // signal documented in LIVE_PRECOMPILE_TESTING.md's bucket table.
         _assertInitialized(tokenAddr, "initialized marker must be set");
-
-        // ---------- seizePolicyIds (slot 15) ----------
-        // Appended after `initialized`; its own per-operation packed slot.
-        uint256 packedSeize = uint256(vm.load(tokenAddr, MockB20Storage.seizePolicyIdsSlot()));
-        assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 15 bits 0..63: SEIZABLE_ACCOUNT lane");
-        assertEq(packedSeize >> 64, 0, "slot 15 bits 64..255: three reserved lanes must be zero");
     }
 
     /// @notice Populates the token with non-default values across every
