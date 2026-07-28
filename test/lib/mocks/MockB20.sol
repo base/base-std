@@ -514,7 +514,7 @@ abstract contract MockB20 is IB20 {
         if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.sender;
         if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;
         if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;
-        if (policyScope == SEIZABLE_ACCOUNT_POLICY) return $.transferPolicyIds.seizable;
+        if (policyScope == SEIZABLE_ACCOUNT_POLICY) return $.seizePolicyIds.seizable;
         if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;
         revert UnsupportedPolicyType(policyScope);
     }
@@ -538,7 +538,7 @@ abstract contract MockB20 is IB20 {
         } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds.executor = newPolicyId;
         } else if (policyScope == SEIZABLE_ACCOUNT_POLICY) {
-            $.transferPolicyIds.seizable = newPolicyId;
+            $.seizePolicyIds.seizable = newPolicyId;
         } else {
             $.mintPolicyIds.receiver = newPolicyId;
         }
@@ -795,7 +795,7 @@ abstract contract MockB20 is IB20 {
     ///      unconditionally, including in the factory bootstrap window,
     ///      mirroring the `burnBlocked` sender-policy check.
     function _requireSeizable(address from) internal view {
-        uint64 seizablePolicyId = MockB20Storage.layout().transferPolicyIds.seizable;
+        uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
         if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
             revert AccountNotBlocked(from);
         }

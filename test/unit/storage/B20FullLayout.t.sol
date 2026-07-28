@@ -56,7 +56,7 @@ contract B20FullLayoutTest is B20Test {
     uint64 internal transferSenderMarker;
     uint64 internal transferReceiverMarker;
     uint64 internal transferExecutorMarker;
-    uint64 internal transferSeizableMarker;
+    uint64 internal seizableMarker;
     uint64 internal mintReceiverMarker;
 
     /// @notice Cross-cuts every field of MockB20Storage.Layout in a single
@@ -84,7 +84,8 @@ contract B20FullLayoutTest is B20Test {
     ///         - 11: pausedVectors (TRANSFER + MINT bits)
     ///         - 12: supplyCap
     ///         - 13: nonces (advanced via permit)
-    ///         - 14: initialized (own slot at end of layout)
+    ///         - 14: initialized (own slot)
+    ///         - 15: seizePolicyIds (seizable lane, appended after initialized)
     function test_b20Layout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
         _populate();
@@ -178,11 +179,7 @@ contract B20FullLayoutTest is B20Test {
             uint256(transferExecutorMarker),
             "slot 9 bits 128..191: transfer EXECUTOR lane"
         );
-        assertEq(
-            (packedTransfer >> 192) & 0xFFFFFFFFFFFFFFFF,
-            uint256(transferSeizableMarker),
-            "slot 9 bits 192..255: transfer SEIZABLE lane"
-        );
+        assertEq(packedTransfer >> 192, 0, "slot 9 bits 192..255: reserved lane must be zero");
 
         uint256 packedMint = uint256(vm.load(tokenAddr, MockB20Storage.mintPolicyIdsSlot()));
         assertEq(packedMint & 0xFFFFFFFFFFFFFFFF, uint256(mintReceiverMarker), "slot 10 bits 0..63: mint RECEIVER lane");
@@ -228,6 +225,12 @@ contract B20FullLayoutTest is B20Test {
         // divergence against the Rust impl is the cross-validation
         // signal documented in LIVE_PRECOMPILE_TESTING.md's bucket table.
         _assertInitialized(tokenAddr, "initialized marker must be set");
+
+        // ---------- seizePolicyIds (slot 15) ----------
+        // Appended after `initialized`; its own per-operation packed slot.
+        uint256 packedSeize = uint256(vm.load(tokenAddr, MockB20Storage.seizePolicyIdsSlot()));
+        assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 15 bits 0..63: SEIZABLE_ACCOUNT lane");
+        assertEq(packedSeize >> 64, 0, "slot 15 bits 64..255: three reserved lanes must be zero");
     }
 
     /// @notice Populates the token with non-default values across every
@@ -274,13 +277,12 @@ contract B20FullLayoutTest is B20Test {
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         transferExecutorMarker =
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
-        transferSeizableMarker =
-            StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        seizableMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         mintReceiverMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
-        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, transferSeizableMarker);
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, seizableMarker);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------
