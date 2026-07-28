@@ -7,7 +7,7 @@ contract ActivationRegistryIsActivatedTest is ActivationRegistryTest {
     /// @notice Verifies isActivated returns false for any feature id that has never been activated
     /// @dev Default state across the entire bytes32 id space. IActivationRegistry NatSpec L45-47
     ///      explicitly carves this out: "not raised by `isActivated`, which returns `false`
-    ///      instead." Regression test for L-04 (was: revert "not implemented").
+    ///      instead." Regression test (was: revert "not implemented").
     function test_isActivated_success_defaultFalse(bytes32 feature) public view {
         _assumeFreshFeature(feature);
         assertFalse(activationRegistry.isActivated(feature), "isActivated must return false for unactivated features");

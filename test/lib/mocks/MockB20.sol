@@ -195,8 +195,8 @@ abstract contract MockB20 is IB20 {
         _requireNonZeroActors(from, to);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
-        // which carves no `privileged` exception for allowance accounting
-        // (BOP-230 / L-04); only the executor-policy check below is bypassed
+        // which carves no `privileged` exception for allowance accounting;
+        // only the executor-policy check below is bypassed
         // for a privileged caller. An infinite allowance is still not
         // decremented (handled inside `_consumeAllowance`).
         _consumeAllowance(from, msg.sender, amount);
@@ -244,7 +244,7 @@ abstract contract MockB20 is IB20 {
     {
         _requireNonZeroActors(from, to);
         // Allowance is consumed unconditionally — including during the factory
-        // bootstrap window — matching the Rust precompile (BOP-230 / L-04).
+        // bootstrap window — matching the Rust precompile.
         // Only the executor-policy check below is bypassed for a privileged
         // caller; infinite allowance is still not decremented.
         _consumeAllowance(from, msg.sender, amount);
@@ -717,7 +717,7 @@ abstract contract MockB20 is IB20 {
     ///      this helper. `transferFrom` / `transferFromWithMemo`
     ///      additionally consume the allowance (unconditionally —
     ///      including in the bootstrap window, matching the Rust
-    ///      precompile, see BOP-230 / L-04) and check the executor
+    ///      precompile) and check the executor
     ///      policy in their bodies before calling here; only the
     ///      executor-policy check honors the bootstrap bypass,
     ///      consistent with the sender/receiver policy bypass below.

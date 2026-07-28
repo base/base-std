@@ -23,8 +23,7 @@ import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationR
 ///
 /// @dev    Old-selector absence is checked with low-level calls (the token carries no fallback, so
 ///         a retired selector cannot resolve); new surface is checked with typed calls that only
-///         compile against the current interface. Each test tags the change it guards with a
-///         trailing `Regression: BOP-XXX.` line.
+///         compile against the current interface.
 contract B20RenamesTest is B20AssetTest {
     /// @dev Asserts a removed selector no longer resolves on the token surface.
     function _assertSelectorRemoved(bytes memory callData, string memory err) internal {
@@ -38,7 +37,6 @@ contract B20RenamesTest is B20AssetTest {
 
     /// @notice Verifies the operator role is exposed as `OPERATOR_ROLE`.
     /// @dev The wire value (`keccak256("OPERATOR_ROLE")`) and library source-of-truth must agree.
-    ///      Regression: BOP-248.
     function test_operatorRole_success_renamedFromSecurityOperator() public view {
         assertEq(asset().OPERATOR_ROLE(), keccak256("OPERATOR_ROLE"), "OPERATOR_ROLE must equal its keccak preimage");
         assertEq(asset().OPERATOR_ROLE(), B20Constants.OPERATOR_ROLE, "OPERATOR_ROLE must match B20Constants");
@@ -51,7 +49,7 @@ contract B20RenamesTest is B20AssetTest {
     /// @notice Verifies share-ratio scaling is exposed under the `multiplier` names and the legacy
     ///         share-ratio selectors are gone
     /// @dev The new getters resolve (a fresh token reports a WAD multiplier) and every legacy
-    ///      selector must not resolve. Regression: BOP-249.
+    ///      selector must not resolve.
     function test_multiplier_success_renamedFromShareRatio(uint256 rawBalance) public {
         rawBalance = bound(rawBalance, 0, type(uint128).max);
 
@@ -89,7 +87,7 @@ contract B20RenamesTest is B20AssetTest {
     /// @notice Verifies the multiplier-change event was widened/renamed to the ERC-8056
     ///         `UIMultiplierUpdated(old, new, effectiveAt)` and the legacy `MultiplierUpdated(uint256)`
     ///         is gone
-    /// @dev `updateMultiplier` must emit the ERC-8056 topic and never the legacy topic. Regression: BOP-431.
+    /// @dev `updateMultiplier` must emit the ERC-8056 topic and never the legacy topic.
     function test_multiplierEvent_success_widenedToUIMultiplierUpdated(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
@@ -108,7 +106,7 @@ contract B20RenamesTest is B20AssetTest {
     /// @notice Verifies the ERC-8056 surface resolves and aliases the native B20 names
     /// @dev `uiMultiplier` aliases `multiplier`; `balanceOfUI` aliases `scaledBalanceOf`; the pending
     ///      surface, `totalSupplyUI`, and `supportsInterface` all resolve. These typed calls only
-    ///      compile against the current interface, so their presence is the guard. Regression: BOP-431.
+    ///      compile against the current interface, so their presence is the guard.
     function test_erc8056Surface_success_aliasesResolve(uint256 amount) public {
         amount = bound(amount, 0, type(uint128).max);
         if (amount > 0) _mint(alice, amount);
@@ -130,7 +128,7 @@ contract B20RenamesTest is B20AssetTest {
 
     /// @notice Verifies `updateExtraMetadata` is gated by METADATA_ROLE, not OPERATOR_ROLE
     /// @dev An OPERATOR_ROLE-only holder is rejected with the METADATA_ROLE selector; a
-    ///      METADATA_ROLE holder succeeds. Regression: BOP-248.
+    ///      METADATA_ROLE holder succeeds.
     function test_updateExtraMetadata_success_gatedByMetadataRole(string calldata value) public {
         // Operator (OPERATOR_ROLE only) cannot write metadata.
         _grantOperator();
@@ -149,7 +147,7 @@ contract B20RenamesTest is B20AssetTest {
 
     /// @notice Verifies `updateMultiplier` is gated by OPERATOR_ROLE, not METADATA_ROLE
     /// @dev A METADATA_ROLE-only holder is rejected with the OPERATOR_ROLE selector — the inverse
-    ///      of the metadata-gating test, confirming the two authorities are distinct. Regression: BOP-248.
+    ///      of the metadata-gating test, confirming the two authorities are distinct.
     function test_updateMultiplier_revert_metadataRoleInsufficient(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantRole(B20Constants.METADATA_ROLE, bob);
@@ -163,7 +161,7 @@ contract B20RenamesTest is B20AssetTest {
     /// @notice Verifies METADATA_ROLE is administered by DEFAULT_ADMIN_ROLE on a freshly created token
     /// @dev The asset variant does not set a custom admin for METADATA_ROLE, so it defaults to
     ///      DEFAULT_ADMIN_ROLE (the default admin grants/revokes METADATA_ROLE). Authority over
-    ///      metadata *operations* is separate and split per the two tests above. Regression: BOP-248.
+    ///      metadata *operations* is separate and split per the two tests above.
     function test_metadataRole_success_administeredByDefaultAdmin() public view {
         assertEq(
             token.getRoleAdmin(B20Constants.METADATA_ROLE),
@@ -178,7 +176,7 @@ contract B20RenamesTest is B20AssetTest {
 
     /// @notice Verifies the asset activation feature is keyed on the `base.b20_asset` namespace
     /// @dev This is the cross-language contract with the Rust `ActivationFeature` enum; a preimage
-    ///      drift desyncs the gate. Regression: BOP-257.
+    ///      drift desyncs the gate.
     function test_b20Asset_success_keyedOnAssetNamespace() public pure {
         assertEq(
             ActivationRegistryFeatureList.B20_ASSET,
@@ -189,7 +187,7 @@ contract B20RenamesTest is B20AssetTest {
 
     /// @notice Verifies the asset feature is not keyed on either retired namespace
     /// @dev Asserting the asset id differs from both retired preimages locks against an accidental
-    ///      revert to the old `base.b20_security` / `base.b20_token` namespace string. Regression: BOP-257.
+    ///      revert to the old `base.b20_security` / `base.b20_token` namespace string.
     function test_b20Asset_success_notKeyedOnLegacyNamespaces() public pure {
         assertTrue(
             ActivationRegistryFeatureList.B20_ASSET != keccak256("base.b20_security"),

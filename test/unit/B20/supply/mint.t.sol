@@ -76,7 +76,7 @@ contract B20MintTest is B20Test {
     }
 
     /// @notice Verifies MINT_RECEIVER_POLICY is enforced even for a privileged (factory bootstrap) mint
-    /// @dev Mint-side counterpart to the transfer privileged-bypass tests (BOP-332): the bootstrap window
+    /// @dev Mint-side counterpart to the transfer privileged-bypass tests: the bootstrap window
     ///      bypasses the transfer-side policies but ALWAYS enforces MINT_RECEIVER_POLICY, so new supply is
     ///      never issued to a policy-denied recipient even at creation. Privilege is reached through a
     ///      genuine bootstrap: the token is created with initCalls that (1) set the mint-receiver policy to
