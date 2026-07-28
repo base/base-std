@@ -109,15 +109,12 @@ def _edges(c: Chain, tok, pid_r: int, pid_b: int) -> None:
 
 
 def _composite(c: Chain, pid_b: int) -> None:
-    """Composite (UNION / INTERSECT) policies: construction, evaluation, update, edges, enforcement.
-
-    Spec IDs are from brains/composite_policy/SMOKE_TEST_SPECS.md.
-    """
+    """Composite (UNION / INTERSECT) policies: construction, evaluation, update, edges, enforcement."""
     carol = c.cfg.new_addr("carol")
     dave = c.cfg.new_addr("dave")
     erin = c.cfg.new_addr("erin")
 
-    step(17, "[CC-1/CC-2] seed two simple children, then create a UNION and an INTERSECT over them")
+    step(17, "seed two simple children, then create a UNION and an INTERSECT over them")
     # childX allows {alice, dave}; childY allows {bob, dave}. dave is the only account in BOTH.
     pid_x = c.create_policy_with_accounts(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST, [c.ALICE, dave])
     pid_y = c.create_policy_with_accounts(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST, [c.BOB, dave])
@@ -128,19 +125,19 @@ def _composite(c: Chain, pid_b: int) -> None:
     c.assert_eq(c.policy.functions.policyExists(pid_inter).call(), True, "INTERSECT composite exists")
     c.assert_eq(c.policy.functions.policyAdmin(pid_inter).call(), c.DEPLOYER, "INTERSECT admin == deployer")
 
-    step(18, "[CE-1/CE-2] UNION authorizes an account in ANY child; denies one in none")
+    step(18, "UNION authorizes an account in ANY child; denies one in none")
     c.assert_eq(c.policy.functions.isAuthorized(pid_union, c.ALICE).call(), True, "UNION: alice (childX only) allowed")
     c.assert_eq(c.policy.functions.isAuthorized(pid_union, c.BOB).call(), True, "UNION: bob (childY only) allowed")
     c.assert_eq(c.policy.functions.isAuthorized(pid_union, dave).call(), True, "UNION: dave (both children) allowed")
     c.assert_eq(c.policy.functions.isAuthorized(pid_union, carol).call(), False, "UNION: carol (no child) denied")
 
-    step(19, "[CE-3/CE-4] INTERSECT authorizes only an account in EVERY child")
+    step(19, "INTERSECT authorizes only an account in EVERY child")
     c.assert_eq(c.policy.functions.isAuthorized(pid_inter, dave).call(), True, "INTERSECT: dave (every child) allowed")
     c.assert_eq(c.policy.functions.isAuthorized(pid_inter, c.ALICE).call(), False, "INTERSECT: alice missing childY -> denied")
     c.assert_eq(c.policy.functions.isAuthorized(pid_inter, c.BOB).call(), False, "INTERSECT: bob missing childX -> denied")
     c.assert_eq(c.policy.functions.isAuthorized(pid_inter, carol).call(), False, "INTERSECT: carol (no child) denied")
 
-    step(20, "[CE-7] live evaluation: mutate a CHILD's membership, composite verdict flips (no call on the composite)")
+    step(20, "live evaluation: mutate a CHILD's membership, composite verdict flips (no call on the composite)")
     c.send(c.policy.functions.updateAllowlist(pid_x, True, [carol]), c.deployer)
     c.assert_eq(c.policy.functions.isAuthorized(pid_union, carol).call(), True, "UNION: carol allowed after childX add")
     c.assert_eq(c.policy.functions.isAuthorized(pid_inter, carol).call(), False, "INTERSECT: carol still denied (childY missing)")
@@ -149,7 +146,7 @@ def _composite(c: Chain, pid_b: int) -> None:
     c.send(c.policy.functions.updateAllowlist(pid_x, False, [carol]), c.deployer)
     c.assert_eq(c.policy.functions.isAuthorized(pid_inter, carol).call(), False, "INTERSECT: carol denied again after childX removal")
 
-    step(21, "[CU-1/EV-7] updateComposite REPLACES the child set (no merge); event carries the exact new set")
+    step(21, "updateComposite REPLACES the child set (no merge); event carries the exact new set")
     pid_c1 = c.create_policy_with_accounts(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST, [erin])
     pid_c2 = c.create_policy_with_accounts(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST, [erin])
     c.assert_eq(c.policy.functions.isAuthorized(pid_union, c.ALICE).call(), True, "pre-update: alice allowed via childX")
@@ -164,7 +161,7 @@ def _composite(c: Chain, pid_b: int) -> None:
         "CompositePolicyUpdated payload == exactly the new child ids",
     )
 
-    step(22, "[CX-3/CX-4] child count outside [2,4] -> ChildPoliciesOutsideOfRange")
+    step(22, "child count outside [2,4] -> ChildPoliciesOutsideOfRange")
     too_few = [pid_x]
     too_many = [pid_x, pid_y, pid_c1, pid_c2, pid_b]
     c.assert_eq(len(too_few) < config.MIN_CHILD_POLICIES, True, "fixture: 1 child is below MIN_CHILD_POLICIES")
@@ -182,7 +179,7 @@ def _composite(c: Chain, pid_b: int) -> None:
     c.expect_revert("ChildPoliciesOutsideOfRange", c.policy.functions.updateComposite(pid_union, too_few), c.DEPLOYER)
     c.expect_revert("ChildPoliciesOutsideOfRange", c.policy.functions.updateComposite(pid_union, too_many), c.DEPLOYER)
 
-    step(23, "[CX-6] a built-in sentinel as a child -> InvalidChildPolicy")
+    step(23, "a built-in sentinel as a child -> InvalidChildPolicy")
     c.expect_revert(
         "InvalidChildPolicy",
         c.policy.functions.createCompositePolicy(c.DEPLOYER, config.POLICY_TYPE_UNION, [config.ALWAYS_ALLOW_ID, pid_x]),
@@ -197,7 +194,7 @@ def _composite(c: Chain, pid_b: int) -> None:
         "InvalidChildPolicy", c.policy.functions.updateComposite(pid_union, [config.ALWAYS_ALLOW_ID, pid_x]), c.DEPLOYER
     )
 
-    step(24, "[CX-7] a composite as a child -> InvalidChildPolicy")
+    step(24, "a composite as a child -> InvalidChildPolicy")
     c.expect_revert(
         "InvalidChildPolicy",
         c.policy.functions.createCompositePolicy(c.DEPLOYER, config.POLICY_TYPE_INTERSECT, [pid_inter, pid_x]),
@@ -205,10 +202,10 @@ def _composite(c: Chain, pid_b: int) -> None:
     )
     c.expect_revert("InvalidChildPolicy", c.policy.functions.updateComposite(pid_union, [pid_inter, pid_x]), c.DEPLOYER)
 
-    step(25, "[CU-6] non-admin updateComposite -> Unauthorized")
+    step(25, "non-admin updateComposite -> Unauthorized")
     c.expect_revert("Unauthorized", c.policy.functions.updateComposite(pid_union, [pid_x, pid_y]), c.USER2)
 
-    step(26, "[CX-1/CX-2/CU-5] composite creator input guards: ZeroAddress, IncompatiblePolicyType")
+    step(26, "composite creator input guards: ZeroAddress, IncompatiblePolicyType")
     # ZeroAddress outranks every later check, so the child set here is deliberately valid.
     c.expect_revert(
         "ZeroAddress",
@@ -223,9 +220,9 @@ def _composite(c: Chain, pid_b: int) -> None:
             c.DEPLOYER,
         )
     # Mirror: updateComposite must reject a SIMPLE target, and the membership mutators must reject a
-    # COMPOSITE target. Together with steps 31-32 this closes the type-guard matrix in both directions,
-    # so a red step 31/32 reads as "the two known creator-side defects" and not "the type byte is
-    # ignored everywhere".
+    # COMPOSITE target. Together with the conformance checks at the end of the journey this closes the
+    # type-guard matrix in both directions, so a red conformance check reads as "the two creator-side
+    # bugs" rather than "the type byte is ignored everywhere".
     c.expect_revert("IncompatiblePolicyType", c.policy.functions.updateComposite(pid_x, [pid_x, pid_y]), c.DEPLOYER)
     c.expect_revert(
         "IncompatiblePolicyType", c.policy.functions.updateAllowlist(pid_union, True, [c.BOB]), c.DEPLOYER
@@ -234,7 +231,7 @@ def _composite(c: Chain, pid_b: int) -> None:
         "IncompatiblePolicyType", c.policy.functions.updateBlocklist(pid_inter, True, [c.BOB]), c.DEPLOYER
     )
 
-    step(27, "[CX-5/CU-8/CX-8] non-existent child -> PolicyNotFound, and it outranks InvalidChildPolicy")
+    step(27, "non-existent child -> PolicyNotFound, and it outranks InvalidChildPolicy")
     # A well-formed but never-created id. Type byte 0 (BLOCKLIST) — note this is exactly the shape whose
     # read-side semantics are permissive (an empty blocklist authorizes everyone), so child-existence
     # validation is the only thing standing between a permissionless caller and a composite that
@@ -253,7 +250,7 @@ def _composite(c: Chain, pid_b: int) -> None:
         c.DEPLOYER,
     )
     c.expect_revert("PolicyNotFound", c.policy.functions.updateComposite(pid_union, [pid_x, ghost]), c.DEPLOYER)
-    # CX-8 precedence: existence is checked across the WHOLE set before validity. The invalid child is
+    # Precedence: existence is checked across the WHOLE set before validity. The invalid child is
     # placed FIRST and the ghost LAST, so a per-element validator would answer InvalidChildPolicy.
     c.expect_revert(
         "PolicyNotFound",
@@ -261,7 +258,7 @@ def _composite(c: Chain, pid_b: int) -> None:
         c.DEPLOYER,
     )
 
-    step(28, "[CT-1] create ASSET token wired to a UNION composite on TRANSFER_RECEIVER + MINT_RECEIVER")
+    step(28, "create ASSET token wired to a UNION composite on TRANSFER_RECEIVER + MINT_RECEIVER")
     # Dedicated children so the token's gate is unaffected by the mutations above.
     pid_t1 = c.create_policy_with_accounts(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST, [c.ALICE])
     pid_t2 = c.create_policy_with_accounts(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST, [c.DEPLOYER])
@@ -285,17 +282,17 @@ def _composite(c: Chain, pid_b: int) -> None:
         ctok.functions.policyId(config.TRANSFER_RECEIVER_POLICY).call(), pid_tok, "TRANSFER_RECEIVER_POLICY == composite"
     )
 
-    step(29, "[CT-2] composite-authorized receivers: mint + transfer succeed")
+    step(29, "composite-authorized receivers: mint + transfer succeed")
     c.send(ctok.functions.mint(c.ALICE, config.amt(100, 18)), c.deployer)
     c.assert_eq(ctok.functions.balanceOf(c.ALICE).call(), config.amt(100, 18), "alice minted (authorized via child 1)")
     c.send(ctok.functions.mint(c.DEPLOYER, config.amt(100, 18)), c.deployer)
     c.send(ctok.functions.transfer(c.ALICE, config.amt(1, 18)), c.deployer)
     c.assert_eq(ctok.functions.balanceOf(c.ALICE).call(), config.amt(101, 18), "transfer to composite-authorized receiver")
 
-    step(30, "[CT-3] composite-denied receiver on transfer -> PolicyForbids")
+    step(30, "composite-denied receiver on transfer -> PolicyForbids")
     c.expect_revert("PolicyForbids", ctok.functions.transfer(c.BOB, config.amt(1, 18)), c.DEPLOYER)
 
-    step(31, "[CT-4] composite-denied receiver on mint -> PolicyForbids")
+    step(31, "composite-denied receiver on mint -> PolicyForbids")
     c.expect_revert("PolicyForbids", ctok.functions.mint(c.BOB, config.amt(1, 18)), c.DEPLOYER)
 
 
@@ -355,35 +352,18 @@ CONFORMANCE_DETECTORS = [
 
 
 def _conformance(c: Chain) -> None:
-    """Assert base/base matches the `IPolicyRegistry` contract. Currently RED — see below.
+    """Assert base/base matches the `IPolicyRegistry` contract. Currently RED; each is a base/base bug.
 
-    base-std and base/base must not diverge: base-std's interface is the contract and the Rust
-    precompile is the implementation of it. Every check here is a base/base bug to fix.
+    Cause: `PolicyType::is_valid()` (`policy/abi.rs`) is narrowed to BLOCKLIST|ALLOWLIST and
+    `validate_create_policy_inputs` (`policy/logic/v2.rs`) consults it before the zero-admin guard, so
+    composite gates get `Panic(0x21)` instead of `IncompatiblePolicyType`, and a zero-admin composite
+    call reports the type problem instead of `ZeroAddress`.
 
-    Known cause of the current failures: `PolicyType::is_valid()` (base/base `policy/abi.rs`) is
-    hand-narrowed to BLOCKLIST|ALLOWLIST, and `validate_create_policy_inputs` (`policy/logic/v2.rs`)
-    consults it BEFORE the zero-admin guard. So the simple creators do reject a composite gate, but
-    with `Panic(0x21)` (EnumConversionError) instead of the documented `IncompatiblePolicyType`, and
-    a zero-admin composite-typed call reports the type problem instead of `ZeroAddress`. Semantically
-    `Panic(0x21)` is the wrong answer regardless: UNION/INTERSECT ARE valid `PolicyType`
-    discriminants, so the enum conversion succeeds — nothing is out of range.
+    Collect-all, mirroring `precompile_invariants.run`: `die()` raises SystemExit, so a plain sequence
+    would abort at the first check and hide the rest. Runs last; all are `eth_call`, none mutate state.
 
-    These are NOT regressions. Before composites, `PolicyType` had only BLOCKLIST|ALLOWLIST, so a
-    composite discriminant was out of enum range and also produced `Panic(0x21)`. The wire behaviour
-    is unchanged; what changed is that the interface now documents `IncompatiblePolicyType` for this
-    input. Once base/base is reconciled these become ordinary regression tests that must stay green.
-
-    COLLECT-ALL, mirroring `precompile_invariants.run`: the harness's `die()` raises SystemExit, so a
-    plain sequence would abort at the first detector and the rest would never execute — failing
-    silently. Each detector is run and reported independently, then the run exits non-zero with the
-    full list.
-
-    Diagnosing the output: `expect_revert` resolves names from the interface ABI's error set and
-    `Panic(uint256)` is not in it, so these read `got=None want=IncompatiblePolicyType`. That is the
-    signature of `Panic(0x21)` — not of a call that failed to revert.
-
-    Runs LAST so the rest of the journey reports first. All are `eth_call` simulations; none mutates
-    chain state.
+    Reading a failure: `Panic(uint256)` is not in the interface's error set, so these report
+    `got=None want=IncompatiblePolicyType` — that is `Panic(0x21)`, not a missing revert.
     """
     findings: list[tuple[str, str]] = []
     for i, (name, fn) in enumerate(CONFORMANCE_DETECTORS, 33):

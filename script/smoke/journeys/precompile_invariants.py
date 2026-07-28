@@ -54,13 +54,10 @@ def _addr_word(address: str) -> bytes:
 
 # ── raw calldata edges (no helper contract; web3 emits bytes Solidity wouldn't) ────────────────────
 def _composite_write_calldata(c: Chain) -> list[tuple[str, bytes]]:
-    """Canonical calldata for the two composite (V2) write selectors.
+    """Canonical calldata for the two composite write selectors.
 
-    Argument values are immaterial: `msg.value != 0` is the FIRST check in policy dispatch, ahead of
-    calldata-gas accounting, hardfork/version resolution and selector matching alike. That ordering is
-    also why these two need no composite-support gating — on a pre-Cobalt node the selectors are
-    unknown, but the value guard still fires before dispatch ever looks at them. Payloads are canonical
-    anyway so a failure can never be blamed on ABI decoding.
+    `msg.value != 0` is the first check in dispatch, ahead of version resolution and selector
+    matching, so arg values are immaterial and no pre-Cobalt gating is needed.
     """
     children = [(ALLOWLIST << 56) | 2, (ALLOWLIST << 56) | 3]
     return [
