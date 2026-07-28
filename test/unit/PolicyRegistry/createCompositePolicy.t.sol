@@ -15,6 +15,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     /// @notice Verifies createCompositePolicy reverts when admin is the zero address
     /// @dev Required-field guard; checks ZeroAddress() error. Takes precedence over every later check.
     function test_createCompositePolicy_revert_zeroAdmin(address caller, uint8 typeIdx) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
         uint64[] memory children = _makeSimpleChildren(2);
@@ -29,6 +30,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     function test_createCompositePolicy_revert_incompatiblePolicyType(address caller, address admin_, uint8 typeIdx)
         public
     {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatablePolicyType(typeIdx); // ALLOWLIST or BLOCKLIST
@@ -49,6 +51,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         uint8 typeIdx,
         uint8 overflow
     ) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -85,6 +88,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         uint8 typeIdx,
         uint64 seed
     ) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -102,6 +106,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     function test_createCompositePolicy_revert_invalidChildPolicy(address caller, address admin_, uint8 typeIdx)
         public
     {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -118,10 +123,43 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         policyRegistry.createCompositePolicy(admin_, pt, children);
     }
 
+    /// @notice Verifies a non-existent child outranks an invalid child regardless of array order
+    /// @dev CX-8. The child set holds an INVALID child (a composite) at index 0 and a NON-EXISTENT
+    ///      well-formed ID at index 1. Validation runs as two full passes — existence across the
+    ///      whole set first, then simple-vs-composite — so the revert is PolicyNotFound(), never
+    ///      InvalidChildPolicy(). A per-element loop would report the index-0 offender instead and
+    ///      yield InvalidChildPolicy; putting the invalid child FIRST is what makes this test
+    ///      discriminate between the two validation shapes.
+    function test_createCompositePolicy_revert_policyNotFoundOutranksInvalidChild(
+        address caller,
+        address admin_,
+        uint8 typeIdx,
+        uint64 seed
+    ) public {
+        _skipIfNoComposite();
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
+
+        // Invalid-but-existing child: a composite may not be composed.
+        uint64 compositeChild = _createComposite(IPolicyRegistry.PolicyType.UNION, 2);
+        // Well-formed but never-created child; must not collide with anything seeded above.
+        uint64 missingChild = _wellFormedUncreatedPolicyId(seed);
+        vm.assume(!policyRegistry.policyExists(missingChild));
+
+        // Invalid child EARLIER than the non-existent one: per-element ordering would surface
+        // InvalidChildPolicy(compositeChild) here.
+        uint64[] memory children = _childIds(compositeChild, missingChild);
+        vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
+        vm.prank(caller);
+        policyRegistry.createCompositePolicy(admin_, pt, children);
+    }
+
     /// @notice Verifies createCompositePolicy reverts when a child is a built-in sentinel
     /// @dev Built-in sentinels (ALWAYS_ALLOW_ID / ALWAYS_BLOCK_ID) are reserved and may not be
     ///      composed; each reverts with InvalidChildPolicy(childPolicyId) carrying the offending ID.
     function test_createCompositePolicy_revert_builtinChild(address caller, address admin_, uint8 typeIdx) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -152,6 +190,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     ///      2^56 times. Mock-only: vm.store cannot write to native precompile addresses.
     ///      Matches the Rust precompile which reverts with Panic(UnderOverflow) = Panic(0x11).
     function test_createCompositePolicy_revert_counterOverflow(address caller, address admin_, uint8 typeIdx) public {
+        _skipIfNoComposite();
         vm.skip(livePrecompiles);
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
@@ -175,6 +214,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     /// @notice Verifies createCompositePolicy assigns a fresh UNION policy id
     /// @dev Paired slot: admin lane matches, exists bit set, ID top byte = UNION.
     function test_createCompositePolicy_success_union(address caller, address admin_) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         uint64[] memory children = _makeSimpleChildren(2);
@@ -203,6 +243,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     /// @notice Verifies createCompositePolicy assigns a fresh INTERSECT policy id
     /// @dev Paired slot: admin lane matches, exists bit set, ID top byte = INTERSECT.
     function test_createCompositePolicy_success_intersect(address caller, address admin_) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         uint64[] memory children = _makeSimpleChildren(2);
@@ -231,6 +272,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     /// @notice Verifies createCompositePolicy accepts a child set exactly at the cap
     /// @dev Boundary check: MAX_CHILD_POLICIES (4) children is inclusive.
     function test_createCompositePolicy_success_atMaxChildren(address caller, address admin_, uint8 typeIdx) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -240,11 +282,67 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         assertTrue(policyRegistry.policyExists(policyId));
     }
 
+    /// @notice Verifies a composite may be created over children of MIXED simple types
+    /// @dev CC-4. The child guard requires each child to be simple (created, non-builtin,
+    ///      non-composite) — it does NOT require the children to share a type. An ALLOWLIST and a
+    ///      BLOCKLIST under the same gate is a supported shape; `_makeSimpleChildren` only mints
+    ///      ALLOWLISTs, so the mixed set is built by hand.
+    function test_createCompositePolicy_success_mixedChildTypes(address caller, address admin_, uint8 typeIdx) public {
+        _skipIfNoComposite();
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
+
+        uint64 allowChild = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        uint64 blockChild = policyRegistry.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        uint64[] memory children = _childIds(allowChild, blockChild);
+
+        vm.prank(caller);
+        uint64 policyId = policyRegistry.createCompositePolicy(admin_, pt, children);
+        assertTrue(policyRegistry.policyExists(policyId), "composite over mixed child types must be created");
+        assertEq(policyRegistry.policyAdmin(policyId), admin_);
+    }
+
+    /// @notice Verifies one child policy can back several composites at once
+    /// @dev CC-7. Children are REFERENCED, not consumed: creating a composite over a child set
+    ///      neither claims those children nor prevents a later composite from reusing them. Two
+    ///      UNIONs are built over the identical child set, then a member is seeded into the shared
+    ///      child AFTER both exist — both composites observe it, proving both hold a live reference
+    ///      to the same child rather than a private copy.
+    function test_createCompositePolicy_success_sharedChildAcrossComposites(address admin_, address account) public {
+        _skipIfNoComposite();
+        vm.assume(admin_ != address(0));
+
+        uint64[] memory children = _makeSimpleChildren(2);
+        uint64 sharedChild = children[0];
+
+        uint64 first = policyRegistry.createCompositePolicy(admin_, IPolicyRegistry.PolicyType.UNION, children);
+        uint64 second = policyRegistry.createCompositePolicy(admin_, IPolicyRegistry.PolicyType.UNION, children);
+
+        assertTrue(policyRegistry.policyExists(first), "first composite must exist");
+        assertTrue(policyRegistry.policyExists(second), "second composite must exist");
+        assertTrue(first != second, "reusing a child set must still mint a distinct composite id");
+
+        // Neither composite authorizes `account` while the shared child is empty.
+        assertFalse(policyRegistry.isAuthorized(first, account));
+        assertFalse(policyRegistry.isAuthorized(second, account));
+
+        // Seeding the SHARED child flips both — the child is referenced by both composites.
+        address[] memory accounts = new address[](1);
+        accounts[0] = account;
+        vm.prank(admin);
+        policyRegistry.updateAllowlist(sharedChild, true, accounts);
+
+        assertTrue(policyRegistry.isAuthorized(first, account), "first composite must see the shared child's member");
+        assertTrue(policyRegistry.isAuthorized(second, account), "second composite must see the shared child's member");
+    }
+
     /// @notice Verifies sequential composite creates each consume a fresh id from the global counter
     /// @dev Each create's ID matches the prediction taken from the live counter immediately before it.
     function test_createCompositePolicy_success_advancesNextPolicyId(address admin_, uint8 typeIdxA, uint8 typeIdxB)
         public
     {
+        _skipIfNoComposite();
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType ptA = _creatableCompositeType(typeIdxA);
         IPolicyRegistry.PolicyType ptB = _creatableCompositeType(typeIdxB);
@@ -266,6 +364,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
     function test_createCompositePolicy_success_emitsPolicyCreated(address caller, address admin_, uint8 typeIdx)
         public
     {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -284,6 +383,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         address admin_,
         uint8 typeIdx
     ) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
@@ -304,6 +404,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         address admin_,
         uint8 typeIdx
     ) public {
+        _skipIfNoComposite();
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
