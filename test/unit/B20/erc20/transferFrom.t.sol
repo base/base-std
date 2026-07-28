@@ -369,15 +369,15 @@ contract B20TransferFromTest is B20Test {
     }
 
     // ============================================================
-    //        REGRESSION: PRIVILEGED BOOTSTRAP ALLOWANCE (BOP-230 / L-04)
+    //        REGRESSION: PRIVILEGED BOOTSTRAP ALLOWANCE
     // ============================================================
     //
     // A privileged transferFrom (factory caller during the bootstrap
     // window) consumes allowance exactly like an ordinary transferFrom:
     // the allowance is both CHECKED and DECREMENTED. The Rust precompile
     // carves no `privileged` exception for allowance accounting — only the
-    // executor-policy check is bypassed for a privileged caller. Before
-    // BOP-230 the Solidity reference skipped the entire allowance block
+    // executor-policy check is bypassed for a privileged caller. Previously
+    // the Solidity reference skipped the entire allowance block
     // during the window (neither checking nor decrementing); these tests
     // pin the corrected, Rust-aligned behavior.
     //
@@ -388,8 +388,8 @@ contract B20TransferFromTest is B20Test {
 
     /// @notice Verifies a privileged transferFrom reverts InsufficientAllowance when allowance is below the spend
     /// @dev Pins that the allowance check is unconditional — a privileged caller is still
-    ///      rejected for insufficient allowance; before BOP-230 the privileged path skipped
-    ///      the check entirely. Regression: BOP-230 / L-04.
+    ///      rejected for insufficient allowance; previously the privileged path skipped
+    ///      the check entirely.
     function test_transferFrom_revert_privileged_insufficientAllowance(
         address from,
         address to,
@@ -425,8 +425,8 @@ contract B20TransferFromTest is B20Test {
 
     /// @notice Verifies a privileged transferFrom decrements allowance by the spent amount
     /// @dev Allowance is consumed during the bootstrap window exactly as outside it, matching
-    ///      the Rust precompile. Before BOP-230 the privileged path left the allowance
-    ///      untouched. Regression: BOP-230 / L-04.
+    ///      the Rust precompile. Previously the privileged path left the allowance
+    ///      untouched.
     function test_transferFrom_success_privileged_decrementsAllowance(
         address from,
         address to,
@@ -472,7 +472,7 @@ contract B20TransferFromTest is B20Test {
     ///      accounting): this isolates the executor-policy bypass. With TRANSFER_EXECUTOR_POLICY set to
     ///      ALWAYS_BLOCK a non-privileged transferFrom reverts PolicyForbids; the privileged (factory
     ///      bootstrap) path must succeed and still burn the allowance. Only the executor-policy check
-    ///      honors the privileged bypass — the allowance is consumed unconditionally (BOP-230 / L-04).
+    ///      honors the privileged bypass — the allowance is consumed unconditionally.
     function test_transferFrom_success_privileged_skipsExecutorPolicy(address from, address to, uint256 amount) public {
         // Mock-only by necessity: like test_transferFrom_revert_privileged_insufficientAllowance,
         // the privileged path needs a pre-existing allowance[from][factory] (from != factory) that

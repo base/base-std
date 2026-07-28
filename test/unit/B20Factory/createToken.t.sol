@@ -667,7 +667,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertEq(actual, address(expectedAddr), "factory must derive address via abi.encode of (sender, salt)");
     }
 
-    /// @notice Verifies an empty `name` round-trips as the empty string (regression test for L-04)
+    /// @notice Verifies an empty `name` round-trips as the empty string
     /// @dev The factory's `_writeString` short-string path uses `mload(add(data, 32))` even when
     ///      `data.length == 0`, which reads adjacent memory rather than zero bytes. With name=""
     ///      and symbol="ETH", the ABI decoder places symbol's length word at name's data+32, so
@@ -687,7 +687,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         assertEq(vm.load(tokenAddr, MockB20Storage.nameSlot()), bytes32(0), "empty name field slot must be all-zero");
     }
 
-    /// @notice Verifies an empty `symbol` round-trips as the empty string (regression test for L-04)
+    /// @notice Verifies an empty `symbol` round-trips as the empty string
     /// @dev Symmetric to the empty-name test. Symbol is the second string written so the OOB read
     ///      reads past it, into whatever the next memory allocation placed there. Whether it's
     ///      garbage from the free-memory pointer or padded zeros depends on calling context; we
@@ -703,7 +703,7 @@ contract B20FactoryCreateB20Test is B20FactoryTest {
         );
     }
 
-    /// @notice Verifies both empty name and empty symbol round-trip correctly (regression test for L-04)
+    /// @notice Verifies both empty name and empty symbol round-trip correctly
     /// @dev Belt-and-suspenders: both strings empty is the most degenerate case and would be
     ///      most likely to surface memory-layout assumptions in the writer.
     function test_createB20_success_bothEmpty_roundTripAsEmpty(address caller, bytes32 salt) public {
