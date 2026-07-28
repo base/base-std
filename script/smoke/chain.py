@@ -560,11 +560,40 @@ class Chain:
         receipt = self.send(self.policy.functions.createPolicyWithAccounts(admin, ptype, accounts), self.deployer)
         return self._policy_id_from(receipt)
 
+    def create_composite_policy(self, admin: ChecksumAddress, ptype: int, child_ids: list[int]) -> int:
+        """Create a UNION/INTERSECT composite over existing simple policies; return the new id.
+
+        Composites are minted through the same `_create` path as simple policies and emit the
+        canonical `PolicyCreated(policyId, creator, policyType)` (verified against
+        `IPolicyRegistry`/`MockPolicyRegistry`), so `_policy_id_from` needs no composite-specific
+        branch. They additionally emit `CompositePolicyUpdated` carrying the full child set —
+        see `composite_children_from` to read it back off the receipt.
+        """
+        receipt = self.send(self.policy.functions.createCompositePolicy(admin, ptype, child_ids), self.deployer)
+        return self._policy_id_from(receipt)
+
     def _policy_id_from(self, receipt: TxReceipt) -> int:
         events = self.policy.events.PolicyCreated().process_receipt(receipt, errors=DISCARD)
         if not events:
             die("PolicyCreated event not found in receipt")
         return int(events[0]["args"]["policyId"])
+
+    def composite_children_from(self, receipt: TxReceipt, policy_id: int | None = None) -> list[int]:
+        """Decode `CompositePolicyUpdated` from a SPECIFIC receipt and return its `childPolicyIds`.
+
+        `assert_events_emitted` is presence-only (topic0 seen somewhere across the run), which
+        cannot distinguish "the child set was replaced with exactly X" from "some composite event
+        fired". This decodes the payload of one tx so a journey can assert the exact array.
+        Pass `policy_id` to select the event for a specific composite when a receipt carries
+        several; otherwise the first (only) one is returned.
+        """
+        events = self.policy.events.CompositePolicyUpdated().process_receipt(receipt, errors=DISCARD)
+        if policy_id is not None:
+            events = [e for e in events if int(e["args"]["policyId"]) == policy_id]
+        if not events:
+            suffix = f" for policyId={policy_id}" if policy_id is not None else ""
+            die(f"CompositePolicyUpdated event not found in receipt{suffix}")
+        return [int(child) for child in events[0]["args"]["childPolicyIds"]]
 
 
 def _norm(v: object) -> object:

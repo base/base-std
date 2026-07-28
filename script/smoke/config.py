@@ -36,9 +36,18 @@ def amt(whole: int, decimals: int) -> int:
 VARIANT_ASSET = 0
 VARIANT_STABLECOIN = 1
 
-# PolicyType enum (IPolicyRegistry).
+# PolicyType enum (IPolicyRegistry). BLOCKLIST/ALLOWLIST are "simple" policies (decide from an
+# address set); UNION/INTERSECT are "composite" gates over 2..4 simple children.
 POLICY_TYPE_BLOCKLIST = 0
 POLICY_TYPE_ALLOWLIST = 1
+POLICY_TYPE_UNION = 2
+POLICY_TYPE_INTERSECT = 3
+
+# Composite child-set bounds. Outside this range the registry reverts
+# ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES). Distinct from the
+# 64-account membership batch limit (BatchSizeTooLarge).
+MIN_CHILD_POLICIES = 2
+MAX_CHILD_POLICIES = 4
 
 # Built-in policy IDs: ALWAYS_ALLOW = 0, ALWAYS_BLOCK = (uint64(ALLOWLIST) << 56) | 1.
 ALWAYS_ALLOW_ID = 0
