@@ -141,8 +141,11 @@ def _edges(c: Chain, tok) -> None:
     c.expect_revert("AnnouncementIdAlreadyUsed", reuse, c.DEPLOYER)
 
 
-def _events(c: Chain) -> None:
+def _events(c: Chain, v2: bool) -> None:
     step(15, "expected events emitted across the flow")
+    # Cobalt (AssetV2) reworked the rebase event: the step-7 updateMultiplier emits ERC-8056's
+    # UIMultiplierUpdated, whereas V1 emits MultiplierUpdated. Assert whichever the fork under test uses.
+    multiplier_event = "UIMultiplierUpdated(uint256,uint256,uint256)" if v2 else "MultiplierUpdated(uint256)"
     c.assert_events_emitted(
         "asset events",
         "B20Created(address,uint8,string,string,uint8,bytes)",
@@ -153,7 +156,7 @@ def _events(c: Chain) -> None:
         "Approval(address,address,uint256)",
         "Announcement(address,string,string,string)",
         "EndAnnouncement(string)",
-        "MultiplierUpdated(uint256)",
+        multiplier_event,
         "ExtraMetadataUpdated(string,string)",
         "NameUpdated(address,string)",
         "SymbolUpdated(address,string)",
@@ -165,7 +168,12 @@ def _events(c: Chain) -> None:
 def run(c: Chain) -> None:
     log("asset-lifecycle: starting")
     tok = _setup(c)
+    # The step-7 rebase (updateMultiplier) emits a fork-specific event: V1's MultiplierUpdated vs
+    # Cobalt/AssetV2's ERC-8056 UIMultiplierUpdated. Probe the ERC-8056 core id once so the flow-level
+    # event check asserts the right one — keeping this journey correct on both Beryl (V1) and Cobalt (V2).
+    v2 = c.supports_erc165(tok, config.SCALED_UI_AMOUNT_ID)
+    log(f"multiplier surface: {'ERC-8056 / AssetV2 (UIMultiplierUpdated)' if v2 else 'V1 (MultiplierUpdated)'}")
     _journey(c, tok)
     _edges(c, tok)
-    _events(c)
+    _events(c, v2)
     log("asset-lifecycle: OK")

@@ -1,7 +1,7 @@
 """CLI: python -m smoke <journey> [<journey> ...] [-k]
 
-Journeys: factory, asset, stablecoin, policy, invariants — or `all` to run every
-journey in sequence. Env (RPC_URL / DEPLOYER_PK / USER2_PK) is sourced by the
+Journeys: factory, asset, multiplier, stablecoin, policy, invariants — or `all` to run
+every journey in sequence. Env (RPC_URL / DEPLOYER_PK / USER2_PK) is sourced by the
 Makefile from .env; running directly requires it exported. A preflight liveness
 probe checks the b20 precompiles are actually active on the target chain (fork
 >= Beryl); if not, the journey is skipped rather than reporting environment state
@@ -20,18 +20,19 @@ import importlib
 import sys
 
 from . import config
-from .chain import Chain, log
+from .chain import Chain, Skip, log
 
 JOURNEYS = {
     "factory": "smoke.journeys.factory",
     "asset": "smoke.journeys.asset_lifecycle",
+    "multiplier": "smoke.journeys.scheduled_multiplier",
     "stablecoin": "smoke.journeys.stablecoin_lifecycle",
     "policy": "smoke.journeys.policy_registry",
     "invariants": "smoke.journeys.precompile_invariants",
 }
 
 # Canonical run order; also the expansion of `all`.
-ORDER = ["factory", "asset", "stablecoin", "policy", "invariants"]
+ORDER = ["factory", "asset", "multiplier", "stablecoin", "policy", "invariants"]
 
 
 def _usage() -> str:
@@ -78,6 +79,12 @@ def main(argv: list[str]) -> None:
         try:
             module.run(chain)
             results.append((name, "pass", ""))
+        except Skip as exc:
+            # A journey opting out because its surface only exists on a later fork (e.g. the ERC-8056
+            # scheduled multiplier at Cobalt). Fork/activation state, not a defect — record and continue
+            # even in fail-fast mode, mirroring the features-not-active preflight skip above.
+            log(f"{name}: not applicable on chain {chain.chain_id} \u2014 {exc}")
+            results.append((name, "skip", str(exc)))
         except SystemExit as exc:
             if not keep_going:
                 raise
