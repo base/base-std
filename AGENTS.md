@@ -94,6 +94,11 @@ Deeper reading: `LIVE_PRECOMPILE_TESTING.md` (cross-validation architecture), `d
 - **Don't reshape mock storage layout unilaterally** — match `MockB20Storage.sol` slot constants
   and cross-validate with `make fork-tests` before merging.
 - **Don't commit `.env` or real private keys** — `.env` is gitignored; use funded testnet keys.
+- **Don't introduce internal-only references** — this repo is public. No links or paths to non-public
+  resources (internal wikis, private design docs, dashboards, chat), no internal ticket or
+  audit-finding IDs, no internal codenames or handles — in code, comments, NatSpec, docs, or commit
+  messages. Restate internal rationale inline in public terms instead of linking it; public EIP/ERC
+  and GitHub URLs and `@author Coinbase` are fine. Remove any you find.
 - **Don't hand-edit ABIs for the smoke tests** — `script/smoke/abis.py` loads them from `out/`;
   run `forge build` instead.
 - **Don't weaken a slot-assertion test to make live-precompile tests pass** — investigate the divergence via
