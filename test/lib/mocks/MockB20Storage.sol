@@ -62,8 +62,7 @@ library MockB20Storage {
     }
 
     /// @notice Seize policy IDs (read by the seize operations `transferFromSeizableWithMemo`,
-    ///         `burnBlocked`, and `burnBlockedWithMemo`). A distinct per-operation group — seize is
-    ///         cold-path and applies to burns too, so it does not belong in the transfer slot.
+    ///         `burnBlocked`, and `burnBlockedWithMemo`).
     /// @dev    Bit layout:
     ///           bits   0.. 63 : seizable (`SEIZABLE_ACCOUNT_POLICY`)
     ///           bits  64..255 : reserved (implicit)
