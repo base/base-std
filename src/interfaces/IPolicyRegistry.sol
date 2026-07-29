@@ -259,4 +259,19 @@ interface IPolicyRegistry {
     ///
     /// @return Pending admin, or `address(0)`.
     function pendingPolicyAdmin(uint64 policyId) external view returns (address);
+
+    /// @notice Returns the child-policy set of the composite `policyId`, in the order it was last
+    ///         written. Returns an empty array for simple policies, built-in sentinels, unknown
+    ///         IDs, and malformed IDs. Never reverts.
+    ///
+    /// @dev An empty return unambiguously means "not a composite": both write paths reject a set
+    ///      outside `[2, 4]` with `ChildPoliciesOutsideOfRange`, so a composite that exists always
+    ///      holds at least 2 children and there is no clear-the-list path.
+    /// @dev The registry preserves the caller's ordering verbatim and neither sorts nor
+    ///      de-duplicates.
+    ///
+    /// @param policyId Policy to query.
+    ///
+    /// @return Child policy IDs, or an empty array.
+    function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory);
 }

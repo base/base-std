@@ -272,6 +272,13 @@ contract MockPolicyRegistry is IPolicyRegistry {
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
     }
 
+    /// @inheritdoc IPolicyRegistry
+    function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory) {
+        if (!_isWellFormed(policyId)) return new uint64[](0);
+        if (!_isComposite(policyId)) return new uint64[](0);
+        return MockPolicyRegistryStorage.layout().children[policyId];
+    }
+
     // ============================================================
     //                       INTERNAL HELPERS
     // ============================================================
