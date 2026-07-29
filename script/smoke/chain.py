@@ -18,6 +18,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
@@ -47,6 +48,46 @@ class Skip(Exception):
 
 def log(msg: str) -> None:
     print(f"[smoke] {msg}", file=sys.stderr)
+
+
+def run_collected(
+    checks: "list[tuple[str, Callable[[], None]]]",
+    *,
+    label: str,
+    informational: "frozenset[str] | set[str]" = frozenset(),
+    step_prefix: str = "",
+) -> None:
+    """Run every check, recording failures instead of aborting at the first.
+
+    `die()` raises SystemExit, so a plain sequence stops at the first failure and the remaining
+    checks never execute. Each `(name, thunk)` is isolated and its failure recorded. Names in
+    `informational` are reported but do not fail the run. Raises SystemExit at the end if any
+    required check failed.
+    """
+    findings: list[tuple[str, str, bool]] = []
+    for i, (name, thunk) in enumerate(checks, 1):
+        step(f"{step_prefix}{i}", name)
+        required = name not in informational
+        try:
+            thunk()
+        except SystemExit as exc:
+            detail = str(exc.code or "").replace("[smoke] ERROR: ", "")
+            print(f"  ✗ {'FINDING' if required else 'info'}: {detail}", file=sys.stderr)
+            findings.append((name, detail, required))
+        except Exception as exc:  # noqa: BLE001 - harness/RPC error, surface as a finding
+            detail = f"{type(exc).__name__}: {exc}"
+            print(f"  ✗ ERROR: {detail}", file=sys.stderr)
+            findings.append((name, detail, required))
+
+    required_fail = [f for f in findings if f[2]]
+    info_only = [f for f in findings if not f[2]]
+    log(f"{label}: {len(checks) - len(findings)}/{len(checks)} checks held")
+    for name, detail, _ in findings:
+        log(f"  ✗ {name} — {detail}")
+    if info_only:
+        log(f"({len(info_only)} accepted divergence(s) reported as informational)")
+    if required_fail:
+        raise SystemExit(f"[smoke] {label}: {len(required_fail)} finding(s) need triage")
 
 
 def step(n: object, desc: str) -> None:
@@ -614,11 +655,26 @@ class Chain:
         receipt = self.send(self.policy.functions.createPolicyWithAccounts(admin, ptype, accounts), self.deployer)
         return self._policy_id_from(receipt)
 
+    def create_composite_policy(self, admin: ChecksumAddress, ptype: int, child_ids: list[int]) -> int:
+        """Create a UNION/INTERSECT composite over existing simple policies; return the new id."""
+        receipt = self.send(self.policy.functions.createCompositePolicy(admin, ptype, child_ids), self.deployer)
+        return self._policy_id_from(receipt)
+
     def _policy_id_from(self, receipt: TxReceipt) -> int:
         events = self.policy.events.PolicyCreated().process_receipt(receipt, errors=DISCARD)
         if not events:
             die("PolicyCreated event not found in receipt")
         return int(events[0]["args"]["policyId"])
+
+    def composite_children_from(self, receipt: TxReceipt, policy_id: int | None = None) -> list[int]:
+        """Decode `CompositePolicyUpdated` from a SPECIFIC receipt and return its `childPolicyIds`."""
+        events = self.policy.events.CompositePolicyUpdated().process_receipt(receipt, errors=DISCARD)
+        if policy_id is not None:
+            events = [e for e in events if int(e["args"]["policyId"]) == policy_id]
+        if not events:
+            suffix = f" for policyId={policy_id}" if policy_id is not None else ""
+            die(f"CompositePolicyUpdated event not found in receipt{suffix}")
+        return [int(child) for child in events[0]["args"]["childPolicyIds"]]
 
 
 def _norm(v: object) -> object:
