@@ -81,6 +81,22 @@ contract B20AssetTest is B20Test {
         asset().updateMultiplier(newMultiplier);
     }
 
+    /// @notice Schedules a pending multiplier via the `operator` actor,
+    ///         lazily granting `OPERATOR_ROLE` on first call.
+    function _setUIMultiplier(uint256 newMultiplier, uint256 effectiveAt) internal {
+        _grantOperator();
+        vm.prank(operator);
+        asset().setUIMultiplier(newMultiplier, effectiveAt);
+    }
+
+    /// @notice Cancels the live pending multiplier via the `operator`
+    ///         actor, lazily granting `OPERATOR_ROLE` on first call.
+    function _cancelScheduledMultiplier() internal {
+        _grantOperator();
+        vm.prank(operator);
+        asset().cancelScheduledMultiplier();
+    }
+
     // ============================================================
     //                      ANNOUNCEMENT HELPERS
     // ============================================================

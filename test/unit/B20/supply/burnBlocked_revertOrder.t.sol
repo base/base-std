@@ -10,14 +10,14 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 /// @title Differential check-order tests for `burnBlocked`.
 ///
 /// @notice **Canonical order (Solidity reference):**
-///         1. PAUSE (`whenNotPaused(BURN)` modifier) → `ContractPaused`
+///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(BURN_BLOCKED_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. BLOCKED (`isAuthorized(senderPolicyId, from) == true` reverts) → `AccountNotBlocked`
+///         3. BLOCKED (`isAuthorized(seizablePolicyId, from) == true` reverts) → `AccountNotBlocked`
 ///         4. BALANCE (`fromBalance < amount` in `_burnRaw`) → `InsufficientBalance`
 ///
 ///         Note on BLOCKED semantics: `burnBlocked` is a clawback function — it
 ///         only succeeds when `from` is currently NOT authorized by the
-///         transfer-sender policy. A test triggers the BLOCKED-precondition
+///         seizable policy. A test triggers the BLOCKED-precondition
 ///         violation by setting the policy to `ALWAYS_ALLOW` so every account is
 ///         authorized, which makes the function revert `AccountNotBlocked`.
 contract B20BurnBlockedRevertOrderTest is B20Test {
@@ -29,11 +29,11 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidCaller(caller);
         _assumeValidActor(from);
         vm.assume(caller != admin);
-        _pause(IB20.PausableFeature.BURN);
-        // No BURN_BLOCKED_ROLE granted AND BURN is paused — pause fires first.
+        _pause(IB20.PausableFeature.SEIZE);
+        // No BURN_BLOCKED_ROLE granted AND SEIZE is paused — pause fires first.
 
         vm.prank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
         token.burnBlocked(from, amount);
     }
 
@@ -44,7 +44,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidCaller(caller);
         _assumeValidActor(from);
         vm.assume(caller != admin);
-        // TRANSFER_SENDER_POLICY left at ALWAYS_ALLOW default → `from` is "not blocked".
+        // SEIZABLE_ACCOUNT_POLICY left at ALWAYS_ALLOW default → `from` is "not blocked".
         // No BURN_BLOCKED_ROLE granted.
 
         vm.prank(caller);
@@ -79,11 +79,11 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
     function test_burnBlocked_revertOrder_pause_beats_blocked(address from, uint256 amount) public {
         _assumeValidActor(from);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        _pause(IB20.PausableFeature.BURN);
-        // TRANSFER_SENDER_POLICY left at ALWAYS_ALLOW → `from` is "not blocked".
+        _pause(IB20.PausableFeature.SEIZE);
+        // SEIZABLE_ACCOUNT_POLICY left at ALWAYS_ALLOW → `from` is "not blocked".
 
         vm.prank(burnBlocker);
-        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
         token.burnBlocked(from, amount);
     }
 
@@ -92,12 +92,12 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidActor(from);
         amount = bound(amount, 1, type(uint128).max);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        _pause(IB20.PausableFeature.BURN);
-        // Need `from` blocked so BLOCKED would pass; set transfer-sender policy to ALWAYS_BLOCK.
-        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _pause(IB20.PausableFeature.SEIZE);
+        // Need `from` blocked so BLOCKED would pass; set seizable policy to ALWAYS_BLOCK.
+        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(burnBlocker);
-        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.BURN));
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
         token.burnBlocked(from, amount);
     }
 
@@ -109,7 +109,7 @@ contract B20BurnBlockedRevertOrderTest is B20Test {
         _assumeValidActor(from);
         amount = bound(amount, 1, type(uint128).max);
         _grantRole(B20Constants.BURN_BLOCKED_ROLE, burnBlocker);
-        // Default TRANSFER_SENDER_POLICY is ALWAYS_ALLOW → `from` is NOT blocked.
+        // Default SEIZABLE_ACCOUNT_POLICY is ALWAYS_ALLOW → `from` is NOT blocked.
         // `from` has zero balance → balance check WOULD fail if BLOCKED didn't fire first.
 
         vm.prank(burnBlocker);

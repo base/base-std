@@ -18,6 +18,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
@@ -36,8 +37,57 @@ from .errors import ERROR_BY_SELECTOR
 from .provider import ConsistentHTTPProvider
 
 
+class Skip(Exception):
+    """Raised by a journey to signal it does not apply to this chain (recorded as a skip, not a fail).
+
+    Mirrors the runner's activation-gate skip: a journey whose surface only exists on a later fork
+    (e.g. the ERC-8056 scheduled multiplier at Cobalt) raises this on a pre-fork chain so the run
+    reports chain/fork state rather than a contract defect.
+    """
+
+
 def log(msg: str) -> None:
     print(f"[smoke] {msg}", file=sys.stderr)
+
+
+def run_collected(
+    checks: "list[tuple[str, Callable[[], None]]]",
+    *,
+    label: str,
+    informational: "frozenset[str] | set[str]" = frozenset(),
+    step_prefix: str = "",
+) -> None:
+    """Run every check, recording failures instead of aborting at the first.
+
+    `die()` raises SystemExit, so a plain sequence stops at the first failure and the remaining
+    checks never execute. Each `(name, thunk)` is isolated and its failure recorded. Names in
+    `informational` are reported but do not fail the run. Raises SystemExit at the end if any
+    required check failed.
+    """
+    findings: list[tuple[str, str, bool]] = []
+    for i, (name, thunk) in enumerate(checks, 1):
+        step(f"{step_prefix}{i}", name)
+        required = name not in informational
+        try:
+            thunk()
+        except SystemExit as exc:
+            detail = str(exc.code or "").replace("[smoke] ERROR: ", "")
+            print(f"  ✗ {'FINDING' if required else 'info'}: {detail}", file=sys.stderr)
+            findings.append((name, detail, required))
+        except Exception as exc:  # noqa: BLE001 - harness/RPC error, surface as a finding
+            detail = f"{type(exc).__name__}: {exc}"
+            print(f"  ✗ ERROR: {detail}", file=sys.stderr)
+            findings.append((name, detail, required))
+
+    required_fail = [f for f in findings if f[2]]
+    info_only = [f for f in findings if not f[2]]
+    log(f"{label}: {len(checks) - len(findings)}/{len(checks)} checks held")
+    for name, detail, _ in findings:
+        log(f"  ✗ {name} — {detail}")
+    if info_only:
+        log(f"({len(info_only)} accepted divergence(s) reported as informational)")
+    if required_fail:
+        raise SystemExit(f"[smoke] {label}: {len(required_fail)} finding(s) need triage")
 
 
 def step(n: object, desc: str) -> None:
@@ -50,6 +100,11 @@ def ok(desc: str) -> None:
 
 def die(msg: str) -> None:
     raise SystemExit(f"[smoke] ERROR: {msg}")
+
+
+def skip(msg: str) -> None:
+    """Abort the current journey as not-applicable to this chain (recorded as skip)."""
+    raise Skip(msg)
 
 
 class Chain:
@@ -347,6 +402,46 @@ class Chain:
             die(f"log order [{desc}]: expected {sig_a} immediately before {sig_b}")
         ok(desc)
 
+    @staticmethod
+    def _emitted(receipt: TxReceipt, sig: str) -> bool:
+        """Whether an event with signature `sig` appears in this receipt's logs."""
+        want = topic0(sig)
+        return any(lg["topics"] and HexBytes(lg["topics"][0]) == want for lg in receipt["logs"])
+
+    def assert_log(self, receipt: TxReceipt, sig: str, desc: str) -> None:
+        """Assert this receipt emitted an event with signature `sig`."""
+        if not self._emitted(receipt, sig):
+            die(f"expected event not emitted [{desc}]: {sig}")
+        ok(desc)
+
+    def assert_no_log(self, receipt: TxReceipt, sig: str, desc: str) -> None:
+        """Assert this receipt did NOT emit an event with signature `sig` (e.g. the superseded V1 event)."""
+        if self._emitted(receipt, sig):
+            die(f"unexpected event emitted [{desc}]: {sig}")
+        ok(desc)
+
+    def event_args(self, receipt: TxReceipt, contract: Contract, event_name: str) -> dict:
+        """Decode a single occurrence of `event_name` from THIS receipt and return its args.
+
+        `assert_events_emitted` and `assert_log` are presence-only — an event with the right name but a
+        WRONG payload passes them. Decode the specific receipt to assert on the emitted values.
+        """
+        decoded = getattr(contract.events, event_name)().process_receipt(receipt, errors=DISCARD)
+        if not decoded:
+            die(f"{event_name} not found in receipt")
+        return dict(decoded[0]["args"])
+
+    def supports_erc165(self, token: Contract, interface_id: bytes) -> bool:
+        """ERC-165 `supportsInterface(interface_id)` on `token`, treating an absent/reverting selector as False.
+
+        A pre-ERC-165 fork's Asset has no `supportsInterface` selector, so the call reverts; that (and a
+        clean `false`) both mean "interface not advertised", which the caller uses to gate fork-specific flow.
+        """
+        try:
+            return bool(token.functions.supportsInterface(interface_id).call())
+        except Exception:  # noqa: BLE001 - a reverting/absent selector means "not supported"
+            return False
+
     def assert_events_emitted(self, desc: str, *signatures: str) -> None:
         """Flow-level check: each signature's topic0 appears across recorded txs."""
         if not self._receipts:
@@ -560,11 +655,26 @@ class Chain:
         receipt = self.send(self.policy.functions.createPolicyWithAccounts(admin, ptype, accounts), self.deployer)
         return self._policy_id_from(receipt)
 
+    def create_composite_policy(self, admin: ChecksumAddress, ptype: int, child_ids: list[int]) -> int:
+        """Create a UNION/INTERSECT composite over existing simple policies; return the new id."""
+        receipt = self.send(self.policy.functions.createCompositePolicy(admin, ptype, child_ids), self.deployer)
+        return self._policy_id_from(receipt)
+
     def _policy_id_from(self, receipt: TxReceipt) -> int:
         events = self.policy.events.PolicyCreated().process_receipt(receipt, errors=DISCARD)
         if not events:
             die("PolicyCreated event not found in receipt")
         return int(events[0]["args"]["policyId"])
+
+    def composite_children_from(self, receipt: TxReceipt, policy_id: int | None = None) -> list[int]:
+        """Decode `CompositePolicyUpdated` from a SPECIFIC receipt and return its `childPolicyIds`."""
+        events = self.policy.events.CompositePolicyUpdated().process_receipt(receipt, errors=DISCARD)
+        if policy_id is not None:
+            events = [e for e in events if int(e["args"]["policyId"]) == policy_id]
+        if not events:
+            suffix = f" for policyId={policy_id}" if policy_id is not None else ""
+            die(f"CompositePolicyUpdated event not found in receipt{suffix}")
+        return [int(child) for child in events[0]["args"]["childPolicyIds"]]
 
 
 def _norm(v: object) -> object:

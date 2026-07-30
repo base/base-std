@@ -19,20 +19,21 @@ fail the run.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
+from functools import partial
 
 from hexbytes import HexBytes
 from web3 import Web3
 
 from .. import config
 from ..abis import forcefeeder_artifact, probe_artifact
-from ..chain import Chain, log, ok, step
+from ..chain import Chain, log, ok, run_collected, step
 from ..codec import AssetCreateParams, init_call
 
 FACTORY = config.B20_FACTORY
 POLICY = config.POLICY_REGISTRY
 ALLOWLIST = config.POLICY_TYPE_ALLOWLIST
+UNION = config.POLICY_TYPE_UNION
 
 # Check names that are known/accepted divergences: reported, but do not fail the run.
 INFORMATIONAL: set[str] = set()
@@ -52,9 +53,28 @@ def _addr_word(address: str) -> bytes:
 
 
 # ── raw calldata edges (no helper contract; web3 emits bytes Solidity wouldn't) ────────────────────
+def _composite_write_calldata(c: Chain) -> list[tuple[str, bytes]]:
+    """Canonical calldata for the two composite write selectors.
+
+    `msg.value != 0` is the first check in dispatch, ahead of version resolution and selector
+    matching, so arg values are immaterial and no pre-Cobalt gating is needed.
+    """
+    children = [(ALLOWLIST << 56) | 2, (ALLOWLIST << 56) | 3]
+    return [
+        ("createCompositePolicy", _clean(c.policy, "createCompositePolicy", c.DEPLOYER, UNION, children)),
+        ("updateComposite", _clean(c.policy, "updateComposite", (UNION << 56) | 4, children)),
+    ]
+
+
 def _payable_rejected(c: Chain, _probe) -> None:
     create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
     c.expect_raw_revert("value on createPolicy", POLICY, create_data, value=1)
+    # Every policy-registry selector is nonpayable (IPolicyRegistry: the check runs at the top of
+    # dispatch), but only createPolicy was ever covered. `error_name` is pinned for these two because
+    # `expect_raw_revert` treats ANY non-ContractLogicError exception as a pass — without it, a
+    # node-level rejection (insufficient funds, bad gas estimate) would masquerade as NonPayable.
+    for name, data in _composite_write_calldata(c):
+        c.expect_raw_revert(f"value on {name}", POLICY, data, value=1, error_name="NonPayable")
 
 
 def _unknown_selector_reverts(c: Chain, _probe) -> None:
@@ -93,11 +113,17 @@ def _staticcall_read_only(c: Chain, probe) -> None:
 
 
 def _value_forwarding_rejected(c: Chain, probe) -> None:
-    create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
     overrides = {"from": c.DEPLOYER, "value": 1}
+    create_data = _clean(c.policy, "createPolicy", c.DEPLOYER, ALLOWLIST)
     fn = probe.functions.probeCall(POLICY, create_data)
     res = fn.call(overrides)
     c.assert_eq(res[0], False, "createPolicy rejects forwarded value", repro_fn=fn, repro_overrides=overrides)
+    # Same guard, reached from a real contract frame, for the two composite write selectors.
+    for name, data in _composite_write_calldata(c):
+        fn = probe.functions.probeCall(POLICY, data)
+        c.assert_eq(
+            fn.call(overrides)[0], False, f"{name} rejects forwarded value", repro_fn=fn, repro_overrides=overrides
+        )
 
 
 def _returndata_fidelity(c: Chain, probe) -> None:
@@ -170,7 +196,7 @@ def _create_gas_independent_of_prefunded_balance(c: Chain, _probe) -> None:
 
 # Ordered audit checklist: (name, fn). `name` doubles as the INFORMATIONAL downgrade key.
 CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
-    ("payable rejected (value on non-payable createPolicy)", _payable_rejected),
+    ("payable rejected (value on non-payable createPolicy + composite writes)", _payable_rejected),
     ("unknown selector reverts (no silent fallthrough)", _unknown_selector_reverts),
     ("empty calldata reverts (no implicit receive/fallback)", _empty_calldata_reverts),
     ("truncated args revert (strict ABI decode)", _truncated_args_revert),
@@ -185,10 +211,6 @@ CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
 ]
 
 
-def _detail(exc: SystemExit) -> str:
-    return str(exc.code or "").replace("[smoke] ERROR: ", "")
-
-
 def _setup(c: Chain):
     step("setup", "deploy PrecompileProbe helper")
     abi, bytecode = probe_artifact()
@@ -200,30 +222,9 @@ def _setup(c: Chain):
 def run(c: Chain) -> None:
     log("precompile-invariants: starting (collect-all; findings reported at the end)")
     probe = _setup(c)
-
-    findings: list[tuple[str, str, bool]] = []  # (name, detail, required)
-    for i, (name, fn) in enumerate(CHECKS, 1):
-        step(i, name)
-        required = name not in INFORMATIONAL
-        try:
-            fn(c, probe)
-        except SystemExit as exc:  # assertion/expectation failed inside a check
-            detail = _detail(exc)
-            tag = "FINDING" if required else "info"
-            print(f"  \u2717 {tag}: {detail}", file=sys.stderr)
-            findings.append((name, detail, required))
-        except Exception as exc:  # noqa: BLE001 - harness/RPC error, surface as a finding
-            detail = f"{type(exc).__name__}: {exc}"
-            print(f"  \u2717 ERROR: {detail}", file=sys.stderr)
-            findings.append((name, detail, required))
-
-    required_fail = [f for f in findings if f[2]]
-    info_only = [f for f in findings if not f[2]]
-    log(f"precompile-invariants: {len(CHECKS) - len(findings)}/{len(CHECKS)} invariants held")
-    for name, detail, _ in findings:
-        log(f"  \u2717 {name} \u2014 {detail}")
-    if info_only:
-        log(f"({len(info_only)} accepted divergence(s) reported as informational)")
-    if required_fail:
-        raise SystemExit(f"[smoke] precompile-invariants: {len(required_fail)} finding(s) need triage")
+    run_collected(
+        [(name, partial(fn, c, probe)) for name, fn in CHECKS],
+        label="precompile-invariants",
+        informational=INFORMATIONAL,
+    )
     log("precompile-invariants: OK")

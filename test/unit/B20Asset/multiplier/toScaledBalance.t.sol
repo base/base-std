@@ -30,7 +30,7 @@ contract B20AssetToScaledBalanceTest is B20AssetTest {
     /// @notice Verifies toScaledBalance of zero rawBalance is zero regardless of the multiplier
     /// @dev Degenerate input edge: any multiplier multiplied into zero is zero.
     function test_toScaledBalance_success_zeroRawBalance(uint256 newMultiplier) public {
-        newMultiplier = bound(newMultiplier, 1, type(uint256).max);
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _updateMultiplier(newMultiplier);
         assertEq(asset().toScaledBalance(0), 0, "zero rawBalance must produce zero scaled balance");
     }
@@ -56,7 +56,10 @@ contract B20AssetToScaledBalanceTest is B20AssetTest {
     ///      to avoid the overflow, leaving the boundary itself untested. A generic expectRevert keeps
     ///      the assertion robust across the mock (Panic) and the live precompile's overflow error.
     function test_toScaledBalance_revert_arithmeticOverflow(uint256 rawBalance, uint256 newMultiplier) public {
-        newMultiplier = bound(newMultiplier, 2, type(uint256).max);
+        // The multiplier is capped at `type(uint128).max` by the setter; overflow is still
+        // reachable because `rawBalance` (an arbitrary conversion input, not bounded by supply)
+        // can be pushed high enough that `rawBalance * multiplier` exceeds `type(uint256).max`.
+        newMultiplier = bound(newMultiplier, 2, type(uint128).max);
         // Force rawBalance * multiplier strictly above type(uint256).max.
         rawBalance = bound(rawBalance, type(uint256).max / newMultiplier + 1, type(uint256).max);
         _updateMultiplier(newMultiplier);

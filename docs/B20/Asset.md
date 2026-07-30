@@ -4,11 +4,42 @@ The Asset variant of B20 — designed for assets of all kinds. Everything in [B2
 
 ## Multiplier
 
-Each account's stored balance is the **raw** balance. A uniform on-chain **multiplier** scales that raw balance into a derived **scaled** view that consumers display. The multiplier applies to all accounts equally, which lets issuers rebase every balance at once — without rewriting individual balances — the shape is similar to wstETH wrapping stETH, where the stored unit is the unwrapped quantity and the derived unit is the rebased view.
+Each account's stored balance is the **raw** balance. A uniform on-chain **multiplier** scales that raw balance into a derived **scaled** view that consumers display. The multiplier applies to all accounts equally, which lets issuers rebase every balance at once — without rewriting individual balances — the shape is similar to wstETH wrapping stETH, where the stored unit is the unwrapped quantity and the derived unit is the rebased view. Because it only rescales the *displayed* balance, the multiplier is purely cosmetic: `balanceOf`, `transfer`, and `totalSupply` stay raw, so raw-denominated venues (AMMs, etc.) are mechanically unaffected by an update.
 
 Read the current multiplier with `multiplier()`; the value is in WAD precision (`1e18`, exposed as `WAD_PRECISION()`). `toScaledBalance(rawBalance)` converts a raw amount to its scaled view, `toRawBalance(scaledBalance)` is the reverse converter (integer-floored, so the round-trip can lose up to one ULP), and `scaledBalanceOf(account)` is a convenience over ERC-20's `balanceOf` that returns the same account's raw balance in its scaled form.
 
-`updateMultiplier(newMultiplier)` updates the multiplier and should be wrapped in an announcement (see [Announcements](#announcements)).
+Both multiplier setters validate `newMultiplier` is non-zero and at most `type(uint128).max` (reverting `InvalidMultiplier` otherwise). The `uint128` ceiling is the overflow guard: with supply capped at `type(uint128).max`, a `uint128` multiplier keeps `balance * multiplier` inside `uint256`, so balance-derived reads never overflow.
+
+### Scheduling multiplier updates
+
+The standard path for a corporate action (a stock split or reinvested stock dividend) is to **schedule** the change ahead of time with `setUIMultiplier(newMultiplier, effectiveAt)`, wrapped in an [announcement](#announcements). Evaluation is lazy, so `multiplier()` / `uiMultiplier()` flip on their own once `block.timestamp` reaches `effectiveAt`.
+
+Only **one pending update is live at a time**. Attempting to schedule over an existing pending update reverts `ScheduleOverlap`. To reorder overlapping corporate actions, explicitly cancel and re-schedule in a single announcement bracket using `announce([cancelScheduledMultiplier, setUIMultiplier(...)])`. `cancelScheduledMultiplier()` clears the live pending and restores the no-pending state (reverting `NoScheduledMultiplier` when nothing live is scheduled).
+
+`updateMultiplier(newMultiplier)` is retained as an **instant failsafe / emergency override**: it sets the multiplier immediately, stamping `effectiveAt = block.timestamp` and clearing any pending update.
+
+The pending schedule is observable through the ERC-8056 surface: `newUIMultiplier()` returns the scheduled target while it is live (otherwise it mirrors `uiMultiplier()`).
+
+### ERC-8056 conformance
+
+The Asset variant conforms to [ERC-8056](https://eips.ethereum.org/EIPS/eip-8056) ("Scaled UI Amount"):
+
+- `uiMultiplier()` is the standard alias of `multiplier()` (core interface `0xa60bf13d`).
+- `newUIMultiplier()` / `effectiveAt()` expose the pending schedule (required extension `0x4bd27648`).
+- `balanceOfUI(account)` aliases `scaledBalanceOf`, and `totalSupplyUI()` returns `totalSupply() * uiMultiplier() / 1e18` (optional Balances extension `0xd890fd71`).
+- `supportsInterface(bytes4)` (ERC-165, `0x01ffc9a7`) returns `true` for those three IDs and for ERC-165 itself. The optional Conversion extension (`0x57854fc3`) is **not** claimed — the native `toScaledBalance` / `toRawBalance` names are kept unaliased for backwards compatibility.
+
+**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateMultiplier`. `MultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by `updateMultiplier` when it clears a live pending. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
+
+### Precision & decimals
+
+All multiplier-derived reads (`toScaledBalance` / `scaledBalanceOf` / `totalSupplyUI` divide by `WAD_PRECISION`; `toRawBalance` divides by the multiplier) round **down**, and raw balances are never rewritten. This guarantees that rounding loss is rare and confined to the scaled view (and to `toRawBalance` conversions). In the rare case where rounding loss occurs, the loss cannot exceed 1 wei of the *scaled* amount only. 
+
+**Thus, prefer 18 decimals for equities**: at 6 decimals, a deep reverse split on a very valuable stock could make 1-wei floor dust economically visible; at 18 it stays noise
+
+### Pause & market-halt policy
+
+Because a multiplier update is value-neutral to raw venues, forward splits and reinvested dividends need no halt on-chain. A reverse split, however, warrants halting via `PausableFeature.TRANSFER` across the flip window so trading windows are paused and re-enabled in orderly fashion. The instant `updateMultiplier` bypasses the scheduling window entirely, so it should likewise be pause-bracketed.
 
 ## Announcements
 
@@ -25,14 +56,14 @@ Indexers should treat every `Announcement` log as the start of exactly one brack
 Wrap a set of operations in a single announcement by calling `announce(internalCalls, id, description, uri)`. The function (gated by `OPERATOR_ROLE`) emits `Announcement`, dispatches each internal call via self-`delegatecall` (which preserves `msg.sender` so the inner role checks see the operator), then emits `EndAnnouncement`. Inner reverts are wrapped in `InternalCallFailed` rather than bubbled — replay the call directly to debug. Nested calls to `announce` revert with `AnnouncementInProgress`; calls shorter than 4 bytes revert with `InternalCallMalformed`.
 
 ```solidity
-// Disclose and apply a community-ratified rebase atomically.
+// Disclose and schedule a 2:1 forward split, effective at the ex-date.
 bytes[] memory internalCalls = new bytes[](1);
-internalCalls[0] = abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
+internalCalls[0] = abi.encodeCall(IB20Asset.setUIMultiplier, (2e18, exDateTimestamp));
 
 IB20Asset(token).announce({
     internalCalls: internalCalls,
-    id: "2026-Q3-rebase",
-    description: "Community governance proposal #42: ratified rebase",
+    id: "2026-Q3-split",
+    description: "2:1 forward split, effective at ex-date",
     uri: "https://disclosures.example.com/..."
 });
 ```
@@ -51,7 +82,7 @@ Each Asset token can carry an arbitrary set of named metadata entries — a gene
 
 ### `OPERATOR_ROLE`
 
-Gates the `updateMultiplier` and the `announce`. These are metadata-like operations — they post disclosures and rescale the displayed balance rather than moving raw balances directly — but a compromised operator carries materially higher severity than ordinary metadata edits, so the capability is elevated into its own independent role instead of being folded into `METADATA_ROLE`. Held separately from `DEFAULT_ADMIN_ROLE` so operators don't need full admin authority.
+Gates `announce`, `setUIMultiplier`, `cancelScheduledMultiplier`, and `updateMultiplier`. These are metadata-like operations — they post disclosures and rescale the displayed balance rather than moving raw balances directly — but a compromised operator carries materially higher severity than ordinary metadata edits, so the capability is elevated into its own independent role instead of being folded into `METADATA_ROLE`. Held separately from `DEFAULT_ADMIN_ROLE` so operators don't need full admin authority.
 
 ## Configurable Decimals
 

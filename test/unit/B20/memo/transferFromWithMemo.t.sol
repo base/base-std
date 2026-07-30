@@ -182,7 +182,7 @@ contract B20TransferFromWithMemoTest is B20Test {
     }
 
     // ============================================================
-    //        REGRESSION: PRIVILEGED BOOTSTRAP ALLOWANCE (BOP-230 / L-04)
+    //        REGRESSION: PRIVILEGED BOOTSTRAP ALLOWANCE
     // ============================================================
     //
     // Mirrors the transferFrom regression: a privileged transferFromWithMemo
@@ -193,8 +193,8 @@ contract B20TransferFromWithMemoTest is B20Test {
 
     /// @notice Verifies a privileged transferFromWithMemo reverts InsufficientAllowance when allowance is below the spend
     /// @dev Pins that the allowance check is unconditional — a privileged caller is still
-    ///      rejected for insufficient allowance; before BOP-230 the privileged path skipped
-    ///      the check entirely. Regression: BOP-230 / L-04.
+    ///      rejected for insufficient allowance; previously the privileged path skipped
+    ///      the check entirely.
     function test_transferFromWithMemo_revert_privileged_insufficientAllowance(
         address from,
         address to,
@@ -231,8 +231,8 @@ contract B20TransferFromWithMemoTest is B20Test {
 
     /// @notice Verifies a privileged transferFromWithMemo decrements allowance by the spent amount
     /// @dev Allowance is consumed during the bootstrap window exactly as outside it, matching
-    ///      the Rust precompile. Before BOP-230 the privileged path left the allowance
-    ///      untouched. Regression: BOP-230 / L-04.
+    ///      the Rust precompile. Previously the privileged path left the allowance
+    ///      untouched.
     function test_transferFromWithMemo_success_privileged_decrementsAllowance(
         address from,
         address to,

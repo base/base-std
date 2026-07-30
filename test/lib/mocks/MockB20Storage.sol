@@ -49,8 +49,7 @@ library MockB20Storage {
     // not declared as a field is simply uninitialized (zero) and the
     // struct cannot accidentally write to it.
 
-    /// @notice Transfer-side policy IDs (read by `_transfer`,
-    ///         `transferFrom*`, and the seize check in `burnBlocked`).
+    /// @notice Transfer-side policy IDs (read by `_transfer` and `transferFrom*`).
     /// @dev    Bit layout (Solidity LSB-first):
     ///           bits   0.. 63 : sender
     ///           bits  64..127 : receiver
@@ -60,6 +59,15 @@ library MockB20Storage {
         uint64 sender;
         uint64 receiver;
         uint64 executor;
+    }
+
+    /// @notice Seize policy IDs (read by the seize operations `transferFromSeizableWithMemo`,
+    ///         `burnBlocked`, and `burnBlockedWithMemo`).
+    /// @dev    Bit layout:
+    ///           bits   0.. 63 : seizable (`SEIZABLE_ACCOUNT_POLICY`)
+    ///           bits  64..255 : reserved (implicit)
+    struct SeizePolicyIds {
+        uint64 seizable;
     }
 
     /// @notice Mint-side policy IDs (read by `_mint`). Only the
@@ -134,15 +142,19 @@ library MockB20Storage {
         uint256 supplyCap;
         // ---------- Permit (EIP-2612) ----------
         mapping(address owner => uint256 nonce) nonces;
-        // ---------- Bootstrap flag ----------
+        // ---------- Seize policies (PACKED, per-operation) ----------
+        // Placed before the mock-only `initialized` flag so the Rust precompile
+        // — which stores no `initialized` field — lands `seizable_policy_id` at
+        // this same offset with no filler slot. Distinct per-operation group
+        // (seize is cold-path and spans transfer + burn), mirroring how mint
+        // policies are grouped separately from transfer policies.
+        SeizePolicyIds seizePolicyIds;
+        // ---------- Bootstrap flag (mock-only) ----------
         // False from etch until the factory sets it true at the end of
-        // createToken. Pinned to its own slot at the END of the layout
-        // because the EVM impl uses this flag as the demarcation between
-        // the privileged bootstrap window and post-init state, while the
-        // Rust impl distinguishes those phases through a different
-        // mechanism and does not need a storage slot for the flag at all.
-        // Keeping it last lets the Rust impl's layout omit it without
-        // disturbing the offset of any other field.
+        // createToken; the mock uses it to demarcate the privileged bootstrap
+        // window. The Rust precompile stores no such flag (it checks
+        // factory-init via deployed marker bytecode), so it omits this trailing
+        // slot entirely — which is why `seizePolicyIds` is placed before it.
         bool initialized;
     }
 
@@ -181,9 +193,11 @@ library MockB20Storage {
     uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;
-    // `initialized` sits alone in its own slot at the END of the layout;
-    // see the field-level natspec above for why.
-    uint256 internal constant INITIALIZED_OFFSET = 14;
+    // Placed before the mock-only `initialized` flag so the Rust precompile lands its seizable
+    // slot at this offset with no filler; see the field-level natspec above.
+    uint256 internal constant SEIZE_POLICY_IDS_OFFSET = 14;
+    // Mock-only bootstrap flag, kept last so the Rust precompile omits it.
+    uint256 internal constant INITIALIZED_OFFSET = 15;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     /// @dev `STORAGE_LOCATION + offset`. The struct never crosses the
@@ -228,6 +242,7 @@ library MockB20Storage {
     function supplyCapSlot() internal pure returns (bytes32) { return slotOf(SUPPLY_CAP_OFFSET); }
     function noncesBaseSlot() internal pure returns (bytes32) { return slotOf(NONCES_OFFSET); }
     function initializedSlot() internal pure returns (bytes32) { return slotOf(INITIALIZED_OFFSET); }
+    function seizePolicyIdsSlot() internal pure returns (bytes32) { return slotOf(SEIZE_POLICY_IDS_OFFSET); }
 
         // forgefmt: disable-end
 
@@ -309,6 +324,17 @@ library MockB20Storage {
         return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128);
     }
 
+    /// @notice Extracts the SEIZABLE_ACCOUNT policy id (lane 0) from the seize packed slot.
+    function seizablePolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed);
+    }
+
+    /// @notice Composes the seize packed slot from its single defined lane.
+    /// @dev Lanes 1..3 are reserved and pinned to zero.
+    function packSeizePolicyIds(uint64 seizableId) internal pure returns (uint256) {
+        return uint256(seizableId);
+    }
+
     /// @notice Extracts the MINT_RECEIVER policy id (lane 0) from the packed slot.
     function mintReceiverPolicyId(uint256 packed) internal pure returns (uint64) {
         return uint64(packed);
@@ -358,6 +384,12 @@ library MockB20Storage {
 ///           directly on the raw `key` string (e.g. `"category"`);
 ///           empty value means unset/removed.
 library MockB20AssetStorage {
+    /// @notice The single scheduled multiplier update (ERC-8056 pending).
+    struct PendingMultiplier {
+        uint128 multiplier;
+        uint64 effectiveAt;
+    }
+
     /// @custom:storage-location erc7201:base.b20.asset
     struct Layout {
         // ---------- Decimals ----------
@@ -382,6 +414,9 @@ library MockB20AssetStorage {
         // (e.g. `category`, `region`, `reference`). Empty string means
         // unset/removed.
         mapping(string key => string value) extraMetadata;
+        // ---------- Pending multiplier (ERC-8056 schedule) ----------
+        // Single scheduled multiplier update, packed into one slot.
+        PendingMultiplier pending;
     }
 
     // keccak256(abi.encode(uint256(keccak256("base.b20.asset")) - 1)) & ~bytes32(uint256(0xff))
@@ -400,6 +435,7 @@ library MockB20AssetStorage {
     uint256 internal constant MULTIPLIER_OFFSET = 1;
     uint256 internal constant USED_ANNOUNCEMENT_IDS_OFFSET = 2;
     uint256 internal constant EXTRA_METADATA_OFFSET = 3;
+    uint256 internal constant PENDING_OFFSET = 4;
 
     /// @notice Absolute slot for a top-level field of `Layout`.
     function slotOf(uint256 offset) internal pure returns (bytes32) {
@@ -428,6 +464,7 @@ library MockB20AssetStorage {
     function multiplierSlot() internal pure returns (bytes32) { return slotOf(MULTIPLIER_OFFSET); }
     function usedAnnouncementIdsBaseSlot() internal pure returns (bytes32) { return slotOf(USED_ANNOUNCEMENT_IDS_OFFSET); }
     function extraMetadataBaseSlot() internal pure returns (bytes32) { return slotOf(EXTRA_METADATA_OFFSET); }
+    function pendingSlot() internal pure returns (bytes32) { return slotOf(PENDING_OFFSET); }
 
             // forgefmt: disable-end
 
@@ -450,6 +487,30 @@ library MockB20AssetStorage {
     ///         Solidity's short/long encoding convention).
     function extraMetadataSlot(string memory key) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(key, extraMetadataBaseSlot()));
+    }
+
+    // ============================================================
+    //                     PACKED-SLOT CODECS
+    // ============================================================
+    // Production code accesses the pending slot via the `PendingMultiplier`
+    // struct, meaning Solidity handles the bit math automatically.
+    // These pure codecs exist for test-side use only (operating on vm.load outputs)
+    // The roundtrip test in `MockB20AssetSlotHelpers.t.sol` verifies this bit math matches
+    // Solidity's struct packing, enshrining it in CI.
+
+    /// @notice Extracts the pending multiplier (bits 0..127) from the packed slot.
+    function pendingMultiplierValue(uint256 packed) internal pure returns (uint128) {
+        return uint128(packed);
+    }
+
+    /// @notice Extracts the pending `effectiveAt` (bits 128..191) from the packed slot.
+    function pendingEffectiveAt(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed >> 128);
+    }
+
+    /// @notice Composes the pending slot from its two lanes.
+    function packPendingMultiplier(uint128 multiplier, uint64 effectiveAt) internal pure returns (uint256) {
+        return uint256(multiplier) | (uint256(effectiveAt) << 128);
     }
 }
 
