@@ -140,6 +140,24 @@ def _edges(c: Chain, tok) -> None:
     reuse = tok.functions.announce([], "smoke-batch-1", "dup", "ipfs://smoke/dup")
     c.expect_revert("AnnouncementIdAlreadyUsed", reuse, c.DEPLOYER)
 
+    step("14b", "announce inner-call system fault propagates raw Panic (not wrapped as InternalCallFailed)")
+    # BOP-477: an inner call that raises a Solidity Panic bubbles the raw Panic unchanged; only
+    # ordinary reverts wrap as InternalCallFailed. The multiplier is 2e18 (step 7), so an inner
+    # toScaledBalance(type(uint256).max) overflows uint256 -> Panic(0x11). Asserting the raw
+    # Panic(uint256) payload from the live precompile is the conformance point.
+    inner_overflow = init_call(c.asset_abi, "toScaledBalance", 2**256 - 1)
+    panic_announce = init_call(
+        c.asset_abi, "announce", [inner_overflow], "smoke-panic-1", "overflow probe", "ipfs://smoke/panic-1"
+    )
+    c.expect_raw_panic(
+        "announce inner overflow -> raw Panic(0x11)", tok.address, panic_announce, 0x11, frm=c.DEPLOYER
+    )
+    c.assert_eq(
+        tok.functions.isAnnouncementIdUsed("smoke-panic-1").call(),
+        False,
+        "reverted announce must not consume the panic-probe id",
+    )
+
 
 def _events(c: Chain, v2: bool) -> None:
     step(15, "expected events emitted across the flow")

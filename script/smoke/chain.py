@@ -36,6 +36,10 @@ from .codec import topic0
 from .errors import ERROR_BY_SELECTOR
 from .provider import ConsistentHTTPProvider
 
+# Solidity built-in `Panic(uint256)` selector. Not a custom error in any ABI, so it is not in
+# `ERROR_BY_SELECTOR`; matched directly by `expect_raw_panic`.
+PANIC_SELECTOR = bytes.fromhex("4e487b71")
+
 
 class Skip(Exception):
     """Raised by a journey to signal it does not apply to this chain (recorded as a skip, not a fail).
@@ -512,6 +516,42 @@ class Chain:
             return
         self._diagnose(f"{desc}: expected revert but call succeeded", repro_call=tx)
         die(f"{desc}: expected revert but call succeeded")
+
+    def expect_raw_panic(
+        self,
+        desc: str,
+        to: ChecksumAddress,
+        data: bytes,
+        code: int,
+        *,
+        frm: ChecksumAddress | None = None,
+    ) -> None:
+        """Simulate a hand-built call; assert it reverts with a Solidity `Panic(uint256)` of `code`.
+
+        `Panic` is a built-in error (selector 0x4e487b71), not a custom error in any ABI, so it is
+        not resolvable through `expect_raw_revert`'s selector map. Asserts the raw revert data is the
+        Panic selector followed by the 32-byte `code` (e.g. 0x11 for arithmetic overflow). Used to
+        pin that an inner-call system fault propagates raw out of `announce` (see BOP-477) rather
+        than being wrapped as `InternalCallFailed`.
+        """
+        tx = {"to": to, "from": frm or self.DEPLOYER, "data": HexBytes(data), "value": 0}
+        try:
+            self.w3.eth.call(tx)
+        except ContractLogicError as exc:
+            raw = self._revert_bytes(exc)
+            if raw is None or len(raw) < 4 or raw[:4] != PANIC_SELECTOR:
+                self._diagnose(f"{desc}: expected Panic({code:#x})", repro_call=tx)
+                die(f"{desc}: expected Panic(uint256) 0x4e487b71 but got {('0x' + raw.hex()) if raw else raw!r}")
+            got_code = int.from_bytes(raw[4:36], "big") if len(raw) >= 36 else None
+            if got_code != code:
+                self._diagnose(f"{desc}: wrong Panic code", repro_call=tx)
+                die(f"{desc}: expected Panic code {code:#x} but got {got_code if got_code is None else hex(got_code)}")
+            ok(f"{desc} (reverts Panic({code:#x}))")
+            return
+        except Exception as exc:  # noqa: BLE001 - surface any non-revert failure
+            die(f"{desc}: expected Panic({code:#x}) but call raised {type(exc).__name__}: {exc}")
+        self._diagnose(f"{desc}: expected Panic but call succeeded", repro_call=tx)
+        die(f"{desc}: expected Panic({code:#x}) but call succeeded")
 
     def send_expecting_revert(self, fn, account: LocalAccount, *, gas: int = 2_000_000) -> TxReceipt:
         """Broadcast a real tx with explicit gas (skips estimation) and assert the receipt reverted."""

@@ -76,6 +76,29 @@ contract B20AssetAnnounceTest is B20AssetTest {
         asset().announce(_singletonBytes(failingCall), "fail-id", "desc", "uri");
     }
 
+    /// @notice Verifies an inner call that raises a Solidity Panic propagates the raw Panic
+    ///         unchanged instead of being wrapped as InternalCallFailed.
+    /// @dev System-fault parity with the Rust precompile: is_system_error() (see base/base
+    ///      crates/common/precompile-storage/src/error.rs) propagates Panic/OutOfGas/Fatal/
+    ///      SlotOverflow raw; only ordinary reverts wrap as InternalCallFailed. The one inner-call
+    ///      Panic concretely reachable through announce is arithmetic overflow (0x11): a multiplier
+    ///      > 1 makes toScaledBalance(type(uint256).max) overflow uint256. Deliberately NOT skipped
+    ///      under live precompiles — asserting the raw Panic payload from the live precompile is the
+    ///      conformance point. The enum (0x21) and array-out-of-bounds (0x32) Panic classes have no
+    ///      inner-call selector that reaches them (strict ABI decode rejects out-of-range enums
+    ///      before any conversion guard, and no reachable path produces an array-OOB), so only the
+    ///      overflow class is exercised here.
+    function test_announce_innerPanic_propagatesRaw() public {
+        _grantOperator();
+        // Multiplier > 1 WAD so `rawBalance * multiplier` overflows uint256 for a large rawBalance.
+        _updateMultiplier(2 * asset().WAD_PRECISION());
+        bytes memory inner = abi.encodeWithSelector(IB20Asset.toScaledBalance.selector, type(uint256).max);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
+        asset().announce(_singletonBytes(inner), "panic-id", "desc", "uri");
+    }
+
     /// @notice Verifies a failed announcement does NOT consume the id (atomicity)
     /// @dev The whole tx unwinds on inner-call failure, including the
     ///      `usedAnnouncementIds[id] = true` write that announce performs before the
