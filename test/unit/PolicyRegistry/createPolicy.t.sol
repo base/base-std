@@ -17,6 +17,18 @@ contract PolicyRegistryCreatePolicyTest is PolicyRegistryTest {
         policyRegistry.createPolicy(address(0), pt);
     }
 
+    /// @notice Verifies createPolicy reverts when given a composite policy type
+    /// @dev createPolicy is a simple-policy constructor; a UNION/INTERSECT gate reverts with
+    ///      IncompatiblePolicyType() (composites are created via createCompositePolicy).
+    function test_createPolicy_revert_incompatiblePolicyType(address caller, address admin_, uint8 typeIdx) public {
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx); // UNION or INTERSECT
+        vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
+        vm.prank(caller);
+        policyRegistry.createPolicy(admin_, pt);
+    }
+
     /// @notice Verifies createPolicy assigns a fresh allowlist policy id
     /// @dev Paired slot: admin lane matches, exists bit set, ID top byte = ALLOWLIST.
     function test_createPolicy_success_allowlist(address caller, address admin_) public {

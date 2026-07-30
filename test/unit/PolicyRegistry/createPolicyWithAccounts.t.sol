@@ -17,6 +17,24 @@ contract PolicyRegistryCreatePolicyWithAccountsTest is PolicyRegistryTest {
         policyRegistry.createPolicyWithAccounts(address(0), IPolicyRegistry.PolicyType.ALLOWLIST, accounts);
     }
 
+    /// @notice Verifies createPolicyWithAccounts reverts when given a composite policy type
+    /// @dev createPolicyWithAccounts is a simple-policy constructor; a UNION/INTERSECT gate reverts
+    ///      with IncompatiblePolicyType(). Fires after the zero-admin check and before the batch-size check.
+    function test_createPolicyWithAccounts_revert_incompatiblePolicyType(
+        address caller,
+        address admin_,
+        uint8 typeIdx,
+        address[] memory accounts
+    ) public {
+        _assumeValidCaller(caller);
+        vm.assume(admin_ != address(0));
+        accounts = _boundAccounts(accounts);
+        IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx); // UNION or INTERSECT
+        vm.expectRevert(IPolicyRegistry.IncompatiblePolicyType.selector);
+        vm.prank(caller);
+        policyRegistry.createPolicyWithAccounts(admin_, pt, accounts);
+    }
+
     /// @notice Verifies createPolicyWithAccounts seeds an allowlist policy with the provided members
     /// @dev Post-creation isAuthorized returns true for each seeded account.
     ///      Paired slot assertion: each `members[id][account]` slot
