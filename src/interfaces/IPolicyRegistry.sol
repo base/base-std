@@ -260,9 +260,9 @@ interface IPolicyRegistry {
     /// @return Pending admin, or `address(0)`.
     function pendingPolicyAdmin(uint64 policyId) external view returns (address);
 
-    /// @notice Returns the child-policy set of the composite `policyId`, in the order it was last
-    ///         written. Returns an empty array for simple policies, built-in sentinels, unknown
-    ///         IDs, and malformed IDs. Never reverts.
+    /// @notice Returns the child-policy set of the composite `policyId`.
+    ///
+    /// @dev Child-policies are listed in the order they were last written.
     ///
     /// @dev An empty return unambiguously means "not a composite": both write paths reject a set
     ///      outside `[2, 4]` with `ChildPoliciesOutsideOfRange`, so a composite that exists always
