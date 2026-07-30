@@ -37,19 +37,13 @@ contract PolicyRegistryCompositePolicyChildIdsTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies compositePolicyChildIds returns empty for a well-formed but uncreated id
-    /// @dev Lookup miss returns an empty array rather than reverting. The fuzzed top byte spans
-    ///      the whole PolicyType range, so this covers uncreated simple and composite IDs alike.
+    /// @dev Lookup should return for an uncreated ID.
     function test_compositePolicyChildIds_success_emptyForUncreated(uint64 seed) public view {
         uint64 policyId = _wellFormedUncreatedPolicyId(seed);
         assertEq(policyRegistry.compositePolicyChildIds(policyId).length, 0);
     }
 
-    /// @notice Verifies a reverted composite creation persists no child set
-    /// @dev The child-count guard runs before the counter is consumed, so the ID that would have
-    ///      been assigned stays unassigned and reads empty. Deliberately a bare `vm.expectRevert()`:
-    ///      the typed `ChildPoliciesOutsideOfRange` revert is already pinned by
-    ///      `createCompositePolicy.t.sol` and `createCompositePolicy_revertOrder.t.sol`, and the
-    ///      failure here is setup for the read, not the assertion under test.
+    /// @notice Verifies a composite creation that fails persists no child set..
     function test_compositePolicyChildIds_success_emptyAfterFailedCreation() public {
         // Children first — `_makeSimpleChildren` consumes counter values of its own, so the
         // prediction below has to come after them.
@@ -73,10 +67,7 @@ contract PolicyRegistryCompositePolicyChildIdsTest is PolicyRegistryTest {
     }
 
     /// @notice Verifies compositePolicyChildIds returns empty for a malformed id
-    /// @dev Malformed-ID short-circuit returns empty, matching the rest of the read surface.
-    ///      Regression guard: `_isComposite` routes through `_typeOf`, whose
-    ///      `PolicyType(uint8(...))` conversion panics 0x21 on a type byte above INTERSECT, so
-    ///      the mock's `_isWellFormed` check must run first.
+    /// @dev Malformed-ID short-circuit returns empty.
     function test_compositePolicyChildIds_success_emptyForMalformedId(uint64 seed) public view {
         uint64 policyId = _malformedPolicyId(seed);
         assertEq(policyRegistry.compositePolicyChildIds(policyId).length, 0);
