@@ -264,9 +264,7 @@ interface IPolicyRegistry {
     ///
     /// @dev Child-policies are listed in the order they were last written.
     ///
-    /// @dev An empty return unambiguously means "not a composite": both write paths reject a set
-    ///      outside `[2, 4]` with `ChildPoliciesOutsideOfRange`, so a composite that exists always
-    ///      holds at least 2 children and there is no clear-the-list path.
+    /// @dev An empty return unambiguously means "not a composite".
     /// @dev The registry preserves the caller's ordering verbatim and neither sorts nor
     ///      de-duplicates.
     ///
