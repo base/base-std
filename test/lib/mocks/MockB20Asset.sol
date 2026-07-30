@@ -109,16 +109,10 @@ contract MockB20Asset is MockB20, IB20Asset {
             _checkSelector(internalCalls[i]);
             (bool success, bytes memory ret) = address(this).delegatecall(internalCalls[i]);
             if (!success) {
-                // Match the Rust precompile: system-level faults (Solidity `Panic(uint256)`)
-                // propagate unwrapped; only ordinary reverts are wrapped as InternalCallFailed. See
-                // is_system_error() in base/base crates/common/precompile-storage/src/error.rs.
-                // The concretely reachable inner-call fault is arithmetic overflow (Panic 0x11) from
-                // e.g. toScaledBalance under a multiplier > 1; OutOfGas/Fatal/SlotOverflow are
-                // native-precompile faults a Solidity delegatecall cannot faithfully reproduce (OOG
-                // follows the 63/64 rule and yields empty returndata), so only the Panic class is
-                // aligned here.
+                // Match the Rust precompile's is_system_error(): a Solidity Panic propagates
+                // unwrapped; only ordinary reverts wrap as InternalCallFailed.
                 if (ret.length >= 4 && bytes4(ret) == bytes4(0x4e487b71)) {
-                    // Re-raise the exact returndata bytes; offset 0x20 skips the length word.
+                    // Re-raise the exact returndata; offset 0x20 skips the length word.
                     assembly {
                         revert(add(ret, 0x20), mload(ret))
                     }

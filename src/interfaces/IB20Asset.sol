@@ -64,8 +64,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     error InternalCallMalformed(bytes call);
 
     /// @notice An inner call dispatched by `announce` reverted with an ordinary revert; its reason is
-    ///         not bubbled. A system-level Solidity `Panic(uint256)` propagates raw instead of being
-    ///         wrapped here (see the `announce` natspec).
+    ///         not bubbled. A Solidity `Panic` propagates raw instead (see `announce`).
     ///
     /// @param call Offending raw calldata blob.
     error InternalCallFailed(bytes call);
@@ -121,9 +120,9 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     /// @dev Reverts with `AnnouncementIdAlreadyUsed` when `id` has previously been consumed.
     /// @dev Reverts with `InternalCallMalformed` when an entry in `internalCalls` is shorter than four bytes.
     /// @dev Reverts with `AnnouncementInProgress` when an entry in `internalCalls` targets `announce` itself.
-    /// @dev An inner call that raises a Solidity Panic (e.g. arithmetic overflow 0x11, enum 0x21,
-    ///      array-out-of-bounds 0x32) propagates the raw Panic unchanged; any other inner revert is
-    ///      wrapped as `InternalCallFailed(call)`. Out-of-gas in an inner call halts the whole call.
+    /// @dev An inner call that raises a Solidity `Panic` (e.g. arithmetic overflow) propagates the
+    ///      raw Panic unchanged; any other inner revert wraps as `InternalCallFailed(call)`. An inner
+    ///      out-of-gas halts the whole call.
     ///
     /// @param internalCalls ABI-encoded calldata blobs executed in order via self-`delegatecall`; may be empty.
     /// @param id            Caller-chosen announcement id; single-use over the token's lifetime.

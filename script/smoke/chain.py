@@ -528,11 +528,8 @@ class Chain:
     ) -> None:
         """Simulate a hand-built call; assert it reverts with a Solidity `Panic(uint256)` of `code`.
 
-        `Panic` is a built-in error (selector 0x4e487b71), not a custom error in any ABI, so it is
-        not resolvable through `expect_raw_revert`'s selector map. Asserts the raw revert data is the
-        Panic selector followed by the 32-byte `code` (e.g. 0x11 for arithmetic overflow). Used to
-        pin that an inner-call system fault propagates raw out of `announce` (see BOP-477) rather
-        than being wrapped as `InternalCallFailed`.
+        Asserts the raw revert data is `PANIC_SELECTOR` followed by the 32-byte `code` (e.g. 0x11 for
+        arithmetic overflow).
         """
         tx = {"to": to, "from": frm or self.DEPLOYER, "data": HexBytes(data), "value": 0}
         try:
