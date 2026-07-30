@@ -148,6 +148,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     ///         in shape to wstETH wrapping stETH.
     ///
     /// @dev Alias of the ERC-8056 `uiMultiplier()`.
+    ///
     /// @return Current (effective) multiplier.
     function multiplier() external view returns (uint256);
 
@@ -180,17 +181,29 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     /// @notice Schedules a multiplier update to take effect at `effectiveAt` — the standard path
     ///         for corporate actions (splits, reinvested dividends).
     ///
-    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
+    /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
+    /// @dev Reverts with `EffectiveAtInPast` when `effectiveAt` is not in the future.
+    /// @dev Reverts with `EffectiveAtTooFar` when `effectiveAt` exceeds `type(uint64).max`.
+    /// @dev Reverts with `ScheduleOverlap` when a live pending update already exists.
+    ///
+    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`.
     /// @param effectiveAt   Timestamp at which `newMultiplier` becomes effective; must be in the future.
     function setUIMultiplier(uint256 newMultiplier, uint256 effectiveAt) external;
 
     /// @notice Cancels the single live pending update, restoring the no-pending state
     ///         (`effectiveAt` resets to 0).
+    ///
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
+    /// @dev Reverts with `NoScheduledMultiplier` when there is no live pending update.
     function cancelScheduledMultiplier() external;
 
     /// @notice Instant failsafe / emergency override — sets the current multiplier immediately and
     ///         cancels any live pending update without a scheduling window.
-    ///         Prefer `setUIMultiplier` for routine corporate actions
+    ///         Prefer `setUIMultiplier` for routine corporate actions.
+    ///
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
+    /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be in `(0, type(uint128).max]`.
     function updateMultiplier(uint256 newMultiplier) external;

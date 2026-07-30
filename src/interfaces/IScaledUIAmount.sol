@@ -8,12 +8,8 @@ pragma solidity >=0.8.20 <0.9.0;
 ///         `uiMultiplier` (18-decimal WAD, `1e18 = 1.0`) that rescales the *displayed*
 ///         balance without minting, transferring, or rewriting any raw balance.
 ///
-/// @dev    Interface ID: `0xa60bf13d` — self-checked via `type(IScaledUIAmount).interfaceId`, which
-///         is derived solely from `uiMultiplier()`. ERC-8056 also defines an OPTIONAL
-///         `TransferWithUIAmount(address,address,uint256,uint256)` event; B20 deliberately omits it
-///         (D9: no per-transfer scaled event, since the multiplier is cosmetic and scaled balances
-///         are reconstructable off-chain). Events do not contribute to the interface ID, so omitting
-///         it leaves `0xa60bf13d` unchanged.
+/// @dev    Interface ID: `0xa60bf13d`. The optional `TransferWithUIAmount` event is intentionally
+///         not implemented; see `docs/B20/Asset.md` for the rationale.
 interface IScaledUIAmount {
     /// @notice Emitted when the UI multiplier is updated.
     event UIMultiplierUpdated(uint256 oldMultiplier, uint256 newMultiplier, uint256 effectiveAtTimestamp);

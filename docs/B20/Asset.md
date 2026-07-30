@@ -8,7 +8,7 @@ Each account's stored balance is the **raw** balance. A uniform on-chain **multi
 
 Read the current multiplier with `multiplier()`; the value is in WAD precision (`1e18`, exposed as `WAD_PRECISION()`). `toScaledBalance(rawBalance)` converts a raw amount to its scaled view, `toRawBalance(scaledBalance)` is the reverse converter (integer-floored, so the round-trip can lose up to one ULP), and `scaledBalanceOf(account)` is a convenience over ERC-20's `balanceOf` that returns the same account's raw balance in its scaled form.
 
-Both multiplier setters validate `newMultiplier` is non-zero and at most `type(uint128).max` (reverting `InvalidMultiplier` otherwise). The `uint128` ceiling is the overflow guard: with supply capped at `type(uint128).max`, a `uint128` multiplier keeps `raw * multiplier` inside `uint256`, so scaled reads can never overflow.
+Both multiplier setters validate `newMultiplier` is non-zero and at most `type(uint128).max` (reverting `InvalidMultiplier` otherwise). The `uint128` ceiling is the overflow guard: with supply capped at `type(uint128).max`, a `uint128` multiplier keeps `balance * multiplier` inside `uint256`, so balance-derived reads never overflow.
 
 ### Scheduling multiplier updates
 
@@ -29,7 +29,7 @@ The Asset variant conforms to [ERC-8056](https://eips.ethereum.org/EIPS/eip-8056
 - `balanceOfUI(account)` aliases `scaledBalanceOf`, and `totalSupplyUI()` returns `totalSupply() * uiMultiplier() / 1e18` (optional Balances extension `0xd890fd71`).
 - `supportsInterface(bytes4)` (ERC-165, `0x01ffc9a7`) returns `true` for those three IDs and for ERC-165 itself. The optional Conversion extension (`0x57854fc3`) is **not** claimed — the native `toScaledBalance` / `toRawBalance` names are kept unaliased for backwards compatibility.
 
-**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateMultiplier`. `MultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by `updateMultiplier` when it clears a live pending.
+**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateMultiplier`. `MultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by `updateMultiplier` when it clears a live pending. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
 
 ### Precision & decimals
 
