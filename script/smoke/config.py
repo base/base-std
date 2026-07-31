@@ -53,7 +53,7 @@ MAX_CHILD_POLICIES = 4
 ALWAYS_ALLOW_ID = 0
 ALWAYS_BLOCK_ID = (1 << 56) | 1
 
-# PausableFeature enum (IB20). SEIZE (Cobalt) governs `seizeWithMemo`; legacy `burnBlocked` stays on BURN.
+# PausableFeature enum (IB20). SEIZE (Cobalt) governs `seizeWithMemo`.
 FEATURE_TRANSFER = 0
 FEATURE_MINT = 1
 FEATURE_BURN = 2
