@@ -104,7 +104,7 @@ summary. A journey whose surface the live chain does not yet ship is reported as
 
 ## What it checks
 
-Six "journeys", run as a whole suite (a single journey can still be run via the CLI for debugging):
+Seven "journeys", run as a whole suite (a single journey can still be run via the CLI for debugging):
 
 | Journey | What it exercises |
 |---|---|
@@ -112,6 +112,7 @@ Six "journeys", run as a whole suite (a single journey can still be run via the 
 | `asset` | Full Asset-variant lifecycle (18 decimals): mint, transfer, `transferWithMemo`, delegated `transferFrom`, `announce` + `batchMint`, rebase via `updateMultiplier`, metadata, burn, then the gates that must reject (supply cap, pause, role, announcement-id reuse). The rebase event is fork-aware (V1 `MultiplierUpdated` vs Cobalt `UIMultiplierUpdated`). |
 | `multiplier` | ERC-8056 scheduled multiplier (AssetV2 @ Cobalt): `setUIMultiplier` scheduling + its guards (`InvalidMultiplier`, `EffectiveAtInPast`, `EffectiveAtTooFar`, `ScheduleOverlap`), `cancelScheduledMultiplier` (+ `NoScheduledMultiplier`), the `updateMultiplier` instant-failsafe V2 event semantics (`UIMultiplierUpdated` + `MultiplierUpdateCancelled`, *not* `MultiplierUpdated`), the read aliases (`uiMultiplier`/`balanceOfUI`/`totalSupplyUI`), and ERC-165 advertisement. **Skips** cleanly on a pre-Cobalt chain (probed via `supportsInterface(0xa60bf13d)`). |
 | `stablecoin` | Stablecoin-variant deltas (fixed 6 decimals, immutable currency) plus the regulated freeze-and-seize path (blocklist policy + `burnBlocked`). |
+| `seize` | Transfer-based seize (AssetV2 @ Cobalt): the `SEIZE_HOLDER_POLICY` membership gate + `SEIZE_ROLE`, `seizeWithMemo` (`Transfer` -> `Memo` -> `Seized`, supply-preserving), its reject gates (`AccountNotSeizable`, role, `InvalidReceiver`, `ContractPaused`), the admin-op decoupling from the receiver policy on `to`, and the independent `SEIZE` pause vector. **Skips** cleanly on a pre-Cobalt chain (probed via the `SEIZE_HOLDER_POLICY()` getter). Complements `stablecoin`, which covers the legacy burn-based `burnBlocked`. |
 | `policy` | Policy creation (both types), membership, built-in sentinels, the two-step admin transfer lifecycle, and a token actually *enforcing* a policy (`PolicyForbids` on transfer + mint). |
 | `invariants` | EVM-context invariants a precompile must implement explicitly: payable rejection, unknown-selector revert, strict ABI decode, dirty-bit canonicalization, `STATICCALL` read-only enforcement, returndata fidelity, OOG containment, revert atomicity, and gas independence from a force-fed balance. Uses the `PrecompileProbe` + `ForceFeeder` helpers under `test/lib/`. |
 
@@ -219,6 +220,6 @@ script/smoke/
   abis.py             # interface ABIs + probe/feeder artifacts, read from out/
   codec.py            # the one hand-written encode: createB20 params + initCalls
   errors.py           # selector -> custom-error-name map (from the ABIs)
-  journeys/           # factory, asset_lifecycle, scheduled_multiplier, stablecoin_lifecycle, policy_registry, precompile_invariants
+  journeys/           # factory, asset_lifecycle, scheduled_multiplier, stablecoin_lifecycle, seize, policy_registry, precompile_invariants
   requirements.txt
 ```

@@ -1,6 +1,6 @@
 """CLI: python -m smoke <journey> [<journey> ...] [-k]
 
-Journeys: factory, asset, multiplier, stablecoin, policy, invariants — or `all` to run
+Journeys: factory, asset, multiplier, stablecoin, seize, policy, invariants — or `all` to run
 every journey in sequence. Env (RPC_URL / DEPLOYER_PK / USER2_PK) is sourced by the
 Makefile from .env; running directly requires it exported. A preflight liveness
 probe checks the b20 precompiles are actually active on the target chain (fork
@@ -27,12 +27,13 @@ JOURNEYS = {
     "asset": "smoke.journeys.asset_lifecycle",
     "multiplier": "smoke.journeys.scheduled_multiplier",
     "stablecoin": "smoke.journeys.stablecoin_lifecycle",
+    "seize": "smoke.journeys.seize",
     "policy": "smoke.journeys.policy_registry",
     "invariants": "smoke.journeys.precompile_invariants",
 }
 
 # Canonical run order; also the expansion of `all`.
-ORDER = ["factory", "asset", "multiplier", "stablecoin", "policy", "invariants"]
+ORDER = ["factory", "asset", "multiplier", "stablecoin", "seize", "policy", "invariants"]
 
 
 def _usage() -> str:
