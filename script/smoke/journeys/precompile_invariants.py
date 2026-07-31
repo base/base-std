@@ -34,6 +34,7 @@ FACTORY = config.B20_FACTORY
 POLICY = config.POLICY_REGISTRY
 ALLOWLIST = config.POLICY_TYPE_ALLOWLIST
 UNION = config.POLICY_TYPE_UNION
+INTERSECT = config.POLICY_TYPE_INTERSECT
 
 # Check names that are known/accepted divergences: reported, but do not fail the run.
 INFORMATIONAL: set[str] = set()
@@ -93,6 +94,27 @@ def _truncated_args_revert(c: Chain, _probe) -> None:
 def _enum_out_of_range_reverts(c: Chain, _probe) -> None:
     bad_enum = _selector("createPolicy(address,uint8)") + _addr_word(c.DEPLOYER) + (5).to_bytes(32, "big")
     c.expect_raw_revert("enum out of range", POLICY, bad_enum)
+
+
+def _create_policy_composite_type_reverts(c: Chain, _probe) -> None:
+    # UNION (2) / INTERSECT (3) decode at Cobalt (the enum widened to 4 variants) and reach the logic,
+    # which rejects them with IncompatiblePolicyType rather than a decode failure or Panic. Both simple
+    # constructors share the guard (after the zero-admin check, before the batch-size guard); composites
+    # are minted only via createCompositePolicy. Well-formed ABI, so build it with the canonical encoder
+    # (a non-zero admin isolates the type check from the ZeroAddress path; an empty batch confirms the
+    # type check precedes the batch-size guard on the with-accounts path).
+    for policy_type in (UNION, INTERSECT):
+        create = _clean(c.policy, "createPolicy", c.DEPLOYER, policy_type)
+        c.expect_raw_revert(
+            f"createPolicy composite type {policy_type}", POLICY, create, error_name="IncompatiblePolicyType"
+        )
+        with_accounts = _clean(c.policy, "createPolicyWithAccounts", c.DEPLOYER, policy_type, [])
+        c.expect_raw_revert(
+            f"createPolicyWithAccounts composite type {policy_type}",
+            POLICY,
+            with_accounts,
+            error_name="IncompatiblePolicyType",
+        )
 
 
 def _dirty_high_bits_rejected(c: Chain, _probe) -> None:
@@ -201,6 +223,10 @@ CHECKS: list[tuple[str, Callable[[Chain, object], None]]] = [
     ("empty calldata reverts (no implicit receive/fallback)", _empty_calldata_reverts),
     ("truncated args revert (strict ABI decode)", _truncated_args_revert),
     ("out-of-range enum reverts", _enum_out_of_range_reverts),
+    (
+        "createPolicy/createPolicyWithAccounts composite type reverts IncompatiblePolicyType",
+        _create_policy_composite_type_reverts,
+    ),
     ("dirty high bits rejected (strict ABI decode)", _dirty_high_bits_rejected),
     ("STATICCALL read-only enforced", _staticcall_read_only),
     ("value forwarding rejected through a contract", _value_forwarding_rejected),
