@@ -106,8 +106,7 @@ interface IB20 {
     error UnsupportedPolicyType(bytes32 policyScope);
 
     /// @notice `seizeWithMemo` was called against a `from` that is currently authorized under
-    ///         `SEIZE_HOLDER_POLICY` (i.e. not a member of the seize-holder set, so not eligible to be
-    ///         seized from).
+    ///         `SEIZE_HOLDER_POLICY` (i.e. not a member of the seize-holder set).
     error AccountNotSeizable(address account);
 
     /// @notice The deprecated `burnBlocked` was called against a `from` that is currently authorized under
@@ -214,7 +213,7 @@ interface IB20 {
     function BURN_ROLE() external view returns (bytes32);
 
     /// @notice Required to call the deprecated `burnBlocked` (no longer part of this interface; retained for
-    ///         the back-compat impl, with formal removal announced for Denim).
+    ///         the back-compat impl).
     /// @return Role constant.
     function BURN_BLOCKED_ROLE() external view returns (bytes32);
 
