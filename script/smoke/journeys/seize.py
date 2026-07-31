@@ -1,4 +1,4 @@
-"""B20 seize (transfer-blocked) smoketest — the Cobalt `seizeWithMemo` path.
+"""B20 seize smoketest — the Cobalt `seizeWithMemo` path.
 
 Exercises the transfer-based seize surface added at Cobalt (V2): the dedicated
 `SEIZE_ROLE`, the `SEIZE_HOLDER_POLICY` membership gate (an account is seizable when
