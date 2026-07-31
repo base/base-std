@@ -8,8 +8,26 @@ flow-level event check.
 from __future__ import annotations
 
 from .. import config
+from ..abis import STABLECOIN_ABI
 from ..chain import Chain, log, step
 from ..codec import StablecoinCreateParams, init_call
+
+# `burnBlocked` is a deprecated precompile selector that base-std #186 removed from the IB20
+# interface, so it is absent from STABLECOIN_ABI. The selector still dispatches on the precompile
+# (retained for back-compat), so bind it via an explicit fragment to keep exercising the legacy
+# burn-based freeze-and-seize path. The transfer-based seize surface is covered by the `seize` journey.
+_BURN_BLOCKED_FRAGMENT = {
+    "type": "function",
+    "name": "burnBlocked",
+    "stateMutability": "nonpayable",
+    "inputs": [{"name": "from", "type": "address"}, {"name": "amount", "type": "uint256"}],
+    "outputs": [],
+}
+
+
+def _burn_blocked_at(c: Chain, tok):
+    """A token binding including the deprecated `burnBlocked` selector (absent from STABLECOIN_ABI)."""
+    return c.w3.eth.contract(address=tok.address, abi=[*STABLECOIN_ABI, _BURN_BLOCKED_FRAGMENT])
 
 
 def _setup(c: Chain):
@@ -55,7 +73,7 @@ def _journey(c: Chain, tok) -> None:
     c.assert_eq(c.policy.functions.isAuthorized(pid, c.ALICE).call(), False, "alice blocked")
 
     step(5, "seize: burnBlocked(alice, 400); Transfer then BurnedBlocked")
-    receipt = c.send(tok.functions.burnBlocked(c.ALICE, config.amt(400, 6)), c.deployer)
+    receipt = c.send(_burn_blocked_at(c, tok).functions.burnBlocked(c.ALICE, config.amt(400, 6)), c.deployer)
     c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), config.amt(600, 6), "alice balance after seize")
     c.assert_eq(tok.functions.totalSupply().call(), config.amt(1100, 6), "total supply after seize")
     c.assert_log_order(
@@ -68,7 +86,7 @@ def _journey(c: Chain, tok) -> None:
 
 def _edges(c: Chain, tok) -> None:
     step(6, "seize an unblocked account -> AccountNotBlocked")
-    c.expect_revert("AccountNotBlocked", tok.functions.burnBlocked(c.BOB, 1), c.DEPLOYER)
+    c.expect_revert("AccountNotBlocked", _burn_blocked_at(c, tok).functions.burnBlocked(c.BOB, 1), c.DEPLOYER)
 
     step(7, "role gate: user2 mint -> AccessControlUnauthorizedAccount")
     c.expect_revert("AccessControlUnauthorizedAccount", tok.functions.mint(c.ALICE, 1), c.USER2)
