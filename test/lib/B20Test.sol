@@ -138,7 +138,7 @@ contract B20Test is B20FactoryTest {
         if (i == 0) return B20Constants.TRANSFER_SENDER_POLICY;
         if (i == 1) return B20Constants.TRANSFER_RECEIVER_POLICY;
         if (i == 2) return B20Constants.TRANSFER_EXECUTOR_POLICY;
-        if (i == 3) return B20Constants.SEIZABLE_ACCOUNT_POLICY;
+        if (i == 3) return B20Constants.SEIZE_HOLDER_POLICY;
         return B20Constants.MINT_RECEIVER_POLICY;
     }
 
@@ -148,7 +148,7 @@ contract B20Test is B20FactoryTest {
     ///         base-token policy types.
     function _isKnownPolicyType(bytes32 policyType) internal pure returns (bool) {
         return policyType == B20Constants.TRANSFER_SENDER_POLICY || policyType == B20Constants.TRANSFER_RECEIVER_POLICY
-            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.SEIZABLE_ACCOUNT_POLICY
+            || policyType == B20Constants.TRANSFER_EXECUTOR_POLICY || policyType == B20Constants.SEIZE_HOLDER_POLICY
             || policyType == B20Constants.MINT_RECEIVER_POLICY;
     }
 
