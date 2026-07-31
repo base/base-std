@@ -27,7 +27,7 @@ JOURNEYS = {
     "asset": "smoke.journeys.asset_lifecycle",
     "multiplier": "smoke.journeys.scheduled_multiplier",
     "stablecoin": "smoke.journeys.stablecoin_lifecycle",
-    "seize": "smoke.journeys.transfer_blocked",
+    "seize": "smoke.journeys.seize",
     "policy": "smoke.journeys.policy_registry",
     "invariants": "smoke.journeys.precompile_invariants",
 }

@@ -1,4 +1,4 @@
-"""B20 transfer-blocked (seize) smoketest — the Cobalt `seizeWithMemo` path.
+"""B20 seize (transfer-blocked) smoketest — the Cobalt `seizeWithMemo` path.
 
 Exercises the transfer-based seize surface added at Cobalt (V2): the dedicated
 `SEIZE_ROLE`, the `SEIZE_HOLDER_POLICY` membership gate (an account is seizable when
@@ -29,7 +29,7 @@ MEMO = b"seize".ljust(32, b"\x00")
 
 
 def _setup(c: Chain):
-    salt = c.cfg.salt_for("transfer_blocked")
+    salt = c.cfg.salt_for("seize")
     params = AssetCreateParams("Seizable Asset", "SEIZ", c.DEPLOYER, config.ASSET_DECIMALS).encode()
     roles = [config.MINT_ROLE, config.SEIZE_ROLE, config.PAUSE_ROLE, config.UNPAUSE_ROLE]
     init_calls = [init_call(c.asset_abi, "grantRole", r, c.DEPLOYER) for r in roles]
@@ -145,7 +145,7 @@ def _pause(c: Chain, tok) -> None:
 def _events(c: Chain) -> None:
     step(10, "expected events emitted across the flow")
     c.assert_events_emitted(
-        "transfer-blocked (seize) events",
+        "seize events",
         "B20Created(address,uint8,string,string,uint8,bytes)",
         "RoleGranted(bytes32,address,address)",
         "Transfer(address,address,uint256)",
@@ -160,7 +160,7 @@ def _events(c: Chain) -> None:
 
 
 def run(c: Chain) -> None:
-    log("transfer-blocked: starting")
+    log("seize: starting")
     tok = _setup(c)
     if not _is_cobalt(c, tok):
         skip("Asset does not expose SEIZE_HOLDER_POLICY() — chain is pre-Cobalt (no seize surface)")
@@ -170,4 +170,4 @@ def run(c: Chain) -> None:
     _decoupling(c, tok)
     _pause(c, tok)
     _events(c)
-    log("transfer-blocked: OK")
+    log("seize: OK")

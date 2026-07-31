@@ -220,6 +220,6 @@ script/smoke/
   abis.py             # interface ABIs + probe/feeder artifacts, read from out/
   codec.py            # the one hand-written encode: createB20 params + initCalls
   errors.py           # selector -> custom-error-name map (from the ABIs)
-  journeys/           # factory, asset_lifecycle, scheduled_multiplier, stablecoin_lifecycle, transfer_blocked, policy_registry, precompile_invariants
+  journeys/           # factory, asset_lifecycle, scheduled_multiplier, stablecoin_lifecycle, seize, policy_registry, precompile_invariants
   requirements.txt
 ```
