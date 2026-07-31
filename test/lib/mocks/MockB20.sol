@@ -310,9 +310,9 @@ abstract contract MockB20 is IB20 {
 
     // Deprecated: `burnBlocked` is retained unchanged for back-compat but is no
     // longer part of the IB20 interface. Its blocked check reads
-    // `TRANSFER_SENDER_POLICY` and it gates on the `BURN` pause vector — it is NOT
-    // part of the seize operation class (that is `seizeWithMemo`). Formal removal
-    // is announced for the Denim hardfork.
+    // `TRANSFER_SENDER_POLICY` and it gates on the `BURN` pause vector. The
+    // recommended path is now `seizeWithMemo` to a treasury/self address followed
+    // by a normal `burn`. Formal removal is announced for the Denim hardfork.
     function burnBlocked(address from, uint256 amount)
         external
         whenNotPaused(PausableFeature.BURN)
