@@ -308,23 +308,18 @@ abstract contract MockB20 is IB20 {
         emit Memo(msg.sender, memo);
     }
 
-    // Deprecated: `burnBlocked` is retained unchanged for back-compat but is no
-    // longer part of the IB20 interface. Its blocked check reads
-    // `TRANSFER_SENDER_POLICY` and it gates on the `BURN` pause vector. The
-    // recommended path is now `seizeWithMemo` to a treasury/self address followed
-    // by a normal `burn`. Formal removal is announced for the Denim hardfork.
+    /// @notice DEPRECATED. Retained unchanged for back-compat but no longer part of the IB20
+    ///         interface. Its blocked check reads `TRANSFER_SENDER_POLICY` and it gates on the `BURN`
+    ///         pause vector. The recommended path is now `seizeWithMemo` to a treasury/self address
+    ///         followed by a normal `burn`.
+    /// @dev Reads the transfer-sender policy id from the transfer-side packed slot and reverts
+    ///      `AccountNotBlocked` if the target is still authorized. Enforced unconditionally, including
+    ///      during the factory bootstrap window, matching the Rust precompile (no `privileged` exception).
     function burnBlocked(address from, uint256 amount)
         external
         whenNotPaused(PausableFeature.BURN)
         onlyRole(BURN_BLOCKED_ROLE)
     {
-        // The point of burnBlocked is to seize from policy-blocked
-        // accounts. Read the transfer-sender policy ID out of the
-        // transfer-side packed slot and reject if the target is
-        // currently authorized. Enforced unconditionally — including
-        // for factory-originated calls during the bootstrap window —
-        // matching the Rust precompile, which carves no `privileged`
-        // exception for this guard.
         uint64 senderPolicyId = MockB20Storage.layout().transferPolicyIds.sender;
         if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(senderPolicyId, from)) {
             revert AccountNotBlocked(from);
