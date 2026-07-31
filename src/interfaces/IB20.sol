@@ -105,9 +105,13 @@ interface IB20 {
     /// @notice `policyScope` is not a slot this token (or its variant) supports.
     error UnsupportedPolicyType(bytes32 policyScope);
 
-    /// @notice A seize operation (`seizeWithMemo`) was called against a `from` that is currently
-    ///         authorized under `SEIZE_HOLDER_POLICY` (i.e. not eligible to be seized from). Also used by the
-    ///         deprecated `burnBlocked`, which checks `TRANSFER_SENDER_POLICY`.
+    /// @notice `seizeWithMemo` was called against a `from` that is currently authorized under
+    ///         `SEIZE_HOLDER_POLICY` (i.e. not a member of the seize-holder set, so not eligible to be
+    ///         seized from).
+    error AccountNotSeizable(address account);
+
+    /// @notice The deprecated `burnBlocked` was called against a `from` that is currently authorized under
+    ///         `TRANSFER_SENDER_POLICY` (i.e. not blocked).
     error AccountNotBlocked(address account);
 
     /// @notice An EIP-2612 `permit` was submitted with a `deadline` strictly less than `block.timestamp`.
@@ -439,7 +443,7 @@ interface IB20 {
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
-    /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `SEIZE_HOLDER_POLICY`.
+    /// @dev Reverts with `AccountNotSeizable` when `from` is currently authorized under `SEIZE_HOLDER_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///
     /// @param from   Account whose balance is being seized.

@@ -13,7 +13,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(SEIZE_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver` (`from` is not zero-checked)
-///         4. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotBlocked`
+///         4. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
 ///         5. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20SeizeWithMemoRevertOrderTest is B20Test {
     address internal seizer = makeAddr("seizer");
@@ -55,7 +55,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         token.seizeWithMemo(from, address(0), 1, bytes32(0));
     }
 
-    /// @notice BLOCKED beats BALANCE (`from` not blocked and zero balance → AccountNotBlocked wins).
+    /// @notice BLOCKED beats BALANCE (`from` not blocked and zero balance → AccountNotSeizable wins).
     function test_seizeWithMemo_revertOrder_blocked_beats_balance(address from, address to) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
@@ -64,7 +64,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         // Default SEIZE_HOLDER_POLICY is ALWAYS_ALLOW → `from` is NOT blocked; zero balance too.
 
         vm.prank(seizer);
-        vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotBlocked.selector, from));
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotSeizable.selector, from));
         token.seizeWithMemo(from, to, 1, bytes32(0));
     }
 

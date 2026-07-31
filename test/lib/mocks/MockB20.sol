@@ -789,14 +789,13 @@ abstract contract MockB20 is IB20 {
         emit Transfer(from, to, amount);
     }
 
-    /// @dev Seize gate: reverts `AccountNotBlocked(from)` unless `from` is
-    ///      blocked under `SEIZE_HOLDER_POLICY` (i.e. NOT authorized). Enforced
-    ///      unconditionally, including in the factory bootstrap window,
-    ///      mirroring the `burnBlocked` sender-policy check.
+    /// @dev Seize gate: reverts `AccountNotSeizable(from)` unless `from` is a
+    ///      member of `SEIZE_HOLDER_POLICY` (i.e. NOT authorized). Enforced
+    ///      unconditionally, including in the factory bootstrap window.
     function _requireSeizable(address from) internal view {
         uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
         if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
-            revert AccountNotBlocked(from);
+            revert AccountNotSeizable(from);
         }
     }
 

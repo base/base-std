@@ -53,7 +53,7 @@ contract B20SeizeWithMemoTest is B20Test {
         token.seizeWithMemo(from, address(0), amount, bytes32(0));
     }
 
-    /// @notice Reverts AccountNotBlocked when `from` is authorized under SEIZE_HOLDER_POLICY.
+    /// @notice Reverts AccountNotSeizable when `from` is authorized under SEIZE_HOLDER_POLICY.
     /// @dev Default SEIZE_HOLDER_POLICY is ALWAYS_ALLOW (0) → every account authorized → not seizable.
     function test_seizeWithMemo_revert_accountNotBlocked(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
@@ -61,7 +61,7 @@ contract B20SeizeWithMemoTest is B20Test {
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
 
         vm.prank(seizer);
-        vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotBlocked.selector, from));
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotSeizable.selector, from));
         token.seizeWithMemo(from, to, amount, bytes32(0));
     }
 
