@@ -111,7 +111,7 @@ contract B20RemovalsTest is B20AssetTest {
     }
 
     /// @notice Verifies the `BURN_FROM_ROLE()` role constant no longer resolves
-    /// @dev `burnBlocked` (gated by `BURN_BLOCKED_ROLE`) is the remaining seize path.
+    /// @dev `seizeWithMemo` (gated by `SEIZE_ROLE`) is the seize path; `burnBlocked` remains a burn.
     function test_burnFromRole_revert_selectorRemoved() public {
         _assertSelectorRemoved(abi.encodeWithSignature("BURN_FROM_ROLE()"), "BURN_FROM_ROLE() must not resolve");
     }

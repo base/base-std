@@ -215,7 +215,7 @@ contract B20FullLayoutTest is B20Test {
         // Its own per-operation packed slot, placed before the mock-only
         // `initialized` flag so the Rust precompile mirrors it without a filler.
         uint256 packedSeize = uint256(vm.load(tokenAddr, MockB20Storage.seizePolicyIdsSlot()));
-        assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 14 bits 0..63: SEIZABLE_ACCOUNT lane");
+        assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 14 bits 0..63: seize-holder lane");
         assertEq(packedSeize >> 64, 0, "slot 14 bits 64..255: three reserved lanes must be zero");
 
         // ---------- initialized ----------
@@ -283,7 +283,7 @@ contract B20FullLayoutTest is B20Test {
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
-        _setPolicy(B20Constants.SEIZABLE_ACCOUNT_POLICY, seizableMarker);
+        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, seizableMarker);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------

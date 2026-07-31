@@ -61,10 +61,9 @@ library MockB20Storage {
         uint64 executor;
     }
 
-    /// @notice Seize policy IDs (read by the seize operations `transferFromSeizableWithMemo`,
-    ///         `burnBlocked`, and `burnBlockedWithMemo`).
+    /// @notice Seize policy IDs (read by the seize operation `seizeWithMemo`).
     /// @dev    Bit layout:
-    ///           bits   0.. 63 : seizable (`SEIZABLE_ACCOUNT_POLICY`)
+    ///           bits   0.. 63 : seizable (`SEIZE_HOLDER_POLICY`)
     ///           bits  64..255 : reserved (implicit)
     struct SeizePolicyIds {
         uint64 seizable;
@@ -119,7 +118,7 @@ library MockB20Storage {
         // shifts and mask operations.
         //
         // Transfer-side policies (read by `_transfer`, `transferFrom*`,
-        // and the seize check in `burnBlocked`).
+        // and the blocked check in the deprecated `burnBlocked`).
         TransferPolicyIds transferPolicyIds;
         // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER_POLICY`
         // is defined today; future granular mint-side policy types (e.g.
@@ -324,7 +323,7 @@ library MockB20Storage {
         return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128);
     }
 
-    /// @notice Extracts the SEIZABLE_ACCOUNT policy id (lane 0) from the seize packed slot.
+    /// @notice Extracts the seize-holder policy id (lane 0) from the seize packed slot.
     function seizablePolicyId(uint256 packed) internal pure returns (uint64) {
         return uint64(packed);
     }

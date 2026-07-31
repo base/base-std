@@ -26,7 +26,7 @@ contract B20UpdatePolicyTest is B20Test {
                     uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()))
                 );
         }
-        if (policyScope == B20Constants.SEIZABLE_ACCOUNT_POLICY) {
+        if (policyScope == B20Constants.SEIZE_HOLDER_POLICY) {
             return
                 MockB20Storage.seizablePolicyId(uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot())));
         }
