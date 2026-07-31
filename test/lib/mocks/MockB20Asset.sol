@@ -107,8 +107,18 @@ contract MockB20Asset is MockB20, IB20Asset {
 
         for (uint256 i = 0; i < internalCalls.length; i++) {
             _checkSelector(internalCalls[i]);
-            (bool success,) = address(this).delegatecall(internalCalls[i]);
-            if (!success) revert InternalCallFailed(internalCalls[i]);
+            (bool success, bytes memory ret) = address(this).delegatecall(internalCalls[i]);
+            if (!success) {
+                // Match the Rust precompile's is_system_error(): a Solidity Panic propagates
+                // unwrapped; only ordinary reverts wrap as InternalCallFailed.
+                if (ret.length >= 4 && bytes4(ret) == bytes4(0x4e487b71)) {
+                    // Re-raise the exact returndata; offset 0x20 skips the length word.
+                    assembly {
+                        revert(add(ret, 0x20), mload(ret))
+                    }
+                }
+                revert InternalCallFailed(internalCalls[i]);
+            }
         }
 
         emit EndAnnouncement(id);

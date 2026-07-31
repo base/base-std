@@ -76,6 +76,21 @@ contract B20AssetAnnounceTest is B20AssetTest {
         asset().announce(_singletonBytes(failingCall), "fail-id", "desc", "uri");
     }
 
+    /// @notice Verifies an inner call that raises a Solidity Panic propagates the raw Panic
+    ///         unchanged instead of being wrapped as InternalCallFailed (parity with the Rust impl).
+    /// @dev Arithmetic overflow (0x11) is the one inner-call Panic reachable on both sides: a
+    ///      multiplier > 1 makes toScaledBalance(uint256 max) overflow. NOT skipped under live
+    ///      precompiles — asserting the raw payload from the live precompile is the conformance point.
+    function test_announce_innerPanic_propagatesRaw() public {
+        _grantOperator();
+        _updateMultiplier(2 * asset().WAD_PRECISION());
+        bytes memory inner = abi.encodeWithSelector(IB20Asset.toScaledBalance.selector, type(uint256).max);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));
+        asset().announce(_singletonBytes(inner), "panic-id", "desc", "uri");
+    }
+
     /// @notice Verifies a failed announcement does NOT consume the id (atomicity)
     /// @dev The whole tx unwinds on inner-call failure, including the
     ///      `usedAnnouncementIds[id] = true` write that announce performs before the
