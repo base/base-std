@@ -329,6 +329,8 @@ abstract contract MockB20 is IB20 {
         emit BurnedBlocked(msg.sender, from, amount);
     }
 
+    /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
+    ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
     /// @dev Admin seize: reassign a blocked account's balance. `to` must be non-zero (otherwise this
     ///      would be a burn), and — unlike a normal transfer — no sender/receiver/executor transfer
     ///      policy is consulted, no allowance is spent, and `from` is not zero-checked (consistent with
@@ -338,6 +340,11 @@ abstract contract MockB20 is IB20 {
     ///      so a treasury need not be allowlisted by default). Deliberately does NOT reuse the
     ///      factory-bootstrap privileged path (which would silently skip the receiver policy); every skip
     ///      here is explicit.
+    /// @param from   Account whose balance is being seized.
+    /// @param to     Destination address for the seized balance.
+    /// @param amount Amount to seize.
+    /// @param memo   Memo payload emitted via `Memo`.
+    /// @return Always `true` on success.
     function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo)
         external
         whenNotPaused(PausableFeature.SEIZE)
