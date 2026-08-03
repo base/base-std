@@ -14,7 +14,8 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         2. ROLE (`onlyRole(SEIZE_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver` (`from` is not zero-checked)
 ///         4. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
-///         5. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
+///         5. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
+///         6. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20SeizeWithMemoRevertOrderTest is B20Test {
     address internal seizer = makeAddr("seizer");
 
@@ -65,6 +66,39 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotSeizable.selector, from));
+        token.seizeWithMemo(from, to, 1, bytes32(0));
+    }
+
+    /// @notice BLOCKED beats RECEIVER (`from` not blocked wins over a forbidding receiver policy on `to`).
+    function test_seizeWithMemo_revertOrder_blocked_beats_receiver(address from, address to) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → `from` is NOT blocked (not seizable).
+        _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotSeizable.selector, from));
+        token.seizeWithMemo(from, to, 1, bytes32(0));
+    }
+
+    /// @notice RECEIVER beats BALANCE (`to` forbidden by the receiver policy wins over zero balance).
+    function test_seizeWithMemo_revertOrder_receiver_beats_balance(address from, address to) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+        // `from` IS seizable (blocked), `to` IS forbidden by the receiver policy, and balance is zero.
+        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(seizer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector, B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.seizeWithMemo(from, to, 1, bytes32(0));
     }
 

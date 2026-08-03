@@ -64,9 +64,11 @@ library MockB20Storage {
     /// @notice Seize policy IDs (read by the seize operation `seizeWithMemo`).
     /// @dev    Bit layout:
     ///           bits   0.. 63 : seizable (`SEIZE_HOLDER_POLICY`)
-    ///           bits  64..255 : reserved (implicit)
+    ///           bits  64..127 : receiver (`SEIZE_RECEIVER_POLICY`)
+    ///           bits 128..255 : reserved (implicit)
     struct SeizePolicyIds {
         uint64 seizable;
+        uint64 receiver;
     }
 
     /// @notice Mint-side policy IDs (read by `_mint`). Only the
@@ -328,10 +330,15 @@ library MockB20Storage {
         return uint64(packed);
     }
 
-    /// @notice Composes the seize packed slot from its single defined lane.
-    /// @dev Lanes 1..3 are reserved and pinned to zero.
-    function packSeizePolicyIds(uint64 seizableId) internal pure returns (uint256) {
-        return uint256(seizableId);
+    /// @notice Extracts the SEIZE_RECEIVER policy id (lane 1) from the seize packed slot.
+    function seizeReceiverPolicyId(uint256 packed) internal pure returns (uint64) {
+        return uint64(packed >> 64);
+    }
+
+    /// @notice Composes the seize packed slot from its two defined lanes.
+    /// @dev Lanes 2..3 are reserved and pinned to zero.
+    function packSeizePolicyIds(uint64 seizableId, uint64 receiverId) internal pure returns (uint256) {
+        return uint256(seizableId) | (uint256(receiverId) << 64);
     }
 
     /// @notice Extracts the MINT_RECEIVER policy id (lane 0) from the packed slot.

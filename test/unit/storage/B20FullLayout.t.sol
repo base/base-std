@@ -57,6 +57,7 @@ contract B20FullLayoutTest is B20Test {
     uint64 internal transferReceiverMarker;
     uint64 internal transferExecutorMarker;
     uint64 internal seizableMarker;
+    uint64 internal seizeReceiverMarker;
     uint64 internal mintReceiverMarker;
 
     /// @notice Cross-cuts every field of MockB20Storage.Layout in a single
@@ -84,7 +85,7 @@ contract B20FullLayoutTest is B20Test {
     ///         - 11: pausedVectors (TRANSFER + MINT bits)
     ///         - 12: supplyCap
     ///         - 13: nonces (advanced via permit)
-    ///         - 14: seizePolicyIds (seizable lane)
+    ///         - 14: seizePolicyIds (seizable + receiver lanes)
     ///         - 15: initialized (mock-only bootstrap flag, kept last)
     function test_b20Layout_success_populatedSnapshotMatchesAllSlots() public {
         // ---------- Populate ----------
@@ -216,7 +217,12 @@ contract B20FullLayoutTest is B20Test {
         // `initialized` flag so the Rust precompile mirrors it without a filler.
         uint256 packedSeize = uint256(vm.load(tokenAddr, MockB20Storage.seizePolicyIdsSlot()));
         assertEq(packedSeize & 0xFFFFFFFFFFFFFFFF, uint256(seizableMarker), "slot 14 bits 0..63: seize-holder lane");
-        assertEq(packedSeize >> 64, 0, "slot 14 bits 64..255: three reserved lanes must be zero");
+        assertEq(
+            (packedSeize >> 64) & 0xFFFFFFFFFFFFFFFF,
+            uint256(seizeReceiverMarker),
+            "slot 14 bits 64..127: seize-receiver lane"
+        );
+        assertEq(packedSeize >> 128, 0, "slot 14 bits 128..255: two reserved lanes must be zero");
 
         // ---------- initialized ----------
         // Mock world: the mock-only bootstrap flag, kept last in its own slot
@@ -279,11 +285,13 @@ contract B20FullLayoutTest is B20Test {
         transferExecutorMarker =
             StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
         seizableMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
+        seizeReceiverMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
         mintReceiverMarker = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.BLOCKLIST);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, transferSenderMarker);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, transferReceiverMarker);
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, transferExecutorMarker);
         _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, seizableMarker);
+        _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, seizeReceiverMarker);
         _setPolicy(B20Constants.MINT_RECEIVER_POLICY, mintReceiverMarker);
 
         // ---------- Pause vectors ----------

@@ -119,6 +119,61 @@ contract B20SeizeWithMemoTest is B20Test {
         assertEq(token.balanceOf(to), amount, "seize must succeed regardless of receiver policy on `to`");
     }
 
+    /// @notice Reverts PolicyForbids(SEIZE_RECEIVER_POLICY, ...) when `to` is not authorized under it.
+    /// @dev The receiver gate mirrors MINT_RECEIVER_POLICY and fires after the seizable check on `from`.
+    function test_seizeWithMemo_revert_receiverPolicyForbids(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        _armSeize();
+        _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(seizer);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector, B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.seizeWithMemo(from, to, amount, bytes32(0));
+    }
+
+    /// @notice An unset SEIZE_RECEIVER_POLICY (default ALWAYS_ALLOW) lets seize send to any destination.
+    function test_seizeWithMemo_success_unsetReceiverPolicyAllowsAnyDestination(
+        address from,
+        address to,
+        uint256 amount
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
+        _mint(from, amount);
+        _armSeize();
+        // SEIZE_RECEIVER_POLICY left unset (0 = ALWAYS_ALLOW).
+
+        vm.prank(seizer);
+        token.seizeWithMemo(from, to, amount, bytes32(0));
+
+        assertEq(token.balanceOf(to), amount, "unset receiver policy must allow any destination");
+    }
+
+    /// @notice A configured-allow SEIZE_RECEIVER_POLICY authorizes the destination and seize succeeds.
+    function test_seizeWithMemo_success_configuredReceiverPolicyAllows(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
+        _mint(from, amount);
+        _armSeize();
+        _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+
+        vm.prank(seizer);
+        token.seizeWithMemo(from, to, amount, bytes32(0));
+
+        assertEq(token.balanceOf(to), amount, "authorized destination must receive the seized amount");
+    }
+
     /// @notice Requires no allowance from the seized account: seize skips allowance accounting.
     function test_seizeWithMemo_success_noAllowanceRequired(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
