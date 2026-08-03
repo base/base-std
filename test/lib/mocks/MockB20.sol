@@ -329,24 +329,21 @@ abstract contract MockB20 is IB20 {
         emit BurnedBlocked(msg.sender, from, amount);
     }
 
+    /// @dev Admin seize: reassign a blocked account's balance. `to` must be non-zero (otherwise this
+    ///      would be a burn), and — unlike a normal transfer — no sender/receiver/executor transfer
+    ///      policy is consulted, no allowance is spent, and `from` is not zero-checked (consistent with
+    ///      the burn-blocked family; a zero/empty `from` fails the seizable or balance check anyway). The
+    ///      membership checks are that `from` is blocked under `SEIZE_HOLDER_POLICY` and `to` is authorized
+    ///      under `SEIZE_RECEIVER_POLICY` (mirroring `MINT_RECEIVER_POLICY`; an unset slot is always-allow,
+    ///      so a treasury need not be allowlisted by default). Deliberately does NOT reuse the
+    ///      factory-bootstrap privileged path (which would silently skip the receiver policy); every skip
+    ///      here is explicit.
     function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo)
         external
         whenNotPaused(PausableFeature.SEIZE)
         onlyRole(SEIZE_ROLE)
         returns (bool)
     {
-        // Admin seize: reassign a blocked account's balance. `to` must be
-        // non-zero (otherwise this would be a burn), and — unlike a normal
-        // transfer — no sender/receiver/executor transfer policy is consulted,
-        // no allowance is spent, and `from` is not zero-checked (consistent
-        // with the burn-blocked family; a zero/empty `from` fails the seizable
-        // or balance check anyway). The membership checks are that `from` is
-        // blocked under SEIZE_HOLDER_POLICY and `to` is authorized under
-        // SEIZE_RECEIVER_POLICY (mirroring MINT_RECEIVER_POLICY; an unset slot
-        // is always-allow, so a treasury need not be allowlisted by default).
-        // Deliberately does NOT reuse the factory-bootstrap privileged path
-        // (which would silently skip the receiver policy); every skip here is
-        // explicit.
         if (to == address(0)) revert InvalidReceiver(to);
         _requireSeizable(from);
         _requireSeizeReceiver(to);

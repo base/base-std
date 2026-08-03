@@ -271,9 +271,7 @@ interface IB20 {
 
     /// @notice Policy slot consulted against `to` by `seizeWithMemo`.
     /// @dev Mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot reads
-    ///      as `0` (always-allow), so seize may send anywhere until an issuer configures the slot — a
-    ///      treasury need not be allowlisted by default. Setting it lets an issuer constrain where seized
-    ///      funds may land, derisking a runaway `SEIZE_ROLE`.
+    ///      as `0` (always-allow), so seize may send anywhere until an issuer configures the slot.
     /// @return Policy scope constant.
     function SEIZE_RECEIVER_POLICY() external view returns (bytes32);
 
