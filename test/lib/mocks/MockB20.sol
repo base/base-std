@@ -96,6 +96,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
     bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
     bytes32 public constant SEIZE_HOLDER_POLICY = B20Constants.SEIZE_HOLDER_POLICY;
+    bytes32 public constant SEIZE_RECEIVER_POLICY = B20Constants.SEIZE_RECEIVER_POLICY;
 
     /// @notice Maximum value the supply cap may be set to. Because `mint`
     ///         rejects any `totalSupply` above the cap, this also bounds
@@ -328,23 +329,31 @@ abstract contract MockB20 is IB20 {
         emit BurnedBlocked(msg.sender, from, amount);
     }
 
+    /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
+    ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
+    /// @dev Admin seize: reassign a blocked account's balance. `to` must be non-zero (otherwise this
+    ///      would be a burn), and — unlike a normal transfer — no sender/receiver/executor transfer
+    ///      policy is consulted, no allowance is spent, and `from` is not zero-checked (consistent with
+    ///      the burn-blocked family; a zero/empty `from` fails the seizable or balance check anyway). The
+    ///      membership checks are that `from` is blocked under `SEIZE_HOLDER_POLICY` and `to` is authorized
+    ///      under `SEIZE_RECEIVER_POLICY` (mirroring `MINT_RECEIVER_POLICY`; an unset slot is always-allow,
+    ///      so a treasury need not be allowlisted by default). Deliberately does NOT reuse the
+    ///      factory-bootstrap privileged path (which would silently skip the receiver policy); every skip
+    ///      here is explicit.
+    /// @param from   Account whose balance is being seized.
+    /// @param to     Destination address for the seized balance.
+    /// @param amount Amount to seize.
+    /// @param memo   Memo payload emitted via `Memo`.
+    /// @return Always `true` on success.
     function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo)
         external
         whenNotPaused(PausableFeature.SEIZE)
         onlyRole(SEIZE_ROLE)
         returns (bool)
     {
-        // Admin seize: reassign a blocked account's balance. `to` must be
-        // non-zero (otherwise this would be a burn), but — unlike a normal
-        // transfer — no sender/receiver/executor policy is consulted, no
-        // allowance is spent, and `from` is not zero-checked (consistent with
-        // the burn-blocked family; a zero/empty `from` fails the seizable or
-        // balance check anyway). The only membership check is that `from` is
-        // blocked under SEIZE_HOLDER_POLICY. Deliberately does NOT reuse the
-        // factory-bootstrap privileged path (which would silently skip the
-        // receiver policy); every skip here is explicit.
         if (to == address(0)) revert InvalidReceiver(to);
         _requireSeizable(from);
+        _requireSeizeReceiver(to);
         _moveBalance(from, to, amount);
         // `Memo` must immediately follow the `Transfer` (emitted by
         // `_moveBalance`), per the IB20 `Memo` invariant, so it precedes
@@ -509,6 +518,7 @@ abstract contract MockB20 is IB20 {
         if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;
         if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;
         if (policyScope == SEIZE_HOLDER_POLICY) return $.seizePolicyIds.seizable;
+        if (policyScope == SEIZE_RECEIVER_POLICY) return $.seizePolicyIds.receiver;
         if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;
         revert UnsupportedPolicyType(policyScope);
     }
@@ -533,6 +543,8 @@ abstract contract MockB20 is IB20 {
             $.transferPolicyIds.executor = newPolicyId;
         } else if (policyScope == SEIZE_HOLDER_POLICY) {
             $.seizePolicyIds.seizable = newPolicyId;
+        } else if (policyScope == SEIZE_RECEIVER_POLICY) {
+            $.seizePolicyIds.receiver = newPolicyId;
         } else {
             $.mintPolicyIds.receiver = newPolicyId;
         }
@@ -791,6 +803,18 @@ abstract contract MockB20 is IB20 {
         uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
         if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
             revert AccountNotSeizable(from);
+        }
+    }
+
+    /// @dev Seize receiver gate: reverts `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
+    ///      unless `to` is authorized under `SEIZE_RECEIVER_POLICY`. Mirrors the
+    ///      `_mint` receiver check: enforced unconditionally, and an unset slot
+    ///      reads as `ALWAYS_ALLOW_ID` so an unconfigured token may seize to any
+    ///      destination (a treasury need not be allowlisted).
+    function _requireSeizeReceiver(address to) internal view {
+        uint64 seizeReceiverPolicyId = MockB20Storage.layout().seizePolicyIds.receiver;
+        if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizeReceiverPolicyId, to)) {
+            revert PolicyForbids(SEIZE_RECEIVER_POLICY, seizeReceiverPolicyId);
         }
     }
 

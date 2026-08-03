@@ -269,6 +269,12 @@ interface IB20 {
     /// @return Policy scope constant.
     function SEIZE_HOLDER_POLICY() external view returns (bytes32);
 
+    /// @notice Policy slot consulted against `to` by `seizeWithMemo`.
+    /// @dev Mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot reads
+    ///      as `0` (always-allow), so seize may send anywhere until an issuer configures the slot.
+    /// @return Policy scope constant.
+    function SEIZE_RECEIVER_POLICY() external view returns (bytes32);
+
     /*//////////////////////////////////////////////////////////////
                                   ERC-20
     //////////////////////////////////////////////////////////////*/
@@ -436,13 +442,15 @@ interface IB20 {
     ///         Emits, in order, `Transfer(from, to, amount)`, `Memo(caller, memo)`, and
     ///         `Seized(caller, from, to, amount)`. A memo of `bytes32(0)` is permitted.
     ///
-    /// @dev Admin operation: skips allowance and the transfer policies. The only membership check is that
-    ///      `from` is blocked under `SEIZE_HOLDER_POLICY`.
-    /// @dev `to` is not policy-checked; the destination need not be allowlisted.
+    /// @dev Admin operation: skips allowance and the transfer policies. The membership checks are that
+    ///      `from` is blocked under `SEIZE_HOLDER_POLICY` and `to` is authorized under `SEIZE_RECEIVER_POLICY`.
+    /// @dev `to` is gated by `SEIZE_RECEIVER_POLICY`, which defaults to always-allow when unset, so an
+    ///      unconfigured token may seize to any destination (a treasury need not be allowlisted).
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
     /// @dev Reverts with `AccountNotSeizable` when `from` is currently authorized under `SEIZE_HOLDER_POLICY`.
+    /// @dev Reverts with `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)` when `to` is not authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///
     /// @param from   Account whose balance is being seized.
