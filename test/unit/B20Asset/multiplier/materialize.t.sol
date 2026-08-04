@@ -45,8 +45,8 @@ contract B20AssetMaterializeTest is B20AssetTest {
         assertEq(asset().uiMultiplier(), second, "second schedule flips in on maturity");
     }
 
-    /// @notice Verifies updateMultiplier clears a *live* pending and emits the cancellation
-    function test_updateMultiplier_success_clearsLivePending() public {
+    /// @notice Verifies updateUIMultiplier clears a *live* pending and emits the cancellation
+    function test_updateUIMultiplier_success_clearsLivePending() public {
         uint256 pendingMultiplier = 2e18;
         uint256 effectiveAt = block.timestamp + 1 days;
         _setUIMultiplier(pendingMultiplier, effectiveAt);
@@ -59,17 +59,17 @@ contract B20AssetMaterializeTest is B20AssetTest {
         vm.expectEmit(false, false, false, true, address(token));
         emit IScaledUIAmount.UIMultiplierUpdated(old, instant, block.timestamp);
         vm.prank(operator);
-        asset().updateMultiplier(instant);
+        asset().updateUIMultiplier(instant);
 
         assertEq(asset().uiMultiplier(), instant, "instant update must take effect immediately");
         assertEq(uint256(vm.load(address(token), MockB20AssetStorage.pendingSlot())), 0, "pending must be cleared");
         assertEq(asset().effectiveAt(), 0, "effectiveAt must reset to 0");
     }
 
-    /// @notice Verifies updateMultiplier clears a *matured* pending WITHOUT a cancellation event
+    /// @notice Verifies updateUIMultiplier clears a *matured* pending WITHOUT a cancellation event
     /// @dev A matured pending already took effect, so it folds into `oldMultiplier` and is cleared
     ///      silently — `UIMultiplierUpdateCancelled` fires only for a live pending.
-    function test_updateMultiplier_success_clearsMaturedPendingNoCancelEvent() public {
+    function test_updateUIMultiplier_success_clearsMaturedPendingNoCancelEvent() public {
         uint256 matured = 2e18;
         uint256 effectiveAt = block.timestamp + 1 days;
         _setUIMultiplier(matured, effectiveAt);
@@ -79,7 +79,7 @@ contract B20AssetMaterializeTest is B20AssetTest {
         _grantOperator();
         vm.recordLogs();
         vm.prank(operator);
-        asset().updateMultiplier(instant);
+        asset().updateUIMultiplier(instant);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         assertEq(

@@ -22,7 +22,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     /// @notice `updateExtraMetadata` was called with an empty `key`.
     error InvalidMetadataKey();
 
-    /// @notice A multiplier setter (`setUIMultiplier` or `updateMultiplier`) was called with a
+    /// @notice A multiplier setter (`setUIMultiplier` or `updateUIMultiplier`) was called with a
     ///         multiplier of zero or above the `type(uint128).max` overflow guard.
     error InvalidMultiplier();
 
@@ -74,7 +74,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     //////////////////////////////////////////////////////////////*/
 
     /// @notice A scheduled multiplier update was cancelled. Emitted by `cancelScheduledMultiplier`,
-    ///         and by `updateMultiplier` when it clears a live pending update.
+    ///         and by `updateUIMultiplier` when it clears a live pending update.
     ///
     /// @param cancelledMultiplier  The pending multiplier that was cleared.
     /// @param cancelledEffectiveAt The `effectiveAt` of the pending update that was cleared.
@@ -94,7 +94,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Required to call `announce`, `setUIMultiplier`, `cancelScheduledMultiplier`, and
-    ///         `updateMultiplier`. The metadata setters (`updateName`, `updateSymbol`,
+    ///         `updateUIMultiplier`. The metadata setters (`updateName`, `updateSymbol`,
     ///         `updateExtraMetadata`) are gated by the inherited `METADATA_ROLE` instead.
     /// @return Role constant.
     function OPERATOR_ROLE() external view returns (bytes32);
@@ -205,11 +205,13 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     ///         cancels any live pending update without a scheduling window.
     ///         Prefer `setUIMultiplier` for routine corporate actions.
     ///
+    /// @dev The precompile also retains the legacy `updateMultiplier(uint256)` selector (identical
+    ///      behavior), dialable but deprecated; it is intentionally no longer advertised here.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
     /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be in `(0, type(uint128).max]`.
-    function updateMultiplier(uint256 newMultiplier) external;
+    function updateUIMultiplier(uint256 newMultiplier) external;
 
     /*//////////////////////////////////////////////////////////////
                             BATCHED ISSUANCE

@@ -73,12 +73,12 @@ contract B20AssetTest is B20Test {
     //                       MULTIPLIER HELPERS
     // ============================================================
 
-    /// @notice Sets the multiplier via the `operator` actor, lazily
-    ///         granting `OPERATOR_ROLE` on first call.
+    /// @notice Sets the multiplier immediately via the `operator` actor (canonical
+    ///         `updateUIMultiplier`), lazily granting `OPERATOR_ROLE` on first call.
     function _updateMultiplier(uint256 newMultiplier) internal {
         _grantOperator();
         vm.prank(operator);
-        asset().updateMultiplier(newMultiplier);
+        asset().updateUIMultiplier(newMultiplier);
     }
 
     /// @notice Schedules a pending multiplier via the `operator` actor,

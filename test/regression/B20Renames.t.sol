@@ -87,13 +87,13 @@ contract B20RenamesTest is B20AssetTest {
     /// @notice Verifies the multiplier-change event was widened/renamed to the ERC-8056
     ///         `UIMultiplierUpdated(old, new, effectiveAt)` and the legacy `MultiplierUpdated(uint256)`
     ///         is gone
-    /// @dev `updateMultiplier` must emit the ERC-8056 topic and never the legacy topic.
+    /// @dev `updateUIMultiplier` must emit the ERC-8056 topic and never the legacy topic.
     function test_multiplierEvent_success_widenedToUIMultiplierUpdated(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         vm.recordLogs();
         vm.prank(operator);
-        asset().updateMultiplier(newMultiplier);
+        asset().updateUIMultiplier(newMultiplier);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertGt(
             _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG), -1, "UIMultiplierUpdated(old,new,effAt) must be emitted"
@@ -123,7 +123,7 @@ contract B20RenamesTest is B20AssetTest {
     // ============================================================
     // The asset variant splits authority: the metadata setters (updateName / updateSymbol /
     // updateContractURI / updateExtraMetadata) are gated by METADATA_ROLE, while the operator
-    // actions (announce / updateMultiplier) are gated by OPERATOR_ROLE. The tests below pin that
+    // actions (announce / updateUIMultiplier) are gated by OPERATOR_ROLE. The tests below pin that
     // split from both sides.
 
     /// @notice Verifies `updateExtraMetadata` is gated by METADATA_ROLE, not OPERATOR_ROLE
@@ -145,17 +145,44 @@ contract B20RenamesTest is B20AssetTest {
         assertEq(asset().extraMetadata(METADATA_EXAMPLE_1), value, "metadata write by METADATA_ROLE must persist");
     }
 
-    /// @notice Verifies `updateMultiplier` is gated by OPERATOR_ROLE, not METADATA_ROLE
+    /// @notice Verifies `updateUIMultiplier` is gated by OPERATOR_ROLE, not METADATA_ROLE
     /// @dev A METADATA_ROLE-only holder is rejected with the OPERATOR_ROLE selector — the inverse
     ///      of the metadata-gating test, confirming the two authorities are distinct.
-    function test_updateMultiplier_revert_metadataRoleInsufficient(uint256 newMultiplier) public {
+    function test_updateUIMultiplier_revert_metadataRoleInsufficient(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantRole(B20Constants.METADATA_ROLE, bob);
         vm.prank(bob);
         vm.expectRevert(
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, bob, B20Constants.OPERATOR_ROLE)
         );
-        asset().updateMultiplier(newMultiplier);
+        asset().updateUIMultiplier(newMultiplier);
+    }
+
+    /// @notice Verifies the deprecated `updateMultiplier(uint256)` selector stays dialable after
+    ///         being de-advertised from `IB20Asset`, and behaves identically to `updateUIMultiplier`.
+    /// @dev Deprecation-not-removal: the precompile permanently retains the legacy selector so block
+    ///      explorers and existing integrations keep working; only base-std's advertised interface
+    ///      drops it. Dialed by raw signature since the typed interface no longer declares it.
+    function test_updateMultiplier_deprecated_stillDialable(uint256 newMultiplier) public {
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
+        _grantOperator();
+        vm.recordLogs();
+        vm.prank(operator);
+        (bool ok,) = address(token).call(abi.encodeWithSignature("updateMultiplier(uint256)", newMultiplier));
+        assertTrue(ok, "legacy updateMultiplier(uint256) selector must remain dialable (deprecated, not removed)");
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertGt(
+            _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG),
+            -1,
+            "legacy updateMultiplier must emit the ERC-8056 UIMultiplierUpdated"
+        );
+        assertEq(
+            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
+            -1,
+            "legacy updateMultiplier must not emit MultiplierUpdated"
+        );
+        assertEq(asset().multiplier(), newMultiplier, "legacy updateMultiplier must set the current multiplier");
     }
 
     /// @notice Verifies METADATA_ROLE is administered by DEFAULT_ADMIN_ROLE on a freshly created token

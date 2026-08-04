@@ -213,19 +213,17 @@ contract MockB20Asset is MockB20, IB20Asset {
         emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
     }
 
-    /// @notice Sets the current multiplier immediately and clears any pending.
-    function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
-        if (newMultiplier == 0 || newMultiplier > type(uint128).max) revert InvalidMultiplier();
-        MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
-        uint256 pendingMult = $.pending.multiplier;
-        uint256 pendingEff = $.pending.effectiveAt;
-        bool livePending = pendingEff > block.timestamp;
+    /// @notice Sets the current multiplier immediately and clears any pending. Canonical ERC-8056
+    ///         "UI Multiplier" vocabulary name for the instant failsafe.
+    function updateUIMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
+        _updateMultiplierNow(newMultiplier);
+    }
 
-        uint256 old = _multiplier();
-        $.multiplier = newMultiplier;
-        if (pendingEff != 0) delete $.pending;
-        if (livePending) emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
-        emit UIMultiplierUpdated(old, newMultiplier, block.timestamp);
+    /// @notice Deprecated alias of `updateUIMultiplier`, retained (dialable) so the precompile's
+    ///         legacy `updateMultiplier(uint256)` selector stays cross-validated by the fork tests.
+    ///         No longer advertised in `IB20Asset`.
+    function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
+        _updateMultiplierNow(newMultiplier);
     }
 
     // ============================================================
@@ -279,6 +277,23 @@ contract MockB20Asset is MockB20, IB20Asset {
     // ============================================================
     //                       INTERNAL HELPERS
     // ============================================================
+
+    /// @dev Shared body for `updateUIMultiplier` / `updateMultiplier`: sets the current multiplier
+    ///      immediately, clears any pending update, and emits the ERC-8056 events (a
+    ///      `UIMultiplierUpdateCancelled` when it clears a live pending, then `UIMultiplierUpdated`).
+    function _updateMultiplierNow(uint256 newMultiplier) internal {
+        if (newMultiplier == 0 || newMultiplier > type(uint128).max) revert InvalidMultiplier();
+        MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
+        uint256 pendingMult = $.pending.multiplier;
+        uint256 pendingEff = $.pending.effectiveAt;
+        bool livePending = pendingEff > block.timestamp;
+
+        uint256 old = _multiplier();
+        $.multiplier = newMultiplier;
+        if (pendingEff != 0) delete $.pending;
+        if (livePending) emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
+        emit UIMultiplierUpdated(old, newMultiplier, block.timestamp);
+    }
 
     /// @dev The effective multiplier: returns the pending slot's value if live,
     ///      otherwise returns the current multiplier.
