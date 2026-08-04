@@ -119,6 +119,13 @@ interface IB20Asset is
     /// @return Precision constant.
     function WAD_PRECISION() external view returns (uint256);
 
+    /// @notice The maximum multiplier the setters accept: `type(uint128).max`, the overflow guard.
+    ///         Exposed so callers can read the bound without triggering the `InvalidMultiplier`
+    ///         revert path. With supply capped at `type(uint128).max`, a `uint128` multiplier keeps
+    ///         `balance * multiplier` inside `uint256`.
+    /// @return Maximum UI multiplier constant.
+    function MAX_UI_MULTIPLIER() external view returns (uint256);
+
     /*//////////////////////////////////////////////////////////////
                               ANNOUNCEMENTS
     //////////////////////////////////////////////////////////////*/

@@ -71,6 +71,10 @@ contract MockB20Asset is MockB20, IB20Asset {
     ///         by this before dividing.
     uint256 public constant WAD_PRECISION = 1e18;
 
+    /// @notice The maximum multiplier the setters accept: `type(uint128).max`, the overflow guard.
+    ///         Single source of truth for the setter guards, exposed via its auto-generated getter.
+    uint256 public constant MAX_UI_MULTIPLIER = type(uint128).max;
+
     // ============================================================
     //                           DECIMALS
     // ============================================================
@@ -195,7 +199,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     ///      setter, which overwrites). A *live* pending (`effectiveAt > block.timestamp`) blocks and
     ///      must be cancelled first.
     function setUIMultiplier(uint256 newMultiplier, uint256 effectiveAt_) external onlyRole(OPERATOR_ROLE) {
-        if (newMultiplier == 0 || newMultiplier > type(uint128).max) revert InvalidMultiplier();
+        if (newMultiplier == 0 || newMultiplier > MAX_UI_MULTIPLIER) revert InvalidMultiplier();
         if (effectiveAt_ <= block.timestamp) revert EffectiveAtInPast(effectiveAt_);
         if (effectiveAt_ > type(uint64).max) revert EffectiveAtTooFar(effectiveAt_);
 
@@ -298,7 +302,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     ///      immediately, clears any pending update, and emits the ERC-8056 events (a
     ///      `UIMultiplierUpdateCancelled` when it clears a live pending, then `UIMultiplierUpdated`).
     function _updateMultiplierNow(uint256 newMultiplier) internal {
-        if (newMultiplier == 0 || newMultiplier > type(uint128).max) revert InvalidMultiplier();
+        if (newMultiplier == 0 || newMultiplier > MAX_UI_MULTIPLIER) revert InvalidMultiplier();
         MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
         uint256 pendingMult = $.pending.multiplier;
         uint256 pendingEff = $.pending.effectiveAt;
