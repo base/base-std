@@ -5,8 +5,10 @@ Exercises the transfer-based seize surface added at Cobalt (V2): the dedicated
 it is NOT authorized by that policy), `seizeWithMemo` (`Transfer` -> `Memo` -> `Seized`,
 supply-preserving because seize is a reassignment, not a burn), and the `SEIZE` pause
 vector — plus the gates that must reject (`AccountNotSeizable`, role,
-`InvalidReceiver`, `ContractPaused`) and the admin-op decoupling from the receiver
-policy on `to`.
+`InvalidReceiver`, `ContractPaused`), the admin-op decoupling from the *transfer*
+receiver policy on `to`, and the `SEIZE_RECEIVER_POLICY` gate on `to` (mirrors
+`MINT_RECEIVER_POLICY`: unset = allow-any, configured = the destination must be
+authorized).
 
 Fork-gated: the whole surface is Cobalt-only. The journey probes the
 `SEIZE_HOLDER_POLICY()` getter and cleanly SKIPS on a pre-Cobalt chain (where the
@@ -56,8 +58,11 @@ def _is_cobalt(c: Chain, tok) -> bool:
 
 
 def _journey(c: Chain, tok) -> None:
-    step(1, "getters: SEIZE_HOLDER_POLICY() and SEIZE_ROLE() match the keccak constants")
+    step(1, "getters: SEIZE_HOLDER_POLICY(), SEIZE_RECEIVER_POLICY() and SEIZE_ROLE() match the keccak constants")
     c.assert_eq(tok.functions.SEIZE_HOLDER_POLICY().call(), config.SEIZE_HOLDER_POLICY, "SEIZE_HOLDER_POLICY scope")
+    c.assert_eq(
+        tok.functions.SEIZE_RECEIVER_POLICY().call(), config.SEIZE_RECEIVER_POLICY, "SEIZE_RECEIVER_POLICY scope"
+    )
     c.assert_eq(tok.functions.SEIZE_ROLE().call(), config.SEIZE_ROLE, "SEIZE_ROLE id")
 
     step(2, "mint(alice, 1000); mint(deployer, 10)")
@@ -142,8 +147,30 @@ def _pause(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.totalSupply().call(), config.amt(1010, 18), "total supply still unchanged across all seizes")
 
 
+def _receiver_policy(c: Chain, tok) -> None:
+    # SEIZE_RECEIVER_POLICY gates `to`, mirroring MINT_RECEIVER_POLICY: unset = allow-any,
+    # configured = the destination must be authorized. Balances entering here: alice=410, bob=600.
+    step(10, "SEIZE_RECEIVER_POLICY unset (default): seize to any destination is allowed")
+    c.assert_eq(tok.functions.SEIZE_RECEIVER_POLICY().call(), config.SEIZE_RECEIVER_POLICY, "receiver scope getter")
+    # Deployer is not on any allowlist; with the scope unset (ALWAYS_ALLOW) the seize still lands.
+    c.send(tok.functions.seizeWithMemo(c.ALICE, c.DEPLOYER, config.amt(10, 18), MEMO), c.deployer)
+    c.assert_eq(tok.functions.balanceOf(c.DEPLOYER).call(), config.amt(10, 18), "deployer received seize (unset receiver policy)")
+
+    step(11, "configure SEIZE_RECEIVER_POLICY allowlist(bob): seize to bob (authorized) succeeds")
+    recv_pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST)
+    c.send(tok.functions.updatePolicy(config.SEIZE_RECEIVER_POLICY, recv_pid), c.deployer)
+    c.send(c.policy.functions.updateAllowlist(recv_pid, True, [c.BOB]), c.deployer)
+    c.assert_eq(c.policy.functions.isAuthorized(recv_pid, c.BOB).call(), True, "bob authorized as seize receiver")
+    c.assert_eq(c.policy.functions.isAuthorized(recv_pid, c.DEPLOYER).call(), False, "deployer not an authorized receiver")
+    c.send(tok.functions.seizeWithMemo(c.ALICE, c.BOB, config.amt(100, 18), MEMO), c.deployer)
+    c.assert_eq(tok.functions.balanceOf(c.BOB).call(), config.amt(700, 18), "bob received seize (authorized receiver)")
+
+    step(12, "receiver policy forbids an unauthorized destination -> PolicyForbids(SEIZE_RECEIVER_POLICY)")
+    c.expect_revert("PolicyForbids", tok.functions.seizeWithMemo(c.ALICE, c.DEPLOYER, 1, MEMO), c.DEPLOYER)
+
+
 def _events(c: Chain) -> None:
-    step(10, "expected events emitted across the flow")
+    step(13, "expected events emitted across the flow")
     c.assert_events_emitted(
         "seize events",
         "B20Created(address,uint8,string,string,uint8,bytes)",
@@ -153,6 +180,7 @@ def _events(c: Chain) -> None:
         "Seized(address,address,address,uint256)",
         "PolicyCreated(uint64,address,uint8)",
         "BlocklistUpdated(uint64,address,bool,address[])",
+        "AllowlistUpdated(uint64,address,bool,address[])",
         "PolicyUpdated(bytes32,uint64,uint64)",
         "Paused(address,uint8[])",
         "Unpaused(address,uint8[])",
@@ -169,5 +197,6 @@ def run(c: Chain) -> None:
     _edges(c, tok)
     _decoupling(c, tok)
     _pause(c, tok)
+    _receiver_policy(c, tok)
     _events(c)
     log("seize: OK")
