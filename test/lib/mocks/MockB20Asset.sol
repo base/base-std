@@ -8,7 +8,7 @@ import {
     IScaledUIAmount,
     IScaledUIAmountNewUIMultiplier,
     IScaledUIAmountBalances
-} from "base-std/interfaces/IScaledUIAmount.sol";
+} from "base-std/interfaces/IERC8056.sol";
 
 import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20AssetStorage, MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";

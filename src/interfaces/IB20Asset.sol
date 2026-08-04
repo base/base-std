@@ -3,7 +3,7 @@ pragma solidity >=0.8.20 <0.9.0;
 
 import {IB20} from "./IB20.sol";
 import {IERC165} from "./IERC165.sol";
-import {IScaledUIAmount, IScaledUIAmountNewUIMultiplier, IScaledUIAmountBalances} from "./IScaledUIAmount.sol";
+import {IScaledUIAmount, IScaledUIAmountNewUIMultiplier, IScaledUIAmountBalances} from "./IERC8056.sol";
 
 /// @title  IB20Asset
 /// @author Coinbase

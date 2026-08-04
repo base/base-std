@@ -5,7 +5,7 @@ import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
 import {IB20} from "base-std/interfaces/IB20.sol";
 import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
-import {IScaledUIAmount} from "base-std/interfaces/IScaledUIAmount.sol";
+import {IScaledUIAmount} from "base-std/interfaces/IERC8056.sol";
 
 contract B20AssetSetUIMultiplierTest is B20AssetTest {
     /// @notice Verifies setUIMultiplier emits UIMultiplierUpdated(old, new, effectiveAt)

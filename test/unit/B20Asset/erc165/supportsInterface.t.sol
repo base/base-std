@@ -8,7 +8,7 @@ import {
     IScaledUIAmount,
     IScaledUIAmountNewUIMultiplier,
     IScaledUIAmountBalances
-} from "base-std/interfaces/IScaledUIAmount.sol";
+} from "base-std/interfaces/IERC8056.sol";
 
 contract B20AssetSupportsInterfaceTest is B20AssetTest {
     // Published ERC-8056 / ERC-165 interface identifiers.
