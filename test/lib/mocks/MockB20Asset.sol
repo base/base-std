@@ -7,7 +7,8 @@ import {IERC165} from "base-std/interfaces/IERC165.sol";
 import {
     IScaledUIAmount,
     IScaledUIAmountNewUIMultiplier,
-    IScaledUIAmountBalances
+    IScaledUIAmountBalances,
+    IScaledUIAmountConversion
 } from "base-std/interfaces/IERC8056.sol";
 
 import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
@@ -153,12 +154,25 @@ contract MockB20Asset is MockB20, IB20Asset {
         return MockB20AssetStorage.layout().pending.effectiveAt;
     }
 
-    function toScaledBalance(uint256 rawBalance) external view returns (uint256) {
-        return (rawBalance * _multiplier()) / WAD_PRECISION;
+    /// @dev ERC-8056 Conversion extension: raw -> UI amount.
+    function toUIAmount(uint256 rawAmount) external view returns (uint256) {
+        return _toUIAmount(rawAmount);
     }
 
+    /// @dev ERC-8056 Conversion extension: UI -> raw amount.
+    function fromUIAmount(uint256 uiAmount) external view returns (uint256) {
+        return _fromUIAmount(uiAmount);
+    }
+
+    /// @dev Deprecated alias of `toUIAmount`, retained (dialable) so the precompile's legacy
+    ///      selector stays cross-validated by the fork tests. No longer advertised in `IB20Asset`.
+    function toScaledBalance(uint256 rawBalance) external view returns (uint256) {
+        return _toUIAmount(rawBalance);
+    }
+
+    /// @dev Deprecated alias of `fromUIAmount`, retained (dialable). No longer advertised.
     function toRawBalance(uint256 scaledBalance) external view returns (uint256) {
-        return (scaledBalance * WAD_PRECISION) / _multiplier();
+        return _fromUIAmount(scaledBalance);
     }
 
     function scaledBalanceOf(address account) external view returns (uint256) {
@@ -230,13 +244,15 @@ contract MockB20Asset is MockB20, IB20Asset {
     //                          ERC-165
     // ============================================================
 
-    /// @dev Advertises ERC-165 itself plus the three claimed ERC-8056 interfaces. The Conversion
-    ///      extension (`0x57854fc3`) is deliberately NOT advertised — the native
-    ///      `toScaledBalance` / `toRawBalance` names are kept unaliased.
+    /// @dev Advertises ERC-165 itself plus the four claimed ERC-8056 interfaces (core, pending,
+    ///      Balances, and Conversion). The Conversion extension (`0x57854fc3`) is claimed after the
+    ///      interface review: `toUIAmount` / `fromUIAmount` are exposed alongside the retained
+    ///      (dialable, de-advertised) legacy `toScaledBalance` / `toRawBalance` selectors.
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return interfaceId == type(IERC165).interfaceId || interfaceId == type(IScaledUIAmount).interfaceId
             || interfaceId == type(IScaledUIAmountNewUIMultiplier).interfaceId
-            || interfaceId == type(IScaledUIAmountBalances).interfaceId;
+            || interfaceId == type(IScaledUIAmountBalances).interfaceId
+            || interfaceId == type(IScaledUIAmountConversion).interfaceId;
     }
 
     // ============================================================
@@ -293,6 +309,18 @@ contract MockB20Asset is MockB20, IB20Asset {
         if (pendingEff != 0) delete $.pending;
         if (livePending) emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
         emit UIMultiplierUpdated(old, newMultiplier, block.timestamp);
+    }
+
+    /// @dev raw -> UI amount at the effective multiplier: `rawAmount * multiplier / WAD_PRECISION`.
+    ///      Shared body for `toUIAmount` and the deprecated `toScaledBalance` alias.
+    function _toUIAmount(uint256 rawAmount) internal view returns (uint256) {
+        return (rawAmount * _multiplier()) / WAD_PRECISION;
+    }
+
+    /// @dev UI -> raw amount at the effective multiplier: `uiAmount * WAD_PRECISION / multiplier`.
+    ///      Shared body for `fromUIAmount` and the deprecated `toRawBalance` alias.
+    function _fromUIAmount(uint256 uiAmount) internal view returns (uint256) {
+        return (uiAmount * WAD_PRECISION) / _multiplier();
     }
 
     /// @dev The effective multiplier: returns the pending slot's value if live,

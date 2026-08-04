@@ -55,8 +55,8 @@ contract B20RenamesTest is B20AssetTest {
 
         // New surface resolves and behaves (1:1 at the WAD default).
         assertEq(asset().multiplier(), asset().WAD_PRECISION(), "fresh multiplier must default to WAD");
-        assertEq(asset().toScaledBalance(rawBalance), rawBalance, "toScaledBalance is identity at WAD");
-        assertEq(asset().toRawBalance(rawBalance), rawBalance, "toRawBalance is identity at WAD");
+        assertEq(asset().toUIAmount(rawBalance), rawBalance, "toUIAmount is identity at WAD");
+        assertEq(asset().fromUIAmount(rawBalance), rawBalance, "fromUIAmount is identity at WAD");
 
         // Legacy share-ratio surface is gone.
         _assertSelectorRemoved(
@@ -105,8 +105,9 @@ contract B20RenamesTest is B20AssetTest {
 
     /// @notice Verifies the ERC-8056 surface resolves and aliases the native B20 names
     /// @dev `uiMultiplier` aliases `multiplier`; `balanceOfUI` aliases `scaledBalanceOf`; the pending
-    ///      surface, `totalSupplyUI`, and `supportsInterface` all resolve. These typed calls only
-    ///      compile against the current interface, so their presence is the guard.
+    ///      surface, `totalSupplyUI`, `toUIAmount`/`fromUIAmount`, and `supportsInterface` all
+    ///      resolve. These typed calls only compile against the current interface, so their presence
+    ///      is the guard.
     function test_erc8056Surface_success_aliasesResolve(uint256 amount) public {
         amount = bound(amount, 0, type(uint128).max);
         if (amount > 0) _mint(alice, amount);
@@ -115,7 +116,30 @@ contract B20RenamesTest is B20AssetTest {
         assertEq(asset().newUIMultiplier(), asset().uiMultiplier(), "no-pending: newUIMultiplier == uiMultiplier");
         assertEq(asset().effectiveAt(), 0, "no-pending: effectiveAt == 0");
         assertEq(asset().totalSupplyUI(), token.totalSupply(), "default multiplier: totalSupplyUI == totalSupply");
+        assertEq(asset().toUIAmount(amount), amount, "toUIAmount identity at WAD default");
+        assertEq(asset().fromUIAmount(amount), amount, "fromUIAmount identity at WAD default");
         assertTrue(asset().supportsInterface(0xa60bf13d), "IScaledUIAmount (0xa60bf13d) must be advertised");
+        assertTrue(asset().supportsInterface(0x57854fc3), "IScaledUIAmountConversion (0x57854fc3) must be advertised");
+    }
+
+    /// @notice Verifies the deprecated `toScaledBalance` / `toRawBalance` selectors stay dialable
+    ///         after being de-advertised in favor of the ERC-8056 `toUIAmount` / `fromUIAmount`.
+    /// @dev Deprecation-not-removal: the precompile permanently retains the legacy conversion
+    ///      selectors (identical behavior); only base-std's advertised interface drops them.
+    ///      Dialed by raw signature since the typed interface no longer declares them.
+    function test_conversion_deprecated_stillDialable(uint256 amount) public {
+        amount = bound(amount, 0, type(uint128).max);
+        _updateMultiplier(2 * asset().WAD_PRECISION());
+
+        (bool okScaled, bytes memory rawScaled) =
+            address(token).staticcall(abi.encodeWithSignature("toScaledBalance(uint256)", amount));
+        assertTrue(okScaled, "legacy toScaledBalance(uint256) must remain dialable");
+        assertEq(abi.decode(rawScaled, (uint256)), asset().toUIAmount(amount), "toScaledBalance must equal toUIAmount");
+
+        (bool okRaw, bytes memory rawRaw) =
+            address(token).staticcall(abi.encodeWithSignature("toRawBalance(uint256)", amount));
+        assertTrue(okRaw, "legacy toRawBalance(uint256) must remain dialable");
+        assertEq(abi.decode(rawRaw, (uint256)), asset().fromUIAmount(amount), "toRawBalance must equal fromUIAmount");
     }
 
     // ============================================================

@@ -27,7 +27,8 @@ The Asset variant conforms to [ERC-8056](https://eips.ethereum.org/EIPS/eip-8056
 - `uiMultiplier()` is the standard alias of `multiplier()` (core interface `0xa60bf13d`).
 - `newUIMultiplier()` / `effectiveAt()` expose the pending schedule (required extension `0x4bd27648`).
 - `balanceOfUI(account)` aliases `scaledBalanceOf`, and `totalSupplyUI()` returns `totalSupply() * uiMultiplier() / 1e18` (optional Balances extension `0xd890fd71`).
-- `supportsInterface(bytes4)` (ERC-165, `0x01ffc9a7`) returns `true` for those three IDs and for ERC-165 itself. The optional Conversion extension (`0x57854fc3`) is **not** claimed — the native `toScaledBalance` / `toRawBalance` names are kept unaliased for backwards compatibility.
+- `toUIAmount(rawAmount)` / `fromUIAmount(uiAmount)` are the canonical raw ⇄ UI converters (optional Conversion extension `0x57854fc3`), applying the effective multiplier. The legacy `toScaledBalance` / `toRawBalance` selectors remain dialable for backwards compatibility but are no longer advertised in `IB20Asset`.
+- `supportsInterface(bytes4)` (ERC-165, `0x01ffc9a7`) returns `true` for those four extension IDs and for ERC-165 itself.
 
 **Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateMultiplier`. `UIMultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by `updateMultiplier` when it clears a live pending. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
 

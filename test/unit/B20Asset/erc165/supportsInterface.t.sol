@@ -7,7 +7,8 @@ import {IERC165} from "base-std/interfaces/IERC165.sol";
 import {
     IScaledUIAmount,
     IScaledUIAmountNewUIMultiplier,
-    IScaledUIAmountBalances
+    IScaledUIAmountBalances,
+    IScaledUIAmountConversion
 } from "base-std/interfaces/IERC8056.sol";
 
 contract B20AssetSupportsInterfaceTest is B20AssetTest {
@@ -16,14 +17,16 @@ contract B20AssetSupportsInterfaceTest is B20AssetTest {
     bytes4 internal constant SCALED_UI_AMOUNT_ID = 0xa60bf13d;
     bytes4 internal constant NEW_UI_MULTIPLIER_ID = 0x4bd27648;
     bytes4 internal constant BALANCES_ID = 0xd890fd71;
+    bytes4 internal constant CONVERSION_ID = 0x57854fc3;
 
-    /// @notice Verifies the four claimed interface IDs are advertised
-    /// @dev ERC-165 itself plus the ERC-8056 core, pending, and Balances extensions.
+    /// @notice Verifies the five claimed interface IDs are advertised
+    /// @dev ERC-165 itself plus the ERC-8056 core, pending, Balances, and Conversion extensions.
     function test_supportsInterface_success_claimedIds() public view {
         assertTrue(asset().supportsInterface(ERC165_ID), "must advertise IERC165");
         assertTrue(asset().supportsInterface(SCALED_UI_AMOUNT_ID), "must advertise IScaledUIAmount");
         assertTrue(asset().supportsInterface(NEW_UI_MULTIPLIER_ID), "must advertise IScaledUIAmountNewUIMultiplier");
         assertTrue(asset().supportsInterface(BALANCES_ID), "must advertise IScaledUIAmountBalances");
+        assertTrue(asset().supportsInterface(CONVERSION_ID), "must advertise IScaledUIAmountConversion");
     }
 
     /// @notice Verifies an unknown interface ID returns false
@@ -32,6 +35,7 @@ contract B20AssetSupportsInterfaceTest is B20AssetTest {
         vm.assume(interfaceId != SCALED_UI_AMOUNT_ID);
         vm.assume(interfaceId != NEW_UI_MULTIPLIER_ID);
         vm.assume(interfaceId != BALANCES_ID);
+        vm.assume(interfaceId != CONVERSION_ID);
         assertFalse(asset().supportsInterface(interfaceId), "unknown interface must not be advertised");
     }
 
@@ -44,5 +48,6 @@ contract B20AssetSupportsInterfaceTest is B20AssetTest {
             type(IScaledUIAmountNewUIMultiplier).interfaceId, NEW_UI_MULTIPLIER_ID, "IScaledUIAmountNewUIMultiplier id"
         );
         assertEq(type(IScaledUIAmountBalances).interfaceId, BALANCES_ID, "IScaledUIAmountBalances id");
+        assertEq(type(IScaledUIAmountConversion).interfaceId, CONVERSION_ID, "IScaledUIAmountConversion id");
     }
 }

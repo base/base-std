@@ -3,7 +3,12 @@ pragma solidity >=0.8.20 <0.9.0;
 
 import {IB20} from "./IB20.sol";
 import {IERC165} from "./IERC165.sol";
-import {IScaledUIAmount, IScaledUIAmountNewUIMultiplier, IScaledUIAmountBalances} from "./IERC8056.sol";
+import {
+    IScaledUIAmount,
+    IScaledUIAmountNewUIMultiplier,
+    IScaledUIAmountBalances,
+    IScaledUIAmountConversion
+} from "./IERC8056.sol";
 
 /// @title  IB20Asset
 /// @author Coinbase
@@ -11,7 +16,14 @@ import {IScaledUIAmount, IScaledUIAmountNewUIMultiplier, IScaledUIAmountBalances
 /// @notice A B-20 token variant for assets of all kinds. Extends `IB20` with announcements,
 ///         multiplier-based scaling, batched mint for bulk issuance, and extra-metadata
 ///         entries.
-interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMultiplier, IScaledUIAmountBalances {
+interface IB20Asset is
+    IB20,
+    IERC165,
+    IScaledUIAmount,
+    IScaledUIAmountNewUIMultiplier,
+    IScaledUIAmountBalances,
+    IScaledUIAmountConversion
+{
     /*//////////////////////////////////////////////////////////////
                                  ERRORS
     //////////////////////////////////////////////////////////////*/
@@ -155,26 +167,15 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     /// @return Current (effective) multiplier.
     function multiplier() external view returns (uint256);
 
-    /// @notice Converts a raw balance to its scaled view: `rawBalance * multiplier / WAD_PRECISION`.
-    ///
-    /// @param rawBalance Raw token amount to scale.
-    ///
-    /// @return Scaled balance at the current multiplier.
-    function toScaledBalance(uint256 rawBalance) external view returns (uint256);
+    /// @notice Raw <-> UI conversion is the inherited ERC-8056 Conversion extension
+    ///         `toUIAmount(uint256)` / `fromUIAmount(uint256)` (see `IScaledUIAmountConversion`),
+    ///         which apply `rawAmount * multiplier / WAD_PRECISION` and its floored inverse using
+    ///         the effective multiplier. Integer division rounds toward zero, so the round-trip is
+    ///         not exactly reversible when `multiplier != WAD_PRECISION`.
+    /// @dev The precompile also retains the legacy `toScaledBalance` / `toRawBalance` selectors
+    ///      (identical behavior), dialable but no longer advertised here.
 
-    /// @notice Converts a scaled balance back to its raw representation:
-    ///         `scaledBalance * WAD_PRECISION / multiplier`.
-    ///
-    /// @dev Integer division rounds toward zero; conversions are not exactly reversible when
-    ///      `multiplier != WAD_PRECISION`. `toRawBalance(toScaledBalance(x))` may return a
-    ///      value slightly less than `x`.
-    ///
-    /// @param scaledBalance Scaled token amount to convert back.
-    ///
-    /// @return rawBalance Raw balance at the current multiplier.
-    function toRawBalance(uint256 scaledBalance) external view returns (uint256 rawBalance);
-
-    /// @notice Convenience for `toScaledBalance(balanceOf(account))`.
+    /// @notice Convenience for `toUIAmount(balanceOf(account))`.
     ///
     /// @param account Account whose scaled balance is being queried.
     ///
