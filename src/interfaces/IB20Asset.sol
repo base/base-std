@@ -174,14 +174,6 @@ interface IB20Asset is
     /// @return Current (effective) multiplier.
     function multiplier() external view returns (uint256);
 
-    /// @notice Raw <-> UI conversion is the inherited ERC-8056 Conversion extension
-    ///         `toUIAmount(uint256)` / `fromUIAmount(uint256)` (see `IScaledUIAmountConversion`),
-    ///         which apply `rawAmount * multiplier / WAD_PRECISION` and its floored inverse using
-    ///         the effective multiplier. Integer division rounds toward zero, so the round-trip is
-    ///         not exactly reversible when `multiplier != WAD_PRECISION`.
-    /// @dev The precompile also retains the legacy `toScaledBalance` / `toRawBalance` selectors
-    ///      (identical behavior), dialable but no longer advertised here.
-
     /// @notice Convenience for `toUIAmount(balanceOf(account))`.
     ///
     /// @param account Account whose scaled balance is being queried.

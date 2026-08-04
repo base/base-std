@@ -37,13 +37,6 @@ ASSET_ABI = _load("IB20Asset")
 STABLECOIN_ABI = _load("IB20Stablecoin")
 POLICY_ABI = _load("IPolicyRegistry")
 
-# The Cobalt interface review de-advertised three selectors from IB20Asset while the precompile
-# keeps them permanently dialable (deprecation, not removal): the instant-failsafe multiplier setter
-# `updateMultiplier(uint256)` and the conversion helpers `toScaledBalance` / `toRawBalance` (now
-# aliased by `updateUIMultiplier` / `toUIAmount` / `fromUIAmount`). The cross-fork asset-lifecycle
-# journey dials these legacy selectors because they are the only multiplier/conversion selectors
-# present on BOTH Beryl (V1) and Cobalt (V2) — the canonical replacements are V2-only. They are not
-# in the compiled IB20Asset ABI anymore, so append their fragments for web3 encoding.
 _DEPRECATED_ASSET_SELECTORS: list[dict[str, Any]] = [
     {
         "type": "function",

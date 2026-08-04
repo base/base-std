@@ -77,11 +77,6 @@ def _journey(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), config.amt(1010, 18), "alice balance after batch")
     c.assert_eq(tok.functions.balanceOf(c.BOB).call(), config.amt(271, 18), "bob balance after batch")
 
-    # Cross-fork journey: dial the legacy `updateMultiplier` / `toScaledBalance` / `toRawBalance`
-    # selectors — the only multiplier/conversion selectors present on BOTH Beryl (V1) and Cobalt
-    # (V2). Their canonical replacements (`updateUIMultiplier` / `toUIAmount` / `fromUIAmount`) are
-    # V2-only, so using them here would break the Beryl run. The rebase event stays fork-aware in
-    # `_events` (V1 `MultiplierUpdated` vs V2 `UIMultiplierUpdated`).
     step(7, "announce + rebase: updateMultiplier(2e18); scaled view doubles")
     rebase = init_call(c.asset_abi, "updateMultiplier", config.amt(2, 18))
     c.send(tok.functions.announce([rebase], "smoke-rebase-1", "2x rebase", "ipfs://smoke/rebase-1"), c.deployer)
