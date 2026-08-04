@@ -26,14 +26,14 @@ contract B20AssetCancelScheduledMultiplierTest is B20AssetTest {
         assertEq(asset().newUIMultiplier(), asset().uiMultiplier(), "no-live-pending: newUIMultiplier == uiMultiplier");
     }
 
-    /// @notice Verifies cancel emits MultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)
+    /// @notice Verifies cancel emits UIMultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)
     function test_cancelScheduledMultiplier_success_emitsEvent(uint256 newMultiplier, uint256 effectiveAt) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         effectiveAt = bound(effectiveAt, block.timestamp + 1, type(uint64).max);
         _setUIMultiplier(newMultiplier, effectiveAt);
 
         vm.expectEmit(false, false, false, true, address(token));
-        emit IB20Asset.MultiplierUpdateCancelled(newMultiplier, effectiveAt);
+        emit IB20Asset.UIMultiplierUpdateCancelled(newMultiplier, effectiveAt);
         vm.prank(operator);
         asset().cancelScheduledMultiplier();
     }
@@ -65,7 +65,7 @@ contract B20AssetCancelScheduledMultiplierTest is B20AssetTest {
     function test_cancelScheduledMultiplier_revert_noPending() public {
         _grantOperator();
         vm.prank(operator);
-        vm.expectRevert(IB20Asset.NoScheduledMultiplier.selector);
+        vm.expectRevert(IB20Asset.NoScheduledUIMultiplier.selector);
         asset().cancelScheduledMultiplier();
     }
 
@@ -77,7 +77,7 @@ contract B20AssetCancelScheduledMultiplierTest is B20AssetTest {
         vm.warp(effectiveAt);
 
         vm.prank(operator);
-        vm.expectRevert(IB20Asset.NoScheduledMultiplier.selector);
+        vm.expectRevert(IB20Asset.NoScheduledUIMultiplier.selector);
         asset().cancelScheduledMultiplier();
     }
 }

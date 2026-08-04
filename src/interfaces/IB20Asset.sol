@@ -41,10 +41,10 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     /// @notice `setUIMultiplier` was called while a live pending update already exists
     ///
     /// @param pendingEffectiveAt The `effectiveAt` of the live pending update.
-    error ScheduleOverlap(uint256 pendingEffectiveAt);
+    error PendingUpdateExists(uint256 pendingEffectiveAt);
 
     /// @notice `cancelScheduledMultiplier` was called when there is no live pending update
-    error NoScheduledMultiplier();
+    error NoScheduledUIMultiplier();
 
     /// @notice A batched function was called with parallel arrays of differing lengths.
     ///
@@ -78,7 +78,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     ///
     /// @param cancelledMultiplier  The pending multiplier that was cleared.
     /// @param cancelledEffectiveAt The `effectiveAt` of the pending update that was cleared.
-    event MultiplierUpdateCancelled(uint256 cancelledMultiplier, uint256 cancelledEffectiveAt);
+    event UIMultiplierUpdateCancelled(uint256 cancelledMultiplier, uint256 cancelledEffectiveAt);
 
     /// @notice Emitted by `updateExtraMetadata`. An empty `value` indicates removal.
     event ExtraMetadataUpdated(string key, string value);
@@ -188,7 +188,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
     /// @dev Reverts with `EffectiveAtInPast` when `effectiveAt` is not in the future.
     /// @dev Reverts with `EffectiveAtTooFar` when `effectiveAt` exceeds `type(uint64).max`.
-    /// @dev Reverts with `ScheduleOverlap` when a live pending update already exists.
+    /// @dev Reverts with `PendingUpdateExists` when a live pending update already exists.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`.
     /// @param effectiveAt   Timestamp at which `newMultiplier` becomes effective; must be in the future.
@@ -198,7 +198,7 @@ interface IB20Asset is IB20, IERC165, IScaledUIAmount, IScaledUIAmountNewUIMulti
     ///         (`effectiveAt` resets to 0).
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
-    /// @dev Reverts with `NoScheduledMultiplier` when there is no live pending update.
+    /// @dev Reverts with `NoScheduledUIMultiplier` when there is no live pending update.
     function cancelScheduledMultiplier() external;
 
     /// @notice Instant failsafe / emergency override — sets the current multiplier immediately and

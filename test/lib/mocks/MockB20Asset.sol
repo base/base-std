@@ -188,7 +188,7 @@ contract MockB20Asset is MockB20, IB20Asset {
         MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
         uint256 pendingEff = $.pending.effectiveAt;
         // A live pending blocks a new schedule.
-        if (pendingEff > block.timestamp) revert ScheduleOverlap(pendingEff);
+        if (pendingEff > block.timestamp) revert PendingUpdateExists(pendingEff);
         // A matured-but-uncancelled pending is folded into the current multiplier before the
         // overwrite below so it is never lost.
         if (pendingEff != 0) $.multiplier = $.pending.multiplier;
@@ -207,10 +207,10 @@ contract MockB20Asset is MockB20, IB20Asset {
         uint256 pendingMult = $.pending.multiplier;
         uint256 pendingEff = $.pending.effectiveAt;
         // Only a live pending can be cancelled
-        if (pendingEff <= block.timestamp) revert NoScheduledMultiplier();
+        if (pendingEff <= block.timestamp) revert NoScheduledUIMultiplier();
         delete $.pending;
 
-        emit MultiplierUpdateCancelled(pendingMult, pendingEff);
+        emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
     }
 
     /// @notice Sets the current multiplier immediately and clears any pending.
@@ -224,7 +224,7 @@ contract MockB20Asset is MockB20, IB20Asset {
         uint256 old = _multiplier();
         $.multiplier = newMultiplier;
         if (pendingEff != 0) delete $.pending;
-        if (livePending) emit MultiplierUpdateCancelled(pendingMult, pendingEff);
+        if (livePending) emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
         emit UIMultiplierUpdated(old, newMultiplier, block.timestamp);
     }
 

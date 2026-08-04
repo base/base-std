@@ -87,13 +87,15 @@ contract B20AssetSetUIMultiplierTest is B20AssetTest {
     }
 
     /// @notice Verifies setUIMultiplier reverts when a live pending update already exists
-    function test_setUIMultiplier_revert_scheduleOverlap(uint256 firstEffectiveAt, uint256 secondEffectiveAt) public {
+    function test_setUIMultiplier_revert_pendingUpdateExists(uint256 firstEffectiveAt, uint256 secondEffectiveAt)
+        public
+    {
         firstEffectiveAt = bound(firstEffectiveAt, block.timestamp + 1, type(uint64).max);
         secondEffectiveAt = bound(secondEffectiveAt, block.timestamp + 1, type(uint64).max);
         _setUIMultiplier(2e18, firstEffectiveAt);
 
         vm.prank(operator);
-        vm.expectRevert(abi.encodeWithSelector(IB20Asset.ScheduleOverlap.selector, firstEffectiveAt));
+        vm.expectRevert(abi.encodeWithSelector(IB20Asset.PendingUpdateExists.selector, firstEffectiveAt));
         asset().setUIMultiplier(3e18, secondEffectiveAt);
     }
 }

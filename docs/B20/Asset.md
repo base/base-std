@@ -14,7 +14,7 @@ Both multiplier setters validate `newMultiplier` is non-zero and at most `type(u
 
 The standard path for a corporate action (a stock split or reinvested stock dividend) is to **schedule** the change ahead of time with `setUIMultiplier(newMultiplier, effectiveAt)`, wrapped in an [announcement](#announcements). Evaluation is lazy, so `multiplier()` / `uiMultiplier()` flip on their own once `block.timestamp` reaches `effectiveAt`.
 
-Only **one pending update is live at a time**. Attempting to schedule over an existing pending update reverts `ScheduleOverlap`. To reorder overlapping corporate actions, explicitly cancel and re-schedule in a single announcement bracket using `announce([cancelScheduledMultiplier, setUIMultiplier(...)])`. `cancelScheduledMultiplier()` clears the live pending and restores the no-pending state (reverting `NoScheduledMultiplier` when nothing live is scheduled).
+Only **one pending update is live at a time**. Attempting to schedule over an existing pending update reverts `PendingUpdateExists`. To reorder overlapping corporate actions, explicitly cancel and re-schedule in a single announcement bracket using `announce([cancelScheduledMultiplier, setUIMultiplier(...)])`. `cancelScheduledMultiplier()` clears the live pending and restores the no-pending state (reverting `NoScheduledUIMultiplier` when nothing live is scheduled).
 
 `updateMultiplier(newMultiplier)` is retained as an **instant failsafe / emergency override**: it sets the multiplier immediately, stamping `effectiveAt = block.timestamp` and clearing any pending update.
 
@@ -29,7 +29,7 @@ The Asset variant conforms to [ERC-8056](https://eips.ethereum.org/EIPS/eip-8056
 - `balanceOfUI(account)` aliases `scaledBalanceOf`, and `totalSupplyUI()` returns `totalSupply() * uiMultiplier() / 1e18` (optional Balances extension `0xd890fd71`).
 - `supportsInterface(bytes4)` (ERC-165, `0x01ffc9a7`) returns `true` for those three IDs and for ERC-165 itself. The optional Conversion extension (`0x57854fc3`) is **not** claimed — the native `toScaledBalance` / `toRawBalance` names are kept unaliased for backwards compatibility.
 
-**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateMultiplier`. `MultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by `updateMultiplier` when it clears a live pending. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
+**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateMultiplier`. `UIMultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by `updateMultiplier` when it clears a live pending. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
 
 ### Precision & decimals
 
