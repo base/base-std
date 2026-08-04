@@ -57,11 +57,9 @@ interface IPolicyRegistry {
     error NoPendingAdmin();
 
     /// @notice A composite policy was created or updated with a child-policy count outside the
-    ///         permitted range. A composite must reference between `min` and `max` simple policies,
-    ///         inclusive.
-    /// @param min Minimum number of child policies permitted.
-    /// @param max Maximum number of child policies permitted.
-    error ChildPoliciesOutsideOfRange(uint256 min, uint256 max);
+    ///         permitted range. A composite must reference between `MIN_COMPOSITE_CHILD_POLICIES`
+    ///         and `MAX_COMPOSITE_CHILD_POLICIES` simple policies, inclusive.
+    error ChildPoliciesOutsideOfRange();
 
     /// @notice Composite policies are not simple policies. Child policies must be existing
     ///         ALLOWLIST or BLOCKLIST policies;
@@ -130,7 +128,8 @@ interface IPolicyRegistry {
     ///      The child-policy set is capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
-    /// @dev Reverts with `ChildPoliciesOutsideOfRange(2, 4)` when `childPolicyIds.length` is not in `[2, 4]`.
+    /// @dev Reverts with `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is not in
+    ///      `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]`.
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
     /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy or a built-in policy.
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
@@ -206,8 +205,9 @@ interface IPolicyRegistry {
     /// @dev Reverts with `IncompatiblePolicyType` when `policyId` is not a composite (UNION or INTERSECT).
     /// @dev Reverts with `Unauthorized` when the caller is not the current admin. A renounced composite
     ///      (admin `address(0)`) can never be updated.
-    /// @dev Reverts with `ChildPoliciesOutsideOfRange(2, 4)` when `childPolicyIds.length` is not in `[2, 4]`;
-    ///      there is no clear-the-list path (the composite child-policy range, not the 64-account batch limit).
+    /// @dev Reverts with `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is not in
+    ///      `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]`; there is no clear-the-list
+    ///      path (the composite child-policy range, not the 64-account batch limit).
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
     /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
     ///      (not a simple policy).
@@ -235,6 +235,16 @@ interface IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                             POLICY QUERIES
     //////////////////////////////////////////////////////////////*/
+
+    /// @notice Minimum number of child policies a composite must reference, inclusive. Never reverts.
+    ///
+    /// @return Minimum permitted child-policy count.
+    function MIN_COMPOSITE_CHILD_POLICIES() external view returns (uint256);
+
+    /// @notice Maximum number of child policies a composite may reference, inclusive. Never reverts.
+    ///
+    /// @return Maximum permitted child-policy count.
+    function MAX_COMPOSITE_CHILD_POLICIES() external view returns (uint256);
 
     /// @notice Returns whether `policyId` is a built-in sentinel or a previously-assigned custom ID. Never reverts.
     ///
