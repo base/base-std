@@ -17,12 +17,11 @@ contract B20FactoryLibEncodeUpdateMultiplierTest is B20FactoryLibTest {
         assertEq(actual, expected, "init-call must match abi.encodeCall(IB20Asset.updateUIMultiplier, ...)");
     }
 
-    /// @notice Verifies the deprecated encoder still binds the legacy `updateMultiplier(uint256)` selector.
-    /// @dev    The legacy selector is de-advertised from `IB20Asset` but retained (dialable) in the
-    ///         precompile, so the encoder targets it by signature. Pins that binding stays intact.
-    function test_encodeUpdateMultiplier_success_matchesLegacySelector(uint256 newMultiplier) public pure {
-        bytes memory expected = abi.encodeWithSignature("updateMultiplier(uint256)", newMultiplier);
+    /// @notice Verifies the deprecated encoder matches `abi.encodeCall(IB20Asset.updateMultiplier, ...)`.
+    /// @dev    `updateMultiplier` is retained (deprecated) in `IB20Asset`; pins the selector binding.
+    function test_encodeUpdateMultiplier_success_matchesAbiEncodeCall(uint256 newMultiplier) public pure {
+        bytes memory expected = abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
         bytes memory actual = B20FactoryLib.encodeUpdateMultiplier(newMultiplier);
-        assertEq(actual, expected, "init-call must match the legacy updateMultiplier(uint256) selector");
+        assertEq(actual, expected, "init-call must match abi.encodeCall(IB20Asset.updateMultiplier, ...)");
     }
 }

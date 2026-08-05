@@ -124,24 +124,16 @@ contract B20RenamesTest is B20AssetTest {
         assertTrue(asset().supportsInterface(0x57854fc3), "IScaledUIAmountConversion (0x57854fc3) must be advertised");
     }
 
-    /// @notice Verifies the deprecated `toScaledBalance` / `toRawBalance` selectors stay dialable
-    ///         after being de-advertised in favor of the ERC-8056 `toUIAmount` / `fromUIAmount`.
-    /// @dev Deprecation-not-removal: the precompile permanently retains the legacy conversion
-    ///      selectors (identical behavior); only base-std's advertised interface drops them.
-    ///      Dialed by raw signature since the typed interface no longer declares them.
+    /// @notice Verifies the deprecated `toScaledBalance` / `toRawBalance` are retained in `IB20Asset`
+    ///         (declared deprecated) and behave identically to the ERC-8056 `toUIAmount` / `fromUIAmount`.
+    /// @dev Deprecation-not-removal: the legacy conversion selectors stay advertised (marked
+    ///      deprecated) and dialable so block explorers and existing integrations keep working.
     function test_conversion_deprecated_stillDialable(uint256 amount) public {
         amount = bound(amount, 0, type(uint128).max);
         _updateMultiplier(2 * asset().WAD_PRECISION());
 
-        (bool okScaled, bytes memory rawScaled) =
-            address(token).staticcall(abi.encodeWithSignature("toScaledBalance(uint256)", amount));
-        assertTrue(okScaled, "legacy toScaledBalance(uint256) must remain dialable");
-        assertEq(abi.decode(rawScaled, (uint256)), asset().toUIAmount(amount), "toScaledBalance must equal toUIAmount");
-
-        (bool okRaw, bytes memory rawRaw) =
-            address(token).staticcall(abi.encodeWithSignature("toRawBalance(uint256)", amount));
-        assertTrue(okRaw, "legacy toRawBalance(uint256) must remain dialable");
-        assertEq(abi.decode(rawRaw, (uint256)), asset().fromUIAmount(amount), "toRawBalance must equal fromUIAmount");
+        assertEq(asset().toScaledBalance(amount), asset().toUIAmount(amount), "toScaledBalance must equal toUIAmount");
+        assertEq(asset().toRawBalance(amount), asset().fromUIAmount(amount), "toRawBalance must equal fromUIAmount");
     }
 
     // ============================================================
@@ -184,31 +176,30 @@ contract B20RenamesTest is B20AssetTest {
         asset().updateUIMultiplier(newMultiplier);
     }
 
-    /// @notice Verifies the deprecated `updateMultiplier(uint256)` selector stays dialable after
-    ///         being de-advertised from `IB20Asset`, and behaves identically to `updateUIMultiplier`.
-    /// @dev Deprecation-not-removal: the precompile permanently retains the legacy selector so block
-    ///      explorers and existing integrations keep working; only base-std's advertised interface
-    ///      drops it. Dialed by raw signature since the typed interface no longer declares it.
+    /// @notice Verifies the deprecated `updateMultiplier` is retained in `IB20Asset` (declared
+    ///         deprecated) and behaves identically to `updateUIMultiplier`.
+    /// @dev Deprecation-not-removal: the legacy selector stays advertised (marked deprecated) and
+    ///      dialable so block explorers and existing integrations keep working; it emits both the
+    ///      deprecated `MultiplierUpdated` and the ERC-8056 `UIMultiplierUpdated`.
     function test_updateMultiplier_deprecated_stillDialable(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         vm.recordLogs();
         vm.prank(operator);
-        (bool ok,) = address(token).call(abi.encodeWithSignature("updateMultiplier(uint256)", newMultiplier));
-        assertTrue(ok, "legacy updateMultiplier(uint256) selector must remain dialable (deprecated, not removed)");
+        asset().updateMultiplier(newMultiplier);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertGt(
             _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG),
             -1,
-            "legacy updateMultiplier must emit the ERC-8056 UIMultiplierUpdated"
+            "deprecated updateMultiplier must emit the ERC-8056 UIMultiplierUpdated"
         );
         assertGt(
             _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
             -1,
-            "legacy updateMultiplier must also emit the deprecated MultiplierUpdated"
+            "deprecated updateMultiplier must also emit MultiplierUpdated"
         );
-        assertEq(asset().multiplier(), newMultiplier, "legacy updateMultiplier must set the current multiplier");
+        assertEq(asset().multiplier(), newMultiplier, "deprecated updateMultiplier must set the current multiplier");
     }
 
     /// @notice Verifies METADATA_ROLE is administered by DEFAULT_ADMIN_ROLE on a freshly created token

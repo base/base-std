@@ -182,6 +182,28 @@ interface IB20Asset is
     /// @return Current (effective) multiplier.
     function multiplier() external view returns (uint256);
 
+    /// @notice DEPRECATED. Converts a raw balance to its scaled view:
+    ///         `rawBalance * multiplier / WAD_PRECISION`. Retained (dialable) for backward
+    ///         compatibility; prefer the ERC-8056 Conversion extension `toUIAmount`.
+    ///
+    /// @param rawBalance Raw token amount to scale.
+    ///
+    /// @return Scaled balance at the current multiplier.
+    function toScaledBalance(uint256 rawBalance) external view returns (uint256);
+
+    /// @notice DEPRECATED. Converts a scaled balance back to its raw representation:
+    ///         `scaledBalance * WAD_PRECISION / multiplier`. Retained (dialable) for backward
+    ///         compatibility; prefer the ERC-8056 Conversion extension `fromUIAmount`.
+    ///
+    /// @dev Integer division rounds toward zero; conversions are not exactly reversible when
+    ///      `multiplier != WAD_PRECISION`. `toRawBalance(toScaledBalance(x))` may return a
+    ///      value slightly less than `x`.
+    ///
+    /// @param scaledBalance Scaled token amount to convert back.
+    ///
+    /// @return rawBalance Raw balance at the current multiplier.
+    function toRawBalance(uint256 scaledBalance) external view returns (uint256 rawBalance);
+
     /// @notice Convenience for `toUIAmount(balanceOf(account))`.
     ///
     /// @param account Account whose scaled balance is being queried.
@@ -213,13 +235,19 @@ interface IB20Asset is
     ///         cancels any live pending update without a scheduling window.
     ///         Prefer `setUIMultiplier` for routine corporate actions.
     ///
-    /// @dev The precompile also retains the legacy `updateMultiplier(uint256)` selector (identical
-    ///      behavior), dialable but deprecated; it is intentionally no longer advertised here.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
     /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be in `(0, type(uint128).max]`.
     function updateUIMultiplier(uint256 newMultiplier) external;
+
+    /// @notice DEPRECATED. Legacy alias of `updateUIMultiplier` with identical behavior (sets the
+    ///         multiplier immediately, clears any live pending, and emits both `MultiplierUpdated`
+    ///         and `UIMultiplierUpdated`). Retained (dialable) for backward compatibility; prefer
+    ///         `updateUIMultiplier`.
+    ///
+    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be in `(0, type(uint128).max]`.
+    function updateMultiplier(uint256 newMultiplier) external;
 
     /*//////////////////////////////////////////////////////////////
                             BATCHED ISSUANCE

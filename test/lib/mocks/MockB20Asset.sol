@@ -168,13 +168,14 @@ contract MockB20Asset is MockB20, IB20Asset {
         return _fromUIAmount(uiAmount);
     }
 
-    /// @dev Deprecated alias of `toUIAmount`, retained (dialable) so the precompile's legacy
-    ///      selector stays cross-validated by the fork tests. No longer advertised in `IB20Asset`.
+    /// @dev Deprecated alias of `toUIAmount` with identical behavior; declared deprecated in
+    ///      `IB20Asset` but kept in the interface for backward compatibility.
     function toScaledBalance(uint256 rawBalance) external view returns (uint256) {
         return _toUIAmount(rawBalance);
     }
 
-    /// @dev Deprecated alias of `fromUIAmount`, retained (dialable). No longer advertised.
+    /// @dev Deprecated alias of `fromUIAmount` with identical behavior; declared deprecated in
+    ///      `IB20Asset` but kept in the interface for backward compatibility.
     function toRawBalance(uint256 scaledBalance) external view returns (uint256) {
         return _fromUIAmount(scaledBalance);
     }
@@ -237,9 +238,8 @@ contract MockB20Asset is MockB20, IB20Asset {
         _updateMultiplierNow(newMultiplier);
     }
 
-    /// @notice Deprecated alias of `updateUIMultiplier`, retained (dialable) so the precompile's
-    ///         legacy `updateMultiplier(uint256)` selector stays cross-validated by the fork tests.
-    ///         No longer advertised in `IB20Asset`.
+    /// @notice Deprecated alias of `updateUIMultiplier`, retained (dialable) with identical behavior.
+    ///         Declared deprecated in `IB20Asset` but kept in the interface for backward compatibility.
     function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
         _updateMultiplierNow(newMultiplier);
     }
@@ -250,8 +250,8 @@ contract MockB20Asset is MockB20, IB20Asset {
 
     /// @dev Advertises ERC-165 itself plus the four claimed ERC-8056 interfaces (core, pending,
     ///      Balances, and Conversion). The Conversion extension (`0x57854fc3`) is claimed after the
-    ///      interface review: `toUIAmount` / `fromUIAmount` are exposed alongside the retained
-    ///      (dialable, de-advertised) legacy `toScaledBalance` / `toRawBalance` selectors.
+    ///      interface review: `toUIAmount` / `fromUIAmount` are the canonical converters, with the
+    ///      legacy `toScaledBalance` / `toRawBalance` retained (deprecated) as aliases.
     function supportsInterface(bytes4 interfaceId) external pure returns (bool) {
         return interfaceId == type(IERC165).interfaceId || interfaceId == type(IScaledUIAmount).interfaceId
             || interfaceId == type(IScaledUIAmountNewUIMultiplier).interfaceId

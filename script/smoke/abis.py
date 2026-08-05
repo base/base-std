@@ -37,31 +37,6 @@ ASSET_ABI = _load("IB20Asset")
 STABLECOIN_ABI = _load("IB20Stablecoin")
 POLICY_ABI = _load("IPolicyRegistry")
 
-_DEPRECATED_ASSET_SELECTORS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "name": "updateMultiplier",
-        "stateMutability": "nonpayable",
-        "inputs": [{"name": "newMultiplier", "type": "uint256"}],
-        "outputs": [],
-    },
-    {
-        "type": "function",
-        "name": "toScaledBalance",
-        "stateMutability": "view",
-        "inputs": [{"name": "rawBalance", "type": "uint256"}],
-        "outputs": [{"name": "", "type": "uint256"}],
-    },
-    {
-        "type": "function",
-        "name": "toRawBalance",
-        "stateMutability": "view",
-        "inputs": [{"name": "scaledBalance", "type": "uint256"}],
-        "outputs": [{"name": "rawBalance", "type": "uint256"}],
-    },
-]
-ASSET_ABI = ASSET_ABI + _DEPRECATED_ASSET_SELECTORS
-
 ALL_ABIS = [FACTORY_ABI, ASSET_ABI, STABLECOIN_ABI, POLICY_ABI]
 
 

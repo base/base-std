@@ -210,13 +210,11 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Asset.updateUIMultiplier, (newMultiplier));
     }
 
-    /// @notice Encodes a bootstrap initCall to the deprecated `updateMultiplier(uint256)` selector.
-    /// @dev The selector is retained (dialable) in the precompile but de-advertised from
-    ///      `IB20Asset`, so it is encoded by signature rather than `abi.encodeCall`. Prefer
-    ///      `encodeUpdateUIMultiplier` for new call sites.
+    /// @notice Encodes a bootstrap initCall to the deprecated `IB20Asset.updateMultiplier`.
+    /// @dev Retained for backward compatibility; prefer `encodeUpdateUIMultiplier` for new call sites.
     /// @param newMultiplier New multiplier, scaled to `WAD_PRECISION`.
     function encodeUpdateMultiplier(uint256 newMultiplier) internal pure returns (bytes memory) {
-        return abi.encodeWithSignature("updateMultiplier(uint256)", newMultiplier);
+        return abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
     }
 
     /// @notice Encodes an initCall / announce inner call to `IB20Asset.setUIMultiplier`
