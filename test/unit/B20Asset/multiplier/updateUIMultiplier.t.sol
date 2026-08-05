@@ -64,6 +64,9 @@ contract B20AssetUpdateUIMultiplierTest is B20AssetTest {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         uint256 oldMultiplier = asset().multiplier();
+        // Instant setter emits the deprecated MultiplierUpdated (backward compat) then UIMultiplierUpdated.
+        vm.expectEmit(false, false, false, true, address(token));
+        emit IB20Asset.MultiplierUpdated(newMultiplier);
         vm.expectEmit(false, false, false, true, address(token));
         emit IScaledUIAmount.UIMultiplierUpdated(oldMultiplier, newMultiplier, block.timestamp);
         vm.prank(operator);

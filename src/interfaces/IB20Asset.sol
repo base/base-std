@@ -85,6 +85,14 @@ interface IB20Asset is
                                  EVENTS
     //////////////////////////////////////////////////////////////*/
 
+    /// @notice Deprecated multiplier-change event. The instant setter (`updateUIMultiplier` /
+    ///         `updateMultiplier`) emits this alongside `UIMultiplierUpdated` so indexers on the
+    ///         legacy topic keep working; the scheduled `setUIMultiplier` emits only
+    ///         `UIMultiplierUpdated`.
+    ///
+    /// @param multiplier The new immediate multiplier.
+    event MultiplierUpdated(uint256 multiplier);
+
     /// @notice A scheduled multiplier update was cancelled. Emitted by `cancelScheduledMultiplier`,
     ///         and by `updateUIMultiplier` when it clears a live pending update.
     ///

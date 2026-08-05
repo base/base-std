@@ -25,7 +25,8 @@ from ..codec import AssetCreateParams, init_call
 
 # ERC-8056 events. UIMultiplierUpdated is emitted by both setUIMultiplier and (on V2) updateUIMultiplier;
 # UIMultiplierUpdateCancelled by cancelScheduledMultiplier and by updateUIMultiplier when it clears a
-# live pending. V1_UPDATED is the superseded V1 event that V2's updateUIMultiplier must NOT emit.
+# live pending. V1_UPDATED (the deprecated MultiplierUpdated) is emitted alongside UIMultiplierUpdated
+# by the instant setter for backward compatibility.
 UI_UPDATED = "UIMultiplierUpdated(uint256,uint256,uint256)"
 CANCELLED = "UIMultiplierUpdateCancelled(uint256,uint256)"
 V1_UPDATED = "MultiplierUpdated(uint256)"
@@ -63,11 +64,11 @@ def _interface_ids(c: Chain, tok) -> None:
 
 
 def _current_multiplier_and_aliases(c: Chain, tok) -> None:
-    step(2, "seed a non-unit current multiplier: updateUIMultiplier(2e18) — V2 emits UIMultiplierUpdated, not MultiplierUpdated")
+    step(2, "seed a non-unit current multiplier: updateUIMultiplier(2e18) — V2 emits UIMultiplierUpdated + deprecated MultiplierUpdated")
     c.send(tok.functions.mint(c.ALICE, config.amt(1000, 18)), c.deployer)
     receipt = c.send(tok.functions.updateUIMultiplier(config.amt(2, 18)), c.deployer)
     c.assert_log(receipt, UI_UPDATED, "updateUIMultiplier emits UIMultiplierUpdated")
-    c.assert_no_log(receipt, V1_UPDATED, "V2 updateUIMultiplier does NOT emit the V1 MultiplierUpdated")
+    c.assert_log(receipt, V1_UPDATED, "V2 updateUIMultiplier also emits the deprecated MultiplierUpdated")
     c.assert_eq(tok.functions.multiplier().call(), config.amt(2, 18), "multiplier == 2e18 immediately")
 
     step(3, "ERC-8056 read aliases mirror their B20 originals")
@@ -131,7 +132,7 @@ def _schedule_and_cancel(c: Chain, tok) -> None:
 
 
 def _failsafe_clears_pending(c: Chain, tok) -> None:
-    step(9, "updateUIMultiplier instant-failsafe clears a live pending: UIMultiplierUpdated + UIMultiplierUpdateCancelled, not MultiplierUpdated")
+    step(9, "updateUIMultiplier instant-failsafe clears a live pending: UIMultiplierUpdated + UIMultiplierUpdateCancelled + deprecated MultiplierUpdated")
     cleared_target, cleared_sched = config.amt(5, 18), _now(c) + 3600
     c.send(tok.functions.setUIMultiplier(cleared_target, cleared_sched), c.deployer)
     receipt = c.send(tok.functions.updateUIMultiplier(config.amt(6, 18)), c.deployer)
@@ -143,7 +144,7 @@ def _failsafe_clears_pending(c: Chain, tok) -> None:
         [cleared_target, cleared_sched],
         "UIMultiplierUpdateCancelled payload == the pending that updateUIMultiplier cleared",
     )
-    c.assert_no_log(receipt, V1_UPDATED, "V2 updateUIMultiplier does NOT emit the V1 MultiplierUpdated")
+    c.assert_log(receipt, V1_UPDATED, "V2 updateUIMultiplier also emits the deprecated MultiplierUpdated")
     c.assert_eq(tok.functions.multiplier().call(), config.amt(6, 18), "updateUIMultiplier sets the current multiplier immediately")
     c.assert_eq(tok.functions.effectiveAt().call(), 0, "updateUIMultiplier cleared the pending (effectiveAt() == 0)")
 

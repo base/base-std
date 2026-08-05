@@ -84,11 +84,11 @@ contract B20RenamesTest is B20AssetTest {
     bytes32 internal constant UI_MULTIPLIER_UPDATED_SIG = keccak256("UIMultiplierUpdated(uint256,uint256,uint256)");
     bytes32 internal constant LEGACY_MULTIPLIER_UPDATED_SIG = keccak256("MultiplierUpdated(uint256)");
 
-    /// @notice Verifies the multiplier-change event was widened/renamed to the ERC-8056
-    ///         `UIMultiplierUpdated(old, new, effectiveAt)` and the legacy `MultiplierUpdated(uint256)`
-    ///         is gone
-    /// @dev `updateUIMultiplier` must emit the ERC-8056 topic and never the legacy topic.
-    function test_multiplierEvent_success_widenedToUIMultiplierUpdated(uint256 newMultiplier) public {
+    /// @notice Verifies the instant setter emits BOTH the ERC-8056 `UIMultiplierUpdated(old, new,
+    ///         effectiveAt)` and the deprecated `MultiplierUpdated(uint256)` (kept for backward
+    ///         compatibility with indexers on the legacy topic).
+    /// @dev `updateUIMultiplier` must emit both topics.
+    function test_multiplierEvent_success_emitsUIAndDeprecated(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         vm.recordLogs();
@@ -98,8 +98,10 @@ contract B20RenamesTest is B20AssetTest {
         assertGt(
             _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG), -1, "UIMultiplierUpdated(old,new,effAt) must be emitted"
         );
-        assertEq(
-            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG), -1, "legacy MultiplierUpdated(uint256) must be gone"
+        assertGt(
+            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
+            -1,
+            "deprecated MultiplierUpdated(uint256) must also be emitted"
         );
     }
 
@@ -201,10 +203,10 @@ contract B20RenamesTest is B20AssetTest {
             -1,
             "legacy updateMultiplier must emit the ERC-8056 UIMultiplierUpdated"
         );
-        assertEq(
+        assertGt(
             _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
             -1,
-            "legacy updateMultiplier must not emit MultiplierUpdated"
+            "legacy updateMultiplier must also emit the deprecated MultiplierUpdated"
         );
         assertEq(asset().multiplier(), newMultiplier, "legacy updateMultiplier must set the current multiplier");
     }

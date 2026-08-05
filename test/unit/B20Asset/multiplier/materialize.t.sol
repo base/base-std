@@ -57,6 +57,8 @@ contract B20AssetMaterializeTest is B20AssetTest {
         vm.expectEmit(false, false, false, true, address(token));
         emit IB20Asset.UIMultiplierUpdateCancelled(pendingMultiplier, effectiveAt);
         vm.expectEmit(false, false, false, true, address(token));
+        emit IB20Asset.MultiplierUpdated(instant);
+        vm.expectEmit(false, false, false, true, address(token));
         emit IScaledUIAmount.UIMultiplierUpdated(old, instant, block.timestamp);
         vm.prank(operator);
         asset().updateUIMultiplier(instant);

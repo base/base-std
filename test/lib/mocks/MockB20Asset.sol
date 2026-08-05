@@ -312,6 +312,8 @@ contract MockB20Asset is MockB20, IB20Asset {
         $.multiplier = newMultiplier;
         if (pendingEff != 0) delete $.pending;
         if (livePending) emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
+        // Emit the deprecated V1 event alongside the ERC-8056 event for backward compatibility.
+        emit MultiplierUpdated(newMultiplier);
         emit UIMultiplierUpdated(old, newMultiplier, block.timestamp);
     }
 

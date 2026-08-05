@@ -159,9 +159,11 @@ def _edges(c: Chain, tok) -> None:
 
 def _events(c: Chain, v2: bool) -> None:
     step(15, "expected events emitted across the flow")
-    # Cobalt (AssetV2) reworked the rebase event: the step-7 updateMultiplier emits ERC-8056's
-    # UIMultiplierUpdated, whereas V1 emits MultiplierUpdated. Assert whichever the fork under test uses.
-    multiplier_event = "UIMultiplierUpdated(uint256,uint256,uint256)" if v2 else "MultiplierUpdated(uint256)"
+    # The step-7 updateMultiplier always emits the deprecated MultiplierUpdated; on Cobalt (AssetV2)
+    # it additionally emits the ERC-8056 UIMultiplierUpdated. Assert both on V2.
+    multiplier_events = ["MultiplierUpdated(uint256)"]
+    if v2:
+        multiplier_events.append("UIMultiplierUpdated(uint256,uint256,uint256)")
     c.assert_events_emitted(
         "asset events",
         "B20Created(address,uint8,string,string,uint8,bytes)",
@@ -172,7 +174,7 @@ def _events(c: Chain, v2: bool) -> None:
         "Approval(address,address,uint256)",
         "Announcement(address,string,string,string)",
         "EndAnnouncement(string)",
-        multiplier_event,
+        *multiplier_events,
         "ExtraMetadataUpdated(string,string)",
         "NameUpdated(address,string)",
         "SymbolUpdated(address,string)",
