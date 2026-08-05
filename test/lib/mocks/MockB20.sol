@@ -344,12 +344,10 @@ abstract contract MockB20 is IB20 {
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
     /// @param memo   Memo payload emitted via `Memo`.
-    /// @return Always `true` on success.
     function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo)
         external
         whenNotPaused(PausableFeature.SEIZE)
         onlyRole(SEIZE_ROLE)
-        returns (bool)
     {
         if (to == address(0)) revert InvalidReceiver(to);
         _requireSeizable(from);
@@ -360,7 +358,6 @@ abstract contract MockB20 is IB20 {
         // `Seized`.
         emit Memo(msg.sender, memo);
         emit Seized(msg.sender, from, to, amount);
-        return true;
     }
 
     // ============================================================
