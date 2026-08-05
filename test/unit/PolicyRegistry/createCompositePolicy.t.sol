@@ -40,7 +40,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
 
     /// @notice Verifies createCompositePolicy reverts when the child count is outside [2, 4]
     /// @dev A composite must reference between MIN_CHILD_POLICIES (2) and MAX_CHILD_POLICIES (4)
-    ///      simple policies, inclusive; checks ChildPoliciesOutsideOfRange(2, 4). Exercises both
+    ///      simple policies, inclusive; checks ChildPoliciesOutsideOfRange(). Exercises both
     ///      under-range (0 and 1 children) and over-range (5..8 children) cases. The composite
     ///      child-policy range is distinct from the 64-account membership limit.
     function test_createCompositePolicy_revert_childPoliciesOutsideOfRange(
@@ -52,9 +52,7 @@ contract PolicyRegistryCreateCompositePolicyTest is PolicyRegistryTest {
         _assumeValidCaller(caller);
         vm.assume(admin_ != address(0));
         IPolicyRegistry.PolicyType pt = _creatableCompositeType(typeIdx);
-        bytes memory expectedRevert = abi.encodeWithSelector(
-            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
-        );
+        bytes memory expectedRevert = abi.encodeWithSelector(IPolicyRegistry.ChildPoliciesOutsideOfRange.selector);
 
         // Under range: 0 children.
         uint64[] memory none = new uint64[](0);

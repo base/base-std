@@ -129,7 +129,7 @@ contract PolicyRegistryTest is BaseTest {
     ///         from `MAX_BATCH_SIZE` (64), which caps account membership
     ///         batches; a composite created or updated with a child count
     ///         outside `[MIN_CHILD_POLICIES, MAX_CHILD_POLICIES]` reverts with
-    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`.
+    ///         `ChildPoliciesOutsideOfRange()`.
     ///         Kept as a test-side literal so fork tests against the real
     ///         precompile use the same compile-time constant.
     uint256 internal constant MAX_CHILD_POLICIES = 4;
