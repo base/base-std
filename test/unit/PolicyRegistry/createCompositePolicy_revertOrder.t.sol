@@ -10,7 +10,7 @@ import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 /// @notice **Canonical order:**
 ///         1. ZERO-ADMIN (`admin == address(0)`) → `ZeroAddress`
 ///         2. INCOMPATIBLE-TYPE (`policyType` not UNION/INTERSECT) → `IncompatiblePolicyType`
-///         3. COUNT-OUTSIDE-RANGE (`childPolicyIds.length` not in `[2, 4]`) → `ChildPoliciesOutsideOfRange(2, 4)`
+///         3. COUNT-OUTSIDE-RANGE (`childPolicyIds.length` not in `[2, 4]`) → `ChildPoliciesOutsideOfRange()`
 ///         4. CHILD-NOT-FOUND (a child does not exist) → `PolicyNotFound`
 ///         5. INVALID-CHILD (a child is itself a composite) → `InvalidChildPolicy`
 ///
@@ -55,9 +55,7 @@ contract PolicyRegistryCreateCompositePolicyRevertOrderTest is PolicyRegistryTes
         // 3. COUNT-OUTSIDE-RANGE: composite type, but a child count outside [2, 4] (all nonexistent)
         //    → ChildPoliciesOutsideOfRange fires before the existence check. Exercises both the
         //    under-range (1 child) and over-range (> MAX_CHILD_POLICIES) ends.
-        bytes memory outsideRange = abi.encodeWithSelector(
-            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
-        );
+        bytes memory outsideRange = abi.encodeWithSelector(IPolicyRegistry.ChildPoliciesOutsideOfRange.selector);
         uint64[] memory one = new uint64[](1);
         one[0] = neverCreatedWellFormedPolicy;
         vm.expectRevert(outsideRange);

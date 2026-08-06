@@ -64,14 +64,12 @@ contract PolicyRegistryUpdateCompositeTest is PolicyRegistryTest {
 
     /// @notice Verifies updateComposite reverts when the new child count is outside [2, 4]
     /// @dev A composite must reference between MIN_CHILD_POLICIES (2) and MAX_CHILD_POLICIES (4)
-    ///      simple policies, inclusive; checks ChildPoliciesOutsideOfRange(2, 4). There is no
+    ///      simple policies, inclusive; checks ChildPoliciesOutsideOfRange(). There is no
     ///      clear-the-list path. Exercises both under-range (0 and 1 children) and over-range
     ///      (5..8 children) cases.
     function test_updateComposite_revert_childPoliciesOutsideOfRange(uint8 typeIdx, uint8 overflow) public {
         uint64 composite = _createComposite(_creatableCompositeType(typeIdx), 2);
-        bytes memory expectedRevert = abi.encodeWithSelector(
-            IPolicyRegistry.ChildPoliciesOutsideOfRange.selector, MIN_CHILD_POLICIES, MAX_CHILD_POLICIES
-        );
+        bytes memory expectedRevert = abi.encodeWithSelector(IPolicyRegistry.ChildPoliciesOutsideOfRange.selector);
 
         // Under range: 0 children.
         uint64[] memory none = new uint64[](0);

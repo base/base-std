@@ -79,17 +79,16 @@ contract MockPolicyRegistry is IPolicyRegistry {
 
     /// @notice Minimum number of child policies a composite must reference.
     ///         `createCompositePolicy` and `updateComposite` revert with
-    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`
-    ///         when `childPolicyIds.length` is below this value.
-    uint256 internal constant MIN_CHILD_POLICIES = 2;
+    ///         `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is below this value.
+    uint256 public constant MIN_COMPOSITE_CHILD_POLICIES = 2;
 
     /// @notice Maximum number of child policies a composite may reference.
     ///         `createCompositePolicy` and `updateComposite` revert with
-    ///         `ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES)`
-    ///         when `childPolicyIds.length` is outside `[MIN_CHILD_POLICIES, MAX_CHILD_POLICIES]`.
+    ///         `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is outside
+    ///         `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]`.
     ///         Distinct from `MAX_BATCH_SIZE` (64), which caps account-membership batches.
     ///         Mirrors the Rust PolicyRegistry precompile.
-    uint256 internal constant MAX_CHILD_POLICIES = 4;
+    uint256 public constant MAX_COMPOSITE_CHILD_POLICIES = 4;
 
     // ============================================================
     //                       POLICY CREATION
@@ -133,8 +132,10 @@ contract MockPolicyRegistry is IPolicyRegistry {
     {
         if (admin == address(0)) revert ZeroAddress();
         if (!_isCompositeType(policyType)) revert IncompatiblePolicyType();
-        if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
-            revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
+        if (
+            childPolicyIds.length < MIN_COMPOSITE_CHILD_POLICIES || childPolicyIds.length > MAX_COMPOSITE_CHILD_POLICIES
+        ) {
+            revert ChildPoliciesOutsideOfRange();
         }
         _requireCreatedSimplePolicies(childPolicyIds);
 
@@ -209,13 +210,15 @@ contract MockPolicyRegistry is IPolicyRegistry {
         uint256 packed = _requireCustom(policyId);
         if (!_isComposite(policyId)) revert IncompatiblePolicyType();
         if (_decodeAdmin(packed) != msg.sender) revert Unauthorized();
-        if (childPolicyIds.length < MIN_CHILD_POLICIES || childPolicyIds.length > MAX_CHILD_POLICIES) {
-            revert ChildPoliciesOutsideOfRange(MIN_CHILD_POLICIES, MAX_CHILD_POLICIES);
+        if (
+            childPolicyIds.length < MIN_COMPOSITE_CHILD_POLICIES || childPolicyIds.length > MAX_COMPOSITE_CHILD_POLICIES
+        ) {
+            revert ChildPoliciesOutsideOfRange();
         }
         _requireCreatedSimplePolicies(childPolicyIds);
 
         // Full replacement: assigning a memory array to the storage array resets its
-        // length and overwrites elements. Child sets are ≤ MAX_CHILD_POLICIES, so there
+        // length and overwrites elements. Child sets are ≤ MAX_COMPOSITE_CHILD_POLICIES, so there
         // is no stale-tail concern.
         MockPolicyRegistryStorage.layout().children[policyId] = childPolicyIds;
         emit CompositePolicyUpdated(policyId, msg.sender, childPolicyIds);

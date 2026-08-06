@@ -147,7 +147,6 @@ interface IB20 {
     event Memo(address indexed caller, bytes32 indexed memo);
 
     /// @notice Emitted by the deprecated `burnBlocked` in addition to `Transfer(from, address(0), amount)`.
-    ///         `burnBlocked` is no longer part of this interface; the event is retained for the back-compat impl.
     event BurnedBlocked(address indexed caller, address indexed from, uint256 amount);
 
     /// @notice Emitted by `seizeWithMemo` in addition to `Transfer(from, to, amount)` (and the
@@ -212,8 +211,7 @@ interface IB20 {
     /// @return Role constant.
     function BURN_ROLE() external view returns (bytes32);
 
-    /// @notice Required to call the deprecated `burnBlocked` (no longer part of this interface; retained for
-    ///         the back-compat impl).
+    /// @notice Required to call the deprecated `burnBlocked`.
     /// @return Role constant.
     function BURN_BLOCKED_ROLE() external view returns (bytes32);
 
@@ -268,6 +266,12 @@ interface IB20 {
     ///      (always-allow), so no account is seizable until an issuer configures the slot.
     /// @return Policy scope constant.
     function SEIZE_HOLDER_POLICY() external view returns (bytes32);
+
+    /// @notice Policy slot consulted against `to` by `seizeWithMemo`.
+    /// @dev Mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot reads
+    ///      as `0` (always-allow), so seize may send anywhere until an issuer configures the slot.
+    /// @return Policy scope constant.
+    function SEIZE_RECEIVER_POLICY() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                                   ERC-20
@@ -432,26 +436,42 @@ interface IB20 {
     /// @param memo   Off-chain memo payload.
     function burnWithMemo(uint256 amount, bytes32 memo) external;
 
+    /// @notice DEPRECATED. Burns `amount` from a `from` account that is blocked under
+    ///         `TRANSFER_SENDER_POLICY`, without spending an allowance. Retained for back-compat;
+    ///         prefer `seizeWithMemo` (to a treasury/self address) followed by `burn`.
+    ///         Emits `Transfer(from, address(0), amount)` and `BurnedBlocked(caller, from, amount)`.
+    ///
+    /// @dev Gated by `BURN_BLOCKED_ROLE` and the `BURN` pause vector (not `SEIZE`). Its blocked check
+    ///      reads `TRANSFER_SENDER_POLICY`, distinct from `seizeWithMemo`'s `SEIZE_HOLDER_POLICY`.
+    /// @dev Reverts with `ContractPaused(BURN)` when `BURN` is paused.
+    /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_BLOCKED_ROLE`.
+    /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `TRANSFER_SENDER_POLICY`.
+    /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
+    ///
+    /// @param from   Account whose blocked balance is being burned.
+    /// @param amount Amount to burn.
+    function burnBlocked(address from, uint256 amount) external;
+
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation.
     ///         Emits, in order, `Transfer(from, to, amount)`, `Memo(caller, memo)`, and
     ///         `Seized(caller, from, to, amount)`. A memo of `bytes32(0)` is permitted.
     ///
-    /// @dev Admin operation: skips allowance and the transfer policies. The only membership check is that
-    ///      `from` is blocked under `SEIZE_HOLDER_POLICY`.
-    /// @dev `to` is not policy-checked; the destination need not be allowlisted.
+    /// @dev Admin operation: skips allowance and the transfer policies. The membership checks are that
+    ///      `from` is blocked under `SEIZE_HOLDER_POLICY` and `to` is authorized under `SEIZE_RECEIVER_POLICY`.
+    /// @dev `to` is gated by `SEIZE_RECEIVER_POLICY`, which defaults to always-allow when unset, so an
+    ///      unconfigured token may seize to any destination (a treasury need not be allowlisted).
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
     /// @dev Reverts with `AccountNotSeizable` when `from` is currently authorized under `SEIZE_HOLDER_POLICY`.
+    /// @dev Reverts with `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)` when `to` is not authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
     /// @param memo   Memo payload.
-    ///
-    /// @return Always `true` on success.
-    function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo) external returns (bool);
+    function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo) external;
 
     /*//////////////////////////////////////////////////////////////
                                   ROLES

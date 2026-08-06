@@ -12,10 +12,11 @@ contract B20UpdatePolicyTest is B20Test {
     /// @notice Reads the policy id stored in the slot lane that
     ///         corresponds to `policyScope`, via raw `vm.load` and the
     ///         per-lane decoder helpers on `MockB20Storage`.
-    /// @dev    The four base-token policy types are packed across two
+    /// @dev    The base-token policy types are packed across three
     ///         slots:
     ///         - `transferPolicyIds` (lane 0: SENDER, 1: RECEIVER, 2: EXECUTOR)
     ///         - `mintPolicyIds` (lane 0: RECEIVER)
+    ///         - `seizePolicyIds` (lane 0: SEIZE_HOLDER, 1: SEIZE_RECEIVER)
     ///         This helper routes to the right slot + lane decoder so
     ///         tests can assert the slot reflects the surface
     ///         `policyId(policyScope)` return.
@@ -29,6 +30,12 @@ contract B20UpdatePolicyTest is B20Test {
         if (policyScope == B20Constants.SEIZE_HOLDER_POLICY) {
             return
                 MockB20Storage.seizablePolicyId(uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot())));
+        }
+        if (policyScope == B20Constants.SEIZE_RECEIVER_POLICY) {
+            return
+                MockB20Storage.seizeReceiverPolicyId(
+                    uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot()))
+                );
         }
         uint256 transferPacked = uint256(vm.load(address(token), MockB20Storage.transferPolicyIdsSlot()));
         if (policyScope == B20Constants.TRANSFER_SENDER_POLICY) {
