@@ -84,24 +84,30 @@ contract B20RenamesTest is B20AssetTest {
     bytes32 internal constant UI_MULTIPLIER_UPDATED_SIG = keccak256("UIMultiplierUpdated(uint256,uint256,uint256)");
     bytes32 internal constant LEGACY_MULTIPLIER_UPDATED_SIG = keccak256("MultiplierUpdated(uint256)");
 
-    /// @notice Verifies the instant setter emits BOTH the ERC-8056 `UIMultiplierUpdated(old, new,
-    ///         effectiveAt)` and the deprecated `MultiplierUpdated(uint256)` (kept for backward
-    ///         compatibility with indexers on the legacy topic).
-    /// @dev `updateUIMultiplier` must emit both topics.
-    function test_multiplierEvent_success_emitsUIAndDeprecated(uint256 newMultiplier) public {
+    /// @notice Verifies the canonical scheduled setter is `updateUIMultiplier(uint256,uint256)`, that
+    ///         the pre-rename `setUIMultiplier(uint256,uint256)` selector is gone, and that the
+    ///         scheduled setter emits only the ERC-8056 `UIMultiplierUpdated` (the deprecated
+    ///         `MultiplierUpdated` is reserved for the instant `updateMultiplier`).
+    /// @dev `updateUIMultiplier` is the rename of `setUIMultiplier`; the old selector must not resolve.
+    function test_scheduledSetter_success_renamedFromSetUIMultiplier(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         vm.recordLogs();
         vm.prank(operator);
-        asset().updateUIMultiplier(newMultiplier);
+        asset().updateUIMultiplier(newMultiplier, block.timestamp + 1);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertGt(
             _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG), -1, "UIMultiplierUpdated(old,new,effAt) must be emitted"
         );
-        assertGt(
+        assertEq(
             _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
             -1,
-            "deprecated MultiplierUpdated(uint256) must also be emitted"
+            "scheduled updateUIMultiplier must NOT emit the deprecated MultiplierUpdated"
+        );
+        // The pre-rename scheduled selector is gone.
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("setUIMultiplier(uint256,uint256)", newMultiplier, block.timestamp + 1),
+            "setUIMultiplier(uint256,uint256) must not resolve (renamed to updateUIMultiplier)"
         );
     }
 
@@ -173,7 +179,7 @@ contract B20RenamesTest is B20AssetTest {
         vm.expectRevert(
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, bob, B20Constants.OPERATOR_ROLE)
         );
-        asset().updateUIMultiplier(newMultiplier);
+        asset().updateUIMultiplier(newMultiplier, block.timestamp + 1);
     }
 
     /// @notice Verifies the deprecated `updateMultiplier` is retained in `IB20Asset` (declared

@@ -12,11 +12,11 @@ Both multiplier setters validate `newMultiplier` is non-zero and at most `type(u
 
 ### Scheduling multiplier updates
 
-The standard path for a corporate action (a stock split or reinvested stock dividend) is to **schedule** the change ahead of time with `setUIMultiplier(newMultiplier, effectiveAt)`, wrapped in an [announcement](#announcements). Evaluation is lazy, so `multiplier()` / `uiMultiplier()` flip on their own once `block.timestamp` reaches `effectiveAt`.
+The standard path for a corporate action (a stock split or reinvested stock dividend) is to **schedule** the change ahead of time with `updateUIMultiplier(newMultiplier, effectiveAt)`, wrapped in an [announcement](#announcements). Evaluation is lazy, so `multiplier()` / `uiMultiplier()` flip on their own once `block.timestamp` reaches `effectiveAt`.
 
-Only **one pending update is live at a time**. Attempting to schedule over an existing pending update reverts `PendingUpdateExists`. To reorder overlapping corporate actions, explicitly cancel and re-schedule in a single announcement bracket using `announce([cancelScheduledMultiplier, setUIMultiplier(...)])`. `cancelScheduledMultiplier()` clears the live pending and restores the no-pending state (reverting `NoScheduledUIMultiplier` when nothing live is scheduled).
+Only **one pending update is live at a time**. Attempting to schedule over an existing pending update reverts `UIMultiplierUpdateExists`. To reorder overlapping corporate actions, explicitly cancel and re-schedule in a single announcement bracket using `announce([cancelUIMultiplierUpdate, updateUIMultiplier(...)])`. `cancelUIMultiplierUpdate()` clears the live pending and restores the no-pending state (reverting `UIMultiplierUpdateDoesNotExist` when nothing live is scheduled).
 
-`updateUIMultiplier(newMultiplier)` is the **instant failsafe / emergency override**: it sets the multiplier immediately, stamping `effectiveAt = block.timestamp` and clearing any pending update. (The legacy `updateMultiplier` is retained in `IB20Asset` as a deprecated alias.)
+`updateMultiplier(newMultiplier)` is the **deprecated instant failsafe / emergency override**: it sets the multiplier immediately, stamping `effectiveAt = block.timestamp` and clearing any pending update. It is retained in `IB20Asset` (marked deprecated, still dialable) for backward compatibility; prefer the scheduled `updateUIMultiplier` for routine corporate actions.
 
 The pending schedule is observable through the ERC-8056 surface: `newUIMultiplier()` returns the scheduled target while it is live (otherwise it mirrors `uiMultiplier()`).
 
@@ -30,7 +30,7 @@ The Asset variant conforms to [ERC-8056](https://eips.ethereum.org/EIPS/eip-8056
 - `toUIAmount(rawAmount)` / `fromUIAmount(uiAmount)` are the canonical raw ⇄ UI converters (optional Conversion extension `0x57854fc3`), applying the effective multiplier. The legacy `toScaledBalance` / `toRawBalance` are retained as deprecated aliases.
 - `supportsInterface(bytes4)` (ERC-165, `0x01ffc9a7`) returns `true` for those four extension IDs and for ERC-165 itself.
 
-**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `setUIMultiplier` and from `updateUIMultiplier` (which stamps `effectiveAtTimestamp = block.timestamp`), satisfying ERC-8056's "emit on every multiplier change". The instant setter (`updateUIMultiplier` / the retained `updateMultiplier`) additionally emits the **deprecated** `MultiplierUpdated(newMultiplier)` event alongside `UIMultiplierUpdated`, so indexers still watching the legacy topic keep working through the transition; the scheduled `setUIMultiplier` emits only `UIMultiplierUpdated`. `UIMultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelScheduledMultiplier` and by the instant setter when it clears a *live* pending — so an instant override that supersedes a live schedule emits the cancel, then `MultiplierUpdated`, then `UIMultiplierUpdated`. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
+**Events.** Every multiplier change emits `UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAtTimestamp)` — from `updateUIMultiplier` and from `updateMultiplier` (which stamps `effectiveAtTimestamp = block.timestamp`), satisfying ERC-8056's "emit on every multiplier change". The deprecated instant setter (`updateMultiplier`) additionally emits the **deprecated** `MultiplierUpdated(newMultiplier)` event alongside `UIMultiplierUpdated`, so indexers still watching the legacy topic keep working through the transition; the scheduled `updateUIMultiplier` emits only `UIMultiplierUpdated`. `UIMultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)` is emitted by `cancelUIMultiplierUpdate` and by the instant setter when it clears a *live* pending — so an instant override that supersedes a live schedule emits the cancel, then `MultiplierUpdated`, then `UIMultiplierUpdated`. The optional ERC-8056 `TransferWithUIAmount` event is intentionally omitted — scaled balances are derivable from the raw `Transfer` and the active multiplier.
 
 ### Precision & decimals
 
@@ -40,7 +40,7 @@ All multiplier-derived reads (`toUIAmount` / `scaledBalanceOf` / `totalSupplyUI`
 
 ### Pause & market-halt policy
 
-Because a multiplier update is value-neutral to raw venues, forward splits and reinvested dividends need no halt on-chain. A reverse split, however, warrants halting via `PausableFeature.TRANSFER` across the flip window so trading windows are paused and re-enabled in orderly fashion. The instant `updateUIMultiplier` bypasses the scheduling window entirely, so it should likewise be pause-bracketed.
+Because a multiplier update is value-neutral to raw venues, forward splits and reinvested dividends need no halt on-chain. A reverse split, however, warrants halting via `PausableFeature.TRANSFER` across the flip window so trading windows are paused and re-enabled in orderly fashion. The instant `updateMultiplier` bypasses the scheduling window entirely, so it should likewise be pause-bracketed.
 
 ## Announcements
 
@@ -59,7 +59,7 @@ Wrap a set of operations in a single announcement by calling `announce(internalC
 ```solidity
 // Disclose and schedule a 2:1 forward split, effective at the ex-date.
 bytes[] memory internalCalls = new bytes[](1);
-internalCalls[0] = abi.encodeCall(IB20Asset.setUIMultiplier, (2e18, exDateTimestamp));
+internalCalls[0] = abi.encodeCall(IB20Asset.updateUIMultiplier, (2e18, exDateTimestamp));
 
 IB20Asset(token).announce({
     internalCalls: internalCalls,
@@ -83,7 +83,7 @@ Each Asset token can carry an arbitrary set of named metadata entries — a gene
 
 ### `OPERATOR_ROLE`
 
-Gates `announce`, `setUIMultiplier`, `cancelScheduledMultiplier`, and `updateUIMultiplier` (and the retained legacy `updateMultiplier`). These are metadata-like operations — they post disclosures and rescale the displayed balance rather than moving raw balances directly — but a compromised operator carries materially higher severity than ordinary metadata edits, so the capability is elevated into its own independent role instead of being folded into `METADATA_ROLE`. Held separately from `DEFAULT_ADMIN_ROLE` so operators don't need full admin authority.
+Gates `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, and the deprecated `updateMultiplier`. These are metadata-like operations — they post disclosures and rescale the displayed balance rather than moving raw balances directly — but a compromised operator carries materially higher severity than ordinary metadata edits, so the capability is elevated into its own independent role instead of being folded into `METADATA_ROLE`. Held separately from `DEFAULT_ADMIN_ROLE` so operators don't need full admin authority.
 
 ## Configurable Decimals
 

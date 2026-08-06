@@ -204,29 +204,24 @@ library B20FactoryLib {
         return abi.encodeCall(IB20Asset.updateExtraMetadata, (key, value));
     }
 
-    /// @notice Encodes a bootstrap initCall to the canonical `IB20Asset.updateUIMultiplier`.
+    /// @notice Encodes an initCall / announce inner call to the canonical scheduled
+    ///         `IB20Asset.updateUIMultiplier`.
     /// @param newMultiplier New multiplier, scaled to `WAD_PRECISION`.
-    function encodeUpdateUIMultiplier(uint256 newMultiplier) internal pure returns (bytes memory) {
-        return abi.encodeCall(IB20Asset.updateUIMultiplier, (newMultiplier));
+    /// @param effectiveAt   Timestamp at which `newMultiplier` becomes effective; must be in the future.
+    function encodeUpdateUIMultiplier(uint256 newMultiplier, uint256 effectiveAt) internal pure returns (bytes memory) {
+        return abi.encodeCall(IB20Asset.updateUIMultiplier, (newMultiplier, effectiveAt));
     }
 
-    /// @notice Encodes a bootstrap initCall to the deprecated `IB20Asset.updateMultiplier`.
-    /// @dev Retained for backward compatibility; prefer `encodeUpdateUIMultiplier` for new call sites.
+    /// @notice Encodes a bootstrap initCall to the deprecated instant `IB20Asset.updateMultiplier`.
+    /// @dev Retained for backward compatibility; prefer the scheduled `encodeUpdateUIMultiplier`.
     /// @param newMultiplier New multiplier, scaled to `WAD_PRECISION`.
     function encodeUpdateMultiplier(uint256 newMultiplier) internal pure returns (bytes memory) {
         return abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
     }
 
-    /// @notice Encodes an initCall / announce inner call to `IB20Asset.setUIMultiplier`
-    /// @param newMultiplier New multiplier, scaled to `WAD_PRECISION`.
-    /// @param effectiveAt   Timestamp at which `newMultiplier` becomes effective; must be in the future.
-    function encodeSetUIMultiplier(uint256 newMultiplier, uint256 effectiveAt) internal pure returns (bytes memory) {
-        return abi.encodeCall(IB20Asset.setUIMultiplier, (newMultiplier, effectiveAt));
-    }
-
-    /// @notice Encodes an announce inner call to `IB20Asset.cancelScheduledMultiplier`.
-    function encodeCancelScheduledMultiplier() internal pure returns (bytes memory) {
-        return abi.encodeCall(IB20Asset.cancelScheduledMultiplier, ());
+    /// @notice Encodes an announce inner call to `IB20Asset.cancelUIMultiplierUpdate`.
+    function encodeCancelUIMultiplierUpdate() internal pure returns (bytes memory) {
+        return abi.encodeCall(IB20Asset.cancelUIMultiplierUpdate, ());
     }
 
     /*//////////////////////////////////////////////////////////////

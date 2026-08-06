@@ -105,7 +105,7 @@ contract B20AssetFullLayoutTest is B20AssetTest {
         _updateMultiplier(MULTIPLIER_MARKER);
         // pending: schedule a live pending via the public surface. `updateMultiplier` above cleared
         // any pending, so this leaves slot 1 (current) at MULTIPLIER_MARKER and populates slot 4.
-        _setUIMultiplier(PENDING_MULTIPLIER, block.timestamp + PENDING_DELAY);
+        _updateUIMultiplier(PENDING_MULTIPLIER, block.timestamp + PENDING_DELAY);
         // extraMetadata[example_3]: post-creation metadata-admin write. The
         // factory does not seed any entry at creation; every other key
         // defaults to empty.

@@ -34,29 +34,29 @@ interface IB20Asset is
     /// @notice `updateExtraMetadata` was called with an empty `key`.
     error InvalidMetadataKey();
 
-    /// @notice A multiplier setter (`setUIMultiplier` or `updateUIMultiplier`) was called with a
-    ///         multiplier of zero or above the `type(uint128).max` overflow guard.
+    /// @notice A multiplier setter (`updateUIMultiplier`, or the deprecated `updateMultiplier`) was
+    ///         called with a multiplier of zero or above the `type(uint128).max` overflow guard.
     error InvalidMultiplier();
 
-    /// @notice `setUIMultiplier` was called with an `effectiveAt` that is not in the future
+    /// @notice `updateUIMultiplier` was called with an `effectiveAt` that is not in the future
     ///         (`effectiveAt <= block.timestamp`).
     ///
     /// @param effectiveAt Rejected effective-at timestamp.
     error EffectiveAtInPast(uint256 effectiveAt);
 
-    /// @notice `setUIMultiplier` was called with an `effectiveAt` above `type(uint64).max`, the
+    /// @notice `updateUIMultiplier` was called with an `effectiveAt` above `type(uint64).max`, the
     ///         width of the on-chain `effectiveAt` field.
     ///
     /// @param effectiveAt Rejected effective-at timestamp.
     error EffectiveAtTooFar(uint256 effectiveAt);
 
-    /// @notice `setUIMultiplier` was called while a live pending update already exists
+    /// @notice `updateUIMultiplier` was called while a live pending update already exists
     ///
-    /// @param pendingEffectiveAt The `effectiveAt` of the live pending update.
-    error PendingUpdateExists(uint256 pendingEffectiveAt);
+    /// @param effectiveAt The `effectiveAt` of the live pending update.
+    error UIMultiplierUpdateExists(uint256 effectiveAt);
 
-    /// @notice `cancelScheduledMultiplier` was called when there is no live pending update
-    error NoScheduledUIMultiplier();
+    /// @notice `cancelUIMultiplierUpdate` was called when there is no live pending update
+    error UIMultiplierUpdateDoesNotExist();
 
     /// @notice A batched function was called with parallel arrays of differing lengths.
     ///
@@ -87,13 +87,13 @@ interface IB20Asset is
 
     /// @notice Deprecated multiplier-change event. The instant setter (`updateUIMultiplier` /
     ///         `updateMultiplier`) emits this alongside `UIMultiplierUpdated` so indexers on the
-    ///         legacy topic keep working; the scheduled `setUIMultiplier` emits only
+    ///         legacy topic keep working; the scheduled `updateUIMultiplier` emits only
     ///         `UIMultiplierUpdated`.
     ///
     /// @param multiplier The new immediate multiplier.
     event MultiplierUpdated(uint256 multiplier);
 
-    /// @notice A scheduled multiplier update was cancelled. Emitted by `cancelScheduledMultiplier`,
+    /// @notice A scheduled multiplier update was cancelled. Emitted by `cancelUIMultiplierUpdate`,
     ///         and by `updateUIMultiplier` when it clears a live pending update.
     ///
     /// @param cancelledMultiplier  The pending multiplier that was cleared.
@@ -113,7 +113,7 @@ interface IB20Asset is
                               ROLE CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Required to call `announce`, `setUIMultiplier`, `cancelScheduledMultiplier`, and
+    /// @notice Required to call `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, and
     ///         `updateUIMultiplier`. The metadata setters (`updateName`, `updateSymbol`,
     ///         `updateExtraMetadata`) are gated by the inherited `METADATA_ROLE` instead.
     /// @return Role constant.
@@ -211,40 +211,33 @@ interface IB20Asset is
     /// @return Scaled balance.
     function scaledBalanceOf(address account) external view returns (uint256);
 
-    /// @notice Schedules a multiplier update to take effect at `effectiveAt` — the standard path
+    /// @notice Schedules a UI-multiplier update to take effect at `effectiveAt` — the canonical path
     ///         for corporate actions (splits, reinvested dividends).
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
     /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
     /// @dev Reverts with `EffectiveAtInPast` when `effectiveAt` is not in the future.
     /// @dev Reverts with `EffectiveAtTooFar` when `effectiveAt` exceeds `type(uint64).max`.
-    /// @dev Reverts with `PendingUpdateExists` when a live pending update already exists.
+    /// @dev Reverts with `UIMultiplierUpdateExists` when a live pending update already exists.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`.
     /// @param effectiveAt   Timestamp at which `newMultiplier` becomes effective; must be in the future.
-    function setUIMultiplier(uint256 newMultiplier, uint256 effectiveAt) external;
+    function updateUIMultiplier(uint256 newMultiplier, uint256 effectiveAt) external;
 
     /// @notice Cancels the single live pending update, restoring the no-pending state
     ///         (`effectiveAt` resets to 0).
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
-    /// @dev Reverts with `NoScheduledUIMultiplier` when there is no live pending update.
-    function cancelScheduledMultiplier() external;
+    /// @dev Reverts with `UIMultiplierUpdateDoesNotExist` when there is no live pending update.
+    function cancelUIMultiplierUpdate() external;
 
-    /// @notice Instant failsafe / emergency override — sets the current multiplier immediately and
-    ///         cancels any live pending update without a scheduling window.
-    ///         Prefer `setUIMultiplier` for routine corporate actions.
+    /// @notice DEPRECATED. Instant failsafe / emergency override — sets the current multiplier
+    ///         immediately and cancels any live pending update without a scheduling window, emitting
+    ///         both `MultiplierUpdated` and `UIMultiplierUpdated`. Retained (dialable) for backward
+    ///         compatibility; prefer the scheduled `updateUIMultiplier` for routine corporate actions.
     ///
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `OPERATOR_ROLE`.
     /// @dev Reverts with `InvalidMultiplier` when `newMultiplier` is zero or above `type(uint128).max`.
-    ///
-    /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be in `(0, type(uint128).max]`.
-    function updateUIMultiplier(uint256 newMultiplier) external;
-
-    /// @notice DEPRECATED. Legacy alias of `updateUIMultiplier` with identical behavior (sets the
-    ///         multiplier immediately, clears any live pending, and emits both `MultiplierUpdated`
-    ///         and `UIMultiplierUpdated`). Retained (dialable) for backward compatibility; prefer
-    ///         `updateUIMultiplier`.
     ///
     /// @param newMultiplier New multiplier scaled to `WAD_PRECISION`; must be in `(0, type(uint128).max]`.
     function updateMultiplier(uint256 newMultiplier) external;

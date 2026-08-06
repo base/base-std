@@ -16,10 +16,10 @@ contract B20AssetMaterializeTest is B20AssetTest {
     bytes32 internal constant CANCELLED_SIG = keccak256("UIMultiplierUpdateCancelled(uint256,uint256)");
 
     /// @notice Verifies scheduling over a *matured* pending folds it into the current multiplier
-    function test_setUIMultiplier_success_materializesMaturedPending() public {
+    function test_updateUIMultiplier_success_materializesMaturedPending() public {
         uint256 first = 2e18;
         uint256 firstEffectiveAt = block.timestamp + 1 days;
-        _setUIMultiplier(first, firstEffectiveAt);
+        _updateUIMultiplier(first, firstEffectiveAt);
         vm.warp(firstEffectiveAt + 1);
         assertEq(asset().uiMultiplier(), first, "precondition: first schedule has matured");
 
@@ -29,7 +29,7 @@ contract B20AssetMaterializeTest is B20AssetTest {
         vm.expectEmit(false, false, false, true, address(token));
         emit IScaledUIAmount.UIMultiplierUpdated(first, second, secondEffectiveAt);
         vm.prank(operator);
-        asset().setUIMultiplier(second, secondEffectiveAt);
+        asset().updateUIMultiplier(second, secondEffectiveAt);
 
         // The matured `first` was folded into slot 1 and is still effective before `second` matures.
         assertEq(asset().uiMultiplier(), first, "matured pending must be folded into current, not lost");
@@ -45,11 +45,11 @@ contract B20AssetMaterializeTest is B20AssetTest {
         assertEq(asset().uiMultiplier(), second, "second schedule flips in on maturity");
     }
 
-    /// @notice Verifies updateUIMultiplier clears a *live* pending and emits the cancellation
-    function test_updateUIMultiplier_success_clearsLivePending() public {
+    /// @notice Verifies updateMultiplier clears a *live* pending and emits the cancellation
+    function test_updateMultiplier_success_clearsLivePending() public {
         uint256 pendingMultiplier = 2e18;
         uint256 effectiveAt = block.timestamp + 1 days;
-        _setUIMultiplier(pendingMultiplier, effectiveAt);
+        _updateUIMultiplier(pendingMultiplier, effectiveAt);
 
         uint256 instant = 5e18;
         uint256 old = asset().uiMultiplier();
@@ -61,27 +61,27 @@ contract B20AssetMaterializeTest is B20AssetTest {
         vm.expectEmit(false, false, false, true, address(token));
         emit IScaledUIAmount.UIMultiplierUpdated(old, instant, block.timestamp);
         vm.prank(operator);
-        asset().updateUIMultiplier(instant);
+        asset().updateMultiplier(instant);
 
         assertEq(asset().uiMultiplier(), instant, "instant update must take effect immediately");
         assertEq(uint256(vm.load(address(token), MockB20AssetStorage.pendingSlot())), 0, "pending must be cleared");
         assertEq(asset().effectiveAt(), 0, "effectiveAt must reset to 0");
     }
 
-    /// @notice Verifies updateUIMultiplier clears a *matured* pending WITHOUT a cancellation event
+    /// @notice Verifies updateMultiplier clears a *matured* pending WITHOUT a cancellation event
     /// @dev A matured pending already took effect, so it folds into `oldMultiplier` and is cleared
     ///      silently — `UIMultiplierUpdateCancelled` fires only for a live pending.
-    function test_updateUIMultiplier_success_clearsMaturedPendingNoCancelEvent() public {
+    function test_updateMultiplier_success_clearsMaturedPendingNoCancelEvent() public {
         uint256 matured = 2e18;
         uint256 effectiveAt = block.timestamp + 1 days;
-        _setUIMultiplier(matured, effectiveAt);
+        _updateUIMultiplier(matured, effectiveAt);
         vm.warp(effectiveAt + 1);
 
         uint256 instant = 5e18;
         _grantOperator();
         vm.recordLogs();
         vm.prank(operator);
-        asset().updateUIMultiplier(instant);
+        asset().updateMultiplier(instant);
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         assertEq(

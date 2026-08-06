@@ -199,7 +199,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     ///      scheduled change is never silently lost (deliberately unlike the ERC-8056 reference
     ///      setter, which overwrites). A *live* pending (`effectiveAt > block.timestamp`) blocks and
     ///      must be cancelled first.
-    function setUIMultiplier(uint256 newMultiplier, uint256 effectiveAt_) external onlyRole(OPERATOR_ROLE) {
+    function updateUIMultiplier(uint256 newMultiplier, uint256 effectiveAt_) external onlyRole(OPERATOR_ROLE) {
         if (newMultiplier == 0 || newMultiplier > MAX_UI_MULTIPLIER) revert InvalidMultiplier();
         if (effectiveAt_ <= block.timestamp) revert EffectiveAtInPast(effectiveAt_);
         if (effectiveAt_ > type(uint64).max) revert EffectiveAtTooFar(effectiveAt_);
@@ -207,7 +207,7 @@ contract MockB20Asset is MockB20, IB20Asset {
         MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
         uint256 pendingEff = $.pending.effectiveAt;
         // A live pending blocks a new schedule.
-        if (pendingEff > block.timestamp) revert PendingUpdateExists(pendingEff);
+        if (pendingEff > block.timestamp) revert UIMultiplierUpdateExists(pendingEff);
         // A matured-but-uncancelled pending is folded into the current multiplier before the
         // overwrite below so it is never lost.
         if (pendingEff != 0) $.multiplier = $.pending.multiplier;
@@ -221,25 +221,21 @@ contract MockB20Asset is MockB20, IB20Asset {
     }
 
     /// @notice Cancels the single live pending update, restoring the no-pending state.
-    function cancelScheduledMultiplier() external onlyRole(OPERATOR_ROLE) {
+    function cancelUIMultiplierUpdate() external onlyRole(OPERATOR_ROLE) {
         MockB20AssetStorage.Layout storage $ = MockB20AssetStorage.layout();
         uint256 pendingMult = $.pending.multiplier;
         uint256 pendingEff = $.pending.effectiveAt;
         // Only a live pending can be cancelled
-        if (pendingEff <= block.timestamp) revert NoScheduledUIMultiplier();
+        if (pendingEff <= block.timestamp) revert UIMultiplierUpdateDoesNotExist();
         delete $.pending;
 
         emit UIMultiplierUpdateCancelled(pendingMult, pendingEff);
     }
 
-    /// @notice Sets the current multiplier immediately and clears any pending. Canonical ERC-8056
-    ///         "UI Multiplier" vocabulary name for the instant failsafe.
-    function updateUIMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
-        _updateMultiplierNow(newMultiplier);
-    }
-
-    /// @notice Deprecated alias of `updateUIMultiplier`, retained (dialable) with identical behavior.
-    ///         Declared deprecated in `IB20Asset` but kept in the interface for backward compatibility.
+    /// @notice DEPRECATED instant failsafe: sets the current multiplier immediately and clears any
+    ///         pending, emitting both `MultiplierUpdated` and `UIMultiplierUpdated`. Declared
+    ///         deprecated in `IB20Asset` but kept (dialable) for backward compatibility; prefer the
+    ///         scheduled `updateUIMultiplier`.
     function updateMultiplier(uint256 newMultiplier) external onlyRole(OPERATOR_ROLE) {
         _updateMultiplierNow(newMultiplier);
     }

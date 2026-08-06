@@ -14,14 +14,14 @@ import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 contract B20AssetReorderTest is B20AssetTest {
     function test_reorder_success_cancelThenScheduleInOneBracket() public {
         uint256 firstEffectiveAt = block.timestamp + 1 days;
-        _setUIMultiplier(2e18, firstEffectiveAt);
+        _updateUIMultiplier(2e18, firstEffectiveAt);
 
         uint256 secondMultiplier = 3e18;
         uint256 secondEffectiveAt = block.timestamp + 2 days;
 
         bytes[] memory calls = new bytes[](2);
-        calls[0] = abi.encodeCall(IB20Asset.cancelScheduledMultiplier, ());
-        calls[1] = abi.encodeCall(IB20Asset.setUIMultiplier, (secondMultiplier, secondEffectiveAt));
+        calls[0] = abi.encodeCall(IB20Asset.cancelUIMultiplierUpdate, ());
+        calls[1] = abi.encodeCall(IB20Asset.updateUIMultiplier, (secondMultiplier, secondEffectiveAt));
 
         _grantOperator();
         _announce(operator, calls, "reorder-2026-Q3", "reorder split", "https://disclosures.example/");

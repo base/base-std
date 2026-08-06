@@ -37,7 +37,7 @@ contract B20AssetToUIAmountTest is B20AssetTest {
 
     /// @notice Verifies toUIAmount applies the WAD fallback when the stored multiplier is zero
     /// @dev A stored `multiplier` of zero resolves as `WAD_PRECISION` on the read surface.
-    ///      `updateUIMultiplier(0)` now reverts (InvalidMultiplier), so we zero the slot via
+    ///      `updateMultiplier(0)` now reverts (InvalidMultiplier), so we zero the slot via
     ///      vm.store to isolate the read-path fallback from write-path validation.
     function test_toUIAmount_success_explicitZeroMultiplierFallsBackToWad(uint256 rawAmount) public {
         rawAmount = bound(rawAmount, 0, type(uint128).max);
