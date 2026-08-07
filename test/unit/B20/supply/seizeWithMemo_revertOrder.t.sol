@@ -13,9 +13,10 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(SEIZE_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
 ///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver` (`from` is not zero-checked)
-///         4. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
-///         5. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
-///         6. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
+///         4. SELF-SEIZE (`from == to`) → `InvalidReceiver`
+///         5. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
+///         6. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
+///         7. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20SeizeWithMemoRevertOrderTest is B20Test {
     address internal seizer = makeAddr("seizer");
 
@@ -54,6 +55,31 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.seizeWithMemo(from, address(0), 1, bytes32(0));
+    }
+
+    /// @notice ROLE beats SELF-SEIZE (an unauthorized caller reverts before the `from == to` check).
+    function test_seizeWithMemo_revertOrder_role_beats_selfSeize(address caller, address account) public {
+        _assumeValidCaller(caller);
+        _assumeValidActor(account);
+        vm.assume(caller != admin);
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.SEIZE_ROLE)
+        );
+        token.seizeWithMemo(account, account, 1, bytes32(0));
+    }
+
+    /// @notice SELF-SEIZE beats BLOCKED (`from == to` reverts even though `from` would also fail the
+    ///         seizable check, i.e. the self-seize guard is unconditional, not gated on policy state).
+    function test_seizeWithMemo_revertOrder_selfSeize_beats_blocked(address account) public {
+        _assumeValidActor(account);
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → `account` is NOT blocked (not seizable either).
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, account));
+        token.seizeWithMemo(account, account, 1, bytes32(0));
     }
 
     /// @notice BLOCKED beats BALANCE (`from` not blocked and zero balance → AccountNotSeizable wins).

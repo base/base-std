@@ -53,11 +53,30 @@ contract B20SeizeWithMemoTest is B20Test {
         token.seizeWithMemo(from, address(0), amount, bytes32(0));
     }
 
+    /// @notice Reverts InvalidReceiver when `from == to`, even when both the seizable and receiver
+    ///         checks would otherwise pass. A self-seize is a no-op balance move that would otherwise
+    ///         still emit a misleading `Transfer`/`Memo`/`Seized`, polluting the compliance trail.
+    function test_seizeWithMemo_revert_selfSeize(address account, uint256 amount) public {
+        _assumeValidActor(account);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+        _mint(account, amount);
+        _armSeize();
+        // `account` is seizable (blocked) and SEIZE_RECEIVER_POLICY is unset (always-allow), so both
+        // membership checks would pass — the self-seize guard must fire before either is consulted.
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, account));
+        token.seizeWithMemo(account, account, amount, bytes32(0));
+
+        assertEq(token.balanceOf(account), amount, "balance must be unchanged");
+    }
+
     /// @notice Reverts AccountNotSeizable when `from` is authorized under SEIZE_HOLDER_POLICY.
     /// @dev Default SEIZE_HOLDER_POLICY is ALWAYS_ALLOW (0) → every account authorized → not seizable.
     function test_seizeWithMemo_revert_accountNotBlocked(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
+        vm.assume(from != to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
 
         vm.prank(seizer);
@@ -124,6 +143,7 @@ contract B20SeizeWithMemoTest is B20Test {
     function test_seizeWithMemo_revert_receiverPolicyForbids(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
+        vm.assume(from != to);
         _armSeize();
         _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 

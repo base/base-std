@@ -116,9 +116,13 @@ def _edges(c: Chain, tok) -> None:
     step(7, "zero destination -> InvalidReceiver (seize is a reassignment, not a burn)")
     c.expect_revert("InvalidReceiver", tok.functions.seizeWithMemo(c.ALICE, config.ZERO, 1, MEMO), c.DEPLOYER)
 
+    step(8, "self-seize (from == to == alice, seizable) -> InvalidReceiver, balance untouched")
+    c.expect_revert("InvalidReceiver", tok.functions.seizeWithMemo(c.ALICE, c.ALICE, 1, MEMO), c.DEPLOYER)
+    c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), config.amt(600, 18), "alice balance unchanged by rejected self-seize")
+
 
 def _decoupling(c: Chain, tok) -> None:
-    step(8, "seize ignores the receiver policy on `to`: block bob on TRANSFER_RECEIVER_POLICY, seize still lands")
+    step(9, "seize ignores the receiver policy on `to`: block bob on TRANSFER_RECEIVER_POLICY, seize still lands")
     recv_pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_BLOCKLIST)
     c.send(tok.functions.updatePolicy(config.TRANSFER_RECEIVER_POLICY, recv_pid), c.deployer)
     c.send(c.policy.functions.updateBlocklist(recv_pid, True, [c.BOB]), c.deployer)
@@ -131,7 +135,7 @@ def _decoupling(c: Chain, tok) -> None:
 
 
 def _pause(c: Chain, tok) -> None:
-    step(9, "pause SEIZE: seizeWithMemo reverts ContractPaused; transfers are independent; unpause restores")
+    step(10, "pause SEIZE: seizeWithMemo reverts ContractPaused; transfers are independent; unpause restores")
     c.send(tok.functions.pause([config.FEATURE_SEIZE]), c.deployer)
     c.assert_eq(tok.functions.isPaused(config.FEATURE_SEIZE).call(), True, "SEIZE paused")
     c.assert_eq(tok.functions.isPaused(config.FEATURE_TRANSFER).call(), False, "TRANSFER not paused (independent vector)")
@@ -150,13 +154,13 @@ def _pause(c: Chain, tok) -> None:
 def _receiver_policy(c: Chain, tok) -> None:
     # SEIZE_RECEIVER_POLICY gates `to`, mirroring MINT_RECEIVER_POLICY: unset = allow-any,
     # configured = the destination must be authorized. Balances entering here: alice=410, bob=600.
-    step(10, "SEIZE_RECEIVER_POLICY unset (default): seize to any destination is allowed")
+    step(11, "SEIZE_RECEIVER_POLICY unset (default): seize to any destination is allowed")
     c.assert_eq(tok.functions.SEIZE_RECEIVER_POLICY().call(), config.SEIZE_RECEIVER_POLICY, "receiver scope getter")
     # Deployer is not on any allowlist; with the scope unset (ALWAYS_ALLOW) the seize still lands.
     c.send(tok.functions.seizeWithMemo(c.ALICE, c.DEPLOYER, config.amt(10, 18), MEMO), c.deployer)
     c.assert_eq(tok.functions.balanceOf(c.DEPLOYER).call(), config.amt(10, 18), "deployer received seize (unset receiver policy)")
 
-    step(11, "configure SEIZE_RECEIVER_POLICY allowlist(bob): seize to bob (authorized) succeeds")
+    step(12, "configure SEIZE_RECEIVER_POLICY allowlist(bob): seize to bob (authorized) succeeds")
     recv_pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST)
     c.send(tok.functions.updatePolicy(config.SEIZE_RECEIVER_POLICY, recv_pid), c.deployer)
     c.send(c.policy.functions.updateAllowlist(recv_pid, True, [c.BOB]), c.deployer)
@@ -165,12 +169,12 @@ def _receiver_policy(c: Chain, tok) -> None:
     c.send(tok.functions.seizeWithMemo(c.ALICE, c.BOB, config.amt(100, 18), MEMO), c.deployer)
     c.assert_eq(tok.functions.balanceOf(c.BOB).call(), config.amt(700, 18), "bob received seize (authorized receiver)")
 
-    step(12, "receiver policy forbids an unauthorized destination -> PolicyForbids(SEIZE_RECEIVER_POLICY)")
+    step(13, "receiver policy forbids an unauthorized destination -> PolicyForbids(SEIZE_RECEIVER_POLICY)")
     c.expect_revert("PolicyForbids", tok.functions.seizeWithMemo(c.ALICE, c.DEPLOYER, 1, MEMO), c.DEPLOYER)
 
 
 def _events(c: Chain) -> None:
-    step(13, "expected events emitted across the flow")
+    step(14, "expected events emitted across the flow")
     c.assert_events_emitted(
         "seize events",
         "B20Created(address,uint8,string,string,uint8,bytes)",
