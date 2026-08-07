@@ -331,16 +331,9 @@ abstract contract MockB20 is IB20 {
 
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
-    /// @dev Admin seize: reassign a blocked account's balance. `to` must be non-zero (otherwise this
-    ///      would be a burn), `from != to` (otherwise `_moveBalance` is a no-op that would still emit a
-    ///      misleading `Transfer`/`Memo`/`Seized`), and — unlike a normal transfer — no sender/receiver/
-    ///      executor transfer policy is consulted, no allowance is spent, and `from` is not zero-checked
-    ///      (consistent with the burn-blocked family; a zero/empty `from` fails the seizable or balance
-    ///      check anyway). The membership checks are that `from` is blocked under `SEIZE_HOLDER_POLICY`
-    ///      and `to` is authorized under `SEIZE_RECEIVER_POLICY` (mirroring `MINT_RECEIVER_POLICY`; an
-    ///      unset slot is always-allow, so a treasury need not be allowlisted by default). Deliberately
-    ///      does NOT reuse the factory-bootstrap privileged path (which would silently skip the receiver
-    ///      policy); every skip here is explicit.
+    /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`
+    ///      or `from == to`. `from` must be blocked under `SEIZE_HOLDER_POLICY`; `to` must be authorized
+    ///      under `SEIZE_RECEIVER_POLICY` (mirrors `MINT_RECEIVER_POLICY`: unset slot = always-allow).
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.

@@ -61,8 +61,6 @@ contract B20SeizeWithMemoTest is B20Test {
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
         _mint(account, amount);
         _armSeize();
-        // `account` is seizable (blocked) and SEIZE_RECEIVER_POLICY is unset (always-allow), so both
-        // membership checks would pass — the self-seize guard must fire before either is consulted.
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, account));
