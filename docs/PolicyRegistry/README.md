@@ -16,7 +16,7 @@ Four policy types are supported, split into two kinds:
 - **`UNION`** (OR) — authorized if *any* child policy authorizes the account.
 - **`INTERSECT`** (AND) — authorized only if *every* child policy authorizes the account.
 
-A composite's child set is 2–4 existing simple (`ALLOWLIST`/`BLOCKLIST`) policy IDs — never another composite, and never a built-in sentinel (`ALWAYS_ALLOW`/`ALWAYS_BLOCK`). Composites reference their children live: `isAuthorized` reads current child membership on every call, not a snapshot taken at composite-creation time, so updating a child's membership immediately changes what the composite authorizes.
+A composite's child set is 2–4 existing simple (`ALLOWLIST`/`BLOCKLIST`) policy IDs — never another composite, and never a built-in sentinel (`ALWAYS_ALLOW`/`ALWAYS_BLOCK`). Composites reference their children live: `isAuthorized` reads current child membership on every call. So updating a child's membership immediately changes what the composite authorizes.
 
 ## Policy IDs
 
@@ -134,7 +134,7 @@ sequenceDiagram
     PolicyRegistry-->>PolicyAdmin: emit CompositePolicyUpdated(policyId, updater, childPolicyIds)
 ```
 
-`childPolicyIds` is a full replacement, not a merge — a child omitted from the new set no longer governs the composite, even if it governed before. There is no clear-the-list path: the new set must still satisfy the same size and child-validity rules as creation. Because composites read child membership live, `isAuthorized` reflects the new set immediately.
+`childPolicyIds` is a full replacement, a child omitted from the new set no longer governs the composite. The new set must still satisfy the same size and child-validity rules as creation.
 
 Reverts: `PolicyNotFound` (unknown `policyId` or a child that doesn't exist), `IncompatiblePolicyType` (`policyId` isn't `UNION`/`INTERSECT`), `Unauthorized` (caller isn't current admin — a renounced composite can never be updated), `ChildPoliciesOutsideOfRange` (child count outside `[2, 4]`), `InvalidChildPolicy` (a child is a composite or a built-in sentinel).
 
