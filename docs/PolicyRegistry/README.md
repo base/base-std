@@ -1,15 +1,22 @@
 # PolicyRegistry
 
-The PolicyRegistry is a singleton precompile for list-based access policies — allowlists and blocklists. Any caller can create a policy and nominate its admin; B20 tokens and other consumers reference policies by `uint64` ID for authorization checks. See [`IPolicyRegistry`](../../src/interfaces/IPolicyRegistry.sol) for the full Solidity interface.
+The PolicyRegistry is a singleton precompile for list-based and composite access policies. Any caller can create a policy and nominate its admin; B20 tokens and other consumers reference policies by `uint64` ID for authorization checks. See [`IPolicyRegistry`](../../src/interfaces/IPolicyRegistry.sol) for the full Solidity interface.
 
 ## Policy Types
 
-Two policy types are supported today:
+Four policy types are supported, split into two kinds:
+
+**Simple** policies decide from an address set:
 
 - **`BLOCKLIST`** — accounts are authorized by default; the admin maintains a list of accounts to explicitly deny.
 - **`ALLOWLIST`** — accounts are denied by default; the admin maintains a list of accounts to explicitly authorize.
 
-Additional types (union / intersect composition of existing policies) are planned for a future hardfork via additive `PolicyType` enum values and sibling creator functions.
+**Composite** policies decide by combining existing simple policies under a logic gate:
+
+- **`UNION`** (OR) — authorized if *any* child policy authorizes the account.
+- **`INTERSECT`** (AND) — authorized only if *every* child policy authorizes the account.
+
+A composite's child set is 2–4 existing simple (`ALLOWLIST`/`BLOCKLIST`) policy IDs — never another composite, and never a built-in sentinel (`ALWAYS_ALLOW`/`ALWAYS_BLOCK`). Composites reference their children live: `isAuthorized` reads current child membership on every call, not a snapshot taken at composite-creation time, so updating a child's membership immediately changes what the composite authorizes.
 
 ## Policy IDs
 
@@ -36,16 +43,21 @@ The `PolicyRegistry` is gated by the [`ActivationRegistry`](../ActivationRegistr
 - `policyExists`
 - `policyAdmin`
 - `pendingPolicyAdmin`
+- `compositePolicyChildIds`
+- `MIN_COMPOSITE_CHILD_POLICIES`
+- `MAX_COMPOSITE_CHILD_POLICIES`
 
 **Gated** — revert with `FeatureNotActivated` while the feature is inactive:
 
 - `createPolicy`
 - `createPolicyWithAccounts`
+- `createCompositePolicy`
 - `stageUpdateAdmin`
 - `finalizeUpdateAdmin`
 - `renounceAdmin`
 - `updateAllowlist`
 - `updateBlocklist`
+- `updateComposite`
 
 Because reads are never gated, a consumer — a B20 token calling `isAuthorized` on transfer, or an indexer reading membership and admin state — sees the same behavior whether or not the feature is active.
 
@@ -70,6 +82,26 @@ Use `createPolicyWithAccounts(admin, policyType, accounts)` for the seeded varia
 
 Reverts: `ZeroAddress` (if `admin` is `address(0)`), `BatchSizeTooLarge` (seeded variant only).
 
+### Create Composite Policy
+
+A caller combines 2–4 existing simple policies under a `UNION` or `INTERSECT` gate and nominates an admin for the composite.
+
+```mermaid
+sequenceDiagram
+    participant Creator
+    participant PolicyRegistry
+
+    Creator->>PolicyRegistry: createCompositePolicy(admin, policyType, childPolicyIds)
+    Note over PolicyRegistry: validate children<br>allocate new policyId<br>store type, admin, children
+    PolicyRegistry-->>Creator: emit PolicyCreated(policyId, creator, policyType)
+    PolicyRegistry-->>Creator: emit PolicyAdminUpdated(policyId, 0, admin)
+    PolicyRegistry-->>Creator: emit CompositePolicyUpdated(policyId, creator, childPolicyIds)
+```
+
+Every entry in `childPolicyIds` must be an existing simple (`ALLOWLIST`/`BLOCKLIST`) policy — never another composite and never a built-in sentinel (`ALWAYS_ALLOW`/`ALWAYS_BLOCK`). The set size must fall within `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]` (2–4, inclusive).
+
+Reverts: `ZeroAddress` (if `admin` is `address(0)`), `IncompatiblePolicyType` (`policyType` isn't `UNION`/`INTERSECT`), `ChildPoliciesOutsideOfRange` (child count outside `[2, 4]`), `PolicyNotFound` (a child doesn't exist), `InvalidChildPolicy` (a child is a composite or a built-in sentinel).
+
 ### Update Membership
 
 The policy admin sets `accounts` to a uniform membership state — all included or all excluded — in a single batch.
@@ -87,6 +119,24 @@ sequenceDiagram
 `updateBlocklist(policyId, blocked, accounts)` has the same shape for `BLOCKLIST` policies; it emits `BlocklistUpdated` instead. Use the matching call for the policy's type — mixing them reverts.
 
 Reverts: `PolicyNotFound` (unknown `policyId`), `IncompatiblePolicyType` (wrong call for the policy's type), `Unauthorized` (caller isn't current admin), `BatchSizeTooLarge`.
+
+### Update Composite Children
+
+The composite's admin replaces its child-policy set in full with `updateComposite`.
+
+```mermaid
+sequenceDiagram
+    participant PolicyAdmin
+    participant PolicyRegistry
+
+    PolicyAdmin->>PolicyRegistry: updateComposite(policyId, childPolicyIds)
+    Note over PolicyRegistry: validate children<br>replace child set in full
+    PolicyRegistry-->>PolicyAdmin: emit CompositePolicyUpdated(policyId, updater, childPolicyIds)
+```
+
+`childPolicyIds` is a full replacement, not a merge — a child omitted from the new set no longer governs the composite, even if it governed before. There is no clear-the-list path: the new set must still satisfy the same size and child-validity rules as creation. Because composites read child membership live, `isAuthorized` reflects the new set immediately.
+
+Reverts: `PolicyNotFound` (unknown `policyId` or a child that doesn't exist), `IncompatiblePolicyType` (`policyId` isn't `UNION`/`INTERSECT`), `Unauthorized` (caller isn't current admin — a renounced composite can never be updated), `ChildPoliciesOutsideOfRange` (child count outside `[2, 4]`), `InvalidChildPolicy` (a child is a composite or a built-in sentinel).
 
 ### Transfer Admin
 
