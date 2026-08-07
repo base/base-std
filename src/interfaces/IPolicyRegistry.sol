@@ -124,14 +124,16 @@ interface IPolicyRegistry {
     /// @notice Creates a new composite policy that combines existing simple policies under a logic
     ///         gate.
     ///
-    /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite.
-    ///      The child-policy set is capped at 4.
+    /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite
+    ///      and never a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK). The child-policy set is
+    ///      capped at 4.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is not in
     ///      `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]`.
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy or a built-in policy.
+    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy or is a
+    ///      built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK).
     /// @dev Panics with arithmetic overflow (Panic 0x11) when the policy counter has reached its maximum value.
     ///
     /// @param admin          Initial admin authorized to update child policies and transfer or renounce
@@ -209,8 +211,8 @@ interface IPolicyRegistry {
     ///      `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]`; there is no clear-the-list
     ///      path (the composite child-policy range, not the 64-account batch limit).
     /// @dev Reverts with `PolicyNotFound` when any child policy does not exist.
-    /// @dev Reverts with `InvalidChildPolicy` when any child policy is itself a composite
-    ///      (not a simple policy).
+    /// @dev Reverts with `InvalidChildPolicy` when any child policy is not a simple policy — i.e.
+    ///      it is itself a composite or a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK).
     ///
     /// @param policyId       Composite policy to update.
     /// @param childPolicyIds Complete new set of existing simple policy IDs.
