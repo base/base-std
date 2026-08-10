@@ -462,7 +462,7 @@ interface IB20 {
     ///      unconfigured token may seize to any destination (a treasury need not be allowlisted).
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
-    /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
+    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `from == to`.
     /// @dev Reverts with `AccountNotSeizable` when `from` is currently authorized under `SEIZE_HOLDER_POLICY`.
     /// @dev Reverts with `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)` when `to` is not authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
