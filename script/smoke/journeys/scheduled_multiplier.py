@@ -1,7 +1,7 @@
 """ERC-8056 scheduled-multiplier smoketest (AssetV2 @ Cobalt).
 
 Exercises the "Scaled UI Amount" surface added to the Asset variant at Cobalt: the scheduled
-`setUIMultiplier` path (with its guards), `cancelScheduledMultiplier`, the `updateMultiplier`
+`updateUIMultiplier` path (with its guards), `cancelUIMultiplierUpdate`, the `updateMultiplier`
 instant-failsafe V2 event semantics, the ERC-8056 read aliases, and ERC-165 advertisement.
 
 Fork-gated: the whole surface is version-specific, so the journey probes `supportsInterface`
@@ -23,11 +23,12 @@ from .. import config
 from ..chain import Chain, log, ok, skip, step
 from ..codec import AssetCreateParams, init_call
 
-# ERC-8056 events. UIMultiplierUpdated is emitted by both setUIMultiplier and (on V2) updateMultiplier;
-# MultiplierUpdateCancelled by cancelScheduledMultiplier and by updateMultiplier when it clears a
-# live pending. V1_UPDATED is the superseded V1 event that V2's updateMultiplier must NOT emit.
+# ERC-8056 events. UIMultiplierUpdated is emitted by both updateUIMultiplier and (on V2) updateMultiplier;
+# UIMultiplierUpdateCancelled by cancelUIMultiplierUpdate and by updateMultiplier when it clears a
+# live pending. V1_UPDATED (the deprecated MultiplierUpdated) is emitted alongside UIMultiplierUpdated
+# by the instant setter for backward compatibility.
 UI_UPDATED = "UIMultiplierUpdated(uint256,uint256,uint256)"
-CANCELLED = "MultiplierUpdateCancelled(uint256,uint256)"
+CANCELLED = "UIMultiplierUpdateCancelled(uint256,uint256)"
 V1_UPDATED = "MultiplierUpdated(uint256)"
 
 WAD = config.amt(1, 18)
@@ -63,11 +64,11 @@ def _interface_ids(c: Chain, tok) -> None:
 
 
 def _current_multiplier_and_aliases(c: Chain, tok) -> None:
-    step(2, "seed a non-unit current multiplier: updateMultiplier(2e18) — V2 emits UIMultiplierUpdated, not MultiplierUpdated")
+    step(2, "seed a non-unit current multiplier: updateMultiplier(2e18) — V2 emits UIMultiplierUpdated + deprecated MultiplierUpdated")
     c.send(tok.functions.mint(c.ALICE, config.amt(1000, 18)), c.deployer)
     receipt = c.send(tok.functions.updateMultiplier(config.amt(2, 18)), c.deployer)
     c.assert_log(receipt, UI_UPDATED, "updateMultiplier emits UIMultiplierUpdated")
-    c.assert_no_log(receipt, V1_UPDATED, "V2 updateMultiplier does NOT emit the V1 MultiplierUpdated")
+    c.assert_log(receipt, V1_UPDATED, "V2 updateMultiplier also emits the deprecated MultiplierUpdated")
     c.assert_eq(tok.functions.multiplier().call(), config.amt(2, 18), "multiplier == 2e18 immediately")
 
     step(3, "ERC-8056 read aliases mirror their B20 originals")
@@ -77,27 +78,27 @@ def _current_multiplier_and_aliases(c: Chain, tok) -> None:
                 "balanceOfUI(alice) == scaledBalanceOf(alice)")
     c.assert_eq(tok.functions.balanceOfUI(c.ALICE).call(), raw * 2, "balanceOfUI(alice) == 2 * balanceOf(alice)")
     total = tok.functions.totalSupply().call()
-    c.assert_eq(tok.functions.totalSupplyUI().call(), tok.functions.toScaledBalance(total).call(),
-                "totalSupplyUI() == toScaledBalance(totalSupply())")
+    c.assert_eq(tok.functions.totalSupplyUI().call(), tok.functions.toUIAmount(total).call(),
+                "totalSupplyUI() == toUIAmount(totalSupply())")
 
 
 def _schedule_reverts(c: Chain, tok) -> None:
-    # No live pending exists yet, so ScheduleOverlap cannot fire — each guard is the binding revert.
+    # No live pending exists yet, so UIMultiplierUpdateExists cannot fire — each guard is the binding revert.
     # Every non-target argument is kept valid so the intended check is what reverts (mirrors the reference).
-    step(4, "setUIMultiplier input guards: InvalidMultiplier / EffectiveAtInPast / EffectiveAtTooFar")
+    step(4, "updateUIMultiplier input guards: InvalidMultiplier / EffectiveAtInPast / EffectiveAtTooFar")
     future = _now(c) + 3600
-    c.expect_revert("InvalidMultiplier", tok.functions.setUIMultiplier(0, future), c.DEPLOYER)
-    c.expect_revert("InvalidMultiplier", tok.functions.setUIMultiplier(1 << 128, future), c.DEPLOYER)
-    c.expect_revert("EffectiveAtInPast", tok.functions.setUIMultiplier(config.amt(3, 18), _now(c)), c.DEPLOYER)
-    c.expect_revert("EffectiveAtTooFar", tok.functions.setUIMultiplier(config.amt(3, 18), 1 << 64), c.DEPLOYER)
+    c.expect_revert("InvalidMultiplier", tok.functions.updateUIMultiplier(0, future), c.DEPLOYER)
+    c.expect_revert("InvalidMultiplier", tok.functions.updateUIMultiplier(1 << 128, future), c.DEPLOYER)
+    c.expect_revert("EffectiveAtInPast", tok.functions.updateUIMultiplier(config.amt(3, 18), _now(c)), c.DEPLOYER)
+    c.expect_revert("EffectiveAtTooFar", tok.functions.updateUIMultiplier(config.amt(3, 18), 1 << 64), c.DEPLOYER)
 
 
 def _schedule_and_cancel(c: Chain, tok) -> None:
     old = tok.functions.uiMultiplier().call()
     sched = _now(c) + 3600
     target = config.amt(3, 18)
-    step(5, f"setUIMultiplier({target}, now+3600) schedules a pending update (read-only assertions; no time travel)")
-    receipt = c.send(tok.functions.setUIMultiplier(target, sched), c.deployer)
+    step(5, f"updateUIMultiplier({target}, now+3600) schedules a pending update (read-only assertions; no time travel)")
+    receipt = c.send(tok.functions.updateUIMultiplier(target, sched), c.deployer)
     # Decode the receipt (not just presence): the scheduled target + effectiveAt are exactly what a
     # presence-only check can't verify.
     ui = c.event_args(receipt, tok, "UIMultiplierUpdated")
@@ -110,40 +111,40 @@ def _schedule_and_cancel(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.effectiveAt().call(), sched, "effectiveAt() == schedule time")
     c.assert_eq(tok.functions.uiMultiplier().call(), old, "uiMultiplier() still reads the old value while pending is future")
 
-    step(6, "a second setUIMultiplier while a live pending exists -> ScheduleOverlap")
-    c.expect_revert("ScheduleOverlap", tok.functions.setUIMultiplier(config.amt(4, 18), _now(c) + 7200), c.DEPLOYER)
+    step(6, "a second updateUIMultiplier while a live pending exists -> UIMultiplierUpdateExists")
+    c.expect_revert("UIMultiplierUpdateExists", tok.functions.updateUIMultiplier(config.amt(4, 18), _now(c) + 7200), c.DEPLOYER)
 
-    step(7, "cancelScheduledMultiplier clears the live pending -> MultiplierUpdateCancelled, effectiveAt() == 0")
-    receipt = c.send(tok.functions.cancelScheduledMultiplier(), c.deployer)
-    cancelled = c.event_args(receipt, tok, "MultiplierUpdateCancelled")
+    step(7, "cancelUIMultiplierUpdate clears the live pending -> UIMultiplierUpdateCancelled, effectiveAt() == 0")
+    receipt = c.send(tok.functions.cancelUIMultiplierUpdate(), c.deployer)
+    cancelled = c.event_args(receipt, tok, "UIMultiplierUpdateCancelled")
     c.assert_eq(
         [cancelled["cancelledMultiplier"], cancelled["cancelledEffectiveAt"]],
         [target, sched],
-        "MultiplierUpdateCancelled payload == (cancelled target, cancelled effectiveAt)",
+        "UIMultiplierUpdateCancelled payload == (cancelled target, cancelled effectiveAt)",
     )
     c.assert_eq(tok.functions.effectiveAt().call(), 0, "effectiveAt() resets to 0 after cancel")
     c.assert_eq(tok.functions.newUIMultiplier().call(), tok.functions.uiMultiplier().call(),
                 "no-live-pending: newUIMultiplier() == uiMultiplier()")
     c.assert_eq(tok.functions.uiMultiplier().call(), old, "cancel leaves the current multiplier untouched")
 
-    step(8, "cancelScheduledMultiplier with nothing scheduled -> NoScheduledMultiplier")
-    c.expect_revert("NoScheduledMultiplier", tok.functions.cancelScheduledMultiplier(), c.DEPLOYER)
+    step(8, "cancelUIMultiplierUpdate with nothing scheduled -> UIMultiplierUpdateDoesNotExist")
+    c.expect_revert("UIMultiplierUpdateDoesNotExist", tok.functions.cancelUIMultiplierUpdate(), c.DEPLOYER)
 
 
 def _failsafe_clears_pending(c: Chain, tok) -> None:
-    step(9, "updateMultiplier instant-failsafe clears a live pending: UIMultiplierUpdated + MultiplierUpdateCancelled, not MultiplierUpdated")
+    step(9, "updateMultiplier instant-failsafe clears a live pending: UIMultiplierUpdated + UIMultiplierUpdateCancelled + deprecated MultiplierUpdated")
     cleared_target, cleared_sched = config.amt(5, 18), _now(c) + 3600
-    c.send(tok.functions.setUIMultiplier(cleared_target, cleared_sched), c.deployer)
+    c.send(tok.functions.updateUIMultiplier(cleared_target, cleared_sched), c.deployer)
     receipt = c.send(tok.functions.updateMultiplier(config.amt(6, 18)), c.deployer)
     c.assert_log(receipt, UI_UPDATED, "updateMultiplier emits UIMultiplierUpdated")
     # Decode the cancel: it must carry the pending it cleared, not any live pending.
-    cancelled = c.event_args(receipt, tok, "MultiplierUpdateCancelled")
+    cancelled = c.event_args(receipt, tok, "UIMultiplierUpdateCancelled")
     c.assert_eq(
         [cancelled["cancelledMultiplier"], cancelled["cancelledEffectiveAt"]],
         [cleared_target, cleared_sched],
-        "MultiplierUpdateCancelled payload == the pending that updateMultiplier cleared",
+        "UIMultiplierUpdateCancelled payload == the pending that updateMultiplier cleared",
     )
-    c.assert_no_log(receipt, V1_UPDATED, "V2 updateMultiplier does NOT emit the V1 MultiplierUpdated")
+    c.assert_log(receipt, V1_UPDATED, "V2 updateMultiplier also emits the deprecated MultiplierUpdated")
     c.assert_eq(tok.functions.multiplier().call(), config.amt(6, 18), "updateMultiplier sets the current multiplier immediately")
     c.assert_eq(tok.functions.effectiveAt().call(), 0, "updateMultiplier cleared the pending (effectiveAt() == 0)")
 
@@ -154,7 +155,7 @@ def _observe_lazy_flip(c: Chain, tok) -> None:
     old = tok.functions.uiMultiplier().call()
     sched = _now(c) + window
     step(10, f"opt-in lazy flip: schedule {target} at now+{window}s, poll multiplier() up to {timeout}s for the matured value")
-    c.send(tok.functions.setUIMultiplier(target, sched), c.deployer)
+    c.send(tok.functions.updateUIMultiplier(target, sched), c.deployer)
     c.assert_eq(tok.functions.uiMultiplier().call(), old, "uiMultiplier() still old immediately after scheduling")
 
     deadline = time.time() + timeout

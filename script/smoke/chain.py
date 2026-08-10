@@ -419,7 +419,7 @@ class Chain:
         ok(desc)
 
     def assert_no_log(self, receipt: TxReceipt, sig: str, desc: str) -> None:
-        """Assert this receipt did NOT emit an event with signature `sig` (e.g. the superseded V1 event)."""
+        """Assert this receipt did NOT emit an event with signature `sig`."""
         if self._emitted(receipt, sig):
             die(f"unexpected event emitted [{desc}]: {sig}")
         ok(desc)

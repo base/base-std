@@ -64,7 +64,7 @@ ASSET_DECIMALS = 18
 STABLECOIN_DECIMALS = 6
 
 # ERC-165 + ERC-8056 interface ids advertised by the Asset variant (AssetV2 @ Cobalt). See
-# src/interfaces/IScaledUIAmount.sol; `supportsInterface(SCALED_UI_AMOUNT_ID)` doubles as the
+# src/interfaces/IERC8056.sol; `supportsInterface(SCALED_UI_AMOUNT_ID)` doubles as the
 # probe that tells a Cobalt (ERC-8056 scheduled multiplier) chain apart from a pre-Cobalt one.
 ERC165_ID = bytes.fromhex("01ffc9a7")
 SCALED_UI_AMOUNT_ID = bytes.fromhex("a60bf13d")

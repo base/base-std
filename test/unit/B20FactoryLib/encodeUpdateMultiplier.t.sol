@@ -7,10 +7,22 @@ import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 import {B20FactoryLibTest} from "base-std-test/lib/B20FactoryLibTest.sol";
 
 contract B20FactoryLibEncodeUpdateMultiplierTest is B20FactoryLibTest {
-    /// @notice Verifies the encoded blob matches `abi.encodeCall(IB20Asset.updateMultiplier, ...)`.
-    /// @dev    Pins the selector binding and uint argument shape for the bootstrap multiplier
-    ///         init call. The asset variant's scaled-balance reads all derive from the
-    ///         multiplier this call seeds, so a selector/arg drift would silently mis-scale balances.
+    /// @notice Verifies the canonical scheduled encoder matches
+    ///         `abi.encodeCall(IB20Asset.updateUIMultiplier, ...)`.
+    /// @dev    Pins the selector binding and argument shape for the scheduled multiplier init call.
+    ///         The asset variant's scaled-balance reads all derive from the multiplier this call
+    ///         seeds, so a selector/arg drift would silently mis-scale balances.
+    function test_encodeUpdateUIMultiplier_success_matchesAbiEncodeCall(uint256 newMultiplier, uint256 effectiveAt)
+        public
+        pure
+    {
+        bytes memory expected = abi.encodeCall(IB20Asset.updateUIMultiplier, (newMultiplier, effectiveAt));
+        bytes memory actual = B20FactoryLib.encodeUpdateUIMultiplier(newMultiplier, effectiveAt);
+        assertEq(actual, expected, "init-call must match abi.encodeCall(IB20Asset.updateUIMultiplier, ...)");
+    }
+
+    /// @notice Verifies the deprecated encoder matches `abi.encodeCall(IB20Asset.updateMultiplier, ...)`.
+    /// @dev    `updateMultiplier` is retained (deprecated) in `IB20Asset`; pins the selector binding.
     function test_encodeUpdateMultiplier_success_matchesAbiEncodeCall(uint256 newMultiplier) public pure {
         bytes memory expected = abi.encodeCall(IB20Asset.updateMultiplier, (newMultiplier));
         bytes memory actual = B20FactoryLib.encodeUpdateMultiplier(newMultiplier);

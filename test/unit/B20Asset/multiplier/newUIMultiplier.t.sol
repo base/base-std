@@ -13,7 +13,7 @@ contract B20AssetNewUIMultiplierTest is B20AssetTest {
         effectiveAt = bound(effectiveAt, block.timestamp + 1, type(uint64).max);
 
         uint256 oldMultiplier = asset().uiMultiplier();
-        _setUIMultiplier(newMultiplier, effectiveAt);
+        _updateUIMultiplier(newMultiplier, effectiveAt);
 
         assertEq(asset().newUIMultiplier(), newMultiplier, "newUIMultiplier must report the live pending target");
         assertEq(asset().effectiveAt(), effectiveAt, "effectiveAt must report the schedule time");
@@ -27,7 +27,7 @@ contract B20AssetNewUIMultiplierTest is B20AssetTest {
     function test_newUIMultiplier_success_maturedMirrorsUiMultiplier(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         uint256 effectiveAt = block.timestamp + 5 days;
-        _setUIMultiplier(newMultiplier, effectiveAt);
+        _updateUIMultiplier(newMultiplier, effectiveAt);
         vm.warp(effectiveAt + 1);
 
         assertEq(asset().newUIMultiplier(), asset().uiMultiplier(), "matured: newUIMultiplier == uiMultiplier");

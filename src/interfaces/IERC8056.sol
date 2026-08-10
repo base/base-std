@@ -54,3 +54,24 @@ interface IScaledUIAmountBalances {
     /// @return UI-adjusted total supply.
     function totalSupplyUI() external view returns (uint256);
 }
+
+/// @title  IScaledUIAmountConversion
+/// @author Ethereum (ERC-8056)
+///
+/// @notice ERC-8056 optional "Conversion" extension: on-chain helpers for converting between raw
+///         token amounts and their UI representation, using the effective (lazily-flipped)
+///         multiplier. Integrators should treat raw on-chain amounts as canonical and call these
+///         only at the display boundary; integer division truncates, so the round-trip is lossy.
+///
+/// @dev    Interface ID: `0x57854fc3`.
+interface IScaledUIAmountConversion {
+    /// @notice Converts a raw token amount to its UI representation.
+    /// @param rawAmount Raw token amount to scale.
+    /// @return UI amount at the effective multiplier.
+    function toUIAmount(uint256 rawAmount) external view returns (uint256);
+
+    /// @notice Converts a UI amount back to its raw token amount.
+    /// @param uiAmount UI amount to convert back.
+    /// @return Raw token amount at the effective multiplier.
+    function fromUIAmount(uint256 uiAmount) external view returns (uint256);
+}

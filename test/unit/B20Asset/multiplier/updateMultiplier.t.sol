@@ -5,7 +5,7 @@ import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
 import {IB20} from "base-std/interfaces/IB20.sol";
 import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
-import {IScaledUIAmount} from "base-std/interfaces/IScaledUIAmount.sol";
+import {IScaledUIAmount} from "base-std/interfaces/IERC8056.sol";
 
 import {MockB20AssetStorage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
@@ -64,6 +64,9 @@ contract B20AssetUpdateMultiplierTest is B20AssetTest {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         uint256 oldMultiplier = asset().multiplier();
+        // Instant setter emits the deprecated MultiplierUpdated (backward compat) then UIMultiplierUpdated.
+        vm.expectEmit(false, false, false, true, address(token));
+        emit IB20Asset.MultiplierUpdated(newMultiplier);
         vm.expectEmit(false, false, false, true, address(token));
         emit IScaledUIAmount.UIMultiplierUpdated(oldMultiplier, newMultiplier, block.timestamp);
         vm.prank(operator);

@@ -27,7 +27,7 @@ contract MockB20AssetSlotHelpersTest is B20AssetTest {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         effectiveAt = bound(effectiveAt, block.timestamp + 1, type(uint64).max);
 
-        _setUIMultiplier(newMultiplier, effectiveAt);
+        _updateUIMultiplier(newMultiplier, effectiveAt);
 
         uint256 packed = uint256(vm.load(address(token), MockB20AssetStorage.pendingSlot()));
         assertEq(

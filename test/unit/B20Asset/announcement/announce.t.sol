@@ -7,6 +7,7 @@ import {B20AssetTest} from "base-std-test/lib/B20AssetTest.sol";
 
 import {IB20} from "base-std/interfaces/IB20.sol";
 import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
+import {IScaledUIAmountConversion} from "base-std/interfaces/IERC8056.sol";
 
 import {B20Constants} from "base-std/lib/B20Constants.sol";
 
@@ -79,12 +80,12 @@ contract B20AssetAnnounceTest is B20AssetTest {
     /// @notice Verifies an inner call that raises a Solidity Panic propagates the raw Panic
     ///         unchanged instead of being wrapped as InternalCallFailed (parity with the Rust impl).
     /// @dev Arithmetic overflow (0x11) is the one inner-call Panic reachable on both sides: a
-    ///      multiplier > 1 makes toScaledBalance(uint256 max) overflow. NOT skipped under live
+    ///      multiplier > 1 makes toUIAmount(uint256 max) overflow. NOT skipped under live
     ///      precompiles — asserting the raw payload from the live precompile is the conformance point.
     function test_announce_innerPanic_propagatesRaw() public {
         _grantOperator();
         _updateMultiplier(2 * asset().WAD_PRECISION());
-        bytes memory inner = abi.encodeWithSelector(IB20Asset.toScaledBalance.selector, type(uint256).max);
+        bytes memory inner = abi.encodeWithSelector(IScaledUIAmountConversion.toUIAmount.selector, type(uint256).max);
 
         vm.prank(operator);
         vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", 0x11));

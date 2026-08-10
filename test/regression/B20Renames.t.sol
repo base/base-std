@@ -55,8 +55,8 @@ contract B20RenamesTest is B20AssetTest {
 
         // New surface resolves and behaves (1:1 at the WAD default).
         assertEq(asset().multiplier(), asset().WAD_PRECISION(), "fresh multiplier must default to WAD");
-        assertEq(asset().toScaledBalance(rawBalance), rawBalance, "toScaledBalance is identity at WAD");
-        assertEq(asset().toRawBalance(rawBalance), rawBalance, "toRawBalance is identity at WAD");
+        assertEq(asset().toUIAmount(rawBalance), rawBalance, "toUIAmount is identity at WAD");
+        assertEq(asset().fromUIAmount(rawBalance), rawBalance, "fromUIAmount is identity at WAD");
 
         // Legacy share-ratio surface is gone.
         _assertSelectorRemoved(
@@ -84,29 +84,38 @@ contract B20RenamesTest is B20AssetTest {
     bytes32 internal constant UI_MULTIPLIER_UPDATED_SIG = keccak256("UIMultiplierUpdated(uint256,uint256,uint256)");
     bytes32 internal constant LEGACY_MULTIPLIER_UPDATED_SIG = keccak256("MultiplierUpdated(uint256)");
 
-    /// @notice Verifies the multiplier-change event was widened/renamed to the ERC-8056
-    ///         `UIMultiplierUpdated(old, new, effectiveAt)` and the legacy `MultiplierUpdated(uint256)`
-    ///         is gone
-    /// @dev `updateMultiplier` must emit the ERC-8056 topic and never the legacy topic.
-    function test_multiplierEvent_success_widenedToUIMultiplierUpdated(uint256 newMultiplier) public {
+    /// @notice Verifies the canonical scheduled setter is `updateUIMultiplier(uint256,uint256)`, that
+    ///         the pre-rename `setUIMultiplier(uint256,uint256)` selector is gone, and that the
+    ///         scheduled setter emits only the ERC-8056 `UIMultiplierUpdated` (the deprecated
+    ///         `MultiplierUpdated` is reserved for the instant `updateMultiplier`).
+    /// @dev `updateUIMultiplier` is the rename of `setUIMultiplier`; the old selector must not resolve.
+    function test_scheduledSetter_success_renamedFromSetUIMultiplier(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantOperator();
         vm.recordLogs();
         vm.prank(operator);
-        asset().updateMultiplier(newMultiplier);
+        asset().updateUIMultiplier(newMultiplier, block.timestamp + 1);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         assertGt(
             _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG), -1, "UIMultiplierUpdated(old,new,effAt) must be emitted"
         );
         assertEq(
-            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG), -1, "legacy MultiplierUpdated(uint256) must be gone"
+            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
+            -1,
+            "scheduled updateUIMultiplier must NOT emit the deprecated MultiplierUpdated"
+        );
+        // The pre-rename scheduled selector is gone.
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("setUIMultiplier(uint256,uint256)", newMultiplier, block.timestamp + 1),
+            "setUIMultiplier(uint256,uint256) must not resolve (renamed to updateUIMultiplier)"
         );
     }
 
     /// @notice Verifies the ERC-8056 surface resolves and aliases the native B20 names
     /// @dev `uiMultiplier` aliases `multiplier`; `balanceOfUI` aliases `scaledBalanceOf`; the pending
-    ///      surface, `totalSupplyUI`, and `supportsInterface` all resolve. These typed calls only
-    ///      compile against the current interface, so their presence is the guard.
+    ///      surface, `totalSupplyUI`, `toUIAmount`/`fromUIAmount`, and `supportsInterface` all
+    ///      resolve. These typed calls only compile against the current interface, so their presence
+    ///      is the guard.
     function test_erc8056Surface_success_aliasesResolve(uint256 amount) public {
         amount = bound(amount, 0, type(uint128).max);
         if (amount > 0) _mint(alice, amount);
@@ -115,7 +124,22 @@ contract B20RenamesTest is B20AssetTest {
         assertEq(asset().newUIMultiplier(), asset().uiMultiplier(), "no-pending: newUIMultiplier == uiMultiplier");
         assertEq(asset().effectiveAt(), 0, "no-pending: effectiveAt == 0");
         assertEq(asset().totalSupplyUI(), token.totalSupply(), "default multiplier: totalSupplyUI == totalSupply");
+        assertEq(asset().toUIAmount(amount), amount, "toUIAmount identity at WAD default");
+        assertEq(asset().fromUIAmount(amount), amount, "fromUIAmount identity at WAD default");
         assertTrue(asset().supportsInterface(0xa60bf13d), "IScaledUIAmount (0xa60bf13d) must be advertised");
+        assertTrue(asset().supportsInterface(0x57854fc3), "IScaledUIAmountConversion (0x57854fc3) must be advertised");
+    }
+
+    /// @notice Verifies the deprecated `toScaledBalance` / `toRawBalance` are retained in `IB20Asset`
+    ///         (declared deprecated) and behave identically to the ERC-8056 `toUIAmount` / `fromUIAmount`.
+    /// @dev Deprecation-not-removal: the legacy conversion selectors stay advertised (marked
+    ///      deprecated) and dialable so block explorers and existing integrations keep working.
+    function test_conversion_deprecated_stillDialable(uint256 amount) public {
+        amount = bound(amount, 0, type(uint128).max);
+        _updateMultiplier(2 * asset().WAD_PRECISION());
+
+        assertEq(asset().toScaledBalance(amount), asset().toUIAmount(amount), "toScaledBalance must equal toUIAmount");
+        assertEq(asset().toRawBalance(amount), asset().fromUIAmount(amount), "toRawBalance must equal fromUIAmount");
     }
 
     // ============================================================
@@ -123,7 +147,7 @@ contract B20RenamesTest is B20AssetTest {
     // ============================================================
     // The asset variant splits authority: the metadata setters (updateName / updateSymbol /
     // updateContractURI / updateExtraMetadata) are gated by METADATA_ROLE, while the operator
-    // actions (announce / updateMultiplier) are gated by OPERATOR_ROLE. The tests below pin that
+    // actions (announce / updateUIMultiplier) are gated by OPERATOR_ROLE. The tests below pin that
     // split from both sides.
 
     /// @notice Verifies `updateExtraMetadata` is gated by METADATA_ROLE, not OPERATOR_ROLE
@@ -145,17 +169,43 @@ contract B20RenamesTest is B20AssetTest {
         assertEq(asset().extraMetadata(METADATA_EXAMPLE_1), value, "metadata write by METADATA_ROLE must persist");
     }
 
-    /// @notice Verifies `updateMultiplier` is gated by OPERATOR_ROLE, not METADATA_ROLE
+    /// @notice Verifies `updateUIMultiplier` is gated by OPERATOR_ROLE, not METADATA_ROLE
     /// @dev A METADATA_ROLE-only holder is rejected with the OPERATOR_ROLE selector — the inverse
     ///      of the metadata-gating test, confirming the two authorities are distinct.
-    function test_updateMultiplier_revert_metadataRoleInsufficient(uint256 newMultiplier) public {
+    function test_updateUIMultiplier_revert_metadataRoleInsufficient(uint256 newMultiplier) public {
         newMultiplier = bound(newMultiplier, 1, type(uint128).max);
         _grantRole(B20Constants.METADATA_ROLE, bob);
         vm.prank(bob);
         vm.expectRevert(
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, bob, B20Constants.OPERATOR_ROLE)
         );
+        asset().updateUIMultiplier(newMultiplier, block.timestamp + 1);
+    }
+
+    /// @notice Verifies the deprecated `updateMultiplier` is retained in `IB20Asset` (declared
+    ///         deprecated) and behaves identically to `updateUIMultiplier`.
+    /// @dev Deprecation-not-removal: the legacy selector stays advertised (marked deprecated) and
+    ///      dialable so block explorers and existing integrations keep working; it emits both the
+    ///      deprecated `MultiplierUpdated` and the ERC-8056 `UIMultiplierUpdated`.
+    function test_updateMultiplier_deprecated_stillDialable(uint256 newMultiplier) public {
+        newMultiplier = bound(newMultiplier, 1, type(uint128).max);
+        _grantOperator();
+        vm.recordLogs();
+        vm.prank(operator);
         asset().updateMultiplier(newMultiplier);
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        assertGt(
+            _firstLogIndex(logs, UI_MULTIPLIER_UPDATED_SIG),
+            -1,
+            "deprecated updateMultiplier must emit the ERC-8056 UIMultiplierUpdated"
+        );
+        assertGt(
+            _firstLogIndex(logs, LEGACY_MULTIPLIER_UPDATED_SIG),
+            -1,
+            "deprecated updateMultiplier must also emit MultiplierUpdated"
+        );
+        assertEq(asset().multiplier(), newMultiplier, "deprecated updateMultiplier must set the current multiplier");
     }
 
     /// @notice Verifies METADATA_ROLE is administered by DEFAULT_ADMIN_ROLE on a freshly created token
