@@ -18,6 +18,12 @@ A collection of Solidity interfaces, libraries, and mock implementations for Bas
 - [**PolicyRegistry**](docs/PolicyRegistry/README.md) — Membership sets controlled by custom admins, initially providing allow and block lists for B20 token operations.
 - [**B20**](docs/B20/README.md) — Standard ERC-20 implementation with extensions for roles, policies, memos, pausing, ERC-2612 permits, and a variant system.
 
+## Changelog
+
+Per-hardfork, per-feature migration notes live in [`changelog/`](changelog/README.md) — code-forward
+deltas for each scoped feature change crossing a hardfork boundary (e.g. Cobalt's
+[Schedule Multiplier Updates](changelog/cobalt/b20-asset-scheduled-multiplier-updates.md)).
+
 ## Source Integration
 
 These source files are imported by production contracts to interact with Base precompiles.
