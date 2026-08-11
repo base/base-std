@@ -15,8 +15,11 @@ error keeps its exact 4-byte selector / topic0 and stays dialable at Cobalt. In 
 `burnBlocked` is **deprecated but unchanged** — same selector, same events, same behavior — and
 remains callable. The migration is: move administrative balance removal from `burnBlocked` to
 `seizeWithMemo` (seize to a treasury/self address, then `burn` if you want the supply destroyed).
-**Cobalt is not live yet**; until it activates only the Beryl surface exists on-chain, and every
-`seize*`/`SEIZE_*` selector below is undialable.
+**Seize is opt-in per token.** The surface exists at Cobalt, but seize does nothing until the issuer
+configures `SEIZE_HOLDER_POLICY`: with the slot unset (always-allow), no account is seizable and
+every `seizeWithMemo` call reverts `AccountNotSeizable`. An issuer that never sets the policy has, in
+effect, no seize capability on that token. **Cobalt is not live yet**; until it activates only the
+Beryl surface exists on-chain, and every `seize*`/`SEIZE_*` selector below is undialable.
 
 ## Mapping table
 
