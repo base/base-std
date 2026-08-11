@@ -53,6 +53,18 @@ contract B20SeizeWithMemoTest is B20Test {
         token.seizeWithMemo(from, address(0), amount, bytes32(0));
     }
 
+    /// @notice Reverts InvalidSender when `from == address(0)`. A non-default `SeizeHolder` can treat
+    ///         the zero address as seizable; without this guard a zero-amount seize from the zero
+    ///         address would emit a misleading `Transfer(0x0, to, 0)` that indexers read as a mint.
+    function test_seizeWithMemo_revert_zeroFrom(address to, uint256 amount) public {
+        _assumeValidActor(to);
+        _armSeize();
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
+        token.seizeWithMemo(address(0), to, amount, bytes32(0));
+    }
+
     /// @notice Reverts InvalidReceiver when `from == to`, even when both the seizable and receiver
     ///         checks would otherwise pass. A self-seize is a no-op balance move that would otherwise
     ///         still emit a misleading `Transfer`/`Memo`/`Seized`, polluting the compliance trail.

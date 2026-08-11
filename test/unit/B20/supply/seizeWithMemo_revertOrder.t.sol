@@ -12,11 +12,12 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 /// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(SEIZE_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver` (`from` is not zero-checked)
-///         4. SELF-SEIZE (`from == to`) → `InvalidReceiver`
-///         5. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
-///         6. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
-///         7. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
+///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         4. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
+///         5. SELF-SEIZE (`from == to`) → `InvalidReceiver`
+///         6. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
+///         7. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
+///         8. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20SeizeWithMemoRevertOrderTest is B20Test {
     address internal seizer = makeAddr("seizer");
 
@@ -55,6 +56,27 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.seizeWithMemo(from, address(0), 1, bytes32(0));
+    }
+
+    /// @notice ZERO-RECEIVER beats ZERO-SENDER (`to == 0` reverts before the `from == 0` check).
+    function test_seizeWithMemo_revertOrder_zeroReceiver_beats_zeroSender() public {
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
+        token.seizeWithMemo(address(0), address(0), 1, bytes32(0));
+    }
+
+    /// @notice ZERO-SENDER beats BLOCKED (`from == 0` reverts even though the zero address would also
+    ///         fail the seizable check, i.e. the guard is unconditional, not gated on policy state).
+    function test_seizeWithMemo_revertOrder_zeroSender_beats_blocked(address to) public {
+        _assumeValidActor(to);
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → the zero address is NOT blocked (not seizable).
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
+        token.seizeWithMemo(address(0), to, 1, bytes32(0));
     }
 
     /// @notice ROLE beats SELF-SEIZE (an unauthorized caller reverts before the `from == to` check).
