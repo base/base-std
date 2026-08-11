@@ -332,8 +332,9 @@ abstract contract MockB20 is IB20 {
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
     /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`
-    ///      or `from == to`. `from` must be blocked under `SEIZE_HOLDER_POLICY`; `to` must be authorized
-    ///      under `SEIZE_RECEIVER_POLICY` (mirrors `MINT_RECEIVER_POLICY`: unset slot = always-allow).
+    ///      or `from == to`, and `InvalidSender` when `from == 0`. `from` must be blocked under
+    ///      `SEIZE_HOLDER_POLICY`; `to` must be authorized under `SEIZE_RECEIVER_POLICY` (mirrors
+    ///      `MINT_RECEIVER_POLICY`: unset slot = always-allow).
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
@@ -344,6 +345,7 @@ abstract contract MockB20 is IB20 {
         onlyRole(SEIZE_ROLE)
     {
         if (to == address(0)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         if (from == to) revert InvalidReceiver(to);
         _requireSeizable(from);
         _requireSeizeReceiver(to);
