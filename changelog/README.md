@@ -42,3 +42,4 @@ citing it** — do not rely on memory. Selectors can be checked with `cast sig` 
 | Hardfork | Feature | Product | Entry |
 | --- | --- | --- | --- |
 | Cobalt (upcoming) | Schedule Multiplier Updates (ERC-8056) | B20 Asset | [b20-asset-scheduled-multiplier-updates](cobalt/b20-asset-scheduled-multiplier-updates.md) |
+| Cobalt (upcoming) | Seize + `burnBlocked` deprecation | B20 (Asset + Stablecoin) | [b20-seize-surface](cobalt/b20-seize-surface.md) |
