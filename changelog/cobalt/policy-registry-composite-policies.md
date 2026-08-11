@@ -99,11 +99,11 @@ Emits `CompositePolicyUpdated(policyId, updater, childPolicyIds)`.
 
 ### Live, depth-1 evaluation
 
-`isAuthorized` on a composite re-reads each child's **current** membership on every call — never a
-snapshot taken at creation or last update. `UNION` returns `true` on the first authorizing child
-(short-circuits); `INTERSECT` returns `false` on the first non-authorizing child. Recursion never
-exceeds depth 1: every child is validated to be a simple (`ALLOWLIST`/`BLOCKLIST`) policy at write
-time, so a composite's children can never themselves be composites.
+`isAuthorized` on a composite calls each child policy's `isAuthorized` — never a snapshot taken at
+creation or last update. `UNION` returns `true` on the first authorizing child (short-circuits);
+`INTERSECT` returns `false` on the first non-authorizing child. Recursion never exceeds depth 1:
+every child is validated to be a simple (`ALLOWLIST`/`BLOCKLIST`) policy at write time, so a
+composite's children can never themselves be composites.
 
 ## Guarantees / edge cases
 
