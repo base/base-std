@@ -50,7 +50,7 @@ Selectors and topic0s below are computed directly from `src/interfaces/IPolicyRe
 
 | Beryl event (topic0) | Cobalt (topic0) | Status | Why |
 | --- | --- | --- | --- |
-| `PolicyCreated(uint64,address,uint8)` `0x718d…2ec27` | unchanged | carried over | Also emitted for composite creation, with `policyType` `UNION`/`INTERSECT`. |
+| `PolicyCreated(uint64,address,uint8)` `0x718d87917f0c4cfd1263707ef0e77c656ed8d8bfaca06152bdb0b8094142ec27` | unchanged | carried over | Also emitted for composite creation, with `policyType` `UNION`/`INTERSECT`. |
 | — | `CompositePolicyUpdated(uint64,address,uint64[])` `0x4ff6adaab31b0df87aa7b8b7320c52b8b3b5eede3bf28a6baaaa8b8b7e1d6363` | new | Emitted on composite creation **and** every `updateComposite`; carries the complete post-update child set. |
 
 `PolicyAdminStaged`, `PolicyAdminUpdated`, `AllowlistUpdated`, and `BlocklistUpdated` are carried
