@@ -13,11 +13,9 @@ existing *simple* policies under a `UNION` (OR) or `INTERSECT` (AND) gate, creat
 breaks.** Every Beryl selector, event topic, and error keeps its exact 4-byte selector / topic0 and
 stays dialable at Cobalt. The only change to existing behavior: `createPolicy` and
 `createPolicyWithAccounts` gain one new — previously unreachable — revert path, rejecting a
-composite `policyType` with the already-existing `IncompatiblePolicyType` error. Composite support
-was flagged in the Beryl-era docs as "planned for a future hardfork via additive `PolicyType` enum
-values and sibling creator functions"; this is that hardfork. **Cobalt is not live yet**; until it
-activates, only the Beryl (simple-policy) surface exists on-chain, and every composite selector below
-is undialable.
+composite `policyType` with the already-existing `IncompatiblePolicyType` error. **Cobalt is not
+live yet**; until it activates, only the Beryl (simple-policy) surface exists on-chain, and every
+composite selector below is undialable.
 
 ## Mapping table
 
