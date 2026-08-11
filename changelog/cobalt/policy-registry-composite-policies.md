@@ -1,6 +1,6 @@
 # PolicyRegistry — composite policies (UNION / INTERSECT)
 
-> **Audience:** teams integrated against `PolicyRegistry` on **Beryl** (live today) — creating and
+> **Audience:** teams integrated against `PolicyRegistry` on **Beryl** — creating and
 > administering simple `ALLOWLIST`/`BLOCKLIST` policies, and referencing policy IDs on B20 policy
 > slots. This note covers **only** the composite (`UNION`/`INTERSECT`) policy support landing at the
 > **Cobalt** hardfork.
@@ -13,9 +13,9 @@ existing *simple* policies under a `UNION` (OR) or `INTERSECT` (AND) gate, creat
 breaks.** Every Beryl selector, event topic, and error keeps its exact 4-byte selector / topic0 and
 stays dialable at Cobalt. The only change to existing behavior: `createPolicy` and
 `createPolicyWithAccounts` gain one new — previously unreachable — revert path, rejecting a
-composite `policyType` with the already-existing `IncompatiblePolicyType` error. **Cobalt is not
-live yet**; until it activates, only the Beryl (simple-policy) surface exists on-chain, and every
-composite selector below is undialable.
+composite `policyType` with the already-existing `IncompatiblePolicyType` error. Until Cobalt
+activates, only the Beryl (simple-policy) surface exists on-chain and every composite selector
+below is undialable.
 
 ## Mapping table
 
