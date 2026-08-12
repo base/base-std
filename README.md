@@ -21,7 +21,7 @@ A collection of Solidity interfaces, libraries, and mock implementations for Bas
 ## Changelog
 
 [`CHANGELOG.md`](CHANGELOG.md) summarizes behavioral changes by hardfork. For selector-level detail
-on a given feature — exact selectors, topic0s, error codes, and edge-case Q&A — see
+on a given feature (exact selectors, topic0s, error codes, and edge-case Q&A), see
 [`changelog/`](changelog/README.md).
 
 ## Source Integration
