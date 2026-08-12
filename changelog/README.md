@@ -59,8 +59,26 @@ base/base ABIs). Don't rely on memory. You can check selectors with `cast sig` o
 
 ## Index
 
-| Hardfork | Feature | Product | Entry |
+Entries are grouped by hardfork, one collapsible section per hardfork, newest first. Each
+hardfork's table is sorted by `Product(s)`, then by change. A change that touches more than one
+product because it lives on a shared interface gets one row, not one row per product: its
+`Product(s)` and `Affected interfaces` columns list everything it touches. Never edit a shipped
+hardfork's rows except to append a new one, and never renumber or reorder existing rows.
+
+<details open>
+<summary><strong>Cobalt (upcoming)</strong> — ordinal <code>02</code></summary>
+
+| Product(s) | Change | Affected interfaces | Entry |
 | --- | --- | --- | --- |
-| Cobalt (upcoming) | Schedule Multiplier Updates (ERC-8056) | B20 Asset | [02_Cobalt_B20Asset_multiplier](02_Cobalt_B20Asset_multiplier.md) |
-| Cobalt (upcoming) | Seize + `burnBlocked` deprecation | B20 (Asset + Stablecoin) | [02_Cobalt_B20_seize](02_Cobalt_B20_seize.md) |
-| Cobalt (upcoming) | Composite Policies (UNION/INTERSECT) | PolicyRegistry | [02_Cobalt_PolicyRegistry_composite_policy](02_Cobalt_PolicyRegistry_composite_policy.md) |
+| B20 Asset | Schedule Multiplier Updates (ERC-8056) | `src/interfaces/IB20Asset.sol` | [02_Cobalt_B20Asset_multiplier](02_Cobalt_B20Asset_multiplier.md) |
+| B20 Asset, B20 Stablecoin | Seize surface + `burnBlocked` deprecation | `src/interfaces/IB20.sol` (shared surface) → inherited by `src/interfaces/IB20Asset.sol`, `src/interfaces/IB20Stablecoin.sol` | [02_Cobalt_B20_seize](02_Cobalt_B20_seize.md) |
+| PolicyRegistry | Composite Policies (UNION/INTERSECT) | `src/interfaces/IPolicyRegistry.sol` | [02_Cobalt_PolicyRegistry_composite_policy](02_Cobalt_PolicyRegistry_composite_policy.md) |
+
+</details>
+
+<!--
+Adding the next hardfork: copy the <details> block above, set <summary> to the new codename and
+ordinal, and fill in its own table. Don't touch prior <details> blocks — this file only grows by
+appending new blocks above this comment and, within the current hardfork's block, by appending new
+rows.
+-->
