@@ -12,14 +12,15 @@ works *today*; `changelog/` describes what changes *at a hardfork* and how to mi
 
 ```
 changelog/
-  <hardfork>/                 # lowercase hardfork name, in activation order (e.g. cobalt)
-    <product>-<feature>.md    # one scoped feature change
+  <hardfork>_<feature>.md    # one scoped feature change
 ```
 
-- **One directory per hardfork**, named for the fork the changes activate at.
-- **One file per scoped feature change**, prefixed by product (`b20-asset-`, `policy-registry-`, …)
-  so a hardfork directory reads as a list of that fork's line items.
-- Filenames are kebab-case and should map to a release-notes line item.
+- **One file per scoped feature change**, named `<hardfork>_<feature>.md` — lowercase hardfork name
+  (e.g. `cobalt`), an underscore, and a short snake_case feature name (e.g. `multiplier`, `seize`,
+  `composite_policy`).
+- Files sort together by hardfork prefix, so the directory listing reads as a per-fork list of that
+  fork's line items, in activation order.
+- Keep the feature name short — it maps to a release-notes line item, not the full feature title.
 
 ## What each entry contains
 
@@ -41,6 +42,6 @@ citing it** — do not rely on memory. Selectors can be checked with `cast sig` 
 
 | Hardfork | Feature | Product | Entry |
 | --- | --- | --- | --- |
-| Cobalt (upcoming) | Schedule Multiplier Updates (ERC-8056) | B20 Asset | [b20-asset-scheduled-multiplier-updates](cobalt/b20-asset-scheduled-multiplier-updates.md) |
-| Cobalt (upcoming) | Seize + `burnBlocked` deprecation | B20 (Asset + Stablecoin) | [b20-seize-surface](cobalt/b20-seize-surface.md) |
-| Cobalt (upcoming) | Composite Policies (UNION/INTERSECT) | PolicyRegistry | [policy-registry-composite-policies](cobalt/policy-registry-composite-policies.md) |
+| Cobalt (upcoming) | Schedule Multiplier Updates (ERC-8056) | B20 Asset | [cobalt_multiplier](cobalt_multiplier.md) |
+| Cobalt (upcoming) | Seize + `burnBlocked` deprecation | B20 (Asset + Stablecoin) | [cobalt_seize](cobalt_seize.md) |
+| Cobalt (upcoming) | Composite Policies (UNION/INTERSECT) | PolicyRegistry | [cobalt_composite_policy](cobalt_composite_policy.md) |

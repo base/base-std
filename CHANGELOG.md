@@ -3,7 +3,7 @@
 This document tracks behavioral changes to the Base precompile standard, organized by hardfork.
 Each section below is a complete summary of one hardfork's changes. For selector-level detail —
 exact function selectors, event topics, error codes, and edge-case behavior — see the corresponding
-entry under [`changelog/<hardfork>/`](changelog/README.md).
+entry under [`changelog/`](changelog/README.md).
 
 ## Cobalt
 
@@ -21,9 +21,9 @@ Symbols superseded by a Cobalt equivalent are deprecated, not deleted, and remai
 
 | Product | Feature | Change | Details |
 | --- | --- | --- | --- |
-| B20 Asset | Schedule Multiplier Updates ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)) | The multiplier surface becomes ERC-8056 conformant (`uiMultiplier`, `toUIAmount`/`fromUIAmount`, `balanceOfUI`, `totalSupplyUI`) and gains a scheduled setter, `updateUIMultiplier`, for corporate actions. The existing instant setter, `updateMultiplier`, is retained as an admin failsafe. | [b20-asset-scheduled-multiplier-updates](changelog/cobalt/b20-asset-scheduled-multiplier-updates.md) |
-| B20 (Asset and Stablecoin) | Seize surface, `burnBlocked` deprecation | Adds `seizeWithMemo`, an admin balance-reassignment operation gated by `SEIZE_ROLE`, a new `SEIZE` pause vector, and two new policy slots. `burnBlocked` is deprecated in its favor but remains callable, unchanged. | [b20-seize-surface](changelog/cobalt/b20-seize-surface.md) |
-| PolicyRegistry | Composite policies (`UNION`/`INTERSECT`) | Adds policies that authorize by combining 2–4 existing simple policies under an OR (`UNION`) or AND (`INTERSECT`) gate, created and mutated via `createCompositePolicy` and `updateComposite`. | [policy-registry-composite-policies](changelog/cobalt/policy-registry-composite-policies.md) |
+| B20 Asset | Schedule Multiplier Updates ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)) | The multiplier surface becomes ERC-8056 conformant (`uiMultiplier`, `toUIAmount`/`fromUIAmount`, `balanceOfUI`, `totalSupplyUI`) and gains a scheduled setter, `updateUIMultiplier`, for corporate actions. The existing instant setter, `updateMultiplier`, is retained as an admin failsafe. | [cobalt_multiplier](changelog/cobalt_multiplier.md) |
+| B20 (Asset and Stablecoin) | Seize surface, `burnBlocked` deprecation | Adds `seizeWithMemo`, an admin balance-reassignment operation gated by `SEIZE_ROLE`, a new `SEIZE` pause vector, and two new policy slots. `burnBlocked` is deprecated in its favor but remains callable, unchanged. | [cobalt_seize](changelog/cobalt_seize.md) |
+| PolicyRegistry | Composite policies (`UNION`/`INTERSECT`) | Adds policies that authorize by combining 2–4 existing simple policies under an OR (`UNION`) or AND (`INTERSECT`) gate, created and mutated via `createCompositePolicy` and `updateComposite`. | [cobalt_composite_policy](changelog/cobalt_composite_policy.md) |
 
 ### Migration guidance
 
