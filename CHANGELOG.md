@@ -21,9 +21,9 @@ Symbols superseded by a Cobalt equivalent are deprecated, not deleted, and remai
 
 | Product | Feature | Change | Details |
 | --- | --- | --- | --- |
-| B20 Asset | Schedule Multiplier Updates ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)) | The multiplier surface becomes ERC-8056 conformant (`uiMultiplier`, `toUIAmount`/`fromUIAmount`, `balanceOfUI`, `totalSupplyUI`) and gains a scheduled setter, `updateUIMultiplier`, for corporate actions. The existing instant setter, `updateMultiplier`, is retained as an admin failsafe. | [cobalt_multiplier](changelog/cobalt_multiplier.md) |
-| B20 (Asset and Stablecoin) | Seize surface, `burnBlocked` deprecation | Adds `seizeWithMemo`, an admin balance-reassignment operation gated by `SEIZE_ROLE`, a new `SEIZE` pause vector, and two new policy slots. `burnBlocked` is deprecated in its favor but remains callable, unchanged. | [cobalt_seize](changelog/cobalt_seize.md) |
-| PolicyRegistry | Composite policies (`UNION`/`INTERSECT`) | Adds policies that authorize by combining 2–4 existing simple policies under an OR (`UNION`) or AND (`INTERSECT`) gate, created and mutated via `createCompositePolicy` and `updateComposite`. | [cobalt_composite_policy](changelog/cobalt_composite_policy.md) |
+| B20 Asset | Schedule Multiplier Updates ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)) | The multiplier surface becomes ERC-8056 conformant (`uiMultiplier`, `toUIAmount`/`fromUIAmount`, `balanceOfUI`, `totalSupplyUI`) and gains a scheduled setter, `updateUIMultiplier`, for corporate actions. The existing instant setter, `updateMultiplier`, is retained as an admin failsafe. | [02_Cobalt_B20Asset_multiplier](changelog/02_Cobalt_B20Asset_multiplier.md) |
+| B20 (Asset and Stablecoin) | Seize surface, `burnBlocked` deprecation | Adds `seizeWithMemo`, an admin balance-reassignment operation gated by `SEIZE_ROLE`, a new `SEIZE` pause vector, and two new policy slots. `burnBlocked` is deprecated in its favor but remains callable, unchanged. | [02_Cobalt_B20_seize](changelog/02_Cobalt_B20_seize.md) |
+| PolicyRegistry | Composite policies (`UNION`/`INTERSECT`) | Adds policies that authorize by combining 2–4 existing simple policies under an OR (`UNION`) or AND (`INTERSECT`) gate, created and mutated via `createCompositePolicy` and `updateComposite`. | [02_Cobalt_PolicyRegistry_composite_policy](changelog/02_Cobalt_PolicyRegistry_composite_policy.md) |
 
 ### Migration guidance
 

@@ -12,15 +12,31 @@ works *today*; `changelog/` describes what changes *at a hardfork* and how to mi
 
 ```
 changelog/
-  <hardfork>_<feature>.md    # one scoped feature change
+  <ordinal>_<Hardfork>_<Product>_<feature>.md    # one scoped feature change
 ```
 
-- **One file per scoped feature change**, named `<hardfork>_<feature>.md` — lowercase hardfork name
-  (e.g. `cobalt`), an underscore, and a short snake_case feature name (e.g. `multiplier`, `seize`,
-  `composite_policy`).
-- Files sort together by hardfork prefix, so the directory listing reads as a per-fork list of that
-  fork's line items, in activation order.
-- Keep the feature name short — it maps to a release-notes line item, not the full feature title.
+- **One file per scoped feature change**, named `<ordinal>_<Hardfork>_<Product>_<feature>.md`:
+  - `<ordinal>` — 2-digit, zero-padded hardfork activation sequence number, assigned once per
+    hardfork (never per file). See [Hardfork ordinals](#hardfork-ordinals) below. This makes sort
+    order correct by construction — a flat directory listing always groups and orders by activation
+    order, independent of whether codenames happen to be alphabetical.
+  - `<Hardfork>` — PascalCase codename (e.g. `Cobalt`).
+  - `<Product>` — PascalCase token matching the same product's directory under
+    [`docs/`](../docs) and [`test/unit/`](../test/unit) (e.g. `B20Asset`, `PolicyRegistry`). For a
+    change spanning both B20 variants, use the shared-surface token `B20`.
+  - `<feature>` — short, lowercase snake_case slug mapping to a release-notes line item (e.g.
+    `multiplier`, `seize`, `composite_policy`).
+- Never rename or renumber a shipped entry. New hardforks get the next ordinal; new features get a
+  new file under an existing ordinal.
+
+### Hardfork ordinals
+
+| Ordinal | Hardfork | Status |
+| --- | --- | --- |
+| `01` | Beryl | live |
+| `02` | Cobalt | upcoming |
+
+Assign the next ordinal here before naming the first entry for a new hardfork.
 
 ## What each entry contains
 
@@ -42,6 +58,6 @@ citing it** — do not rely on memory. Selectors can be checked with `cast sig` 
 
 | Hardfork | Feature | Product | Entry |
 | --- | --- | --- | --- |
-| Cobalt (upcoming) | Schedule Multiplier Updates (ERC-8056) | B20 Asset | [cobalt_multiplier](cobalt_multiplier.md) |
-| Cobalt (upcoming) | Seize + `burnBlocked` deprecation | B20 (Asset + Stablecoin) | [cobalt_seize](cobalt_seize.md) |
-| Cobalt (upcoming) | Composite Policies (UNION/INTERSECT) | PolicyRegistry | [cobalt_composite_policy](cobalt_composite_policy.md) |
+| Cobalt (upcoming) | Schedule Multiplier Updates (ERC-8056) | B20 Asset | [02_Cobalt_B20Asset_multiplier](02_Cobalt_B20Asset_multiplier.md) |
+| Cobalt (upcoming) | Seize + `burnBlocked` deprecation | B20 (Asset + Stablecoin) | [02_Cobalt_B20_seize](02_Cobalt_B20_seize.md) |
+| Cobalt (upcoming) | Composite Policies (UNION/INTERSECT) | PolicyRegistry | [02_Cobalt_PolicyRegistry_composite_policy](02_Cobalt_PolicyRegistry_composite_policy.md) |
