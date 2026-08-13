@@ -20,9 +20,9 @@ A collection of Solidity interfaces, libraries, and mock implementations for Bas
 
 ## Changelog
 
-Per-hardfork, per-feature migration notes live in [`changelog/`](changelog/README.md) — code-forward
-deltas for each scoped feature change crossing a hardfork boundary (e.g. Cobalt's
-[Schedule Multiplier Updates](changelog/cobalt/b20-asset-scheduled-multiplier-updates.md)).
+[`CHANGELOG.md`](CHANGELOG.md) summarizes behavioral changes by hardfork. For selector-level detail
+on a given feature (exact selectors, topic0s, error codes, and edge-case Q&A), see
+[`changelog/`](changelog/README.md).
 
 ## Source Integration
 
