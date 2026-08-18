@@ -11,14 +11,8 @@ This change adds a `seizeWithMemo` function to the shared `IB20` interface. Both
 
 Today, an operator seizes an asset with a three-step workaround: block the account, call `burnBlocked`, then mint the same amount to a new holder. This destroys the balance and reissues it. `seizeWithMemo` replaces the workaround with a single admin call that reassigns the balance directly from one account to another.
 
-This change ships at the **Cobalt** hardfork. Cobalt has not activated on-chain yet, and the README lists it as `Upcoming`. Seize has no separate `ActivationRegistry` flag. It activates automatically at the Cobalt hardfork date. This behavior differs from `PolicyRegistry` composite policies, which need an explicit activation flip.
-
 **Compatibility promise**: `burnBlocked` remains fully dialable with its existing behavior. No removal is planned. This deprecation is permanent, not a phased removal. BOP-471, the re-merge ticket, was canceled. `seizeWithMemo` is new, additive surface, and nothing existing is broken.
 
-This document is for two audiences:
-
-- Token issuers and compliance integrators who currently use the block, burn, and mint workaround.
-- Anyone who integrates against the deprecated `burnBlocked` path.
 
 ## Motivation
 
@@ -66,7 +60,7 @@ The following table maps the affected symbols. All selectors and topic0 values w
 | `error AccountNotSeizable(address)` | `0x91dbbc8d` | new | |
 | `PausableFeature.SEIZE` | — | new | Dedicated pause vector, independent of `BURN`. |
 
-The new seize surface adds the following declarations to `IB20`. These declarations are copied from `src/interfaces/IB20.sol`.
+The new seize surface adds the following declarations to `IB20`.
 
 ```solidity
 // Pausable operation classes. The SEIZE member is appended after TRANSFER, MINT, and BURN.

@@ -27,6 +27,23 @@ changelog/AGENTS.md
 changelog/README.md
 ```
 
+## Required reading before drafting
+
+Before writing any output, read every file below in full. These are the bundled,
+offline copies of this skill's writing rules — use them as the authoritative source
+instead of fetching the external sites they summarize:
+
+```text
+references/template-point-form.md
+references/simplified-technical-english.md
+references/google-technical-writing.md
+```
+
+Do not skip this reading pass, and do not substitute a `WebFetch` of the external URLs
+named in Steps 5 and 6 for reading these files — the referenced sites may be unreachable,
+paywalled, or have drifted from what this skill applies, and the bundled files are the
+version this skill is designed against.
+
 ## Exact output structure
 
 The output must use this structure and heading text in this order:
@@ -116,6 +133,26 @@ Do not move content to a new heading to make the document easier to organize.
 Before citing a function signature, event signature, error selector, topic0, function
 selector, or ERC-165 interface ID, verify it against the source or mark it for verification.
 
+### 3a. Offer to help fill `### Interface Changes` and `### Examples` gaps
+
+`### Interface Changes` and `### Examples` are the two sections most likely to need facts
+the point-form input does not supply in full: exact signatures, selectors, topic0 values,
+or a working call sequence. When either section would otherwise ship with a `[TODO: ...]`
+or `[TODO: verify against source]` marker, stop before finalizing that section and ask the
+user whether they want help closing the gap — for example, whether you should search the
+repository (`src/interfaces/**` and related source) to find or verify the missing
+signature, selector, or example, or whether they would rather supply the value themselves
+or leave the TODO in place.
+
+- Ask once per document, covering all outstanding interface/example gaps together, rather
+  than once per gap.
+- If the user says yes, read the relevant source before writing the section, and verify
+  each value you cite rather than guessing.
+- If the user declines, or doesn't respond, keep the `[TODO: ...]` markers rather than
+  inventing a plausible-looking signature, selector, or example.
+- Do not ask about gaps elsewhere in the document (Summary, Motivation, Background, Design
+  Decisions, Migration Steps) — only Interface Changes and Examples warrant this offer.
+
 ### 4. Write the specification
 
 Convert point-form fragments into complete technical prose. Keep the meaning and
@@ -126,11 +163,9 @@ numbered lists for migration steps. Use code blocks for verified code or call se
 
 ### 5. Apply Simplified Technical English principles
 
-Use the public `asd-ste100-skill` as a source of writing principles:
-
-```text
-https://github.com/danyuchn/asd-ste100-skill
-```
+Apply the rules in `references/simplified-technical-english.md` (read in the required
+reading pass above). That file is the source of truth for this step — do not fetch the
+public `asd-ste100-skill` repository it summarizes.
 
 Apply these rules:
 
@@ -152,12 +187,9 @@ the official ASD-STE100 dictionary.
 
 ### 6. Apply Google technical-writing guidance
 
-Use Google’s technical-writing guidance as the style reference:
-
-```text
-https://developers.google.com/style
-https://developers.google.com/tech-writing
-```
+Apply the checklist in `references/google-technical-writing.md` (read in the required
+reading pass above). That file is the source of truth for this step — do not fetch
+developers.google.com.
 
 Apply these rules:
 
@@ -185,6 +217,7 @@ Check all of the following:
 - Examples contain only supplied or verified values.
 - Migration steps identify compatibility and breaking changes when the input provides them.
 - Missing information uses TODO markers.
+- Any Interface Changes/Examples gap was offered to the user per Step 3a before shipping a TODO.
 - Active voice, terminology consistency, sentence clarity, and plain language were applied.
 
 ## Output rules

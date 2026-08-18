@@ -17,10 +17,6 @@
   Stablecoin, no variant-specific logic
 - Original flow to seize an asset was block + `burnBlocked` + mint (destroy then reissue);
   `seizeWithMemo` replaces this with a single admin call that reassigns the balance directly
-- Ships at the **Cobalt** hardfork, which has not activated on-chain yet (README lists it
-  `Upcoming`). Seize has no separate `ActivationRegistry` flag — it activates automatically at the
-  Cobalt hardfork date (unlike `PolicyRegistry`'s composite policies, which need an explicit
-  activation flip)
 - **Compatibility promise**: `burnBlocked` remains fully dialable with its existing behavior —
   no removal is planned (permanent, not a phased deprecation; BOP-471, the re-merge ticket, was
   canceled). `seizeWithMemo` is new, additive surface; nothing existing is broken
