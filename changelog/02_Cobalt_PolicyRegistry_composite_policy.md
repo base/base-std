@@ -7,7 +7,7 @@
 
 ## Summary
 
-This change adds two new `PolicyRegistry` policy types: `UNION` (OR) and `INTERSECT` (AND). Together these are called "composite policies." A composite policy authorizes an account by combining the results of 2 to 4 existing simple policies. This feature is for users of the policy registry who want to combine several policies without flattening them into one large list. A composite policy can reference only existing simple policies (`ALLOWLIST` or `BLOCKLIST`). A composite policy can never reference another composite policy, and can never reference a built-in sentinel (`ALWAYS_ALLOW` or `ALWAYS_BLOCK`).
+This change adds two new `PolicyRegistry` policy types: `UNION` (OR) and `INTERSECT` (AND). These are called "composite policies." A composite policy authorizes an account by combining the results of 2 to 4 existing simple policies. This feature is for users of the policy registry who want to combine several policies without flattening them into one large list. A composite policy can reference only existing simple policies (`ALLOWLIST` or `BLOCKLIST`). A composite policy can never reference another composite policy, and can never reference a built-in sentinel (`ALWAYS_ALLOW` or `ALWAYS_BLOCK`).
 
 This feature ships at the **Cobalt** hardfork. Every mutating call — `createCompositePolicy` and `updateComposite` — is gated by `ActivationRegistry`, the same as every other mutating `PolicyRegistry` function. The feature does not activate automatically. Read-only calls — `isAuthorized`, `compositePolicyChildIds`, `MIN_COMPOSITE_CHILD_POLICIES`, and `MAX_COMPOSITE_CHILD_POLICIES` — remain callable regardless of activation status.
 
