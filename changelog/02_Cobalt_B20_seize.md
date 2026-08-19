@@ -2,7 +2,7 @@
 
 - **Feature Name**: seize
 - **Start Date**: 2026-08-17
-- **Authors**: Rayyan Alam
+- **Authors**: Stephan
 - **Title**: Seize surface + burnBlocked deprecation
 
 ## Summary
