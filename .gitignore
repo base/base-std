@@ -25,4 +25,4 @@ __pycache__/
 *.swo
 .idea/
 .vscode/
-.changelog_template/
+changelog_template/
