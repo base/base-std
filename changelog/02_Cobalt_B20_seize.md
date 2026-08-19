@@ -41,7 +41,7 @@ This change makes seizure functionality and burning functionality explicitly dis
 
 ### B20 Asset and B20 Stablecoin
 
-B20 Asset and B20 Stablecoin are native tokens launched on Base. They extend ERC-20 with compliance checks for transfers and roles for specific methods. Roles follow the OpenZeppelin role-based model. Compliance checks execute before and after specific functions as defined in the specification. These checks rely on the policy ID defined in the contract and are tested for compliance against a contract address. The contracts have built-in roles and access controls. Functions are gated using the Policy Registry and policy functionality.
+B20 Asset and B20 Stablecoin are native tokens launched on Base. They extend ERC-20 with compliance checks for transfers and roles for specific methods. Roles follow the OpenZeppelin role-based model. Compliance checks execute before and after specific functions as defined in the specification. These checks rely on the policy ID's defined in the contract and are tested for compliance against a contract address. The contracts have built-in roles and access controls. Functions are gated using the Policy Registry and policy functionality.
 
 ### Policy Registry
 
