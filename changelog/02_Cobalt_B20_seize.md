@@ -142,6 +142,16 @@ A shared seize-policy approach was rejected: burning and seizing have different 
 
 The name `transferFromBlockedWithMemo` was considered and rejected. `seizeWithMemo` names the intent (seizure) rather than the mechanism (blocked transfer).
 
+## Implications for Integrators
+
+Any contract that pools deposits from multiple end users and holds this token as a single on-chain balance can lose that entire pooled balance in one admin call. This includes lending-protocol vaults, AMM pools, staking contracts, custodial wallets, and bridges. The mechanism acts at the pooling contract's address, not at individual depositor-share granularity, so uninvolved depositors are affected alongside any targeted one.
+
+This is not a new risk. `burnBlocked` (still dialable, deprecated) already lets an issuer zero a blocked address's balance through block, burn, and reissue elsewhere. `seizeWithMemo` does not expand who is exposed. The change is operational: `seizeWithMemo` collapses that workaround into one call, redirects the balance instead of burning and reissuing it, and emits a dedicated `Seized` event. Both paths remain live. If an integrator contract is blocked under `TRANSFER_SENDER_POLICY` or not authorized under `SEIZE_HOLDER_POLICY`, an admin can move out its entire balance.
+
+To check current exposure, call `token.policyId(SEIZE_HOLDER_POLICY())` and `token.policyId(TRANSFER_SENDER_POLICY())` (`IB20.policyId`, `src/interfaces/IB20.sol:590`) to get the governing policy IDs for those slots. Then query the Policy Registry's `isAuthorized(policyId, account)` with the pooling contract's own address against each ID. If the contract is not authorized under the seize-holder policy, or is blocked under the transfer-sender policy, its entire balance is exposed at that time. This check is only point-in-time. An issuer can later change either slot with `updatePolicy`, so "not seizable today" is not a durable guarantee. For a stronger structural assessment, inspect the policy implementations currently assigned to those slots. A fixed allowlist is more stable than a policy the issuer can freely repoint.
+
+For a leading indicator, subscribe to `PolicyUpdated(policyScope, oldPolicyId, newPolicyId)` (`IB20.sol:179`) for the `SEIZE_HOLDER_POLICY` and `TRANSFER_SENDER_POLICY` scopes. This event fires when the issuer changes either governing policy, before any seizure or blocked-burn occurs. `Seized` and `BurnedBlocked` are lagging signals because they fire only after funds have already moved. Before onboarding a B20 asset or stablecoin as a deposit or collateral asset, run the exposure check against the pooling contract's own address and keep the `PolicyUpdated` subscription running for the life of the integration. If a seizure or blocked-burn is detected, snapshot the pool's per-depositor share accounting immediately. The loss happens atomically in the seize or burn call, and the on-chain events do not identify which depositors should absorb it.
+
 ## Migration Steps
 
 **Backwards-compatible:** `burnBlocked` continues to work unchanged. No action is required if you do not need seize behavior yet.
