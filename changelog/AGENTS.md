@@ -28,26 +28,6 @@ Each file name has four parts:
 Never rename or renumber a shipped entry. Once a hardfork activates on-chain, its entries are
 frozen; only add new files for new hardforks or features.
 
-## Writing an entry
-
-Keep entries minimal and migration-focused. Don't restate unchanged behavior. A good entry has:
-
-1. An audience statement and a one-paragraph summary that leads with the compatibility promise:
-   what still works, what's deprecated but still dialable, and what's new. State plainly whether
-   the fork is live yet.
-2. A mapping table: old symbol, new symbol, status (`deprecated-dialable`, `renamed`, or `new`), and
-   a one-line reason. Cover functions, events, and errors, with real signatures and selectors.
-3. A "New at `<hardfork>` (adopt these)" section describing the new surface and its lifecycle.
-4. A guarantees and edge cases section: a short Q&A covering what a careful integrator would ask,
-   each answered with the precise on-chain behavior.
-
-Before you cite a function signature, event signature or topic0, error selector, 4-byte function
-selector, or ERC-165 interface ID, verify it against the source (`src/interfaces/**` and the
-base/base ABIs). Don't rely on memory, and don't trust a prior entry's numbers even for a symbol
-you believe is unchanged. Check selectors with `cast sig` or `cast keccak`.
-
-If you can't verify a value, flag it in the entry or ask, rather than shipping a plausible-looking
-but unverified selector.
 
 ## Indexing a new entry
 
