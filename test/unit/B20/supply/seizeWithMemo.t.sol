@@ -6,17 +6,16 @@ import {IB20} from "base-std/interfaces/IB20.sol";
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
-import {MockPolicyRegistry, PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
 /// @title Unit tests for `seizeWithMemo` (transfer-based seize).
 contract B20SeizeWithMemoTest is B20Test {
     address internal seizer = makeAddr("seizer");
 
-    /// @dev Blocks `from` under SEIZE_HOLDER_POLICY and grants the seize role. Mirrors the
-    ///      setup every success path shares.
+    /// @dev Grants the seize role. Default `SEIZE_HOLDER_POLICY` is ALWAYS_ALLOW,
+    ///      so every account is authorized (seizable) until the slot is reconfigured.
     function _armSeize() internal {
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
     }
 
     /// @notice Reverts when caller lacks SEIZE_ROLE.
@@ -81,13 +80,14 @@ contract B20SeizeWithMemoTest is B20Test {
         assertEq(token.balanceOf(account), amount, "balance must be unchanged");
     }
 
-    /// @notice Reverts AccountNotSeizable when `from` is authorized under SEIZE_HOLDER_POLICY.
-    /// @dev Default SEIZE_HOLDER_POLICY is ALWAYS_ALLOW (0) → every account authorized → not seizable.
-    function test_seizeWithMemo_revert_accountNotBlocked(address from, address to, uint256 amount) public {
+    /// @notice Reverts AccountNotSeizable when `from` is not authorized under SEIZE_HOLDER_POLICY.
+    /// @dev ALWAYS_BLOCK means every account is unauthorized → not seizable.
+    function test_seizeWithMemo_revert_accountNotSeizable(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
         vm.assume(from != to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
+        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotSeizable.selector, from));
@@ -184,6 +184,24 @@ contract B20SeizeWithMemoTest is B20Test {
         token.seizeWithMemo(from, to, amount, bytes32(0));
 
         assertEq(token.balanceOf(to), amount, "unset receiver policy must allow any destination");
+    }
+
+    /// @notice An unset SEIZE_HOLDER_POLICY (default ALWAYS_ALLOW) lets seize from any account.
+    function test_seizeWithMemo_success_unsetHolderPolicyAllowsAnySource(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
+        _mint(from, amount);
+        _armSeize();
+        // SEIZE_HOLDER_POLICY left unset (0 = ALWAYS_ALLOW).
+
+        vm.prank(seizer);
+        token.seizeWithMemo(from, to, amount, bytes32(0));
+
+        assertEq(token.balanceOf(to), amount, "unset holder policy must allow any source");
     }
 
     /// @notice A configured-allow SEIZE_RECEIVER_POLICY authorizes the destination and seize succeeds.

@@ -83,7 +83,7 @@ function burnBlocked(address from, uint256 amount) external;
 
 **Policy semantics:**
 
-- `SEIZE_HOLDER_POLICY` gates who is seizable. The membership is inverted: an account is seizable when it is **not** authorized under this policy. This mirrors the blocklist semantics of `burnBlocked`'s `TRANSFER_SENDER_POLICY` so the "blocked = seizable" model carries over. An unset slot reads as `0` (always-allow), so no account is seizable until an issuer configures the slot. This is a safe default.
+- `SEIZE_HOLDER_POLICY` gates who is seizable. Membership is inclusive: an account is seizable when it is **authorized** under this policy. This matches the standard allowlist pattern used by `MINT_RECEIVER_POLICY` and `SEIZE_RECEIVER_POLICY`. An unset slot reads as `0` (always-allow), so every account is seizable until an issuer configures the slot (for example, with an allowlist of seizable holders).
 
 - `SEIZE_RECEIVER_POLICY` gates the seize destination. It mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot defaults to always-allow, so an unconfigured token may seize to any destination (a treasury need not be allowlisted).
 
@@ -95,7 +95,7 @@ function burnBlocked(address from, uint256 amount) external;
 2. Check that the caller holds `SEIZE_ROLE`; else revert `AccessControlUnauthorizedAccount`.
 3. Reject zero or self destinations; else revert `InvalidReceiver`.
 4. Reject zero source; else revert `InvalidSender`.
-5. Require `from` to be not authorized under `SEIZE_HOLDER_POLICY`; else revert `AccountNotSeizable`.
+5. Require `from` to be authorized under `SEIZE_HOLDER_POLICY`; else revert `AccountNotSeizable`.
 6. Require `to` to be allowed by `SEIZE_RECEIVER_POLICY`; else revert `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`.
 7. Check balance; else revert `InsufficientBalance`.
 8. Emit `Transfer`, then `Memo`, then `Seized`.
@@ -121,7 +121,7 @@ Seize is a transfer, not a burn. The balance moves from `from` to `to` and `tota
 
 **After (new, single call):**
 
-1. Configure `from` as NOT authorized under `SEIZE_HOLDER_POLICY` (i.e., blocked).
+1. Configure `from` as authorized under `SEIZE_HOLDER_POLICY` (for example, as an allowlist member).
 2. Call `seizeWithMemo(from, treasury, amount, memo)` — gated by `SEIZE_ROLE`.
 3. Emits, in order:
    - `Transfer(from, treasury, amount)`
@@ -151,7 +151,7 @@ The name `transferFromBlockedWithMemo` was considered and rejected. `seizeWithMe
 **To adopt `seizeWithMemo`:**
 
 1. Grant `SEIZE_ROLE` to the account(s) that should be able to seize. With no `SEIZE_ROLE` holders, no one can seize.
-2. Configure `SEIZE_HOLDER_POLICY` so the accounts you want seizable are NOT authorized under it. With no policy configured (unset = always-allow), no account is seizable.
+2. Configure `SEIZE_HOLDER_POLICY` so the accounts you want seizable are authorized under it (for example, an allowlist of seizable holders). With no policy configured (unset = always-allow), every account is seizable.
 3. Optionally configure `SEIZE_RECEIVER_POLICY` to restrict where seized funds may land. Unset defaults to always-allow (for example, an unallowlisted treasury still works).
 
 **To reproduce `burnBlocked`'s destroy-supply outcome with seize:** `seizeWithMemo` alone does not reduce `totalSupply`. Seize to a treasury or self address, then call `burn(amount)` from that address if you want the supply destroyed.

@@ -332,7 +332,7 @@ abstract contract MockB20 is IB20 {
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
     /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`
-    ///      or `from == to`, and `InvalidSender` when `from == 0`. `from` must be blocked under
+    ///      or `from == to`, and `InvalidSender` when `from == 0`. `from` must be authorized under
     ///      `SEIZE_HOLDER_POLICY`; `to` must be authorized under `SEIZE_RECEIVER_POLICY` (mirrors
     ///      `MINT_RECEIVER_POLICY`: unset slot = always-allow).
     /// @param from   Account whose balance is being seized.
@@ -790,12 +790,13 @@ abstract contract MockB20 is IB20 {
         emit Transfer(from, to, amount);
     }
 
-    /// @dev Seize gate: reverts `AccountNotSeizable(from)` unless `from` is a
-    ///      member of `SEIZE_HOLDER_POLICY` (i.e. NOT authorized). Enforced
-    ///      unconditionally, including in the factory bootstrap window.
+    /// @dev Seize gate: reverts `AccountNotSeizable(from)` unless `from` is
+    ///      authorized under `SEIZE_HOLDER_POLICY`. Enforced unconditionally,
+    ///      including in the factory bootstrap window. An unset slot reads as
+    ///      `ALWAYS_ALLOW_ID`, so every account is seizable until configured.
     function _requireSeizable(address from) internal view {
         uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
-        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
+        if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
             revert AccountNotSeizable(from);
         }
     }

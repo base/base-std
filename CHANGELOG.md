@@ -36,8 +36,9 @@ scheduled `updateUIMultiplier(uint256,uint256)`.
 #### B20 Asset and Stablecoin: `burnBlocked` callers
 
 Replace administrative balance removal with `seizeWithMemo(from, treasury, amount, memo)`, then call
-`burn(amount)` if you still need to destroy supply. Seize is opt-in per token: it has no effect
-until the issuer sets `SEIZE_HOLDER_POLICY`.
+`burn(amount)` if you still need to destroy supply. Seize is gated by `SEIZE_ROLE` and
+`SEIZE_HOLDER_POLICY`: an account is seizable when authorized under that policy (unset defaults
+to always-allow, so issuers that want a restricted seize set must configure an allowlist).
 
 #### PolicyRegistry integrators
 

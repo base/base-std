@@ -2,7 +2,7 @@
 
 Exercises the transfer-based seize surface added at Cobalt (V2): the dedicated
 `SEIZE_ROLE`, the `SEIZE_HOLDER_POLICY` membership gate (an account is seizable when
-it is NOT authorized by that policy), `seizeWithMemo` (`Transfer` -> `Memo` -> `Seized`,
+it is authorized by that policy), `seizeWithMemo` (`Transfer` -> `Memo` -> `Seized`,
 supply-preserving because seize is a reassignment, not a burn), and the `SEIZE` pause
 vector — plus the gates that must reject (`AccountNotSeizable`, role,
 `InvalidReceiver`, `ContractPaused`), the admin-op decoupling from the *transfer*
@@ -71,12 +71,12 @@ def _journey(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), config.amt(1000, 18), "alice balance")
     c.assert_eq(tok.functions.totalSupply().call(), config.amt(1010, 18), "total supply")
 
-    step(3, "seizable setup: blocklist policy on SEIZE_HOLDER_POLICY, block alice (alice becomes seizable)")
-    pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_BLOCKLIST)
+    step(3, "seizable setup: allowlist policy on SEIZE_HOLDER_POLICY, allow alice (alice becomes seizable)")
+    pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_ALLOWLIST)
     c.send(tok.functions.updatePolicy(config.SEIZE_HOLDER_POLICY, pid), c.deployer)
-    c.send(c.policy.functions.updateBlocklist(pid, True, [c.ALICE]), c.deployer)
-    c.assert_eq(c.policy.functions.isAuthorized(pid, c.ALICE).call(), False, "alice not authorized (seizable)")
-    c.assert_eq(c.policy.functions.isAuthorized(pid, c.BOB).call(), True, "bob authorized (not seizable)")
+    c.send(c.policy.functions.updateAllowlist(pid, True, [c.ALICE]), c.deployer)
+    c.assert_eq(c.policy.functions.isAuthorized(pid, c.ALICE).call(), True, "alice authorized (seizable)")
+    c.assert_eq(c.policy.functions.isAuthorized(pid, c.BOB).call(), False, "bob not authorized (not seizable)")
 
     step(4, "seizeWithMemo(alice, bob, 400, memo): Transfer -> Memo -> Seized; supply unchanged")
     receipt = c.send(tok.functions.seizeWithMemo(c.ALICE, c.BOB, config.amt(400, 18), MEMO), c.deployer)
@@ -103,7 +103,7 @@ def _journey(c: Chain, tok) -> None:
 
 
 def _edges(c: Chain, tok) -> None:
-    step(5, "seize an account that is NOT seizable (bob authorized) -> AccountNotSeizable")
+    step(5, "seize an account that is NOT seizable (bob not authorized) -> AccountNotSeizable")
     c.expect_revert("AccountNotSeizable", tok.functions.seizeWithMemo(c.BOB, c.DEPLOYER, 1, MEMO), c.DEPLOYER)
 
     step(6, "role gate: user2 (no SEIZE_ROLE) -> AccessControlUnauthorizedAccount")
