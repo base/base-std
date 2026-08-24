@@ -107,8 +107,7 @@ interface IB20 {
 
     /// @notice `seizeWithMemo` was called against a `from` account that is not seizable under
     ///         `SEIZE_HOLDER_POLICY`.
-    /// @dev `SEIZE_HOLDER_POLICY` uses inverted semantics: a `from` is seizable only when the
-    ///      policy does not authorize it.
+    /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
     error AccountNotSeizable(address account);
 
     /// @notice The deprecated `burnBlocked` was called against a `from` that is currently authorized under
@@ -264,8 +263,7 @@ interface IB20 {
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `from` by `seizeWithMemo`.
-    /// @dev This scope uses inverted semantics: a `from` is seizable only when
-    ///      `isAuthorized(policyId, from)` returns false.
+    /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
     /// @dev An unset slot reads as `0` (always-allow), so no account is seizable until an issuer
     ///      explicitly configures the slot.
     /// @return Policy scope constant.
@@ -461,8 +459,8 @@ interface IB20 {
     ///         `Seized(caller, from, to, amount)`. A memo of `bytes32(0)` is permitted.
     ///
     /// @dev Admin operation: skips allowance and the transfer policies.
-    /// @dev `from` is gated by `SEIZE_HOLDER_POLICY`, which uses inverted semantics:
-    ///      `from` is seizable only when `isAuthorized(policyId, from)` returns false.
+    /// @dev `from` is gated by `SEIZE_HOLDER_POLICY`.
+    /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
     /// @dev An unset `SEIZE_HOLDER_POLICY` slot reads as `0` (always-allow), so no account is
     ///      seizable until an issuer explicitly configures the slot.
     /// @dev `to` is authorized under `SEIZE_RECEIVER_POLICY`.
