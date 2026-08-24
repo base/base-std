@@ -264,9 +264,8 @@ interface IB20 {
 
     /// @notice Policy slot consulted against `from` by `seizeWithMemo`.
     /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
-    /// @dev This is distinct from the allowlist-style checks used by `transfer` and `transferFrom`,
-    ///      where `isAuthorized(...) == true` allows the operation. `SEIZE_HOLDER_POLICY` uses the
-    ///      inverse result so it can target accounts that those checks deny.
+    /// @dev This uses the inverse of the normal transfer-style gating: accounts are seizable when
+    ///      `isAuthorized(...)` returns false, not true.
     /// @dev An unset slot reads as `0` (always-allow), so no account is seizable until an issuer
     ///      explicitly configures the slot.
     /// @return Policy scope constant.
@@ -461,15 +460,8 @@ interface IB20 {
     ///         Emits, in order, `Transfer(from, to, amount)`, `Memo(caller, memo)`, and
     ///         `Seized(caller, from, to, amount)`. A memo of `bytes32(0)` is permitted.
     ///
-    /// @dev Admin operation: skips allowance and the transfer policies.
-    /// @dev `from` is gated by `SEIZE_HOLDER_POLICY`.
-    /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
-    /// @dev This is distinct from the allowlist-style checks used by `transfer` and `transferFrom`,
-    ///      where `isAuthorized(...) == true` allows the operation. `SEIZE_HOLDER_POLICY` uses the
-    ///      inverse result so it can target accounts that those checks deny.
-    /// @dev An unset `SEIZE_HOLDER_POLICY` slot reads as `0` (always-allow), so no account is
-    ///      seizable until an issuer explicitly configures the slot.
-    /// @dev `to` is authorized under `SEIZE_RECEIVER_POLICY`.
+    /// @dev Admin operation: skips allowance and the transfer policies. The membership checks are that
+    ///      `from` is blocked under `SEIZE_HOLDER_POLICY` and `to` is authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev `to` is gated by `SEIZE_RECEIVER_POLICY`, which defaults to always-allow when unset, so an
     ///      unconfigured token may seize to any destination (a treasury need not be allowlisted).
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
