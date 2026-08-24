@@ -83,7 +83,7 @@ function burnBlocked(address from, uint256 amount) external;
 
 **Policy semantics:**
 
-- `SEIZE_HOLDER_POLICY` gates who is seizable. The membership is inverted: an account is seizable when it is **not** authorized under this policy. This mirrors the blocklist semantics of `burnBlocked`'s `TRANSFER_SENDER_POLICY` so the "blocked = seizable" model carries over. An unset slot reads as `0` (always-allow), so no account is seizable until an issuer configures the slot. This is a safe default.
+- `SEIZE_HOLDER_POLICY` gates who is seizable. The membership is inverted: an account is seizable when it is **not** authorized under this policy. This is distinct from the allowlist-style checks used by `transfer` and `transferFrom`, where `isAuthorized(...) == true` allows the operation. `SEIZE_HOLDER_POLICY` uses the inverse result so it can target accounts those checks deny. An unset slot reads as `0` (always-allow), so no account is seizable until an issuer configures the slot. This is a safe default.
 
 - `SEIZE_RECEIVER_POLICY` gates the seize destination. It mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot defaults to always-allow, so an unconfigured token may seize to any destination (a treasury need not be allowlisted).
 

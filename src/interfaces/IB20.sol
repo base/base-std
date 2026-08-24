@@ -264,6 +264,9 @@ interface IB20 {
 
     /// @notice Policy slot consulted against `from` by `seizeWithMemo`.
     /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
+    /// @dev This is distinct from the allowlist-style checks used by `transfer` and `transferFrom`,
+    ///      where `isAuthorized(...) == true` allows the operation. `SEIZE_HOLDER_POLICY` uses the
+    ///      inverse result so it can target accounts that those checks deny.
     /// @dev An unset slot reads as `0` (always-allow), so no account is seizable until an issuer
     ///      explicitly configures the slot.
     /// @return Policy scope constant.
@@ -461,6 +464,9 @@ interface IB20 {
     /// @dev Admin operation: skips allowance and the transfer policies.
     /// @dev `from` is gated by `SEIZE_HOLDER_POLICY`.
     /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
+    /// @dev This is distinct from the allowlist-style checks used by `transfer` and `transferFrom`,
+    ///      where `isAuthorized(...) == true` allows the operation. `SEIZE_HOLDER_POLICY` uses the
+    ///      inverse result so it can target accounts that those checks deny.
     /// @dev An unset `SEIZE_HOLDER_POLICY` slot reads as `0` (always-allow), so no account is
     ///      seizable until an issuer explicitly configures the slot.
     /// @dev `to` is authorized under `SEIZE_RECEIVER_POLICY`.
