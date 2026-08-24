@@ -133,6 +133,7 @@ Seize is a transfer, not a burn. The balance moves from `from` to `to` and `tota
 **Final shipped shape:** `seizeWithMemo` and `burnBlocked` use fully independent policy slots and pause vectors.
 
 - `seizeWithMemo` uses the new `SEIZE_HOLDER_POLICY` (for `from`) and `SEIZE_RECEIVER_POLICY` (for `to`), the new `SEIZE_ROLE`, and the new `PausableFeature.SEIZE`.
+- `SEIZE_HOLDER_POLICY` is intentionally distinct from the allowlist-style checks used by `transfer` and `transferFrom`. Those flows allow the operation when `isAuthorized(...) == true`; seize uses the inverse result so it can target accounts those checks deny. This also preserves the safe default because an unset slot reads as `0` (always-allow), which means no account is seizable until the issuer explicitly configures the slot.
 - `burnBlocked` retains `TRANSFER_SENDER_POLICY`, `BURN_BLOCKED_ROLE`, and the `BURN` pause vector unchanged.
 - Seize operations are rare, so the reserved lane in the transfer packed policy slot was not reused for seize. That lane is kept open for a possible future transfer-side optimization where another hot-path transfer policy could be packed into the existing transfer slot without adding a second `SLOAD`. Because seize is a cold-path/rare-path operation, it instead gets its own packed `seizePolicyIds` slot.
 
