@@ -105,8 +105,9 @@ interface IB20 {
     /// @notice `policyScope` is not a slot this token (or its variant) supports.
     error UnsupportedPolicyType(bytes32 policyScope);
 
-    /// @notice `seizeWithMemo` was called against a `from` that is currently authorized under
-    ///         `SEIZE_HOLDER_POLICY` (i.e. not a member of the seize-holder set).
+    /// @notice `seizeWithMemo` was called against a `from` account that is not seizable under
+    ///         `SEIZE_HOLDER_POLICY`.
+    /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
     error AccountNotSeizable(address account);
 
     /// @notice The deprecated `burnBlocked` was called against a `from` that is currently authorized under
@@ -262,8 +263,11 @@ interface IB20 {
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `from` by `seizeWithMemo`.
-    /// @dev A `from` is seizable only when it is NOT authorized by this policy. An unset slot reads as `0`
-    ///      (always-allow), so no account is seizable until an issuer configures the slot.
+    /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
+    /// @dev This uses the inverse of the normal transfer-style gating: accounts are seizable when
+    ///      `isAuthorized(...)` returns false, not true.
+    /// @dev An unset slot reads as `0` (always-allow), so no account is seizable until an issuer
+    ///      explicitly configures the slot.
     /// @return Policy scope constant.
     function SEIZE_HOLDER_POLICY() external view returns (bytes32);
 
@@ -464,7 +468,7 @@ interface IB20 {
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `from == to`.
     /// @dev Reverts with `InvalidSender` when `from == address(0)`.
-    /// @dev Reverts with `AccountNotSeizable` when `from` is currently authorized under `SEIZE_HOLDER_POLICY`.
+    /// @dev Reverts with `AccountNotSeizable` when `from` is authorized under `SEIZE_HOLDER_POLICY`.
     /// @dev Reverts with `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)` when `to` is not authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///
