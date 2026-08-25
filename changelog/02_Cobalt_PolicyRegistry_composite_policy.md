@@ -132,6 +132,9 @@ The function emits only `CompositePolicyUpdated(policyId, updater, childPolicyId
 `isAuthorized` uses the same result from each child, whether that child is an `ALLOWLIST` or a `BLOCKLIST`.
 The composite only determines how to combine those results:
 
+Composite creation and updates reject composite children. Authorization therefore evaluates only simple child
+policies and does not recurse into another composite.
+
 ```text
 isAuthorized(policyId, account):
     if policy is ALLOWLIST:
@@ -153,7 +156,7 @@ isAuthorized(policyId, account):
         return true
 ```
 
-#### Notes
+#### Authorization Details
 
 - Evaluation is live, not a snapshot. Each call reads the current membership of each evaluated child.
 - Evaluation short-circuits. `UNION` stops at the first authorizing child, and `INTERSECT` stops at the first
@@ -162,7 +165,6 @@ isAuthorized(policyId, account):
   cannot affect the authorization result. Put the child most likely to short-circuit first.
 - `ALLOWLIST` and `BLOCKLIST` children use the same composite evaluation path. Each child first resolves its
   own authorization result, and then the composite combines those results.
-- Composite children must be simple policies, so recursion cannot exceed one level.
 - Duplicate child IDs are allowed. The registry preserves their order and does not deduplicate them.
 - `updateComposite` requires two to four children, so an existing composite cannot become empty or undersized.
 - A child remains effective if its admin renounces. Renouncing freezes future membership changes but does not
