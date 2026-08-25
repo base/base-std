@@ -68,7 +68,7 @@ function MAX_COMPOSITE_CHILD_POLICIES() external view returns (uint256);
 ```
 
 | Symbol | Selector / Topic0 | Status | Notes |
-|--------|-------------------|--------|-------|
+| ------ | ----------------- | ------ | ----- |
 | `createCompositePolicy(address,uint8,uint64[])` | `0x6fdd1491` | NEW | `PolicyType` ABI-encodes as `uint8`; creates a UNION/INTERSECT composite |
 | `updateComposite(uint64,uint64[])` | `0xbfe142c0` | NEW | Full replacement of the child set |
 | `compositePolicyChildIds(uint64)` | `0x7c40df74` | NEW (view) | Returns the stored child set verbatim; empty for non-composites |
@@ -82,6 +82,7 @@ function MAX_COMPOSITE_CHILD_POLICIES() external view returns (uint256);
 | `createPolicyWithAccounts(address,uint8,address[])` | `0xa2d3044f` | extended | Same new `IncompatiblePolicyType` rejection |
 
 The `PolicyType` enum introduces two new values:
+
 - `UNION = 2` — authorized if any child policy authorizes the account (OR)
 - `INTERSECT = 3` — authorized only if every child policy authorizes the account (AND)
 
@@ -92,6 +93,7 @@ The `PolicyType` enum introduces two new values:
 - Each child must be an existing `ALLOWLIST` or `BLOCKLIST` policy. Composite policies and the built-in `ALWAYS_ALLOW` and `ALWAYS_BLOCK` policies are not valid children.
 
 The canonical revert order is:
+
 1. `ZeroAddress` (admin)
 2. `IncompatiblePolicyType` (policyType not UNION/INTERSECT)
 3. `ChildPoliciesOutsideOfRange` (count not in `[2, 4]`)
@@ -99,6 +101,7 @@ The canonical revert order is:
 5. `InvalidChildPolicy` (a child is itself composite or sentinel, checked as a second pass)
 
 The function emits, in order:
+
 - `PolicyCreated(policyId, creator, policyType)`
 - `PolicyAdminUpdated(policyId, address(0), admin)`
 - `CompositePolicyUpdated(policyId, creator, childPolicyIds)`
@@ -108,6 +111,7 @@ The function emits, in order:
 This function replaces the entire child set with two to four existing simple policies, subject to the same validation rules as `createCompositePolicy`. It does not support partial updates or an empty child set.
 
 The canonical revert order is:
+
 1. `PolicyNotFound` (composite itself doesn't exist)
 2. `IncompatiblePolicyType` (`policyId` is a simple policy)
 3. `Unauthorized` (caller isn't the current admin — fires before the count check)
@@ -242,6 +246,7 @@ Future authorization checks use the new child set immediately (live evaluation, 
 **Decision**: Two explicit policy types (`UNION`, `INTERSECT`) with a single `createCompositePolicy` function and full-replacement `updateComposite`.
 
 **Alternative 1: One generic COMPOSITE type**
+
 - Store a separate operator (AND, OR, NOT, XOR) in composite storage.
 - Rejected because:
   - Requires storing both "composite" flag and the operator.
@@ -250,6 +255,7 @@ Future authorization checks use the new child set immediately (live evaluation, 
   - Generic boolean expressions create a larger gas and audit surface.
 
 **Alternative 2: Token-level policy groups**
+
 - Keep Policy Registry unchanged; have each B20 token store multiple policy IDs + an operator.
 - Rejected because:
   - Composite policies would not be reusable entities.
@@ -258,6 +264,7 @@ Future authorization checks use the new child set immediately (live evaluation, 
   - Spreads complexity across more contracts.
 
 **Alternative 3: Incremental child updates**
+
 - Provide `addCompositeOperand` / `removeCompositeOperand` functions.
 - Rejected because:
   - Child list is capped at 4 entries.
@@ -266,6 +273,7 @@ Future authorization checks use the new child set immediately (live evaluation, 
   - Caller can resend the complete list at low cost.
 
 **Alternative 4: Separate creator functions**
+
 - Use `createUnionPolicy` and `createIntersectPolicy`.
 - Rejected because:
   - Doubles the creation API surface.
@@ -273,6 +281,7 @@ Future authorization checks use the new child set immediately (live evaluation, 
   - Future operators would require additional functions.
 
 **Alternative 5: Nested composites (a composite referencing another composite)**
+
 - Allow composite children, to some bounded depth, instead of restricting children to simple `ALLOWLIST`/`BLOCKLIST` policies.
 - Rejected because:
   - Restricting children to simple policies guarantees `isAuthorized` recursion terminates at depth 1 — no cycle risk, no unbounded traversal.
@@ -284,12 +293,13 @@ Future authorization checks use the new child set immediately (live evaluation, 
 **Backwards-compatible**: Existing simple policies (`ALLOWLIST`/`BLOCKLIST`) continue to work unchanged. No action required if you do not need composite behavior.
 
 **For users currently flattening multiple lists into one policy**:
-  1. Identify the simple policies you want to combine.
-  2. Call `policyRegistry.createCompositePolicy(admin, UNION or INTERSECT, [childPolicyIds])`.
-  3. Update the B20 token's policy scope to point to the new composite policy ID:
-     - `b20.updatePolicy(TRANSFER_SENDER_POLICY, compositePolicyId)`
-     - No B20 contract change is required — B20 treats the composite ID as an opaque `uint64` exactly like a simple policy ID.
-  4. Remove the old flattened policy if no longer needed.
+
+1. Identify the simple policies you want to combine.
+2. Call `policyRegistry.createCompositePolicy(admin, UNION or INTERSECT, [childPolicyIds])`.
+3. Update the B20 token's policy scope to point to the new composite policy ID:
+   - `b20.updatePolicy(TRANSFER_SENDER_POLICY, compositePolicyId)`
+   - No B20 contract change is required — B20 treats the composite ID as an opaque `uint64` exactly like a simple policy ID.
+4. Remove the old flattened policy if no longer needed.
 
 **No breaking changes**: All existing selectors, events, and errors remain dialable at Cobalt.
 
