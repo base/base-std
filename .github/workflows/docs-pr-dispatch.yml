@@ -1,0 +1,387 @@
+name: Notify Base Docs from base-std
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # Public documentation sources. Keep this list synchronized with the
+      # `paths=(...)` array in "Compute diff and changed paths" below.
+      - "src/StdPrecompiles.sol"
+      - "src/interfaces/**"
+      - "src/lib/**"
+      - "test/lib/mocks/**"
+      - "docs/**"
+      - "CHANGELOG.md"
+      - "changelog/**"
+  workflow_dispatch:
+    inputs:
+      base_sha:
+        description: "Override BASE_SHA for the diff. Leave blank for HEAD^."
+        required: false
+        type: string
+        default: ""
+      target_sha:
+        description: "Override AFTER_SHA for the diff. Leave blank for HEAD."
+        required: false
+        type: string
+        default: ""
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # id-token: write is required so the OIDC mint step below can request a
+  # GitHub-signed JWT attesting this run's source repo. The token is the
+  # only server-attested binding from the dispatch credential to a
+  # specific source repo — without it the docs-side `source_repo` claim
+  # is just attacker-controllable JSON. See README "OIDC source-repo
+  # attestation" for the threat model.
+  id-token: write
+
+env:
+  # Required repo variable: set DOCS_REPOSITORY to "<owner>/<docs-repo>"
+  # under Settings → Secrets and variables → Actions → Variables. There is
+  # no default — the workflow validates this is set before dispatching.
+  DOCS_REPOSITORY: ${{ vars.DOCS_REPOSITORY }}
+  # GitHub Actions client_payload has a 64 KiB hard ceiling. We now also
+  # carry an OIDC attestation JWT (~1.5–2 KiB) plus the usual PR/source
+  # context fields, so we sit further under the ceiling than before
+  # (was 64512). Artifact transport picks up anything bigger.
+  DIFF_SIZE_LIMIT: 60000
+  # Code-change dispatches use this event_type. Release dispatches use a
+  # different one and are fired from docs-pr-dispatch-release.yml.
+  EVENT_TYPE: base-code-changed
+  # The "effective" source SHA — what the receiver should treat as the
+  # commit that drove this dispatch. On a real push to main this is just
+  # github.sha. On a workflow_dispatch replay it's the `target_sha` input,
+  # so the receiver's branch name + PR title + provenance links all
+  # reference the diff content. Without keying off target_sha, replays
+  # would collide on the same `docs/sync-code-change-<HEAD>` branch.
+  EFFECTIVE_SHA: ${{ github.event.inputs.target_sha || github.sha }}
+
+jobs:
+  notify:
+    name: Dispatch base-std change to docs repo
+    # Fork guard: do not run on forks of the host repo, even when the
+    # workflow file is copied with it. The dispatch step holds a cross-repo
+    # PAT (DOCS_REPO_TOKEN) — refusing to run on forks is the cheapest form
+    # of containment, and forks never inherit the secret anyway so this is
+    # defense in depth, not the only check.
+    if: github.event.repository.fork == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@95d9a5deda9de15063e7595e9719c11c38c90ae2 # v2.13.2
+        with:
+          egress-policy: audit
+
+      - name: Authorize trigger
+        # Defense in depth: push-to-main already requires write access via branch
+        # protection, but we explicitly verify the pusher (github.actor) has at
+        # least write permission via the REST collaborators endpoint. Fails the
+        # job before any cross-repo network call happens if the actor doesn't
+        # qualify. workflow_dispatch is gated the same way.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          perm=$(curl -sS --fail-with-body \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/collaborators/${ACTOR}/permission" \
+            | jq -r '.permission // "none"')
+          case "$perm" in
+            admin|maintain|write)
+              echo "Actor '$ACTOR' has '$perm' permission on $REPO."
+              ;;
+            *)
+              echo "Actor '$ACTOR' has '$perm' permission on $REPO — refusing to dispatch." >&2
+              exit 1
+              ;;
+          esac
+      - name: Checkout repository
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          # 0 = full history. Needed so historical SHAs passed via
+          # workflow_dispatch inputs (demo replays) are reachable. For normal
+          # pushes 2 is enough, but the cost of full fetch is a few seconds
+          # and the simplicity is worth it.
+          fetch-depth: 0
+
+      - name: Compute diff and changed paths
+        id: diff
+        env:
+          # When fired via workflow_dispatch with explicit inputs we honor those
+          # (used for demo replays where we want to dispatch a historical diff).
+          # On real pushes both inputs are absent → fall through to the event's
+          # before/after SHAs.
+          BEFORE_SHA: ${{ github.event.inputs.base_sha || github.event.before }}
+          AFTER_SHA: ${{ github.event.inputs.target_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          paths=(
+            "src/StdPrecompiles.sol"
+            "src/interfaces"
+            "src/lib"
+            "test/lib/mocks"
+            "docs"
+            "CHANGELOG.md"
+            "changelog"
+          )
+          diff_file="$RUNNER_TEMP/base-std-docs.diff"
+          changed_paths_file="$RUNNER_TEMP/changed-paths.json"
+          # Three cases for $BEFORE_SHA:
+          #   1. Normal push: a real parent SHA → diff against it.
+          #   2. Initial push to a branch: all-zeros sentinel → use HEAD^.
+          #   3. workflow_dispatch: empty (event has no `before` field) → use HEAD^.
+          # Cases 2 and 3 collapse to the same fallback.
+          if [[ -z "$BEFORE_SHA" || "$BEFORE_SHA" =~ ^0+$ ]]; then
+            base="${AFTER_SHA}^"
+          else
+            base="$BEFORE_SHA"
+          fi
+          # Full unified diff for the watched paths.
+          git diff "$base" "$AFTER_SHA" -- "${paths[@]}" > "$diff_file"
+          # List of changed file paths (relative to repo root). The docs-side
+          # router uses these to decide which doc pages to regenerate.
+          git diff "$base" "$AFTER_SHA" --name-only -- "${paths[@]}" \
+            | jq -R -s 'split("\n") | map(select(length > 0))' > "$changed_paths_file"
+          diff_size=$(wc -c < "$diff_file" | tr -d ' ')
+          echo "diff_size=$diff_size" >> "$GITHUB_OUTPUT"
+          echo "diff_path=$diff_file" >> "$GITHUB_OUTPUT"
+          echo "changed_paths_path=$changed_paths_file" >> "$GITHUB_OUTPUT"
+          echo "Computed diff: $diff_size bytes across ${#paths[@]} watched paths"
+          echo "Changed files: $(jq 'length' "$changed_paths_file")"
+      - name: Resolve associated pull request
+        id: pr
+        env:
+          # Use the auto-injected workflow token; no gh CLI, no third-party tooling.
+          GITHUB_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          # Look up the PR for the SHA the diff actually lands at — on a
+          # workflow_dispatch replay this is target_sha, not the dispatcher
+          # run's HEAD. Otherwise the PR title/body in the docs PR come from
+          # the wrong upstream PR.
+          SHA: ${{ env.EFFECTIVE_SHA }}
+        run: |
+          set -euo pipefail
+          pr_json=$(curl -sS --fail-with-body \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/commits/${SHA}/pulls" \
+            | jq '.[0] // {}')
+          number=$(jq -r '.number // ""' <<< "$pr_json")
+          title=$(jq -r '.title // ""' <<< "$pr_json")
+          body=$(jq -r '.body // ""' <<< "$pr_json")
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          printf '%s' "$title" > "$RUNNER_TEMP/pr_title.txt"
+          printf '%s' "$body" > "$RUNNER_TEMP/pr_body.txt"
+          if [[ -n "$number" ]]; then
+            echo "Resolved PR #$number: $title"
+          else
+            echo "No PR associated with this commit (direct push to main); dispatching with empty PR context."
+          fi
+      - name: Decide diff transport (inline vs artifact)
+        id: transport
+        env:
+          DIFF_SIZE: ${{ steps.diff.outputs.diff_size }}
+        run: |
+          set -euo pipefail
+          # Small diffs travel inline in the repository_dispatch payload
+          # (fast path, no extra round-trip). Large diffs go via a GitHub
+          # Actions artifact: the dispatcher uploads, the payload references
+          # it by run-id + name, and the receiver downloads it via the
+          # GitHub API. This avoids the ~64 KB client_payload ceiling.
+          if (( DIFF_SIZE > DIFF_SIZE_LIMIT )); then
+            echo "Diff is $DIFF_SIZE bytes (> $DIFF_SIZE_LIMIT); will upload as artifact."
+            echo "use_artifact=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Diff is $DIFF_SIZE bytes (<= $DIFF_SIZE_LIMIT); embedding inline."
+            echo "use_artifact=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Upload diff artifact (only for oversized diffs)
+        if: steps.transport.outputs.use_artifact == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          # Key the artifact off the workflow run id (always unique) rather
+          # than github.sha — two replays of the same target_sha must not
+          # collide on artifact storage, and the receiver pulls by
+          # diff_artifact_run_id + diff_artifact_name so semantic SHAs
+          # aren't needed here.
+          name: sync-diff-${{ github.run_id }}
+          path: ${{ steps.diff.outputs.diff_path }}
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Mint OIDC attestation
+        id: oidc
+        # Requests a GitHub-signed OIDC token whose `repository` claim is
+        # server-attested (it cannot be forged by the dispatcher's PAT —
+        # only by a workflow actually running on this repo with
+        # `id-token: write`). The receiver verifies this token against
+        # GitHub's JWKS and requires payload.repository ==
+        # client_payload.source_repo, closing the source_repo spoofing
+        # vector described in the Archon finding.
+        #
+        # Audience binds the token to a specific docs repo so a leaked
+        # token can't be replayed against an unrelated receiver. We
+        # encode the docs repo so audits can map tokens → intended
+        # receiver without parsing the JWT body.
+        env:
+          AUDIENCE: docs-sync:${{ env.DOCS_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" ]]; then
+            echo "::error title=OIDC mint failed::ACTIONS_ID_TOKEN_REQUEST_* env vars are not set. The job-level 'permissions: id-token: write' declaration is required for OIDC minting." >&2
+            exit 1
+          fi
+          response_path="$RUNNER_TEMP/oidc-response.json"
+          status=$(curl -sS -o "$response_path" -w '%{http_code}' \
+            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            -H "Accept: application/json" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${AUDIENCE}")
+          if [[ "$status" != "200" ]]; then
+            echo "::error title=OIDC mint failed::token endpoint returned HTTP ${status}" >&2
+            cat "$response_path" >&2 || true
+            exit 1
+          fi
+          token=$(jq -r '.value // ""' "$response_path")
+          if [[ -z "$token" || "$token" == "null" ]]; then
+            echo "::error title=OIDC mint failed::token endpoint returned 200 but no .value field" >&2
+            exit 1
+          fi
+          # Mask the token immediately so neither this step's trailing
+          # lines nor any downstream step can leak it via log echo.
+          echo "::add-mask::$token"
+          # Write to a file rather than $GITHUB_OUTPUT — JWTs sit close
+          # to the per-line cap and we want zero risk of truncation.
+          # The chmod 600 limits exposure on shared self-hosted runners.
+          token_path="$RUNNER_TEMP/oidc-token.jwt"
+          printf '%s' "$token" > "$token_path"
+          chmod 600 "$token_path"
+          echo "token_path=$token_path" >> "$GITHUB_OUTPUT"
+          echo "Minted OIDC token (audience=${AUDIENCE}, ${#token} bytes)"
+
+      - name: Build dispatch payload
+        id: payload
+        env:
+          DIFF_SIZE: ${{ steps.diff.outputs.diff_size }}
+          DIFF_PATH: ${{ steps.diff.outputs.diff_path }}
+          CHANGED_PATHS_PATH: ${{ steps.diff.outputs.changed_paths_path }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          # Effective source SHA — see comment on EFFECTIVE_SHA above. The
+          # receiver derives branch name, PR title, and provenance from
+          # this; using github.sha here collapses every replay into one PR.
+          SHA: ${{ env.EFFECTIVE_SHA }}
+          USE_ARTIFACT: ${{ steps.transport.outputs.use_artifact }}
+          RUN_ID: ${{ github.run_id }}
+          OIDC_TOKEN_PATH: ${{ steps.oidc.outputs.token_path }}
+        run: |
+          set -euo pipefail
+          # Two payload shapes, mutually exclusive:
+          #   * inline:    diff field carries the full diff content
+          #   * artifact:  diff field is empty, diff_artifact_* fields point
+          #                at the GitHub Actions artifact on THIS run
+          # diff_truncated is reserved for a future partial-diff path. Today
+          # both shapes deliver the full diff to the receiver.
+          if [[ "$USE_ARTIFACT" == "true" ]]; then
+            diff_arg=("--arg" "diff" "")
+            artifact_run_id="$RUN_ID"
+            # Must match the `name:` we used in the Upload step above.
+            artifact_name="sync-diff-$RUN_ID"
+          else
+            diff_arg=("--rawfile" "diff" "$DIFF_PATH")
+            artifact_run_id=""
+            artifact_name=""
+          fi
+          # The previous step already enforced that the OIDC token was
+          # minted and wrote it to OIDC_TOKEN_PATH. jq --rawfile will
+          # error here if the path is empty, so no extra recheck needed.
+          payload_file="$RUNNER_TEMP/dispatch.json"
+          jq -n \
+            --arg event_type "$EVENT_TYPE" \
+            --arg source_repo "$GITHUB_REPOSITORY" \
+            --arg sha "$SHA" \
+            --arg pr_number "$PR_NUMBER" \
+            --rawfile pr_title "$RUNNER_TEMP/pr_title.txt" \
+            --rawfile pr_body "$RUNNER_TEMP/pr_body.txt" \
+            "${diff_arg[@]}" \
+            --argjson truncated false \
+            --arg diff_artifact_run_id "$artifact_run_id" \
+            --arg diff_artifact_name "$artifact_name" \
+            --slurpfile changed_paths "$CHANGED_PATHS_PATH" \
+            --rawfile oidc_token "$OIDC_TOKEN_PATH" \
+            '{
+              event_type: $event_type,
+              client_payload: {
+                kind: "code-change",
+                source_repo: $source_repo,
+                sha: $sha,
+                pr_number: $pr_number,
+                pr_title: $pr_title,
+                pr_body: $pr_body,
+                diff: $diff,
+                diff_truncated: $truncated,
+                diff_artifact_run_id: $diff_artifact_run_id,
+                diff_artifact_name: $diff_artifact_name,
+                changed_paths: $changed_paths[0],
+                oidc_token: $oidc_token
+              }
+            }' > "$payload_file"
+          echo "payload_path=$payload_file" >> "$GITHUB_OUTPUT"
+          echo "Payload size: $(wc -c < "$payload_file") bytes (use_artifact=$USE_ARTIFACT)"
+      - name: Validate required secrets and variables
+        env:
+          DOCS_PAT: ${{ secrets.DOCS_REPO_TOKEN }}
+          DOCS_REPO: ${{ env.DOCS_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DOCS_REPO:-}" ]]; then
+            echo "DOCS_REPOSITORY repo variable is not configured." >&2
+            echo "Set it under Settings → Secrets and variables → Actions → Variables to '<owner>/<docs-repo>'." >&2
+            exit 1
+          fi
+          if [[ -z "${DOCS_PAT:-}" ]]; then
+            echo "DOCS_REPO_TOKEN secret is not configured." >&2
+            echo "Create a fine-grained PAT scoped to ${DOCS_REPO} and save it as the DOCS_REPO_TOKEN secret." >&2
+            exit 1
+          fi
+      - name: Send repository_dispatch to docs repo
+        env:
+          DOCS_PAT: ${{ secrets.DOCS_REPO_TOKEN }}
+          PAYLOAD_PATH: ${{ steps.payload.outputs.payload_path }}
+          # Notice banner + log line should show the SHA the receiver will
+          # actually document, not whatever happened to be at base/main HEAD.
+          SHA: ${{ env.EFFECTIVE_SHA }}
+        run: |
+          set -euo pipefail
+          response_body="$RUNNER_TEMP/response.txt"
+          status_code=$(curl -sS \
+            -o "$response_body" \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $DOCS_PAT" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$DOCS_REPOSITORY/dispatches" \
+            --data-binary @"$PAYLOAD_PATH")
+          echo "Dispatch status: $status_code"
+          if [[ -s "$response_body" ]]; then
+            echo "Response body:"
+            cat "$response_body"
+          fi
+          if [[ "$status_code" != "204" ]]; then
+            echo "Dispatch failed (expected 204, got $status_code)." >&2
+            exit 1
+          fi
+          echo "Dispatched '$EVENT_TYPE' to $DOCS_REPOSITORY for ${SHA}"
+          # `::notice::` surfaces this as a banner in the run summary,
+          # rather than being buried in the step log. Same primitive
+          # Mintlify uses via core.notice() in their automate-agent example.
+          echo "::notice title=Docs dispatch sent::${EVENT_TYPE} → ${DOCS_REPOSITORY} (base-std@${SHA:0:7})"
