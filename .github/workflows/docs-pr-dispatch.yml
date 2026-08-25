@@ -342,27 +342,29 @@ jobs:
             --rawfile oidc_token "$OIDC_TOKEN_PATH" \
             '{
               event_type: $event_type,
-              client_payload: {
-                kind: "code-change",
-                source_repo: $source_repo,
-                sha: $sha,
-                pr_number: $pr_number,
-                pr_title: $pr_title,
-                pr_body: $pr_body,
-                changed_paths: $changed_paths[0],
-                oidc_token: $oidc_token
-              }
-              + if $transport == "artifact" then
-                  {
-                    diff_artifact_run_id: $diff_artifact_run_id,
-                    diff_artifact_name: $diff_artifact_name
-                  }
-                else
-                  {
-                    diff: $diff,
-                    diff_truncated: $truncated
-                  }
-                end
+              client_payload: (
+                {
+                  kind: "code-change",
+                  source_repo: $source_repo,
+                  sha: $sha,
+                  pr_number: $pr_number,
+                  pr_title: $pr_title,
+                  pr_body: $pr_body,
+                  changed_paths: $changed_paths[0],
+                  oidc_token: $oidc_token
+                }
+                + (if $transport == "artifact" then
+                    {
+                      diff_artifact_run_id: $diff_artifact_run_id,
+                      diff_artifact_name: $diff_artifact_name
+                    }
+                  else
+                    {
+                      diff: $diff,
+                      diff_truncated: $truncated
+                    }
+                  end)
+              )
             }' > "$payload_file"
           property_count=$(jq '.client_payload | length' "$payload_file")
           if (( property_count > 10 )); then
