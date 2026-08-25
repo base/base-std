@@ -7,53 +7,79 @@
 
 ## Summary
 
-Compliant asset issuers need freeze and seize models. This change adds `seizeWithMemo` to the shared `IB20` interface. Both B20 Asset and B20 Stablecoin inherit this function with no variant-specific logic. The original flow to seize an asset required three steps: block the account, call `burnBlocked`, then mint to reissue. The new `seizeWithMemo` function replaces this workaround with a single admin call that reassigns the balance directly. The `burnBlocked` function is deprecated but remains supported with unchanged behavior and no committed removal date.
+This change adds `seizeWithMemo` to the shared `IB20` interface so asset issuers have a dedicated seizing flow, decoupled from `burnBlocked`. The function reassigns a holder's balance to a destination in a single admin call and emits a dedicated `Seized` event after `Transfer` and `Memo`. Both B20 Asset and B20 Stablecoin inherit the function with no variant-specific logic. The `burnBlocked` function remains supported with unchanged behavior, but it is deprecated and has no committed removal date.
+
+Two audiences are affected. Asset issuers can use `seizeWithMemo` for compliance seize workflows, gated by dedicated seize policies (`SEIZE_HOLDER_POLICY` and `SEIZE_RECEIVER_POLICY`). Indexers can use the `Seized` event to map which addresses were seized and where the balance moved.
 
 ## Motivation
 
-Compliant asset issuers need freeze and seize models. Burn functionality must be explicitly distinct from seize because they may be gated on different policies.
+Compliant asset and real-world asset (RWA) issuers must seize holder balances for court orders, sanctions, and freeze-and-reissue workflows. Issuers need a dedicated seize flow. In practice, a seizure takes assets from a specific holder (`from`) and reassigns that balance to a separate safekeeping account (`to`). The operation is not a burn or a mint because `totalSupply` does not change. After the seizure, the safekeeping account is an ordinary holder. It can transfer the tokens back with `transfer` or `transferFrom`, burn them, or use other token operations.
 
-Today the workaround to achieve a seizure is: call `burnBlocked` to burn the asset (gated by `TRANSFER_SENDER_POLICY`, the same policy that `burnBlocked` reads), then call `mint` to reissue the same amount to the seize account. This approach has two problems. First, the emitted events (burn + mint) misrepresent the operation as a burn. No single event indicates that a seizure occurred. Second, `totalSupply` changes when the balance is burned, then changes again on reissue.
+Issuers originally used `burnBlocked` as a workaround. That path has three steps:
 
-The `seizeWithMemo` function replaces that workaround with a direct transfer to the seize account. It emits a dedicated `Seized` event. This makes seizing and burning explicitly distinct.
+1. Block the holder under `TRANSFER_SENDER_POLICY`.
+2. Call `burnBlocked` to destroy the holder's balance.
+3. Call `mint` to reissue the same amount to the seize destination.
+
+That workaround is insufficient for indexers and supply accounting. There is no dedicated seize event, so indexers cannot tell a seizure from a burn plus mint. `totalSupply` decreases on the burn and increases again on the mint. Supply-sensitive readers see a transient supply change that is not a real issuance or redemption. Holder balances also move twice: from `from` to zero, then from zero to the destination.
+
+The workaround also couples who is seizable to who can transfer, because `burnBlocked` reads `TRANSFER_SENDER_POLICY`. The set of accounts that must be seizable is not always the same as the set blocked from transferring.
+
+`seizeWithMemo` addresses those gaps. That path has two steps:
+
+1. Block the holder under `SEIZE_HOLDER_POLICY` (the holder must be not authorized).
+2. Call `seizeWithMemo(from, to, amount, memo)`.
+
+The call emits `Transfer`, then `Memo`, then `Seized`. Holder balances move once from `from` to `to`. `totalSupply` does not change. Seize policy slots are independent of transfer policy.
 
 ## Background
 
-### B20 Asset and B20 Stablecoin
-
-B20 Asset and B20 Stablecoin are Base-native token contracts that extend ERC-20 with role-gated administrative functions and policy-gated operation checks. Each token stores fine-grained policy slots, keyed by operation and actor position. The token consults the Policy Registry through `isAuthorized(policyId, account)` to decide whether a given account is allowed for that slot. For example, transfer flows can independently gate the sender, receiver, and executor. Other operations use their own dedicated policy slots, such as mint receiver and seize holder/receiver. This design separates access control from compliance logic: roles determine who may call privileged methods, and policy slots determine which accounts may participate in a given token operation.
-
 ### Policy Registry
 
-The Policy Registry is a singleton precompile contract. Its responsibility is to return `isAuthorized(policyId, account)`. B20 uses the Policy Registry to gate operations by passing the stored policy ID and the account to check.
+The Policy Registry is a singleton precompile. It maintains authorization policies and answers `isAuthorized(policyId, account)`. B20 does not store the member addresses. Each B20 policy scope stores a `uint64` policy ID that points into the registry.
+
+Issuers create a policy for a specific compliance or business rule, then attach that policy ID to a B20 scope. Because the registry is shared, more than one token can reference the same policy ID.
+
+The registry supports these policy types:
+
+- `ALLOWLIST`: the account is authorized only if it is in the set
+- `BLOCKLIST`: the account is authorized unless it is in the set
+- Composite (`UNION`, `INTERSECT`): combine existing allowlists and blocklists
+
+Simple policies (`ALLOWLIST` and `BLOCKLIST`) hold the address lists. Composite policies reuse those lists instead of copying them.
+
+### B20 Asset and B20 Stablecoin
+
+B20 is a Base-native token standard that extends ERC-20. Issuers use it for stablecoins and other regulated assets. Each token stores policy IDs that point into the Policy Registry. On a gated operation, B20 asks the registry whether the relevant account is authorized. For example, a `transfer`:
+
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant B20
+    participant PolicyRegistry
+
+    Caller->>B20: transfer(to, amount)
+    B20->>PolicyRegistry: isAuthorized(TRANSFER_SENDER_POLICY, caller)
+    PolicyRegistry-->>B20: true
+    B20-->>Caller: Transfer(caller, to, amount)
+```
+
+
+
+Existing policy scopes include:
+
+- `TRANSFER_SENDER_POLICY`: the `from` of `transfer` and `transferFrom`
+- `TRANSFER_RECEIVER_POLICY`: the `to` of `transfer` and `transferFrom`
+- `TRANSFER_EXECUTOR_POLICY`: the `msg.sender` of `transferFrom`
+- `MINT_RECEIVER_POLICY`: the `to` of `mint`
+
+The `burnBlocked` workaround in Motivation uses `BURN_BLOCKED_ROLE` and `TRANSFER_SENDER_POLICY`. The holder must be not authorized under that sender policy. The call burns to `address(0)` and reduces `totalSupply`.
 
 ## Specs
 
 ### Interface Changes
 
 The following changes add new functions, events, errors, and role/policy constants to the `IB20` interface. The deprecated `burnBlocked` function and its associated error and event remain but are marked deprecated.
-
-**Deprecated (dialable, unchanged behavior, no removal date committed):**
-
-| Symbol | Selector / topic0 |
-|--------|-------------------|
-| `burnBlocked(address,uint256)` | `0xec0cf3dc` |
-| `error AccountNotBlocked(address)` | `0x64a5cb46` |
-| `event BurnedBlocked(address,address,uint256)` | `0x0b552e96653fd6842da37c477005d3b5c08a8c7d3631b1f43787b2dc9a1006a3` |
-
-**New additions:**
-
-| Symbol | Selector / topic0 / value |
-|--------|---------------------------|
-| `seizeWithMemo(address,address,uint256,bytes32)` | `0xf916d81b` |
-| `SEIZE_ROLE()` | `0x3c7e9ba5` (role value `0x3469b8b0d89e9604f8510ed143f74a8336d22955d4f83e23bf53d9414e27f432`) |
-| `SEIZE_HOLDER_POLICY()` | `0xb279d311` (value `0x1497ab2b67ebb0a75dd9cdd6aec9f0e64620e6b87e911af7a088ac12e58d9ef2`) |
-| `SEIZE_RECEIVER_POLICY()` | `0xb31da27f` (value `0xbf15b19caf5c77422c038bc25f26b8b815c3a14f6d04c6616076b81bcfe07b3d`) |
-| `event Seized(address indexed caller, address indexed from, address indexed to, uint256 amount)` | `0xa9aec5d8b86e2fa2fd6ac3af62f2622e3dfdab1967d4cbbb56a5df7d74cb887c` |
-| `error AccountNotSeizable(address)` | `0x91dbbc8d` |
-| `PausableFeature.SEIZE` | Enum value appended after `BURN` |
-
-The net additions to the `IB20` interface surface are shown below. The `burnBlocked` function and its associated error and event remain but are marked deprecated.
 
 ```solidity
 // PausableFeature enum — SEIZE appended
@@ -81,11 +107,29 @@ function seizeWithMemo(address from, address to, uint256 amount, bytes32 memo) e
 function burnBlocked(address from, uint256 amount) external;
 ```
 
-**Policy semantics:**
+**Deprecated (dialable, unchanged behavior, no removal date committed):**
 
-- `SEIZE_HOLDER_POLICY` gates who is seizable. The membership is inverted: an account is seizable when it is **not** authorized under this policy. This is distinct from the allowlist-style checks used by `transfer` and `transferFrom`, where `isAuthorized(...) == true` allows the operation. `SEIZE_HOLDER_POLICY` uses the inverse result so it can target accounts those checks deny. An unset slot reads as `0` (always-allow), so no account is seizable until an issuer configures the slot. This is a safe default.
 
-- `SEIZE_RECEIVER_POLICY` gates the seize destination. It mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot defaults to always-allow, so an unconfigured token may seize to any destination (a treasury need not be allowlisted).
+| Symbol                                         | Selector / topic0                                                    |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| `burnBlocked(address,uint256)`                 | `0xec0cf3dc`                                                         |
+| `error AccountNotBlocked(address)`             | `0x64a5cb46`                                                         |
+| `event BurnedBlocked(address,address,uint256)` | `0x0b552e96653fd6842da37c477005d3b5c08a8c7d3631b1f43787b2dc9a1006a3` |
+
+
+**New additions:**
+
+
+| Symbol                                                                                           | Selector / topic0 / value                                                                      |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `seizeWithMemo(address,address,uint256,bytes32)`                                                 | `0xf916d81b`                                                                                   |
+| `SEIZE_ROLE()`                                                                                   | `0x3c7e9ba5` (role value `0x3469b8b0d89e9604f8510ed143f74a8336d22955d4f83e23bf53d9414e27f432`) |
+| `SEIZE_HOLDER_POLICY()`                                                                          | `0xb279d311` (value `0x1497ab2b67ebb0a75dd9cdd6aec9f0e64620e6b87e911af7a088ac12e58d9ef2`)      |
+| `SEIZE_RECEIVER_POLICY()`                                                                        | `0xb31da27f` (value `0xbf15b19caf5c77422c038bc25f26b8b815c3a14f6d04c6616076b81bcfe07b3d`)      |
+| `event Seized(address indexed caller, address indexed from, address indexed to, uint256 amount)` | `0xa9aec5d8b86e2fa2fd6ac3af62f2622e3dfdab1967d4cbbb56a5df7d74cb887c`                           |
+| `error AccountNotSeizable(address)`                                                              | `0x91dbbc8d`                                                                                   |
+| `PausableFeature.SEIZE`                                                                          | Enum value appended after `BURN`                                                               |
+
 
 ### Behavioural Changes
 
@@ -100,46 +144,135 @@ function burnBlocked(address from, uint256 amount) external;
 7. Check balance; else revert `InsufficientBalance`.
 8. Emit `Transfer`, then `Memo`, then `Seized`.
 
-The `memo` parameter attaches an on-chain reference (for example, a case ID or legal order) to each seizure for compliance and audit trails. It is surfaced via the `Memo` event.
+```mermaid
+sequenceDiagram
+    participant Caller
+    participant B20
+    participant PolicyRegistry
 
-The `seizeWithMemo` function bypasses all three transfer-side policies (`TRANSFER_SENDER_POLICY`, `TRANSFER_RECEIVER_POLICY`, `TRANSFER_EXECUTOR_POLICY`). A seizure is a privileged admin action gated by `SEIZE_ROLE` and the seize policies, not a peer transfer. Therefore transfer-side compliance gating does not apply.
+    Caller->>B20: seizeWithMemo(from, to, amount, memo)
+    B20->>PolicyRegistry: isAuthorized(SEIZE_HOLDER_POLICY, from)
+    PolicyRegistry-->>B20: false
+    Note right of B20: false means from is seizable
+    B20->>PolicyRegistry: isAuthorized(SEIZE_RECEIVER_POLICY, to)
+    PolicyRegistry-->>B20: true
+    B20-->>Caller: Transfer(from, to, amount)
+    B20-->>Caller: Memo(caller, memo)
+    B20-->>Caller: Seized(caller, from, to, amount)
+```
 
-A dedicated pause vector `PausableFeature.SEIZE` pauses `seizeWithMemo`. When `SEIZE` is paused, the function reverts with `ContractPaused(SEIZE)`.
 
-Seize is a transfer, not a burn. The balance moves from `from` to `to` and `totalSupply` remains unchanged. This is the key behavioral difference from `burnBlocked`, which sends to `address(0)` and reduces supply.
 
-**Storage layout change:** A packed `seizePolicyIds` slot is added for `SEIZE_HOLDER_POLICY` and `SEIZE_RECEIVER_POLICY`. This change is additive; `burnBlocked` storage remains unchanged.
+**Policy polarity and defaults:**
+
+- `SEIZE_HOLDER_POLICY` is inverted. The call proceeds only when `isAuthorized(SEIZE_HOLDER_POLICY, from)` is false. An unset slot is `0` (always-allow), so every account is authorized meaning that no account is seizable until the issuer attaches a policy.
+- `SEIZE_RECEIVER_POLICY` is a normal allow check. The call proceeds only when `isAuthorized(SEIZE_RECEIVER_POLICY, to)` is true. An unset slot is `0` (always-allow), so any destination can receive seized assets.
+- `seizeWithMemo` checks `SEIZE_HOLDER_POLICY` and `SEIZE_RECEIVER_POLICY`. It does not check `TRANSFER_SENDER_POLICY` or `TRANSFER_RECEIVER_POLICY`. Blocking a holder from transferring does not make them seizable. Authorizing a transfer receiver does not authorize them as a seize destination.
+
+**Storage layout change:** A packed `seizePolicyIds` slot is added at offset 14 in the `base.b20` ERC-7201 namespace. The change is additive. Offsets 0–13 and `burnBlocked` storage are unchanged. The reserved lane in the transfer packed slot (offset 9, bits 192–255) is not used.
+
+- Namespace location: `0xc78b71fee795ddd74aff64ea9b2474194c938c3196430e10bb5f01ed48434000`
+- Placed at `SEIZE_POLICY_IDS_OFFSET = 14`
+
+The field is packed into a single 256-bit slot:
+
+
+| Bits    | Lane | Field      | Scope                   |
+| ------- | ---- | ---------- | ----------------------- |
+| 0–63    | 0    | `seizable` | `SEIZE_HOLDER_POLICY`   |
+| 64–127  | 1    | `receiver` | `SEIZE_RECEIVER_POLICY` |
+| 128–255 | 2–3  | reserved   | unused, pinned to zero  |
+
 
 ### Examples
 
 **Before (old block + burn + mint workaround, still available, deprecated):**
 
-1. Configure `from` as blocked under `TRANSFER_SENDER_POLICY`.
-2. Call `burnBlocked(from, amount)` — burns `from`'s balance, gated by `BURN_BLOCKED_ROLE`.
-3. Call `mint(treasury, amount)` — separately reissues the same amount, gated by `MINT_ROLE`.
-4. Emits: `Transfer(from, address(0), amount)` + `BurnedBlocked(caller, from, amount)` + `Transfer(address(0), treasury, amount)` — two independent operations.
+The token's `TRANSFER_SENDER_POLICY` already points at a blocklist. Tokens leave Alice, hit `address(0)`, then land on the treasury. `totalSupply` decreases and is restored.
+
+1. `updateBlocklist(TRANSFER_SENDER_POLICY, true, [Alice])` — add Alice to the blocklist.
+2. Call `burnBlocked(Alice, amount)` — burns Alice's balance, gated by `BURN_BLOCKED_ROLE`.
+3. Call `mint(Treasury, amount)` — separately reissues the same amount, gated by `MINT_ROLE`.
+4. Emits: `Transfer(Alice, address(0), amount)` + `BurnedBlocked(Admin, Alice, amount)` + `Transfer(address(0), Treasury, amount)` — two independent operations.
+
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (holder)
+    participant Admin
+    participant PolicyRegistry
+    participant B20
+    participant Treasury
+
+    Admin->>PolicyRegistry: updateBlocklist(TRANSFER_SENDER_POLICY, true, [Alice])
+    Note over Alice: blocked under TRANSFER_SENDER_POLICY
+
+    Admin->>B20: burnBlocked(Alice, amount)
+    B20-->>Alice: Transfer(Alice, address(0), amount)
+    Note over Alice: loses amount
+    B20-->>Admin: BurnedBlocked(Admin, Alice, amount)
+    Note over B20: totalSupply decreases
+
+    Admin->>B20: mint(Treasury, amount)
+    B20-->>Treasury: Transfer(address(0), Treasury, amount)
+    Note over Treasury: gains amount
+    Note over B20: totalSupply restored
+```
+
+
 
 **After (new, single call):**
 
-1. Configure `from` as NOT authorized under `SEIZE_HOLDER_POLICY` (i.e., blocked).
-2. Call `seizeWithMemo(from, treasury, amount, memo)` — gated by `SEIZE_ROLE`.
+The token's `SEIZE_HOLDER_POLICY` already points at a blocklist. Tokens move Alice → treasury. `totalSupply` does not change.
+
+1. `updateBlocklist(SEIZE_HOLDER_POLICY, true, [Alice])` — add Alice to the blocklist.
+2. Call `seizeWithMemo(Alice, Treasury, amount, memo)` — gated by `SEIZE_ROLE`.
 3. Emits, in order:
-   - `Transfer(from, treasury, amount)`
-   - `Memo(caller, memo)`
-   - `Seized(caller, from, treasury, amount)`
+  - `Transfer(Alice, Treasury, amount)`
+  - `Memo(Admin, memo)`
+  - `Seized(Admin, Alice, Treasury, amount)`
+
+```mermaid
+sequenceDiagram
+    participant Alice as Alice (holder)
+    participant Admin
+    participant PolicyRegistry
+    participant B20
+    participant Treasury
+
+    Admin->>PolicyRegistry: updateBlocklist(SEIZE_HOLDER_POLICY, true, [Alice])
+    Note over Alice: not authorized under SEIZE_HOLDER_POLICY
+
+    Admin->>B20: seizeWithMemo(Alice, Treasury, amount, memo)
+    B20-->>Alice: Transfer(Alice, Treasury, amount)
+    B20-->>Treasury: Transfer(Alice, Treasury, amount)
+    Note over Alice: loses amount
+    Note over Treasury: gains amount
+    Note over B20: totalSupply unchanged
+    B20-->>Admin: Memo(Admin, memo)
+    B20-->>Admin: Seized(Admin, Alice, Treasury, amount)
+```
+
+
 
 ## Design Decisions & Alternatives Considered
 
-**Final shipped shape:** `seizeWithMemo` and `burnBlocked` use fully independent policy slots and pause vectors.
+### Design Decisions
 
-- `seizeWithMemo` uses the new `SEIZE_HOLDER_POLICY` (for `from`) and `SEIZE_RECEIVER_POLICY` (for `to`), the new `SEIZE_ROLE`, and the new `PausableFeature.SEIZE`.
-- `SEIZE_HOLDER_POLICY` is intentionally different from the allowlist-style checks used by `transfer` and `transferFrom`. In those flows, `isAuthorized(...) == true` permits the operation. In `seizeWithMemo`, the same check is interpreted inversely: the call reverts when `isAuthorized(...) == true`, so only accounts denied by the policy are seizable. This preserves the safe default, because an unset slot reads as `0` (always allow), which means no account is seizable until the issuer explicitly configures the policy. It also lets seize semantics align with the existing "blocked account" policy model already used by `transferFrom`-style restrictions.
-- `burnBlocked` retains `TRANSFER_SENDER_POLICY`, `BURN_BLOCKED_ROLE`, and the `BURN` pause vector unchanged.
-- Seize operations are rare, so the reserved lane in the transfer packed policy slot was not reused for seize. That lane is kept open for a possible future transfer-side optimization where another hot-path transfer policy could be packed into the existing transfer slot without adding a second `SLOAD`. Because seize is a cold-path/rare-path operation, it instead gets its own packed `seizePolicyIds` slot.
+`seizeWithMemo` and `burnBlocked` use fully independent policy slots and pause vectors.
 
-### Function Naming Alternatives
+- `seizeWithMemo` uses the new `SEIZE_HOLDER_POLICY` for `from` and `SEIZE_RECEIVER_POLICY` for `to` so that seizure eligibility and destinations are configured independently from transfer authorization. Changing a transfer policy therefore cannot implicitly make an account seizable or approve a seizure destination.
+- The new `SEIZE_ROLE` separates authority to seize from other administrative permissions. The new `PausableFeature.SEIZE` also makes seizure an independently pausable operation, so an issuer can stop seizures without pausing transfers or burns.
+- `SEIZE_HOLDER_POLICY` intentionally inverts the allowlist-style check used by `transfer` and `transferFrom`. `seizeWithMemo` reverts when `isAuthorized(SEIZE_HOLDER_POLICY, from)` is true, so only accounts denied by the policy are seizable. Because an unset slot reads as `0` (always allow), no account is seizable until the issuer explicitly configures the policy. This polarity also matches the existing blocked-account model, which lets issuers apply the same denylist logic used for blocked transfer and burn restrictions.
+- `burnBlocked` retains `TRANSFER_SENDER_POLICY`, `BURN_BLOCKED_ROLE`, and the `BURN` pause vector because burning and seizing have different effects and must remain independently configurable. Keeping the existing controls unchanged also preserves current `burnBlocked` behavior.
+- `seizeWithMemo` gets its own packed `seizePolicyIds` slot because seizure is a rare, cold-path operation. The reserved lane in the transfer packed policy slot remains available for a future transfer-side policy, where packing another hot-path check into the existing slot could avoid a second `SLOAD`.
+
+### Alternatives
+
+#### Shared Seize Policy
 
 A shared seize-policy approach was rejected: burning and seizing have different effects (see Behavioural Changes), so `burnBlocked` remains independent and no `burnBlockedWithMemo` variant is included.
+
+#### Function Name
 
 The name `transferFromBlockedWithMemo` was considered and rejected. `seizeWithMemo` names the intent (seizure) rather than the mechanism (blocked transfer).
 
@@ -163,6 +296,9 @@ Issuers can check current exposure by reading the policy IDs assigned to `SEIZE_
 2. Configure `SEIZE_HOLDER_POLICY` so the accounts you want seizable are NOT authorized under it. With no policy configured (unset = always-allow), no account is seizable.
 3. Optionally configure `SEIZE_RECEIVER_POLICY` to restrict where seized funds may land. Unset defaults to always-allow (for example, an unallowlisted treasury still works).
 
-**To reproduce `burnBlocked`'s destroy-supply outcome with seize:** `seizeWithMemo` alone does not reduce `totalSupply`. Seize to a treasury or self address, then call `burn(amount)` from that address if you want the supply destroyed.
+**To reproduce `burnBlocked`'s destroy-supply outcome with seize:** `seizeWithMemo` alone does not reduce `totalSupply`.
+
+1. Call `seizeWithMemo` with a treasury or self-controlled address as `to`.
+2. Call `burn(amount)` from that address to destroy the seized supply.
 
 **No storage migration:** `burnBlocked`'s storage and behavior are untouched by this change.
