@@ -124,6 +124,12 @@ jobs:
           AFTER_SHA: ${{ github.event.inputs.target_sha || github.sha }}
         run: |
           set -euo pipefail
+          # workflow_dispatch string inputs preserve pasted whitespace. A
+          # commit SHA cannot contain whitespace, so trim it before using it
+          # as a Git revision and fail with a focused message if it is still
+          # not resolvable in the full checkout.
+          BEFORE_SHA=$(printf '%s' "$BEFORE_SHA" | xargs)
+          AFTER_SHA=$(printf '%s' "$AFTER_SHA" | xargs)
           paths=(
             "src/StdPrecompiles.sol"
             "src/interfaces"
@@ -144,6 +150,14 @@ jobs:
             base="${AFTER_SHA}^"
           else
             base="$BEFORE_SHA"
+          fi
+          if ! git rev-parse --verify --quiet "${AFTER_SHA}^{commit}" > /dev/null; then
+            echo "::error title=Invalid target SHA::'$AFTER_SHA' is not a commit available in this checkout." >&2
+            exit 1
+          fi
+          if ! git rev-parse --verify --quiet "${base}^{commit}" > /dev/null; then
+            echo "::error title=Invalid base SHA::'$base' is not a commit available in this checkout." >&2
+            exit 1
           fi
           # Full unified diff for the watched paths.
           git diff "$base" "$AFTER_SHA" -- "${paths[@]}" > "$diff_file"
@@ -285,18 +299,26 @@ jobs:
         run: |
           set -euo pipefail
           # Two payload shapes, mutually exclusive:
-          #   * inline:    diff field carries the full diff content
-          #   * artifact:  diff field is empty, diff_artifact_* fields point
-          #                at the GitHub Actions artifact on THIS run
-          # diff_truncated is reserved for a future partial-diff path. Today
-          # both shapes deliver the full diff to the receiver.
+          #   * inline:    diff carries the full diff and diff_truncated=false;
+          #                empty artifact references are omitted.
+          #   * artifact:  diff and diff_truncated are omitted; artifact
+          #                references point at the GitHub Actions artifact on
+          #                THIS run.
+          #
+          # GitHub repository_dispatch accepts at most 10 top-level
+          # client_payload properties. Omitting fields that have no meaning
+          # for a transport keeps both shapes within that API limit while
+          # remaining compatible with the receiver's empty-field defaults.
+          # Today both shapes deliver the full diff to the receiver.
           if [[ "$USE_ARTIFACT" == "true" ]]; then
             diff_arg=("--arg" "diff" "")
+            transport="artifact"
             artifact_run_id="$RUN_ID"
             # Must match the `name:` we used in the Upload step above.
             artifact_name="sync-diff-$RUN_ID"
           else
             diff_arg=("--rawfile" "diff" "$DIFF_PATH")
+            transport="inline"
             artifact_run_id=""
             artifact_name=""
           fi
@@ -306,6 +328,7 @@ jobs:
           payload_file="$RUNNER_TEMP/dispatch.json"
           jq -n \
             --arg event_type "$EVENT_TYPE" \
+            --arg transport "$transport" \
             --arg source_repo "$GITHUB_REPOSITORY" \
             --arg sha "$SHA" \
             --arg pr_number "$PR_NUMBER" \
@@ -326,16 +349,28 @@ jobs:
                 pr_number: $pr_number,
                 pr_title: $pr_title,
                 pr_body: $pr_body,
-                diff: $diff,
-                diff_truncated: $truncated,
-                diff_artifact_run_id: $diff_artifact_run_id,
-                diff_artifact_name: $diff_artifact_name,
                 changed_paths: $changed_paths[0],
                 oidc_token: $oidc_token
               }
+              + if $transport == "artifact" then
+                  {
+                    diff_artifact_run_id: $diff_artifact_run_id,
+                    diff_artifact_name: $diff_artifact_name
+                  }
+                else
+                  {
+                    diff: $diff,
+                    diff_truncated: $truncated
+                  }
+                end
             }' > "$payload_file"
+          property_count=$(jq '.client_payload | length' "$payload_file")
+          if (( property_count > 10 )); then
+            echo "::error title=Dispatch payload too wide::client_payload has $property_count top-level properties; GitHub permits at most 10." >&2
+            exit 1
+          fi
           echo "payload_path=$payload_file" >> "$GITHUB_OUTPUT"
-          echo "Payload size: $(wc -c < "$payload_file") bytes (use_artifact=$USE_ARTIFACT)"
+          echo "Payload size: $(wc -c < "$payload_file") bytes (use_artifact=$USE_ARTIFACT, client_payload_properties=$property_count)"
       - name: Validate required secrets and variables
         env:
           DOCS_PAT: ${{ secrets.DOCS_REPO_TOKEN }}
