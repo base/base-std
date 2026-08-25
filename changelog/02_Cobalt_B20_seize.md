@@ -268,13 +268,8 @@ sequenceDiagram
 
 ### Alternatives
 
-#### Shared Seize Policy
-
-A shared seize-policy approach was rejected: burning and seizing have different effects (see Behavioural Changes), so `burnBlocked` remains independent and no `burnBlockedWithMemo` variant is included.
-
-#### Function Name
-
-The name `transferFromBlockedWithMemo` was considered and rejected. `seizeWithMemo` names the intent (seizure) rather than the mechanism (blocked transfer).
+- **Shared seize policy:** A shared seize-policy approach was rejected: burning and seizing have different effects (see Behavioural Changes), so `burnBlocked` remains independent and no `burnBlockedWithMemo` variant is included.
+- **Function name:** The name `transferFromBlockedWithMemo` was considered and rejected. `seizeWithMemo` names the intent (seizure) rather than the mechanism (blocked transfer).
 
 ## Implications for Integrators
 
