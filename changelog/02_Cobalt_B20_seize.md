@@ -143,6 +143,14 @@ A shared seize-policy approach was rejected: burning and seizing have different 
 
 The name `transferFromBlockedWithMemo` was considered and rejected. `seizeWithMemo` names the intent (seizure) rather than the mechanism (blocked transfer).
 
+## Implications for Integrators
+
+For pooled-balance integrators, `seizeWithMemo` and `burnBlocked` create a path for funds to move without the regular transfer flow. This matters for systems that keep internal vault accounting against one on-chain token balance, such as lending-protocol vaults, AMM pools, staking contracts, custodial wallets, and bridges. The mechanism acts at the pooling contract's address, not at individual depositor-share granularity, so the accounting impact falls on the pool as a whole.
+
+This is not a new risk. `burnBlocked` (still dialable, deprecated) already lets an issuer zero a blocked address's balance through block, burn, and reissue elsewhere. `seizeWithMemo` does not expand who is exposed. The change is operational: `seizeWithMemo` collapses that workaround into one call, redirects the balance instead of burning and reissuing it, and emits a dedicated `Seized` event. Both paths remain live. If an integrator contract is blocked under `TRANSFER_SENDER_POLICY` or not authorized under `SEIZE_HOLDER_POLICY`, funds can move out of that contract without the regular transfer flow.
+
+Issuers can check current exposure by reading the policy IDs assigned to `SEIZE_HOLDER_POLICY` and `TRANSFER_SENDER_POLICY` with `token.policyId(...)` (`IB20.policyId`, `src/interfaces/IB20.sol`). Then they can query the Policy Registry's `isAuthorized(policyId, account)` with the pooling contract's own address against each ID. If the contract is not authorized under the seize-holder policy, or is blocked under the transfer-sender policy, funds can be seized or burned from that vault balance under the current configuration. This check is only point-in-time. An issuer can later change either slot with `updatePolicy`, so "not seizable today" is not a strong guarantee.
+
 ## Migration Steps
 
 **Backwards-compatible:** `burnBlocked` continues to work unchanged. No action is required if you do not need seize behavior yet.
