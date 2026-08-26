@@ -168,11 +168,10 @@ For routine corporate actions, an account with `OPERATOR_ROLE` calls `updateUIMu
 3. **Apply the matured value.** The update matures when `block.timestamp >= effectiveAt`. From that point, `uiMultiplier()` returns the scheduled multiplier. The contract calculates this effective value when a caller reads it. Maturation does not write to storage or emit an event.
 4. **Handle a later multiplier update.** Until another multiplier update occurs, `newUIMultiplier()` mirrors `uiMultiplier()` and returns the matured value, and `effectiveAt()` retains its past timestamp. A later `updateUIMultiplier` call stores the matured multiplier as the current multiplier before recording the new schedule. A later `updateMultiplier` call replaces the matured multiplier immediately and clears the pending schedule.
 
-The `effectiveAt` timestamp must be strictly in the future. The function reverts with `EffectiveAtInPast` when
-`effectiveAt <= block.timestamp`. The update matures when `block.timestamp >= effectiveAt`, so a schedule cannot
-target the current timestamp.
+Notes:
 
-Detect a live pending update by checking `effectiveAt() > block.timestamp`. Do not check `effectiveAt() == 0`.
+- `effectiveAt` must be strictly in the future. The function reverts with `EffectiveAtInPast` when `effectiveAt <= block.timestamp`, so a schedule cannot target the current timestamp.
+- Detect a live pending update with `effectiveAt() > block.timestamp`. Do not check `effectiveAt() == 0`.
 
 ```mermaid
 sequenceDiagram
