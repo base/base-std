@@ -237,6 +237,16 @@ sequenceDiagram
     Asset-->>Reader: Current multiplier remains unchanged
 ```
 
+##### Event handling for integrators
+
+Use `UIMultiplierUpdated` as the canonical source for multiplier updates. The event is emitted when an update is
+scheduled, not when the new multiplier becomes active. If `effectiveAtTimestamp > block.timestamp`, treat the
+update as pending until the specified timestamp. The contract does not emit another event when the update matures.
+
+When `UIMultiplierUpdateCancelled` is emitted, discard the pending update. The instant `updateMultiplier` function
+emits both `MultiplierUpdated` and `UIMultiplierUpdated`. Process only `UIMultiplierUpdated` to avoid handling the
+same update twice.
+
 
 
 
