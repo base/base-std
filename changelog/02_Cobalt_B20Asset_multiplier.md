@@ -11,7 +11,7 @@ Stock issuers and tokenization platforms need to support corporate actions such 
 
 Issuers and operators use `updateUIMultiplier` to schedule a change and `cancelUIMultiplierUpdate` to cancel a pending change. The existing `updateMultiplier` function remains available as an emergency failsafe that applies a change immediately. All three functions require `OPERATOR_ROLE`.
 
-For integrators, scheduling a multiplier change does not change a user's raw token balance. Before the scheduled timestamp, the UI functions continue to use the current multiplier. At and after that timestamp, functions such as `balanceOfUI`, `totalSupplyUI`, and `toUIAmount` use the scheduled multiplier and return updated UI values. Integrators can read the pending multiplier and timestamp through `newUIMultiplier()` and `effectiveAt()`, and should use the `UIMultiplierUpdated` event instead of the deprecated `MultiplierUpdated` event.
+Scheduling a multiplier change does not alter raw token balances. UI values continue to use the current multiplier until the scheduled timestamp, then automatically use the new multiplier. Integrators can read pending updates on-chain and should migrate to the canonical `UIMultiplierUpdated` event.
 
 ## Motivation
 
