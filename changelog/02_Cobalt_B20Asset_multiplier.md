@@ -229,23 +229,13 @@ same update twice.
 
 #### UI-scaled views
 
-The Functions table lists the ERC-8056 aliases. The `uiMultiplier`, `balanceOfUI`, `toUIAmount`, and
-`fromUIAmount` functions return the same values as `multiplier`, `scaledBalanceOf`, `toScaledBalance`, and
-`toRawBalance`, respectively. The `totalSupplyUI()` function returns
-`totalSupply() * uiMultiplier() / WAD_PRECISION`.
+The Functions table lists the ERC-8056 aliases. Behavior that matters for integrators:
 
-Multiplier changes do not modify canonical raw balances. They only change the derived UI-scaled values.
-
-UI-scaled views calculate `raw * multiplier / WAD_PRECISION` with integer division. The calculation rounds down.
-The `fromUIAmount` and `toRawBalance` functions also round down, so a round trip can lose up to one unit in the
-last place (ULP) when `multiplier != WAD_PRECISION`.
-
-A large reverse split can make this rounding effect economically significant for tokens with few decimals. Use
-18 decimals for equities to minimize the effect. For more information, see `docs/B20/Asset.md`.
-
-Each UI-scaled read performs one additional `SLOAD` and one timestamp comparison to determine whether a pending
-multiplier has matured. This change affects `uiMultiplier`, `multiplier`, `balanceOfUI`, `scaledBalanceOf`,
-`toUIAmount`, `fromUIAmount`, and `totalSupplyUI`. Raw `balanceOf` reads are unchanged.
+- `uiMultiplier`, `balanceOfUI`, `toUIAmount`, and `fromUIAmount` return the same values as `multiplier`, `scaledBalanceOf`, `toScaledBalance`, and `toRawBalance`, respectively. `totalSupplyUI()` returns `totalSupply() * uiMultiplier() / WAD_PRECISION`.
+- Multiplier changes do not modify canonical raw balances. They only change derived UI-scaled values.
+- UI-scaled views calculate `raw * multiplier / WAD_PRECISION` with integer division and round down. `fromUIAmount` and `toRawBalance` also round down, so a round trip can lose up to one unit in the last place (ULP) when `multiplier != WAD_PRECISION`.
+- A large reverse split can make this rounding effect economically significant for tokens with few decimals. Use 18 decimals for equities to minimize the effect. For more information, see `docs/B20/Asset.md`.
+- Each UI-scaled read performs one additional `SLOAD` and one timestamp comparison to determine whether a pending multiplier has matured. This applies to `uiMultiplier`, `multiplier`, `balanceOfUI`, `scaledBalanceOf`, `toUIAmount`, `fromUIAmount`, and `totalSupplyUI`. Raw `balanceOf` reads are unchanged.
 
 #### Deprecated `updateMultiplier` behavior
 
