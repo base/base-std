@@ -7,17 +7,21 @@
 
 ## Summary
 
-Asset issuers often use the Policy Registry to maintain compliance lists. They and other Policy Registry users can also depend on shared lists maintained by other policy owners. This feature lets them compose these policies without copying entries into a new list or maintaining infrastructure to synchronize updates.
+Asset issuers use the Policy Registry to enforce compliance on their tokens. Any token can reference any policy, including a list the issuer maintains and a shared list another policy owner maintains — for example a KYC allowlist or a sanctions blocklist. Combining those policies previously required flattening them into a new list.
 
-The feature introduces two new `PolicyRegistry` policy types: `UNION` (OR) and `INTERSECT` (AND), collectively called composite policies. A `UNION` policy authorizes an account if any child policy authorizes it. An `INTERSECT` policy authorizes an account only if every child policy authorizes it. Each composite references two to four existing simple policies (`ALLOWLIST` or `BLOCKLIST`). Composite policies cannot reference other composites, and the registry enforces this constraint when a composite is created or updated. Authorization uses each child's current state, so updating a child automatically affects every composite that references it.
+This feature adds composite policies so issuers can combine those lists without flattening. A `UNION` (OR) policy authorizes an account if any child policy authorizes it. An `INTERSECT` (AND) policy authorizes an account only if every child policy authorizes it.
+
+Each composite references two to four existing simple policies (`ALLOWLIST` or `BLOCKLIST`). Composite policies cannot reference other composites; the registry enforces this constraint when a composite is created or updated. Authorization uses each child's current state, so updating a child automatically affects every composite that references it.
 
 ## Motivation
 
-Asset issuance platforms often manage many assets that share authorization requirements. An issuer can reuse one policy across these assets, but assigning that policy directly leaves no way to customize authorization for an individual asset. A composite policy lets the issuer use shared policies by default while preserving per-asset overrides. For example, a `UNION` can combine a shared allowlist with a token-specific allowlist.
+Asset issuance platforms often manage many assets that share authorization requirements. An issuer can reuse one policy across these assets, but assigning that policy directly leaves no way to customize authorization for an individual asset.
 
-Without composition, users must copy entries from source policies into a new, flattened policy and operate infrastructure that monitors and synchronizes every source update. This approach duplicates policy data and can leave the copy stale when synchronization is delayed or fails. Until the copy catches up, valid transfers can be rejected or transfers that the source policy no longer authorizes can proceed.
+Without a way to combine policies, users must copy entries from source policies into a new, flattened policy and operate infrastructure that monitors and synchronizes every source update. This approach duplicates policy data and can leave the copy stale when synchronization is delayed or fails. Until the copy catches up, valid transfers can be rejected or transfers that the source policy no longer authorizes can proceed.
 
-Access control can also require more than one condition. An application might require both KYC verification and ProUser status, or accept either ProUser status or LifetimeUser status. Composite policies support these cases by introducing `UNION` (OR) and `INTERSECT` (AND). Because authorization evaluates each child policy's current state, one child update immediately applies to every composite that references it, without list-copying infrastructure.
+Access control can also require more than one condition. An application might require both KYC verification and ProUser status, or accept either ProUser status or LifetimeUser status. A single simple policy cannot express those AND or OR relationships across independent lists.
+
+Composite policies address both cases without flattening. A `UNION` (OR) policy authorizes an account if any child authorizes it, so an issuer can combine a shared allowlist with a token-specific allowlist. An `INTERSECT` (AND) policy authorizes an account only if every child authorizes it, so an issuer can require both KYC verification and ProUser status. Authorization evaluates each child's current state, so one child update immediately applies to every composite that references it, without list-copying infrastructure.
 
 ## Background
 
