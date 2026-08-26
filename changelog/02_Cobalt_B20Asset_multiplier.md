@@ -9,9 +9,9 @@
 
 Stock issuers and tokenization platforms need to support corporate actions such as stock splits and reverse stock splits. This change implements ERC-8056 for B20 Asset in the Cobalt hardfork. Which allows issuers to schedule a multiplier change for a specific future timestamp instead of applying it immediately.
 
-Issuers and operators use `updateUIMultiplier` to schedule a change and `cancelUIMultiplierUpdate` to cancel a pending change. The existing `updateMultiplier` function remains available as an emergency failsafe that applies a change immediately. All three functions require `OPERATOR_ROLE`.
+Issuers and operators can now use `updateUIMultiplier` to schedule a change and `cancelUIMultiplierUpdate` to cancel a pending change. The existing `updateMultiplier` function remains available as an emergency failsafe that applies a change immediately. All three functions require `OPERATOR_ROLE`.
 
-Scheduling a multiplier change does not alter raw token balances. UI values continue to use the current multiplier until the scheduled timestamp, then automatically use the new multiplier. Integrators can read pending updates on-chain and should migrate to the canonical `UIMultiplierUpdated` event.
+Scheduling a multiplier update leaves raw token balances unchanged and changes only their UI representation. UI values use the current multiplier before the effective timestamp and the scheduled multiplier at or after it. Integrators can prepare for this transition by reading pending updates on-chain and listening for the canonical `UIMultiplierUpdated` event.
 
 ## Motivation
 
