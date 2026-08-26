@@ -25,7 +25,7 @@ ERC-8056 provides this scheduling model. An operator records a pending multiplie
 
 ### B20 Asset
 
-B20 Asset extends ERC-20 for issuers that tokenize real-world assets on Base, including stocks, bonds, funds, and commodities. It records each holder's balance as a raw amount. A single multiplier converts raw amounts into UI amounts for display.
+B20 Asset extends ERC-20 for issuers that tokenize real-world assets on Base. It records each holder's balance as a raw amount. A single multiplier converts raw amounts into UI amounts for display.
 
 This design lets an issuer represent a corporate action, such as a stock split, without rewriting holder balances. ERC-20 transfers and DeFi protocols continue to use the unchanged raw amounts.
 
