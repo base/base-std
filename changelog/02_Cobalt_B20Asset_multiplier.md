@@ -181,7 +181,7 @@ sequenceDiagram
     participant Reader as User or integrator
 
     Operator->>Asset: updateUIMultiplier(newMultiplier, effectiveAt)
-    Asset-->>Operator: Schedule pending multiplier
+    Asset-->>Operator: UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAt)
     Reader->>Asset: uiMultiplier() before effectiveAt
     Asset-->>Reader: Current multiplier
     Note over Asset: effectiveAt passes<br/>No transaction, event, or storage write
@@ -206,26 +206,16 @@ sequenceDiagram
     participant Reader as User or integrator
 
     Operator->>Asset: updateUIMultiplier(newMultiplier, effectiveAt)
-    Asset-->>Operator: Schedule pending multiplier
+    Asset-->>Operator: UIMultiplierUpdated(oldMultiplier, newMultiplier, effectiveAt)
     Reader->>Asset: uiMultiplier() before effectiveAt
     Asset-->>Reader: Current multiplier
     Operator->>Asset: cancelUIMultiplierUpdate() before effectiveAt
-    Asset-->>Operator: Clear pending update and emit cancellation event
+    Asset-->>Operator: UIMultiplierUpdateCancelled(cancelledMultiplier, cancelledEffectiveAt)
     Reader->>Asset: uiMultiplier()
     Asset-->>Reader: Current multiplier remains unchanged
 ```
 
 
-
-##### Event handling for integrators
-
-Use `UIMultiplierUpdated` as the canonical source for multiplier updates. The event is emitted when an update is
-scheduled, not when the new multiplier becomes active. If `effectiveAtTimestamp > block.timestamp`, treat the
-update as pending until the specified timestamp. The contract does not emit another event when the update matures.
-
-When `UIMultiplierUpdateCancelled` is emitted, discard the pending update. The instant `updateMultiplier` function
-emits both `MultiplierUpdated` and `UIMultiplierUpdated`. Process only `UIMultiplierUpdated` to avoid handling the
-same update twice.
 
 #### UI-scaled views
 
@@ -299,10 +289,9 @@ only immediate on-chain override for an incorrect scheduled value or timestamp.
 
 ### Off-chain integrators
 
-To detect a live pending update, off-chain integrators should check whether `effectiveAt() > block.timestamp`.
-Do not check whether `effectiveAt() == 0` because `effectiveAt()` retains the most recent timestamp after an update
-matures. Listen for the canonical `UIMultiplierUpdated` event instead of the deprecated `MultiplierUpdated` event,
-which is emitted only by the instant `updateMultiplier` function.
-
-The `toScaledBalance` and `toRawBalance` functions and the legacy `MultiplierUpdated` event remain available for
-backward compatibility but are deprecated. No removal is scheduled, but a future hardfork may remove them.
+- Listen for the canonical `UIMultiplierUpdated` event instead of the deprecated `MultiplierUpdated` event, which is emitted only by the instant `updateMultiplier` function.
+- `UIMultiplierUpdated` is emitted when an update is scheduled, not when the new multiplier becomes active. If `effectiveAtTimestamp > block.timestamp`, treat the update as pending until that timestamp. The contract does not emit another event when the update matures.
+- When `UIMultiplierUpdateCancelled` is emitted, discard the pending update.
+- The instant `updateMultiplier` function emits both `MultiplierUpdated` and `UIMultiplierUpdated`. Process only `UIMultiplierUpdated` to avoid handling the same update twice.
+- Detect a live pending update with `effectiveAt() > block.timestamp`. Do not check `effectiveAt() == 0`, because `effectiveAt()` retains the most recent timestamp after an update matures.
+- The `toScaledBalance` and `toRawBalance` functions and the legacy `MultiplierUpdated` event remain available for backward compatibility but are deprecated. No removal is scheduled, but a future hardfork may remove them.
