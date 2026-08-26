@@ -19,7 +19,7 @@ Traditional financial institutions coordinate stock splits, reverse stock splits
 
 The existing `updateMultiplier` function applies a multiplier change when its transaction lands on-chain. Because transaction inclusion time is unpredictable, operators cannot use this function to guarantee an agreed effective timestamp. Operators need to be able to submit a transaction in advance and schedule the change for a specific activation threshold without predicting when the transaction must land.
 
-ERC-8056 provides this scheduling model. An operator records a pending multiplier and its effective timestamp in advance. The new multiplier becomes effective when `block.timestamp >= effectiveAt`, without requiring another transaction at that time. This gives downstream systems a predictable activation threshold for coordinating UI balances, prices, and accounting values. Retaining `updateMultiplier` provides an emergency override for an incorrect scheduled multiplier or effective timestamp.
+[ERC-8056](https://eips.ethereum.org/EIPS/eip-8056) provides this scheduling model. An operator records a pending multiplier and its effective timestamp in advance. The new multiplier becomes effective when `block.timestamp >= effectiveAt`, without requiring another transaction at that time. This gives downstream systems a predictable activation threshold for coordinating UI balances, prices, and accounting values. Retaining `updateMultiplier` provides an emergency override for an incorrect scheduled multiplier or effective timestamp.
 
 ## Background
 
@@ -159,9 +159,7 @@ sequenceDiagram
 
 #### New Behavior
 
-For routine corporate actions, call `updateUIMultiplier(uint256 newMultiplier, uint256 effectiveAt)` to schedule a multiplier change. The contract allows one pending change at a time, and `effectiveAt` must be a future timestamp.
-
-The existing `OPERATOR_ROLE` controls `updateUIMultiplier`, `cancelUIMultiplierUpdate`, and `updateMultiplier`.
+For routine corporate actions, an account with `OPERATOR_ROLE` calls `updateUIMultiplier(uint256 newMultiplier, uint256 effectiveAt)` to schedule a multiplier change. The contract allows one pending change at a time, and `effectiveAt` must be a future timestamp. The same role also controls `cancelUIMultiplierUpdate` and the emergency `updateMultiplier` failsafe.
 
 ##### Scheduled update lifecycle
 
