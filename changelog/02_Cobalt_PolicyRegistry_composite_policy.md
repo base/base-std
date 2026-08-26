@@ -133,11 +133,7 @@ The function emits only `CompositePolicyUpdated(policyId, updater, childPolicyId
 
 #### Authorization Implementation
 
-`isAuthorized` uses the same result from each child, whether that child is an `ALLOWLIST` or a `BLOCKLIST`.
-The composite only determines how to combine those results:
-
-Composite creation and updates reject composite children. Authorization therefore evaluates only simple child
-policies and does not recurse into another composite.
+The `isAuthorized` implementation change works as this pseudo-code:
 
 ```text
 isAuthorized(policyId, account):
@@ -162,13 +158,17 @@ isAuthorized(policyId, account):
 
 #### Authorization Details
 
+These invariants hold:
+
+- Composite creation and updates reject composite children, so evaluation never recurses. Each child is a
+  simple `ALLOWLIST` or `BLOCKLIST`.
+- Each child returns one authorization result, whether it is an `ALLOWLIST` or a `BLOCKLIST`. The composite
+  only combines those results.
 - Evaluation is live, not a snapshot. Each call reads the current membership of each evaluated child.
 - Evaluation short-circuits. `UNION` stops at the first authorizing child, and `INTERSECT` stops at the first
   non-authorizing child.
-- Gas cost depends on the number of child policies evaluated. Child order can therefore affect gas, but it
-  cannot affect the authorization result. Put the child most likely to short-circuit first.
-- `ALLOWLIST` and `BLOCKLIST` children use the same composite evaluation path. Each child first resolves its
-  own authorization result, and then the composite combines those results.
+- Child order cannot change the authorization result. It can change gas, because gas depends on how many
+  children are evaluated. Put the child most likely to short-circuit first.
 - Duplicate child IDs are allowed. The registry preserves their order and does not deduplicate them.
 - `updateComposite` requires two to four children, so an existing composite cannot become empty or undersized.
 - A child remains effective if its admin renounces. Renouncing freezes future membership changes but does not
@@ -205,21 +205,71 @@ simple policies use; composite policies do not use a separate counter.
 
 ### Examples
 
-#### Before (Simple Policy)
+Assume existing simple policies: `employeesPolicyId` (ALLOWLIST) and `approvedRegionPolicyId` (ALLOWLIST). Both Before and After combine them so an account may transfer if it is on either list.
 
-Assign one existing policy directly to a B20 policy scope:
+#### Before (Flattened Policy)
+
+B20 stores one policy ID per scope, so the two allowlists must be copied into a new flattened allowlist. Off-chain infrastructure then has to keep that copy aligned with both sources.
+
+**1. Flatten once**
+
+Read members from `employeesPolicyId` and `approvedRegionPolicyId`. Create a new allowlist with the union, then point B20 at it.
 
 ```solidity
-b20.updatePolicy(TRANSFER_SENDER_POLICY, allowlistPolicyId)
+flattenedPolicyId = policyRegistry.createPolicyWithAccounts(
+    admin,
+    ALLOWLIST,
+    [/* union of employees and approved-region addresses */]
+)
+b20.updatePolicy(TRANSFER_SENDER_POLICY, flattenedPolicyId)
 ```
 
-Only accounts in `allowlistPolicyId` can transfer.
+```mermaid
+flowchart LR
+    E[employeesPolicyId members]
+    R[approvedRegionPolicyId members]
+    F[flattenedPolicyId]
+    T[B20 TRANSFER_SENDER_POLICY]
+    E -->|copy| F
+    R -->|copy| F
+    T -->|stores| F
+```
+
+**2. Listen to both sources**
+
+Watch `AllowlistUpdated` on `employeesPolicyId` and `approvedRegionPolicyId`. A change on either list is not visible to B20 until the listener writes it into the flattened copy.
+
+```mermaid
+flowchart LR
+    E[employeesPolicyId]
+    R[approvedRegionPolicyId]
+    L[Sync infrastructure]
+    E -->|AllowlistUpdated| L
+    R -->|AllowlistUpdated| L
+```
+
+**3. Propagate the change**
+
+On each event, copy the membership delta into `flattenedPolicyId` with `updateAllowlist`, or rebuild a new flattened allowlist and call `updatePolicy` again. Until that transaction lands, an account added to a source list is still rejected, and an account removed from a source list can still transfer.
+
+```mermaid
+sequenceDiagram
+    participant SourceAdmin
+    participant Employees as employeesPolicyId
+    participant Listener as Sync infrastructure
+    participant Flat as flattenedPolicyId
+    participant B20
+
+    SourceAdmin->>Employees: updateAllowlist(true, [Alice])
+    Employees-->>Listener: AllowlistUpdated(..., true, [Alice])
+    Note over B20,Flat: Alice cannot transfer yet
+    Listener->>Flat: updateAllowlist(true, [Alice])
+    Note over B20,Flat: Alice can transfer
+```
 
 #### After (Composite Policy)
 
-Assume existing simple policies: `employeesPolicyId` (ALLOWLIST), `approvedRegionPolicyId` (ALLOWLIST).
-
-Create a UNION composite:
+Create a UNION composite that references the two source policies. Do not copy their members:
 
 ```solidity
 policyRegistry.createCompositePolicy(admin, UNION, [employeesPolicyId, approvedRegionPolicyId])
@@ -233,19 +283,25 @@ Assign to B20:
 b20.updatePolicy(TRANSFER_SENDER_POLICY, compositePolicyId)
 ```
 
-B20 has no composite-specific logic — it passes the policy ID to the registry as usual.
+B20 has no composite-specific logic — it passes the policy ID to the registry as usual. Adding Alice to `employeesPolicyId` authorizes her on the next check, with no recopy.
 
-#### Updating a Composite
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Employees as employeesPolicyId
+    participant Region as approvedRegionPolicyId
+    participant Union as UNION composite
+    participant B20
 
-```solidity
-policyRegistry.updateComposite(compositePolicyId, [employeesPolicyId, trustedPartnersPolicyId])
+    Admin->>Union: createCompositePolicy(UNION, [employees, approvedRegion])
+    Admin->>B20: updatePolicy(TRANSFER_SENDER_POLICY, compositePolicyId)
+
+    Note over Employees: Alice added to employeesPolicyId
+    B20->>Union: isAuthorized(compositePolicyId, Alice)
+    Union->>Employees: isAuthorized(employeesPolicyId, Alice)
+    Employees-->>Union: true
+    Union-->>B20: true
 ```
-
-Emits: `CompositePolicyUpdated(policyId, admin, [newChildren])`.
-
-B20 continues using the same policy ID — no token-side update required.
-
-Future authorization checks use the new child set immediately (live evaluation, no snapshot).
 
 ## Design Decisions & Alternatives Considered
 
@@ -296,9 +352,9 @@ Future authorization checks use the new child set immediately (live evaluation, 
 
 ## Migration Steps
 
-**Backwards-compatible**: Existing simple policies (`ALLOWLIST`/`BLOCKLIST`) continue to work unchanged. No action required if you do not need composite behavior.
+This change is not breaking. All existing selectors, events, and errors remain dialable at Cobalt, and existing simple policies (`ALLOWLIST` and `BLOCKLIST`) continue to work unchanged. If you do not need composite behavior, you do not need to take any action.
 
-**For users currently flattening multiple lists into one policy**:
+If you currently flatten multiple lists into one policy, migrate as follows:
 
 1. Identify the simple policies you want to combine.
 2. Call `policyRegistry.createCompositePolicy(admin, UNION or INTERSECT, [childPolicyIds])`.
@@ -306,7 +362,3 @@ Future authorization checks use the new child set immediately (live evaluation, 
    - `b20.updatePolicy(TRANSFER_SENDER_POLICY, compositePolicyId)`
    - No B20 contract change is required — B20 treats the composite ID as an opaque `uint64` exactly like a simple policy ID.
 4. Remove the old flattened policy if no longer needed.
-
-**No breaking changes**: All existing selectors, events, and errors remain dialable at Cobalt.
-
-**No storage migration**: `children` is a new, empty mapping at ERC-7201 offset 4. Existing `PolicyRegistry` state at offsets 0–3 is unmodified by Cobalt activation.
