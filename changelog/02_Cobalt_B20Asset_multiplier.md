@@ -17,11 +17,11 @@ Scheduling a multiplier change does not alter raw token balances. UI values cont
 
 Traditional financial institutions coordinate stock splits, reverse stock splits, and reinvested dividends around an agreed effective time, often at the start of the next trading day. Exchanges, custodians, and accounting systems need advance notice so they can prepare before the action takes effect.
 
-The existing `updateMultiplier` function applies a multiplier change when its transaction lands on-chain. Because transaction inclusion time is unpredictable, this function cannot guarantee an agreed effective timestamp. This limitation prevents downstream systems from coordinating a multiplier change reliably and can cause them to report inconsistent UI balances, prices, and accounting values. Issuers still need `updateMultiplier` as an emergency override for an incorrect scheduled multiplier or effective timestamp.
+The existing `updateMultiplier` function applies a multiplier change when its transaction lands on-chain. Because transaction inclusion time is unpredictable, operators cannot use this function to guarantee an agreed effective timestamp. Operators need to be able to submit a transaction in advance and schedule the change for a specific activation threshold without predicting when the transaction must land.
+
+ERC-8056 provides this scheduling model. An operator records a pending multiplier and its effective timestamp in advance. The new multiplier becomes effective when `block.timestamp >= effectiveAt`, without requiring another transaction at that time. This gives downstream systems a predictable activation threshold for coordinating UI balances, prices, and accounting values. Retaining `updateMultiplier` provides an emergency override for an incorrect scheduled multiplier or effective timestamp.
 
 ## Background
-
-
 
 ### B20 Asset
 
@@ -34,8 +34,6 @@ Before this change, B20 Asset provided these multiplier functions:
 - `updateMultiplier(uint256 newMultiplier)`: applies the multiplier immediately
 - `toScaledBalance(uint256)` and `toRawBalance(uint256)`: legacy read and conversion aliases that predate the ERC-8056 naming
 
-
-
 ### ERC-8056
 
 [ERC-8056](https://eips.ethereum.org/EIPS/eip-8056) standardizes how ERC-20 tokens expose scaled amounts in user interfaces. It defines an 18-decimal UI multiplier while keeping raw balances, total supply, and transfer amounts unchanged.
@@ -44,11 +42,7 @@ The standard requires tokens to expose the current multiplier, a pending multipl
 
 ## Specs
 
-
-
 ### Interface Changes
-
-
 
 #### Solidity interface
 
@@ -79,8 +73,6 @@ interface IB20AssetCobalt {
 }
 ```
 
-
-
 #### ABI changes
 
 The following tables describe new, renamed, and deprecated symbols. Selector and topic0 values are verified against the implementation.
@@ -108,8 +100,6 @@ The following tables describe new, renamed, and deprecated symbols. Selector and
 | `updateMultiplier(uint256)`           | `0x5ffe6146` | deprecated-dialable        | Retained as emergency failsafe. Instant setter; clears any live pending update. Prefer scheduled `updateUIMultiplier`.                                                       |
 
 
-
-
 ##### Events
 
 
@@ -118,8 +108,6 @@ The following tables describe new, renamed, and deprecated symbols. Selector and
 | `UIMultiplierUpdated(uint256,uint256,uint256)` | `0x2205df4534432b2f60654a3fdb48737ffdaf3e9edb1a498bd985bc026b15b055` | new                      | ERC-8056 canonical multiplier-change event. Parameters are `(oldMultiplier, newMultiplier, effectiveAtTimestamp)`. Emitted by both setters; the instant setter stamps `effectiveAtTimestamp = block.timestamp`. |
 | `UIMultiplierUpdateCancelled(uint256,uint256)` | `0x883856335ba5f60c18b9817c4505d3c7d3f6223dcf39516b30c508c46a5e1cad` | new                      | Signals a cleared pending update (via cancel or a superseding instant setter).                                                                                                                                  |
 | `MultiplierUpdated(uint256)`                   | `0x4dbe4840d7465bd162f67814cea0b519567a2e0e578bcde61e7f4ced361e5a3d` | deprecated-still-emitted | Legacy event. Emitted only by the instant setter (`updateMultiplier`) alongside `UIMultiplierUpdated`. The scheduled setter emits only `UIMultiplierUpdated`.                                                   |
-
-
 
 
 ##### Errors
@@ -132,8 +120,6 @@ The following tables describe new, renamed, and deprecated symbols. Selector and
 | `UIMultiplierUpdateExists(uint256)` | `0x4481a68e` | new       | Thrown when a live pending update already exists.                                                                                                                                                                                                                                                  |
 | `UIMultiplierUpdateDoesNotExist()`  | `0xa7d6a5ca` | new       | Thrown when cancel is called with no live pending update.                                                                                                                                                                                                                                          |
 | `InvalidMultiplier()`               | `0x6f12f3dc` | unchanged | Error symbol and selector unchanged. Zero or above-ceiling guard. Now also thrown by `updateUIMultiplier`, and newly thrown by `updateMultiplier` for `newMultiplier > type(uint128).max`. Pre-Cobalt `updateMultiplier` rejected only zero. See Compatibility behavior under Behavioural Changes. |
-
-
 
 
 ##### Interface IDs advertised via `supportsInterface`
@@ -152,8 +138,6 @@ ERC-8056 conformance note: The optional `TransferWithUIAmount` event is intentio
 
 ### Behavioural Changes
 
-
-
 #### Old Behavior
 
 Previously, an operator called `updateMultiplier(uint256)` to change the multiplier. The contract applied the change in the same transaction, so UI balances reflected the new multiplier immediately. It also emitted `MultiplierUpdated(uint256)`, which is now deprecated.
@@ -170,8 +154,6 @@ sequenceDiagram
     Reader->>Asset: multiplier()
     Asset-->>Reader: New multiplier
 ```
-
-
 
 
 
@@ -211,8 +193,6 @@ sequenceDiagram
 
 
 
-
-
 ##### Cancelling a scheduled update
 
 Call `cancelUIMultiplierUpdate()` before `effectiveAt` to cancel a live pending update. Cancellation clears the pending change and emits `UIMultiplierUpdateCancelled(uint256,uint256)`.
@@ -237,6 +217,8 @@ sequenceDiagram
     Asset-->>Reader: Current multiplier remains unchanged
 ```
 
+
+
 ##### Event handling for integrators
 
 Use `UIMultiplierUpdated` as the canonical source for multiplier updates. The event is emitted when an update is
@@ -246,10 +228,6 @@ update as pending until the specified timestamp. The contract does not emit anot
 When `UIMultiplierUpdateCancelled` is emitted, discard the pending update. The instant `updateMultiplier` function
 emits both `MultiplierUpdated` and `UIMultiplierUpdated`. Process only `UIMultiplierUpdated` to avoid handling the
 same update twice.
-
-
-
-
 
 #### UI-scaled views
 
@@ -313,8 +291,6 @@ The resulting namespace layout is:
 | 2      | `usedAnnouncementIds` | `mapping`           | Unchanged                                        |
 | 3      | `extraMetadata`       | `mapping`           | Unchanged                                        |
 | 4      | `pending`             | `PendingMultiplier` | New packed field                                 |
-
-
 
 
 ## Design Decisions & Alternatives Considered
