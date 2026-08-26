@@ -2,7 +2,7 @@
 
 - **Feature Name**: Scheduled Multiplier
 - **Start Date**: 2026-08-17
-- **Authors**: Markus
+- **Authors**: Rayyan Alam and Markus
 - **Title**: Schedule Multiplier Updates (ERC-8056)
 
 ## Summary
@@ -295,3 +295,4 @@ only immediate on-chain override for an incorrect scheduled value or timestamp.
 - The instant `updateMultiplier` function emits both `MultiplierUpdated` and `UIMultiplierUpdated`. Process only `UIMultiplierUpdated` to avoid handling the same update twice.
 - Detect a live pending update with `effectiveAt() > block.timestamp`. Do not check `effectiveAt() == 0`, because `effectiveAt()` retains the most recent timestamp after an update matures.
 - The `toScaledBalance` and `toRawBalance` functions and the legacy `MultiplierUpdated` event remain available for backward compatibility but are deprecated. No removal is scheduled, but a future hardfork may remove them.
+
