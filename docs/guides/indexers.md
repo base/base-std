@@ -24,4 +24,4 @@ _TODO — see [Versioning](../concepts/versioning.md) for the underlying model._
 
 ## Schema / version compatibility
 
-_TODO — see [Versions reference](../reference/versions.md)._
+_TODO — see the [changelog index's hardfork ordinals](../../changelog/README.md#hardfork-ordinals)._

@@ -16,4 +16,4 @@ _TODO — ABI/selector stability guarantees for existing integrations._
 
 ## Where to check the current version
 
-_TODO — see [Versions reference](../reference/versions.md) and [`CHANGELOG.md`](../../CHANGELOG.md)._
+_TODO — see [`CHANGELOG.md`](../../CHANGELOG.md) and the [changelog index's hardfork ordinals](../../changelog/README.md#hardfork-ordinals)._

@@ -14,4 +14,4 @@ Building something?
 Looking for exact technical details?
 
 - [Concepts](concepts/) — the mental model: assets, policies, roles, execution, versioning
-- [Reference](reference/) — interfaces, events, errors, constants, versions
+- [Reference](reference/) — interfaces, events, errors, constants
