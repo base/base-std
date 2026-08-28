@@ -20,7 +20,7 @@ A collection of Solidity interfaces, libraries, and mock implementations for Bas
 
 ## Documentation
 
-See [`docs/`](docs/README.md) for the full documentation map: overview, architecture, audience guides (integrator/indexer/implementer), concepts, and reference.
+See [`docs/`](docs/README.md) for the full documentation map: overview, architecture, audience guides (integrator/indexer), concepts, and reference.
 
 ## Changelog
 

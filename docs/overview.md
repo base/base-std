@@ -1,17 +1,3 @@
-“B20 in 10 Minutes.” Very readable, probably 5–10 minutes.
-
-It answers:
-
-What is B20?
-Why does it exist?
-How does the Factory create an asset?
-How do roles and pause work?
-How do compliance checks integrate?
-Where should I go next?
-
-Someone should be able to read just this and explain B20 at a high level.
-
-
 # B20 Overview
 
 B20 is Base's native token standard for issuing and managing programmable assets onchain.
@@ -206,10 +192,6 @@ If you are integrating B20:
 If you are indexing B20:
 
 → [Indexer Guide](./guides/indexers.md)
-
-If you are implementing B20:
-
-→ [Implementer Guide](./guides/implementers.md)
 
 For exact interfaces and protocol definitions:
 

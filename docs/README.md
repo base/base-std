@@ -9,7 +9,6 @@ Building something?
 
 - [Integrator Guide](guides/integrators.md)
 - [Indexer Guide](guides/indexers.md)
-- [Implementer Guide](guides/implementers.md)
 
 Looking for exact technical details?
 
