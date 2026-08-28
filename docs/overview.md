@@ -7,7 +7,6 @@ Why does it exist?
 How does the Factory create an asset?
 How do roles and pause work?
 How do compliance checks integrate?
-Where does B20 sit in the Base stack?
 Where should I go next?
 
 Someone should be able to read just this and explain B20 at a high level.
@@ -93,11 +92,11 @@ The Activation Registry is a Base-operated safety switch that turns Factory and 
 
 ## Configuring Roles
 
-B20 uses [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control) on the token to gate privileged features: mint, burn, seize, metadata, and the pause vectors (`TRANSFER`, `MINT`, `BURN`, `SEIZE`). Roles are not a separate registry.
+Roles let an issuer assign each privileged operation to a specific account. An admin can grant minting to a minter, seizing to a compliance operator, and pausing of a single feature (`TRANSFER`, `MINT`, `BURN`, or `SEIZE`) without pausing the rest of the token.
 
-One `DEFAULT_ADMIN_ROLE` holder grants and revokes those roles. A privileged call checks the role first, then the matching pause vector. Holder `transfer` skips the role check; it still hits the `TRANSFER` pause vector and policy.
+B20 implements this with [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control) on the token. Roles are not a separate registry. One `DEFAULT_ADMIN_ROLE` holder grants and revokes the operating roles. A privileged call checks the role first, then the matching pause vector. Holder `transfer` skips the role check; it still hits the `TRANSFER` pause vector and policy.
 
-The full role list and what each role gates is in [Roles](./concepts/roles.md). A grant-then-call looks like this:
+The full role list and what each role gates is in [Roles](./concepts/roles.md). A role-gated call looks like this:
 
 ```mermaid
 sequenceDiagram
@@ -116,20 +115,54 @@ sequenceDiagram
 1. At creation, `initialAdmin` holds `DEFAULT_ADMIN_ROLE`.
 2. That admin grants operating roles such as `MINT_ROLE` and `PAUSE_ROLE`.
 3. A caller without the required role is rejected with `AccessControlUnauthorizedAccount`.
-4. A caller who holds the role still reverts with `ContractPaused` if that feature's pause vector is on.
-5. `PAUSE_ROLE` and `UNPAUSE_ROLE` are separate, so the account that pauses does not have to be the account that resumes.
+
+---
+
+## Pause Vectors
+
+Pause vectors stop a class of operations on a token without pausing the rest of the asset. An issuer uses them when an off-chain workflow needs a feature frozen (for example a settlement window), or when a vulnerability is found and that path must stop immediately.
+
+Pause is per feature, not global. The four vectors are `TRANSFER`, `MINT`, `BURN`, and `SEIZE`. Pausing `MINT` halts new issuance while transfers continue. `approve` is not pause-gated.
+
+`pause` requires `PAUSE_ROLE`. `unpause` requires `UNPAUSE_ROLE`. Those roles are separate, so the account that pauses does not have to be the account that resumes.
+
+A paused call looks like this:
+
+```mermaid
+sequenceDiagram
+    participant Pauser
+    participant Token as B20 token
+    participant Caller
+    participant Unpauser
+
+    Caller->>Token: mint(to, amount)
+    Token-->>Caller: allowed
+
+    Pauser->>Token: pause([MINT])
+    Caller->>Token: mint(to, amount)
+    Token-->>Caller: revert ContractPaused(MINT)
+
+    Unpauser->>Token: unpause([MINT])
+    Caller->>Token: mint(to, amount)
+    Token-->>Caller: allowed
+```
+
+1. A caller who holds `MINT_ROLE` can mint while `MINT` is unpaused.
+2. An account with `PAUSE_ROLE` pauses `MINT`. Other features stay live.
+3. The next `mint` reverts with `ContractPaused(MINT)`, even if the caller still holds `MINT_ROLE`.
+4. An account with `UNPAUSE_ROLE` unpauses `MINT`. Minting works again.
 
 ---
 
 ## Integrating Compliance Checks
 
-The Policy Registry is a global singleton precompile. It stores reusable allowlists, blocklists, and composite policies (union or intersect). Tokens do not keep membership lists.
+Most compliance checks reduce to a set of addresses and an allow-or-deny decision on a specific function. B20 uses that model instead of per-token hooks: you maintain an allowlist or blocklist, bind it to a function on the token, and the call proceeds or reverts.
 
-Each movement path consults its own policy scopes. `transfer` checks `TRANSFER_SENDER_POLICY` (`from`) and `TRANSFER_RECEIVER_POLICY` (`to`). `transferFrom` also checks `TRANSFER_EXECUTOR_POLICY` (`msg.sender`). `mint` checks `MINT_RECEIVER_POLICY` (`to`).
+Those lists live in the Policy Registry, a global singleton precompile, not on the token. Allowlists, blocklists, and composite policies (union or intersect) are stored there and referenced by policy ID. Because the registry is shared, one list can back many tokens: you maintain membership once, and every attached token sees the same result.
 
-You add a policy on the registry, then attach its ID to a scope with `updatePolicy`. One policy can be attached to many tokens or many scopes. A compliance system administers membership on the registry. The token never calls that system; the node reads `isAuthorized` when it executes the call.
+A token admin binds a policy ID to a policy scope with `updatePolicy`. A scope sits in a similar place to a hook: it runs on a specific function. When that function runs, the token asks the registry `isAuthorized(policyId, account)` and reverts with `PolicyForbids` if the check fails. Which scope runs on which function is in [Policies](./concepts/policies.md).
 
-The full scope list is in [Policies](./concepts/policies.md). Attach-then-gate looks like this:
+A policy-gated transfer looks like this:
 
 ```mermaid
 sequenceDiagram
@@ -154,34 +187,9 @@ sequenceDiagram
 
 1. Create an allowlist or blocklist on the registry.
 2. The token admin binds that policy ID to a scope.
-3. On the next matching call, the token asks the registry whether the relevant account is authorized.
+3. On `transfer`, the token asks the registry whether the receiver is authorized.
 4. Authorized: the call continues. Denied: the call reverts with `PolicyForbids`.
-5. Unset scopes default to always-allow. `approve` is not policy-gated. You submit these calls the same way you submit any other transaction to a Base node.
-
----
-
-## B20 in the Stack
-
-A B20 call uses the same submission path as any other contract call. The node runs shared precompile logic instead of per-token bytecode.
-
-```mermaid
-flowchart TD
-    A[Application / Wallet / Backend]
-    I[B20 interface]
-    P[B20 precompiles]
-    X[Base execution]
-    S[Canonical state]
-    A -->|transaction| I
-    I --> P
-    P --> X
-    X --> S
-```
-
-- **Application-facing interface.** Wallets and apps call ERC-20-style functions at the asset address.
-- **B20 precompiles.** The Factory, each token, and the Policy Registry are node-native. Every asset shares the same logic.
-- **Base execution.** The node applies authorization, policy, and pause checks, then commits canonical state and events.
-
-[How B20 Works](./architecture.md) walks this path through the dispatcher, version resolution, and storage.
+5. Unset scopes default to always-allow. `approve` is not policy-gated.
 
 ---
 
