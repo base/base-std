@@ -5,10 +5,48 @@
 ## 1. How B20 Uses Precompiles
 
 ### 1.1 Normal Contracts vs Precompiles
-- On every `CALL`/`STATICCALL` (etc.), the EVM checks a precompile registry *before* it ever loads bytecode at the target address.
-- If the address matches an entry in that registry, native code runs directly — bytecode is never loaded or interpreted.
-- Only a registry miss falls through to normal contract execution (load bytecode → interpret). An address with no bytecode and no registry entry behaves like an empty account: the call stops immediately with no output — this is what a precompile address looks like *before* the hardfork that introduces it.
-- Classic Ethereum precompiles (`ecrecover`, `sha256`, `ripemd160`, `modexp`, `ecadd`/`ecmul`/`ecpairing`, `blake2f`, etc.) are looked up through this exact same registry. B20 doesn't bypass or extend the EVM's dispatch path — it plugs into it.
+
+Precompiles are code compiled into the node client. Unlike regular smart contracts, they are not deployed as EVM bytecode and the EVM interpreter does not execute them. They run as native code, so they bypass the opcode-by-opcode interpreter loop: decode, execute, update stack and memory, then repeat. That native path is why they are faster. Ethereum introduced them because some operations, such as hashing and cryptographic primitives, were too expensive to run efficiently in the EVM. Callers still see a contract-like interface.
+
+Because the interpreter is not in the path, a precompile implements its own state access and gas accounting. State is still stored through the EVM state model, the same way regular contracts store state. Gas metering is defined by the precompile itself rather than by per-opcode interpreter costs.
+
+The node decides which path to take. On every `CALL`, `STATICCALL`, and related opcode, the EVM checks a precompile registry before it loads bytecode at the target address. If the address is registered, native code runs and bytecode is never loaded or interpreted. If it is not registered, the node runs regular EVM code. The client identifies a precompile by a reserved address mapped in that registry.
+
+```mermaid
+flowchart TD
+    A[Call arrives at node] --> B{Target address in precompile registry?}
+    B -->|yes| C[Run native precompile]
+    B -->|no| D[Run regular EVM code]
+```
+
+Classic Ethereum precompiles (`ecrecover`, `sha256`, `ripemd160`, `modexp`, `ecadd`/`ecmul`/`ecpairing`, `blake2f`, and others) are looked up through this same registry. B20 does not bypass or extend the EVM dispatch path. It registers into that path. An address with no bytecode and no registry entry behaves like an empty account: the call returns immediately with no output. That is how a precompile address looks before the hardfork that introduces it.
+
+From the outside, the two paths look the same until the EVM reaches the target. The actor submits a transaction, the node validates and gossips it, the block builder executes it, and the EVM calls the contract address. A regular contract then runs bytecode. A precompile runs native client code. Both paths read and write EVM state.
+
+```mermaid
+flowchart TB
+    classDef highlight fill:#fff3b0,stroke:#d4a017,color:#000
+
+    subgraph regular [Regular]
+        direction LR
+        RA[Actor] -->|submits tx| RN[Node]
+        RN -->|validate and gossip| RB[Block builder]
+        RB -->|executes tx| RE[EVM]
+        RE -->|call contract address| RC[Bytecode]
+        RC -->|read/write| RS[EVM state]
+    end
+
+    subgraph precompile [Precompile]
+        direction LR
+        PA[Actor] -->|submits tx| PN[Node]
+        PN -->|validate and gossip| PB[Block builder]
+        PB -->|executes tx| PE[EVM]
+        PE -->|call contract address| PC[Native client code]
+        PC -->|read/write| PS[EVM state]
+    end
+
+    class RC,PC highlight
+```
 
 ### 1.2 B20's Native Contract Model
 - B20 tokens, the Factory, the Policy Registry, and the Activation Registry are all precompiles: native logic hosted by the execution client at a fixed or derived address, not deployed EVM bytecode.
