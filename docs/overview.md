@@ -104,28 +104,27 @@ See [Policies](./concepts/policies.md). For how a call moves through these servi
 
 ---
 
-## The Lifecycle of a B20 Asset
+## Bringing a B20 Asset into Use
 
-An issuer brings a B20 asset into use through this sequence.
+An issuer follows this sequence.
 
 ```mermaid
 flowchart TD
-    C["Create Asset<br/>Issuer through Factory"]
-    G["Configure Roles / Policies<br/>Admin"]
-    IU["Issue Units<br/>Issuer"]
-    T["Transfer<br/>Holders"]
-    A["Administrative Actions<br/>Admin"]
-    C --> G
-    G --> IU
-    IU --> T
-    T --> A
+    subgraph s1 [1. Create]
+        direction LR
+        I1[Issuer] -->|createB20| F[Factory]
+    end
+    subgraph s2 [2. Configure and mint]
+        direction LR
+        I2[Issuer] -->|grantRole / updatePolicy| G[Configure]
+        I2 -->|mint| M[Mint]
+    end
+    s1 --> s2
 ```
 
-1. An issuer creates an asset through the Factory. The asset now exists: it has a name, a symbol, a variant, and an initial admin.
-2. The admin assigns operating roles and attaches the policies that govern the asset.
-3. The issuer mints new units on the asset to holder accounts. The asset allows the mint only if the caller has the mint role and the recipient is allowed by policy.
-4. Holders who received those units can transfer them to other accounts. The asset allows each transfer only if the sender and the recipient are allowed by policy.
-5. The admin can pause the asset, seize units, burn supply, or update metadata.
+1. The issuer creates an asset through the Factory. The asset now exists: it has a name, a symbol, a variant, and an initial admin.
+2. The issuer configures roles and policies on the asset and mints units to holders. The asset allows the mint only if the caller has the mint role and the recipient is allowed by policy.
+3. Holders who received those units can transfer them to other accounts. The asset allows each transfer only if the sender and the recipient are allowed by policy.
 
 ---
 
