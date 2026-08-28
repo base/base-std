@@ -28,3 +28,17 @@ _TODO — every scope defaults to `ALWAYS_ALLOW` at token creation unless overri
 ## Configuring policies
 
 _TODO_
+
+
+
+# Policies
+
+- What is a policy?
+- What problem does it solve?
+- Policy IDs
+- Policy scopes
+- Allowlist vs blocklist
+- Composite policies
+- How policies are shared
+- How policy administration works
+- Examples
