@@ -4,11 +4,10 @@ It answers:
 
 What is B20?
 Why does it exist?
-What problems does it solve?
-Where does it sit in Base?
-What is a B20 Asset?
-What are policies?
-What does a basic transaction look like?
+How does the Factory create an asset?
+How do roles and pause work?
+How do compliance checks integrate?
+Where does B20 sit in the Base stack?
 Where should I go next?
 
 Someone should be able to read just this and explain B20 at a high level.
@@ -65,174 +64,123 @@ A single standard also helps integrators and issuers. Wallets and apps integrate
 
 ---
 
-## Core Mental Model
+## Creating a B20 Asset
 
-Three services matter when you issue or use a B20. Each has one job. A fourth singleton, the Activation Registry, is a Base-operated safety switch that turns these features on; issuers and apps do not operate it.
+Every B20 token is created through the Factory, a singleton precompile. You submit `createB20` to a Base node the same way you submit any other contract call.
+
+```mermaid
+sequenceDiagram
+    participant Issuer
+    participant Factory
+    participant Token as B20 token
+
+    Issuer->>Factory: createB20(variant, salt, params, initCalls)
+    Factory->>Token: seal identity
+    Factory->>Token: initCalls (grantRole, updatePolicy, mint)
+    Factory-->>Issuer: token address
+```
+
+1. The issuer calls `createB20` with a variant, a salt, and creation parameters (name, symbol, initial admin, and variant-specific fields).
+2. The Factory assigns a deterministic address from `(variant, sender, salt)` and seals the token's identity.
+3. Optional `initCalls` run on the new token so the issuer can grant roles, attach policies, or mint in the same transaction.
+4. `createB20` returns. The Factory retains no ongoing access to the token.
+
+Choose **Asset** for general-purpose issuance, including RWAs, or **Stablecoin** for a fiat-pegged token with a fixed currency code. Both variants share roles, policies, and the ERC-20 surface. See [Assets](./concepts/assets.md).
+
+The Activation Registry is a Base-operated safety switch that turns Factory and token features on. Issuers and apps do not operate it.
+
+---
+
+## Configuring Roles
+
+Privileged operations on a token use [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control). Roles live on the token. They are not a separate registry.
+
+The admin grants and revokes roles with the standard AccessControl methods: `grantRole`, `revokeRole`, `renounceRole`, and `setRoleAdmin`. `DEFAULT_ADMIN_ROLE` is the top-level admin. It is the role required to grant other roles, attach policies, and set the supply cap.
+
+| Role | Gates |
+| --- | --- |
+| `DEFAULT_ADMIN_ROLE` | `grantRole`, `revokeRole`, `setRoleAdmin`, `updatePolicy`, `updateSupplyCap` |
+| `MINT_ROLE` | `mint` |
+| `BURN_ROLE` | `burn` |
+| `SEIZE_ROLE` | `seizeWithMemo` |
+| `PAUSE_ROLE` / `UNPAUSE_ROLE` | `pause` / `unpause` |
+| `METADATA_ROLE` | name, symbol, and contract URI updates |
+
+The Asset variant also has `OPERATOR_ROLE` for announcements and multiplier updates. See [Roles](./concepts/roles.md).
+
+Pause is per feature, not global. `PAUSE_ROLE` can pause any of four vectors: `TRANSFER`, `MINT`, `BURN`, and `SEIZE`. `UNPAUSE_ROLE` is a separate role, so the account that pauses does not have to be the account that resumes. `approve` is not pause-gated.
+
+Holder `transfer` is not role-gated. Anyone who holds units can transfer them, subject to pause and policy.
+
+---
+
+## Integrating Compliance Checks
+
+The Policy Registry is a singleton precompile that stores reusable allowlists, blocklists, and composite policies. The token does not keep membership lists. It stores which policy applies to an operation, then asks the registry whether the relevant account is allowed.
 
 ```mermaid
 flowchart LR
-    F[B20 Factory]
-    T[B20 token]
+    E[Policy engine]
+    A[Token admin]
     R[Policy Registry]
-    F -->|creates| T
-    T -->|consults| R
+    T[B20 token]
+    E -->|update membership| R
+    A -->|updatePolicy| T
+    T -->|isAuthorized| R
 ```
 
-The Factory creates tokens. Each token holds balances and configuration for one asset. The Policy Registry answers whether an account is allowed under a given policy.
+A compliance system connects as a **policy engine** by administering membership on the registry. The token admin binds that policy to a scope with `updatePolicy`. One policy can be attached to many tokens. The token never calls the engine; the engine writes to the registry, and the node reads `isAuthorized` when it executes the call.
 
-### B20 Factory
+### Transfer control path
 
-The Factory is a singleton precompile. Every B20 token is created through it. At creation you choose a variant: Asset, for general-purpose issuance including RWAs, or Stablecoin, for a fiat-pegged token with a fixed currency code.
-
-The Factory does not hold balances, assign roles, or decide who may transfer. It creates the token and retains no ongoing access.
-
-### B20 token
-
-The token is the asset. The issuer creates it through the Factory and maintains it. It holds balances and supply, and it exposes the ERC-20 surface plus administrative controls: mint, burn, pause, seize, and metadata.
-
-[Roles](./concepts/roles.md) live on the token. They answer who may call those privileged operations on this asset. They are not a separate registry.
-
-Asset and Stablecoin share this model. They differ in a few variant-specific fields, not in how issuance, roles, or policies work. See [Assets](./concepts/assets.md).
-
-### Policy Registry
-
-The Policy Registry is a singleton precompile that stores reusable authorization policies. The token does not keep membership lists. It stores which policy applies to an operation, then asks the registry whether the relevant account is allowed.
-
-The token owns which rule applies. The registry owns whether an account satisfies that rule. One policy can be attached to many tokens.
-
-See [Policies](./concepts/policies.md). For how a call moves through these services, see [How B20 Works](./architecture.md).
-
----
-
-## Bringing a B20 Asset into Use
-
-An issuer follows this sequence.
+You submit a transfer the same way you submit any other onchain call: as a transaction to a Base node, targeting the asset address.
 
 ```mermaid
 flowchart TD
-    subgraph s1 [1. Create]
-        direction LR
-        I1[Issuer] -->|createB20| F[Factory]
-    end
-    subgraph s2 [2. Configure and mint]
-        direction LR
-        I2[Issuer] -->|grantRole / updatePolicy| G[Configure]
-        I2 -->|mint| M[Mint]
-    end
-    s1 --> s2
+    U[User / Application]
+    N[Base node]
+    A[B20 Asset]
+    P[Pause check]
+    R[Policy Registry]
+    S[State + events]
+    U -->|transfer| N
+    N --> A
+    A --> P
+    P -->|sender and receiver| R
+    R --> S
 ```
 
-1. The issuer creates an asset through the Factory. The asset now exists: it has a name, a symbol, a variant, and an initial admin.
-2. The issuer configures roles and policies on the asset and mints units to holders. The asset allows the mint only if the caller has the mint role and the recipient is allowed by policy.
-3. Holders who received those units can transfer them to other accounts. The asset allows each transfer only if the sender and the recipient are allowed by policy.
+1. A wallet or application submits a transaction that calls `transfer` on the asset.
+2. The node executes the call. If `TRANSFER` is paused, the transaction reverts.
+3. The asset reads the policy IDs on `TRANSFER_SENDER_POLICY` (`from`) and `TRANSFER_RECEIVER_POLICY` (`to`), then asks the Policy Registry whether each account is authorized. `transferFrom` also checks `TRANSFER_EXECUTOR_POLICY` against `msg.sender`.
+4. If those checks pass, the node updates balances and emits `Transfer`. If a check fails, the transaction reverts and state does not change.
+
+Slots default to always-allow until the admin attaches a policy. `approve` is not policy-gated. See [Policies](./concepts/policies.md).
 
 ---
 
-## How a B20 Operation Works
+## B20 in the Stack
 
-Show one extremely simple transaction path.
+A B20 call uses the same submission path as any other contract call. The node runs shared precompile logic instead of per-token bytecode.
 
-Example:
+```mermaid
+flowchart TD
+    A[Application / Wallet / Backend]
+    I[B20 interface]
+    P[B20 precompiles]
+    X[Base execution]
+    S[Canonical state]
+    A -->|transaction| I
+    I --> P
+    P --> X
+    X --> S
+```
 
-User / Application
-       |
-       | transfer(...)
-       v
-   B20 Asset
-       |
-       v
-Authorization / Policy Checks
-       |
-       v
-State Transition
-       |
-       v
-Events
+- **Application-facing interface.** Wallets and apps call ERC-20-style functions at the asset address.
+- **B20 precompiles.** The Factory, each token, and the Policy Registry are node-native. Every asset shares the same logic.
+- **Base execution.** The node applies authorization, policy, and pause checks, then commits canonical state and events.
 
-Then explain:
-
-- applications submit a B20 operation
-- B20 evaluates the relevant authorization and policy rules
-- if valid, canonical state changes
-- events expose the resulting transition to downstream systems
-
-This prepares readers for architecture.md.
-
----
-
-## Example: Issuing and Transferring an Asset
-
-Use one example throughout the documentation.
-
-For example:
-
-> ACME creates `ACME-TBILL`, a token representing units of a treasury product.
-
-Walk through:
-
-1. ACME creates the asset.
-2. ACME configures the appropriate permissions.
-3. ACME attaches a holder eligibility policy.
-4. ACME issues 1,000 units to Alice.
-5. Alice transfers 100 units to Bob.
-6. B20 evaluates whether Bob satisfies the required policy.
-7. If allowed, balances are updated and the relevant events are emitted.
-
-The point isn't to show code.
-
-The point is to connect all the concepts introduced above.
-
----
-
-## B20 in the Base Stack
-
-Show where B20 sits.
-
-Application / Wallet / Backend
-            |
-            v
-       B20 Interface
-            |
-            v
-      B20 Precompiles
-            |
-            v
-      Base Execution
-            |
-            v
-      Canonical State
-
-Explain the separation between:
-
-- application-facing interface
-- B20 protocol functionality
-- underlying Base execution
-
-This should be enough context for readers before they enter architecture.md.
-
----
-
-## Who Builds Against B20?
-
-Very briefly introduce your three audiences.
-
-### Integrators
-
-Applications, issuers, wallets, backends, or other systems that interact with B20 assets.
-
-→ [Integrator Guide](./guides/integrators.md)
-
-### Indexers
-
-Systems that ingest B20 events and state to provide APIs, analytics, explorers, portfolio views, or other derived data.
-
-→ [Indexer Guide](./guides/indexers.md)
-
-### Implementers
-
-Engineers working on B20 execution, client support, precompiles, testing, upgrades, or protocol behavior.
-
-→ [Implementer Guide](./guides/implementers.md)
+[How B20 Works](./architecture.md) walks this path through the dispatcher, version resolution, and storage.
 
 ---
 
