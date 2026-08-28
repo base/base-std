@@ -93,69 +93,70 @@ The Activation Registry is a Base-operated safety switch that turns Factory and 
 
 ## Configuring Roles
 
-Privileged operations on a token use [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control). Roles live on the token. They are not a separate registry.
+B20 uses [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control) on the token to gate privileged features: mint, burn, seize, metadata, and the pause vectors (`TRANSFER`, `MINT`, `BURN`, `SEIZE`). Roles are not a separate registry.
 
-The admin grants and revokes roles with the standard AccessControl methods: `grantRole`, `revokeRole`, `renounceRole`, and `setRoleAdmin`. `DEFAULT_ADMIN_ROLE` is the top-level admin. It is the role required to grant other roles, attach policies, and set the supply cap.
+One `DEFAULT_ADMIN_ROLE` holder grants and revokes those roles. A privileged call checks the role first, then the matching pause vector. Holder `transfer` skips the role check; it still hits the `TRANSFER` pause vector and policy.
 
-| Role | Gates |
-| --- | --- |
-| `DEFAULT_ADMIN_ROLE` | `grantRole`, `revokeRole`, `setRoleAdmin`, `updatePolicy`, `updateSupplyCap` |
-| `MINT_ROLE` | `mint` |
-| `BURN_ROLE` | `burn` |
-| `SEIZE_ROLE` | `seizeWithMemo` |
-| `PAUSE_ROLE` / `UNPAUSE_ROLE` | `pause` / `unpause` |
-| `METADATA_ROLE` | name, symbol, and contract URI updates |
+The full role list and what each role gates is in [Roles](./concepts/roles.md). A grant-then-call looks like this:
 
-The Asset variant also has `OPERATOR_ROLE` for announcements and multiplier updates. See [Roles](./concepts/roles.md).
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Token as B20 token
+    participant Caller
 
-Pause is per feature, not global. `PAUSE_ROLE` can pause any of four vectors: `TRANSFER`, `MINT`, `BURN`, and `SEIZE`. `UNPAUSE_ROLE` is a separate role, so the account that pauses does not have to be the account that resumes. `approve` is not pause-gated.
+    Caller->>Token: mint(to, amount)
+    Token-->>Caller: revert AccessControlUnauthorizedAccount
 
-Holder `transfer` is not role-gated. Anyone who holds units can transfer them, subject to pause and policy.
+    Admin->>Token: grantRole(MINT_ROLE, Caller)
+    Caller->>Token: mint(to, amount)
+    Token-->>Caller: allowed
+```
+
+1. At creation, `initialAdmin` holds `DEFAULT_ADMIN_ROLE`.
+2. That admin grants operating roles such as `MINT_ROLE` and `PAUSE_ROLE`.
+3. A caller without the required role is rejected with `AccessControlUnauthorizedAccount`.
+4. A caller who holds the role still reverts with `ContractPaused` if that feature's pause vector is on.
+5. `PAUSE_ROLE` and `UNPAUSE_ROLE` are separate, so the account that pauses does not have to be the account that resumes.
 
 ---
 
 ## Integrating Compliance Checks
 
-The Policy Registry is a singleton precompile that stores reusable allowlists, blocklists, and composite policies. The token does not keep membership lists. It stores which policy applies to an operation, then asks the registry whether the relevant account is allowed.
+The Policy Registry is a global singleton precompile. It stores reusable allowlists, blocklists, and composite policies (union or intersect). Tokens do not keep membership lists.
+
+Each movement path consults its own policy scopes. `transfer` checks `TRANSFER_SENDER_POLICY` (`from`) and `TRANSFER_RECEIVER_POLICY` (`to`). `transferFrom` also checks `TRANSFER_EXECUTOR_POLICY` (`msg.sender`). `mint` checks `MINT_RECEIVER_POLICY` (`to`).
+
+You add a policy on the registry, then attach its ID to a scope with `updatePolicy`. One policy can be attached to many tokens or many scopes. A compliance system administers membership on the registry. The token never calls that system; the node reads `isAuthorized` when it executes the call.
+
+The full scope list is in [Policies](./concepts/policies.md). Attach-then-gate looks like this:
 
 ```mermaid
-flowchart LR
-    E[Policy engine]
-    A[Token admin]
-    R[Policy Registry]
-    T[B20 token]
-    E -->|update membership| R
-    A -->|updatePolicy| T
-    T -->|isAuthorized| R
+sequenceDiagram
+    participant Admin
+    participant Registry as Policy Registry
+    participant Token as B20 token
+    participant Alice
+
+    Admin->>Registry: createPolicy(ALLOWLIST)
+    Admin->>Token: updatePolicy(TRANSFER_RECEIVER_POLICY, id)
+    Alice->>Token: transfer(Bob)
+    Token->>Registry: isAuthorized(id, Bob)
+    Registry-->>Token: false
+    Token-->>Alice: revert PolicyForbids
+
+    Admin->>Registry: updateAllowlist(Bob)
+    Alice->>Token: transfer(Bob)
+    Token->>Registry: isAuthorized(id, Bob)
+    Registry-->>Token: true
+    Token-->>Alice: allowed
 ```
 
-A compliance system connects as a **policy engine** by administering membership on the registry. The token admin binds that policy to a scope with `updatePolicy`. One policy can be attached to many tokens. The token never calls the engine; the engine writes to the registry, and the node reads `isAuthorized` when it executes the call.
-
-### Transfer control path
-
-You submit a transfer the same way you submit any other onchain call: as a transaction to a Base node, targeting the asset address.
-
-```mermaid
-flowchart TD
-    U[User / Application]
-    N[Base node]
-    A[B20 Asset]
-    P[Pause check]
-    R[Policy Registry]
-    S[State + events]
-    U -->|transfer| N
-    N --> A
-    A --> P
-    P -->|sender and receiver| R
-    R --> S
-```
-
-1. A wallet or application submits a transaction that calls `transfer` on the asset.
-2. The node executes the call. If `TRANSFER` is paused, the transaction reverts.
-3. The asset reads the policy IDs on `TRANSFER_SENDER_POLICY` (`from`) and `TRANSFER_RECEIVER_POLICY` (`to`), then asks the Policy Registry whether each account is authorized. `transferFrom` also checks `TRANSFER_EXECUTOR_POLICY` against `msg.sender`.
-4. If those checks pass, the node updates balances and emits `Transfer`. If a check fails, the transaction reverts and state does not change.
-
-Slots default to always-allow until the admin attaches a policy. `approve` is not policy-gated. See [Policies](./concepts/policies.md).
+1. Create an allowlist or blocklist on the registry.
+2. The token admin binds that policy ID to a scope.
+3. On the next matching call, the token asks the registry whether the relevant account is authorized.
+4. Authorized: the call continues. Denied: the call reverts with `PolicyForbids`.
+5. Unset scopes default to always-allow. `approve` is not policy-gated. You submit these calls the same way you submit any other transaction to a Base node.
 
 ---
 

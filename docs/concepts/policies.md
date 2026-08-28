@@ -4,7 +4,18 @@
 
 ## Policy scopes
 
-_TODO — per-actor scopes gating transfer/mint operations._
+Each movement path consults its own scopes. The token stores a policy ID per scope and asks the Policy Registry `isAuthorized(policyId, account)`.
+
+| Scope | Consulted on | Account |
+| --- | --- | --- |
+| `TRANSFER_SENDER_POLICY` | `transfer`, `transferFrom` | `from` |
+| `TRANSFER_RECEIVER_POLICY` | `transfer`, `transferFrom` | `to` |
+| `TRANSFER_EXECUTOR_POLICY` | `transferFrom` only | `msg.sender` |
+| `MINT_RECEIVER_POLICY` | `mint` | `to` |
+| `SEIZE_HOLDER_POLICY` | `seizeWithMemo` | `from` (seizable when unauthorized) |
+| `SEIZE_RECEIVER_POLICY` | `seizeWithMemo` | `to` |
+
+A denied check reverts with `PolicyForbids`. `approve` is not policy-gated.
 
 ## The PolicyRegistry
 
