@@ -30,43 +30,38 @@ B20 is Base's native token standard for issuing and managing programmable assets
 
 The standard also includes compliance and administrative controls. Issuers can configure roles and permissions, attach policies, mint and burn supply, pause operations, and perform other administrative actions that regulated-asset workflows typically require.
 
-B20 runs as precompiles in the Base node, not as per-token Solidity. Applications call ERC-20-style interfaces; the execution layer runs the shared B20 logic natively. Base upgrades that logic through hardforks, so issuers and holders get consistent behavior and native execution across all B20 assets.
+B20 runs as precompiles in the Base node, not as per-token Solidity. Wallets, issuers, and apps call ERC-20-style interfaces; the node runs the shared B20 logic natively. Base upgrades that logic through hardforks, so every caller gets consistent behavior and native execution across all B20 assets.
 
 ### At a Glance
 
-Optional small diagram:
+```mermaid
+flowchart TD
+    W[Wallets]
+    I[Issuers]
+    A[Apps]
+    B[B20 interface]
+    N[Node]
+    P[Precompile]
+    L[Shared logic]
+    W --> B
+    I --> B
+    A --> B
+    B -->|call| N
+    N --> P
+    P --> L
+```
 
-Application
-    |
-    v
-B20 Interfaces
-    |
-    v
-B20 Precompiles
-    |
-    v
-Base Execution Layer
-
-One sentence explaining that applications interact with familiar contract-style interfaces while execution happens through native B20 functionality.
+You call a B20 asset the same way you call any other contract: through its interface at the asset address. Every B20 asset uses that same interface and the same precompile logic, so integrators have one source of truth.
 
 ---
 
 ## Why B20?
 
-Explain the problem B20 is trying to solve.
+Real-world asset (RWA) issuance onchain needs a shared token standard with compliance built into the asset. ERC-20 covers balances, transfers, and approvals. Regulated assets also need eligibility checks, roles, mint and burn, pausing, and other administrative controls. Issuers rebuild those primitives for almost every tokenized asset.
 
-Potential themes:
+Issuers who implement that stack themselves repeat the same logic, diverge in behavior, and force every wallet and app to integrate a custom token. B20 is the alternative: you create a B20 asset and configure its roles and policies instead of writing and maintaining a one-off token. Compliance is a first-class primitive, not an add-on each issuer designs around transfers.
 
-- Tokenized assets repeatedly need the same primitives.
-- Implementing these independently creates inconsistency and duplicated engineering effort.
-- Assets may require richer controls than basic token transfers.
-- Native primitives can provide standardized behavior and stronger ecosystem interoperability.
-
-Avoid going deep into implementation rationale here.
-
-The goal is to answer:
-
-> Why would someone use B20 instead of building everything themselves?
+A single standard also helps integrators and issuers. Wallets and apps integrate against one interface. Issuers can use shared services, such as oracles, without designing a new integration for each asset.
 
 ---
 
