@@ -67,90 +67,65 @@ A single standard also helps integrators and issuers. Wallets and apps integrate
 
 ## Core Mental Model
 
-Introduce the main B20 concepts at the highest level.
+Three services matter when you issue or use a B20. Each has one job. A fourth singleton, the Activation Registry, is a Base-operated safety switch that turns these features on; issuers and apps do not operate it.
 
-### Assets
+```mermaid
+flowchart LR
+    F[B20 Factory]
+    T[B20 token]
+    R[Policy Registry]
+    F -->|creates| T
+    T -->|consults| R
+```
 
-A B20 Asset represents an issued onchain asset.
+The Factory creates tokens. Each token holds balances and configuration for one asset. The Policy Registry answers whether an account is allowed under a given policy.
 
-Explain in a few sentences:
+### B20 Factory
 
-- balances
-- supply
-- asset configuration
-- administrative capabilities
+The Factory is a singleton precompile. Every B20 token is created through it. At creation you choose a variant: Asset, for general-purpose issuance including RWAs, or Stablecoin, for a fiat-pegged token with a fixed currency code.
 
-Do not describe every method.
+The Factory does not hold balances, assign roles, or decide who may transfer. It creates the token and retains no ongoing access.
 
-### Roles
+### B20 token
 
-Roles determine who is authorized to perform privileged operations.
+The token is the asset. The issuer creates it through the Factory and maintains it. It holds balances and supply, and it exposes the ERC-20 surface plus administrative controls: mint, burn, pause, seize, and metadata.
 
-Examples might include:
+[Roles](./concepts/roles.md) live on the token. They answer who may call those privileged operations on this asset. They are not a separate registry.
 
-- issuing
-- administrative changes
-- seizing
-- managing policies
+Asset and Stablecoin share this model. They differ in a few variant-specific fields, not in how issuance, roles, or policies work. See [Assets](./concepts/assets.md).
 
-Link to deeper documentation.
+### Policy Registry
 
-### Policies
+The Policy Registry is a singleton precompile that stores reusable authorization policies. The token does not keep membership lists. It stores which policy applies to an operation, then asks the registry whether the relevant account is allowed.
 
-Policies define conditions that must be satisfied for certain operations.
+The token owns which rule applies. The registry owns whether an account satisfies that rule. One policy can be attached to many tokens.
 
-Example mental model:
-
-Transfer
-   |
-   v
-Policy Evaluation
-   |
-   +--> Allowed
-   |
-   +--> Rejected
-
-Explain that policies allow asset behavior to encode eligibility or transfer requirements without explaining every policy type yet.
-
-### Native Functionality
-
-Explain briefly that B20 functionality is implemented through Base precompiles and exposed through contract-compatible interfaces.
-
-Do not explain dispatcher/version resolution yet.
-
-Link to architecture.md.
+See [Policies](./concepts/policies.md). For how a call moves through these services, see [How B20 Works](./architecture.md).
 
 ---
 
 ## The Lifecycle of a B20 Asset
 
-Give readers one simple end-to-end sequence.
+An issuer brings a B20 asset into use through this sequence.
 
-Create Asset
-    |
-    v
-Configure Roles / Policies
-    |
-    v
-Issue Units
-    |
-    v
-Transfer / Manage
-    |
-    v
-Administrative Actions
+```mermaid
+flowchart TD
+    C["Create Asset<br/>Issuer through Factory"]
+    G["Configure Roles / Policies<br/>Admin"]
+    IU["Issue Units<br/>Issuer"]
+    T["Transfer<br/>Holders"]
+    A["Administrative Actions<br/>Admin"]
+    C --> G
+    G --> IU
+    IU --> T
+    T --> A
+```
 
-Then describe each step in one sentence.
-
-For example:
-
-1. An issuer creates an asset.
-2. The issuer configures who can administer it and what policies govern it.
-3. Units are issued to holders.
-4. Holders interact with the asset subject to its configured rules.
-5. Authorized parties can perform administrative operations when required.
-
-This section should establish the lifecycle without teaching the API.
+1. An issuer creates an asset through the Factory. The asset now exists: it has a name, a symbol, a variant, and an initial admin.
+2. The admin assigns operating roles and attaches the policies that govern the asset.
+3. The issuer mints new units on the asset to holder accounts. The asset allows the mint only if the caller has the mint role and the recipient is allowed by policy.
+4. Holders who received those units can transfer them to other accounts. The asset allows each transfer only if the sender and the recipient are allowed by policy.
+5. The admin can pause the asset, seize units, burn supply, or update metadata.
 
 ---
 
