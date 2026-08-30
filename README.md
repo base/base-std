@@ -117,6 +117,29 @@ ActivationRegistry, (2) the precompile isn't deployed at its canonical
 address on the forked chain, or (3) the Rust impl's storage layout /
 behavior diverges from the Solidity reference at the asserted slot.
 
+### Reading CI checks
+
+base-std CI has two kinds of checks, and the distinction tells you whether a red
+check is yours to fix:
+
+- **base-std correctness (blocking).** `Build`, `Test`, `Format`, the coverage
+  checks, and CodeQL verify the library and the Solidity reference suite (run
+  against the mocks — "reference mode"). These are required; a failure is a real
+  base-std bug to fix before merge.
+- **Conformance (advisory, never blocking).** The `Conformance: …` jobs run the
+  same suite against the live Rust precompiles to check that base/base matches
+  the reference. A failure means base/base diverges — base/base's job to catch
+  up, not a problem with your PR. These never show a red check; the result is
+  posted as a PR comment instead.
+  - `Conformance: shipped base/base` runs on every PR against the published
+    base-anvil build we ship (fast; Beryl at launch). It should pass.
+  - `Conformance: base/base main` runs on a schedule against bleeding-edge
+    base/base (built from source). Divergences there are an expected early
+    warning during base/base development.
+
+Rule of thumb: **a red check is always something to fix; conformance divergences
+arrive as a PR comment, never a red check.**
+
 ## License
 
 MIT

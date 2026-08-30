@@ -1,0 +1,137 @@
+name: Conformance (shipped base/base)
+
+# ADVISORY, NEVER BLOCKING. Runs the base-std unit suite against the live Rust
+# precompiles from the *published* base-anvil build we ship (Beryl v1.1.0 at
+# launch) — no from-source compile, so it's fast enough for every PR. A failure
+# means base/base diverges from the base-std Solidity reference, not that this
+# PR is wrong; the signal is delivered as a PR comment, never a red check.
+# The "against base/base main" early-warning lives in conformance-main.yml.
+
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  # Published base-anvil release to test against. Rolling `nightly` always
+  # points at the latest shipped build (Beryl at launch); pin to a specific
+  # `nightly-<sha>` here if you ever need a fixed target.
+  BASE_ANVIL_RELEASE: nightly
+
+jobs:
+  conformance-shipped:
+    name: "Conformance: shipped base/base (advisory)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Advisory: never fails the run. Divergences are reported in a PR comment.
+    continue-on-error: true
+    steps:
+      - name: Harden the runner (audit egress)
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout base-std
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 1
+          submodules: recursive
+
+      - name: Download published base-anvil binaries
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/base-anvil-bin"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/foundry.tar.gz" \
+            "https://github.com/base/base-anvil/releases/download/${BASE_ANVIL_RELEASE}/foundry_nightly_linux_amd64.tar.gz"
+          tar -xzf "$dir/foundry.tar.gz" -C "$dir"
+          echo "ANVIL_BIN=$dir/anvil" >> "$GITHUB_ENV"
+          echo "FORGE_BIN=$dir/forge" >> "$GITHUB_ENV"
+          "$dir/anvil" --version
+          # Record the base/base commit this build reproduces, for the report.
+          base_sha=$(gh release view "$BASE_ANVIL_RELEASE" --repo base/base-anvil --json body --jq .body \
+            | grep -oiE 'base/base[^0-9a-f]+[0-9a-f]{40}' | grep -oiE '[0-9a-f]{40}' | head -1 || true)
+          echo "BASE_SHA=${base_sha:-unknown}" >> "$GITHUB_ENV"
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.13'
+
+      - name: Set up fork-test runner venv
+        shell: bash
+        run: make smoke-setup PYTHON=python3
+
+      - name: Run conformance suite (advisory)
+        shell: bash
+        run: |
+          set +e
+          ANVIL_LOG="$RUNNER_TEMP/anvil.log" make fork-tests 2>&1 | tee "$RUNNER_TEMP/out.txt"
+          # Advisory: do not fail the check. The PR comment carries the signal.
+          exit 0
+
+      - name: Report results (summary + PR comment)
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          out="$RUNNER_TEMP/out.txt"
+          passed=$(grep -c '\[PASS\]' "$out" 2>/dev/null || true); passed=${passed:-0}
+          failed=$(grep -c '\[FAIL' "$out" 2>/dev/null || true); failed=${failed:-0}
+          marker="<!-- conformance-shipped -->"
+
+          if [ ! -s "$out" ] || [ "$((passed + failed))" -eq 0 ]; then
+            body="${marker}
+          ### Conformance (shipped base/base): did not run
+          The download or setup step failed before any tests executed — this is a CI/infra issue, not a divergence. See the [run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          elif [ "$failed" -eq 0 ]; then
+            body="${marker}
+          ### ✅ Conformance (shipped base/base): all ${passed} passed
+          The shipped base-anvil build (base/base \`${BASE_SHA}\`) matches the base-std reference. _Advisory — never blocks._"
+          else
+            failing=$(grep '\[FAIL' "$out" | sed 's/\x1B\[[0-9;]*m//g' \
+              | sed 's/^\[FAIL: \(.*\)\] \(.*\) (runs.*$/- **\2**: `\1`/' | sort -u || true)
+            body="${marker}
+          ### ⚠️ Conformance (shipped base/base): ${failed} diverged, ${passed} passed
+
+          Ran the base-std suite against the live Rust precompiles from the shipped base-anvil build (base/base \`${BASE_SHA}\`). These are points where **base/base diverges from the base-std Solidity reference** — base/base needs to catch up, *not* a problem with this PR. **Advisory: does not block merge.**
+
+          <details><summary>Diverging tests</summary>
+
+          ${failing}
+
+          </details>"
+          fi
+
+          { echo "## Conformance (shipped base/base)"; echo ""; echo "$body" | sed '1d'; } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            pr="${{ github.event.pull_request.number }}"; repo="${{ github.repository }}"
+            existing=$(gh api "repos/${repo}/issues/${pr}/comments" \
+              --jq ".[] | select(.body | startswith(\"${marker}\")) | .id" | head -1)
+            if [ -n "$existing" ]; then
+              gh api "repos/${repo}/issues/comments/${existing}" -X PATCH --field body="$body" > /dev/null
+            else
+              gh api "repos/${repo}/issues/${pr}/comments" --field body="$body" > /dev/null
+            fi
+          fi
+
+      - name: Upload anvil log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: conformance-shipped-anvil-log
+          path: ${{ runner.temp }}/anvil.log
+          if-no-files-found: ignore
