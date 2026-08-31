@@ -7,8 +7,8 @@ New to B20?
 
 Building something?
 
-- [Integrator Guide](guides/integrators.md)
-- [Indexer Guide](guides/indexers.md)
+- [Seize a holder's B20 balance](guides/seizeing-assets.md)
+- [Schedule a UI multiplier change](guides/scheduling-multiplier-changes.md)
 
 Looking for exact technical details?
 

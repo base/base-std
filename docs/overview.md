@@ -187,11 +187,8 @@ If you want to understand how B20 works internally:
 
 If you are integrating B20:
 
-→ [Integrator Guide](./guides/integrators.md)
-
-If you are indexing B20:
-
-→ [Indexer Guide](./guides/indexers.md)
+→ [Seize a holder's B20 balance](./guides/seizeing-assets.md)
+→ [Schedule a UI multiplier change](./guides/scheduling-multiplier-changes.md)
 
 For exact interfaces and protocol definitions:
 
