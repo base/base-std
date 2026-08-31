@@ -103,40 +103,91 @@ Checks include activation, role, pause, and policy. Activation does not hide the
 ## 2. How a Token Is Created
 
 ### 2.1 Creating a Token
-- Every token comes from one entrypoint on the Factory: `createB20(variant, salt, params, initCalls)`.
-- The Factory computes the token's address deterministically, seals its identity (name, symbol, decimals, etc.), emits `B20Created`, grants the initial admin role (or skips it, to create an adminless token), then runs `initCalls` against the new token before returning its address.
-- Once `createB20` returns, the Factory has no further access to the token — creation is a one-shot, one-transaction event.
+
+A B20 token can only be created through the Factory. The single entrypoint is `createB20(variant, salt, params, initCalls)`.
+
+The caller supplies a variant (Asset or Stablecoin), a salt, and `params` that carry the token's metadata: name, symbol, decimals, and variant-specific fields. `initCalls` is optional. When present, it is a list of bootstrap calls the Factory runs on the new token in the same transaction.
+
+The Factory computes the token's address deterministically from `(variant, sender, salt)`, then checks that nothing already exists there. If the address is occupied, `createB20` reverts with `TokenAlreadyExists`.
+
+If the address is empty, the Factory plants a single `0xef` byte as the account's bytecode. B20 tokens are not EVM contracts, so they do not carry traditional bytecode. The node never interprets that stub: it routes by address, as described in [§1.2](#12-b20s-precompiles). `0xef` is the [EIP-3541](https://eips.ethereum.org/EIPS/eip-3541) reserved prefix. Ordinary `CREATE` and `CREATE2` cannot produce it. An address with the `0xB2` prefix and that stub can only have come from the Factory.
+
+```mermaid
+flowchart TD
+    A["createB20(variant, salt, params, initCalls)"] --> B["Compute address from (variant, sender, salt)"]
+    B --> C{Address already occupied?}
+    C -->|yes| D["Revert TokenAlreadyExists"]
+    C -->|no| E["Plant 0xef bytecode stub"]
+    E --> F[Seal identity]
+    F --> G[Emit B20Created]
+    G --> H[Grant initial admin or skip]
+    H --> I[Run initCalls]
+    I --> J[Return token address]
+```
+
+The Factory then seals the token's identity — name, symbol, decimals, and variant-specific fields — emits `B20Created`, and grants the initial admin role. Passing `address(0)` as the initial admin skips that grant and creates an adminless token. It then runs `initCalls` against the new token and returns the token's address.
+
+Once `createB20` returns, the Factory has no further access to the token. Creation is a one-shot, one-transaction event.
 
 ### 2.2 Recognizing a B20 Token
-- The address itself encodes the answer: `0xB2` prefix + variant byte + `keccak256(sender, salt)` suffix. `isB20(address)` reads that encoding directly — no registry lookup needed.
-- This is also how routing works after creation: since token addresses can't be pre-registered, the node resolves them through a dynamic lookup that decodes the variant straight from the address and dispatches to the right logic (Asset vs Stablecoin) on the fly.
-- Before a token is created, its address behaves like any other unregistered address — calling it is a no-op, the same empty-account behavior described in §1.1.
+
+Token addresses cannot be entries in the node's static precompile table. They are created at runtime, so the node recognizes them by reading the address and the account's bytecode.
+
+The address layout is a `0xB2` prefix (byte `[0]` is `0xB2`, bytes `[1:9]` are zero), a variant byte at position `[10]`, and a suffix derived from `keccak256(sender, salt)`. `isB20(address)` reads that prefix directly. It does not consult a registry.
+
+`isB20` is prefix-only, so it can return true for an address the Factory has not created yet. `isB20Initialized` is the stronger check: the address bears the `0xB2` prefix and the `0xef` stub the Factory planted in [§2.1](#21-creating-a-token).
+
+Dynamic routing uses both checks. On every call, the node asks: does this address start with `0xB2`, and is the account bytecode the `0xef` stub? If either check fails, the target is not a live B20. The call follows the ordinary empty-account or regular-EVM path described in [§1.1](#11-normal-contracts-vs-precompiles).
+
+If both checks pass, the node decodes the variant from address byte `[10]` and dispatches to the matching native logic. Asset (`0x00`) runs Asset logic. Stablecoin (`0x01`) runs Stablecoin logic.
+
+```mermaid
+flowchart TD
+    A[Call arrives at address] --> B{"Starts with 0xB2<br/>and bytecode is 0xef?"}
+    B -->|no| C[Empty account or regular EVM]
+    B -->|yes| D{Variant byte at address 10}
+    D -->|Asset 0x00| E[Asset logic]
+    D -->|Stablecoin 0x01| F[Stablecoin logic]
+```
+
+Before a token is created, its predicted address matches the `0xB2` prefix but has no stub. Calling it is a no-op. After `createB20` returns, the `0xef` stub is what flips the address from "looks like a B20" to "is a live B20," and routing begins.
 
 ## 3. How B20 Evolves
 
-### 3.1 Protocol Upgrades
-- B20 changes ship as part of hardforks (e.g. Beryl → Cobalt) — the same mechanism that gates any other protocol-level change.
-- A hardfork can introduce an entirely new precompile (the Activation Registry itself only exists from Beryl onward) or a new logic version for an existing one.
+B20 introduces new changes through protocol upgrades. On Base, those upgrades are hardforks: moments when consensus itself changes. For B20, a hardfork is when the protocol can update the logic that runs at a specific precompile address, or introduce a new precompile entirely.
 
-### 3.2 Logic Versions
-- Each precompile's logic is versioned. Once a version ships, it's frozen forever — self-contained, with no shared mutable state or traits across versions.
-- Why: editing logic in place at a fixed address would change execution for historical blocks too, breaking replay from genesis. Freezing is what preserves consensus.
+### 3.1 Protocol Upgrades
+
+Base ships protocol changes as hardforks (for example Beryl → Cobalt). That is the same gate that any other consensus change uses. A B20 hardfork can do one of two things:
+
+- Introduce a new precompile. The Activation Registry itself exists only from Beryl onward.
+- Update the logic that runs at a specific precompile address, by shipping a new logic version.
+
+Callers still hit the same address. What changes is which native implementation the node runs for that address after the fork.
+
+### 3.2 Execution Consensus
+
+Every hardfork must preserve execution consensus with every earlier hardfork. Logic that ran at Beryl must still run as Beryl logic after Cobalt ships a different version. The code at each hardfork is fixed: later forks add new versions; they do not rewrite the old ones.
+
+That invariant is what makes genesis sync work. A node that replays every block from genesis must arrive at the same state as a node that has been live the whole time. If Beryl-era logic were edited in place at the precompile's fixed address, historical blocks would execute differently, and the replayed chain would diverge.
+
+Each shipped version is therefore frozen: self-contained, with no shared mutable state or traits across versions.
+
+```mermaid
+flowchart LR
+    subgraph beryl [Beryl blocks]
+        B[Beryl logic]
+    end
+    subgraph cobalt [Cobalt blocks]
+        C[Cobalt logic]
+    end
+    G[Sync from genesis] --> B
+    B --> C
+    C --> S[Same state as a live node]
+```
 
 ### 3.3 Fork / Version Resolution
-- A hardfork resolves to a specific logic version (fork → version enum → frozen implementation) — resolved once per call, never "whatever is current."
-- A call reverts if no version is resolved for the active fork (calling logic that doesn't exist yet), rather than silently falling back to a default.
 
-### 3.4 Adding New Functions
-- New functionality ships as a new frozen version alongside the old ones — never by editing an existing version in place.
-- Additive-only guarantee: a hardfork can add selectors, events, and errors; it never removes or changes ones that already shipped.
+A hardfork resolves to a specific logic version: fork → version enum → frozen implementation. The node resolves that mapping once per call. It never picks "whatever is current." A Beryl block always runs Beryl logic, even after Cobalt has shipped.
 
-### 3.5 ABI Evolution
-- The logic interface itself is append-only: new versions may add methods, never remove or change existing signatures.
-- Deprecated symbols are kept, not deleted (e.g. `burnBlocked`, the instant `updateMultiplier`) — old callers keep working unchanged.
-
-### 3.6 Historical Execution
-- Old transactions replay deterministically: the dispatcher resolves the version that was active *at that block's fork*, not "current" logic — so replaying history always re-executes the version that was live at the time.
-
-### 3.7 Backwards Compatibility
-- Nothing that already shipped changes meaning — existing selectors, events, and errors keep their exact semantics across every later fork.
-- Consumers integrated against an old version keep working after a new version ships alongside it. They simply don't get new capabilities until they adopt the new ABI surface.
+A call reverts if no version is resolved for the active fork — for example, calling logic that does not exist yet. There is no silent fallback to a default version.
