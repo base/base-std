@@ -138,20 +138,18 @@ sequenceDiagram
 
 
 
-Once there are zero admins, `grantRole`, `revokeRole`, and `setRoleAdmin` revert for every role. Custom admin chains freeze too. There is no path back. `updatePolicy` and `updateSupplyCap` become permanently unreachable. Functions gated by other roles keep working. A `METADATA_ROLE` holder can still update name, symbol, and URI.
+Once there are zero admins, `grantRole`, `revokeRole`, and `setRoleAdmin` revert for every role. Custom admin chains freeze too. `updatePolicy` and `updateSupplyCap` become permanently unreachable. A `METADATA_ROLE` holder can still update name, symbol, and URI.
 
 #### 2.6.2 A single capability
 
-There is no dedicated retire call. To close minting while keeping pause, metadata, policy, and other roles under admin control, compose `revokeRole` and `setRoleAdmin`:
+To close minting, compose `revokeRole` and `setRoleAdmin`:
 
 1. Call `revokeRole(MINT_ROLE, holder)` for every current `MINT_ROLE` holder.
 2. Call `setRoleAdmin(MINT_ROLE, MINT_ROLE)`. The role becomes its own admin.
 
-After this, granting `MINT_ROLE` requires holding `MINT_ROLE`. Nobody does, so nobody can grant it again. The grant check does not fall back to `DEFAULT_ADMIN_ROLE`. The admin that ran these calls cannot undo them. Undo would need `MINT_ROLE`'s current admin, which is now `MINT_ROLE` itself.
+A holder left in place keeps minting and can still grant `MINT_ROLE` to others. They are then the only administrators of that role.
 
-Every existing holder must be revoked. A holder left in place keeps minting and can still grant `MINT_ROLE` to others. They are then the only administrators of that role.
-
-The same two steps retire any operating role. `DEFAULT_ADMIN_ROLE` and every other role stay fully functional. There is no dedicated event. The call emits the ordinary `RoleAdminChanged(role, previousAdminRole, role)`. Monitoring for a permanent retirement means watching for `newAdminRole == role`.
+The same two steps retire any operating role. The call emits `RoleAdminChanged(role, previousAdminRole, role)`. Watch for `newAdminRole == role`.
 
 ```mermaid
 sequenceDiagram
@@ -162,8 +160,6 @@ sequenceDiagram
     Token-->>Admin: RoleRevoked
     Admin->>Token: setRoleAdmin(MINT_ROLE, MINT_ROLE)
     Token-->>Admin: RoleAdminChanged(MINT_ROLE, DEFAULT_ADMIN_ROLE, MINT_ROLE)
-    Admin->>Token: grantRole(MINT_ROLE, anyone)
-    Token-->>Admin: revert AccessControlUnauthorizedAccount
 ```
 
 
