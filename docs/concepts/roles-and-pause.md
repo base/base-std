@@ -36,7 +36,7 @@ Two functions always require `DEFAULT_ADMIN_ROLE`: `updatePolicy` and `updateSup
 | `OPERATOR_ROLE`      | Asset-only: `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, deprecated `updateMultiplier` |
 
 
-`OPERATOR_ROLE` exists only on Asset. See [Token Types](assets.md). `approve` is not role-gated. Holder `transfer` is not role-gated. A holder can always move their own balance, subject to pause and policy.
+`OPERATOR_ROLE` exists only on Asset. See [Token Types](token-types.md). `approve` is not role-gated. Holder `transfer` is not role-gated. A holder can always move their own balance, subject to pause and policy.
 
 ### 2.3 Granting and revoking
 

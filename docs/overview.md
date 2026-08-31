@@ -70,7 +70,7 @@ sequenceDiagram
 3. Optional `initCalls` run on the new token so the issuer can grant roles, attach policies, or mint in the same transaction.
 4. `createB20` returns. The Factory retains no ongoing access to the token.
 
-Choose **Asset** for general-purpose issuance, including RWAs, or **Stablecoin** for a fiat-pegged token with a fixed currency code. Both variants share roles, policies, and the ERC-20 surface. See [Assets](./concepts/assets.md).
+Choose **Asset** for general-purpose issuance, including RWAs, or **Stablecoin** for a fiat-pegged token with a fixed currency code. Both variants share roles, policies, and the ERC-20 surface. See [Token Types](./concepts/token-types.md).
 
 The Activation Registry is a Base-operated safety switch that turns Factory and token features on. Issuers and apps do not operate it.
 

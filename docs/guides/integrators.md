@@ -12,7 +12,7 @@ _TODO_
 
 ## Reading assets
 
-_TODO — see [Assets](../concepts/assets.md) for the underlying model._
+_TODO — see [Token Types](../concepts/token-types.md) for the underlying model._
 
 ## Submitting transactions
 
