@@ -37,7 +37,7 @@ scheduled `updateUIMultiplier(uint256,uint256)`.
 
 Replace administrative balance removal with `seizeWithMemo(from, treasury, amount, memo)`, then call
 `burn(amount)` if you still need to destroy supply. Seize is opt-in per token: it has no effect
-until the issuer sets `SEIZE_HOLDER_POLICY`.
+until the issuer sets `SEIZE_EXEMPT_POLICY`.
 
 #### PolicyRegistry integrators
 

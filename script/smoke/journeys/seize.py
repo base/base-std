@@ -1,7 +1,7 @@
 """B20 seize smoketest — the Cobalt `seizeWithMemo` path.
 
 Exercises the transfer-based seize surface added at Cobalt (V2): the dedicated
-`SEIZE_ROLE`, the `SEIZE_HOLDER_POLICY` membership gate (an account is seizable when
+`SEIZE_ROLE`, the `SEIZE_EXEMPT_POLICY` membership gate (an account is seizable when
 it is NOT authorized by that policy), `seizeWithMemo` (`Transfer` -> `Memo` -> `Seized`,
 supply-preserving because seize is a reassignment, not a burn), and the `SEIZE` pause
 vector — plus the gates that must reject (`AccountNotSeizable`, role,
@@ -11,7 +11,7 @@ receiver policy on `to`, and the `SEIZE_RECEIVER_POLICY` gate on `to` (mirrors
 authorized).
 
 Fork-gated: the whole surface is Cobalt-only. The journey probes the
-`SEIZE_HOLDER_POLICY()` getter and cleanly SKIPS on a pre-Cobalt chain (where the
+`SEIZE_EXEMPT_POLICY()` getter and cleanly SKIPS on a pre-Cobalt chain (where the
 seize selectors do not exist) — the same "chain/fork state, not a contract defect"
 stance as the `multiplier` journey and the activation preflight.
 
@@ -45,21 +45,21 @@ def _setup(c: Chain):
 
 
 def _is_cobalt(c: Chain, tok) -> bool:
-    """Cobalt probe: the `SEIZE_HOLDER_POLICY()` getter only resolves on the V2 wire surface.
+    """Cobalt probe: the `SEIZE_EXEMPT_POLICY()` getter only resolves on the V2 wire surface.
 
     On a pre-Cobalt (Beryl / V1) chain the selector is unknown and the call reverts, so the seize
     surface is absent and the journey opts out.
     """
     try:
-        scope = tok.functions.SEIZE_HOLDER_POLICY().call()
+        scope = tok.functions.SEIZE_EXEMPT_POLICY().call()
     except (ContractLogicError, BadFunctionCallOutput):
         return False
-    return scope == config.SEIZE_HOLDER_POLICY
+    return scope == config.SEIZE_EXEMPT_POLICY
 
 
 def _journey(c: Chain, tok) -> None:
-    step(1, "getters: SEIZE_HOLDER_POLICY(), SEIZE_RECEIVER_POLICY() and SEIZE_ROLE() match the keccak constants")
-    c.assert_eq(tok.functions.SEIZE_HOLDER_POLICY().call(), config.SEIZE_HOLDER_POLICY, "SEIZE_HOLDER_POLICY scope")
+    step(1, "getters: SEIZE_EXEMPT_POLICY(), SEIZE_RECEIVER_POLICY() and SEIZE_ROLE() match the keccak constants")
+    c.assert_eq(tok.functions.SEIZE_EXEMPT_POLICY().call(), config.SEIZE_EXEMPT_POLICY, "SEIZE_EXEMPT_POLICY scope")
     c.assert_eq(
         tok.functions.SEIZE_RECEIVER_POLICY().call(), config.SEIZE_RECEIVER_POLICY, "SEIZE_RECEIVER_POLICY scope"
     )
@@ -71,9 +71,9 @@ def _journey(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), config.amt(1000, 18), "alice balance")
     c.assert_eq(tok.functions.totalSupply().call(), config.amt(1010, 18), "total supply")
 
-    step(3, "seizable setup: blocklist policy on SEIZE_HOLDER_POLICY, block alice (alice becomes seizable)")
+    step(3, "seizable setup: blocklist policy on SEIZE_EXEMPT_POLICY, block alice (alice becomes seizable)")
     pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_BLOCKLIST)
-    c.send(tok.functions.updatePolicy(config.SEIZE_HOLDER_POLICY, pid), c.deployer)
+    c.send(tok.functions.updatePolicy(config.SEIZE_EXEMPT_POLICY, pid), c.deployer)
     c.send(c.policy.functions.updateBlocklist(pid, True, [c.ALICE]), c.deployer)
     c.assert_eq(c.policy.functions.isAuthorized(pid, c.ALICE).call(), False, "alice not authorized (seizable)")
     c.assert_eq(c.policy.functions.isAuthorized(pid, c.BOB).call(), True, "bob authorized (not seizable)")
@@ -198,7 +198,7 @@ def run(c: Chain) -> None:
     log("seize: starting")
     tok = _setup(c)
     if not _is_cobalt(c, tok):
-        skip("Asset does not expose SEIZE_HOLDER_POLICY() — chain is pre-Cobalt (no seize surface)")
+        skip("Asset does not expose SEIZE_EXEMPT_POLICY() — chain is pre-Cobalt (no seize surface)")
     ok("chain is Cobalt-capable (seize surface present)")
     _journey(c, tok)
     _edges(c, tok)

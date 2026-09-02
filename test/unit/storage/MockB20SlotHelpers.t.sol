@@ -226,16 +226,16 @@ contract MockB20SlotHelpersTest is B20Test {
         );
     }
 
-    /// @notice Verifies `seizePolicyIdsSlot()` locates the seize-holder lane.
-    /// @dev Write to SEIZE_HOLDER_POLICY via `updatePolicy`; lane decoder reads back from its own slot.
-    function test_seizePolicyIdsSlot_success_decodesSeizableLane() public {
-        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+    /// @notice Verifies `seizePolicyIdsSlot()` locates the seize-exempt lane.
+    /// @dev Write to SEIZE_EXEMPT_POLICY via `updatePolicy`; lane decoder reads back from its own slot.
+    function test_seizePolicyIdsSlot_success_decodesExemptLane() public {
+        _setPolicy(B20Constants.SEIZE_EXEMPT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         uint256 packed = uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot()));
         assertEq(
-            MockB20Storage.seizablePolicyId(packed),
+            MockB20Storage.exemptPolicyId(packed),
             PolicyRegistryConstants.ALWAYS_BLOCK_ID,
-            "seizablePolicyId lane must reflect the policy write"
+            "exemptPolicyId lane must reflect the policy write"
         );
     }
 
@@ -265,9 +265,9 @@ contract MockB20SlotHelpersTest is B20Test {
     }
 
     /// @notice Verifies `packSeizePolicyIds` is the inverse of the seize lane decoders.
-    function test_packSeizePolicyIds_success_roundtrips(uint64 seizableId, uint64 receiverId) public pure {
-        uint256 packed = MockB20Storage.packSeizePolicyIds(seizableId, receiverId);
-        assertEq(MockB20Storage.seizablePolicyId(packed), seizableId);
+    function test_packSeizePolicyIds_success_roundtrips(uint64 exemptId, uint64 receiverId) public pure {
+        uint256 packed = MockB20Storage.packSeizePolicyIds(exemptId, receiverId);
+        assertEq(MockB20Storage.exemptPolicyId(packed), exemptId);
         assertEq(MockB20Storage.seizeReceiverPolicyId(packed), receiverId);
     }
 

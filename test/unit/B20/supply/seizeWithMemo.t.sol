@@ -12,11 +12,11 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "base-std-test/lib/moc
 contract B20SeizeWithMemoTest is B20Test {
     address internal seizer = makeAddr("seizer");
 
-    /// @dev Blocks `from` under SEIZE_HOLDER_POLICY and grants the seize role. Mirrors the
-    ///      setup every success path shares.
+    /// @dev Sets SEIZE_EXEMPT_POLICY to ALWAYS_BLOCK (no account is seize-exempt) and grants
+    ///      the seize role. Mirrors the setup every success path shares.
     function _armSeize() internal {
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZE_EXEMPT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
     }
 
     /// @notice Reverts when caller lacks SEIZE_ROLE.
@@ -81,8 +81,8 @@ contract B20SeizeWithMemoTest is B20Test {
         assertEq(token.balanceOf(account), amount, "balance must be unchanged");
     }
 
-    /// @notice Reverts AccountNotSeizable when `from` is authorized under SEIZE_HOLDER_POLICY.
-    /// @dev Default SEIZE_HOLDER_POLICY is ALWAYS_ALLOW (0) → every account authorized → not seizable.
+    /// @notice Reverts AccountNotSeizable when `from` is authorized under SEIZE_EXEMPT_POLICY.
+    /// @dev Default SEIZE_EXEMPT_POLICY is ALWAYS_ALLOW (0) → every account authorized → not seizable.
     function test_seizeWithMemo_revert_accountNotBlocked(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);

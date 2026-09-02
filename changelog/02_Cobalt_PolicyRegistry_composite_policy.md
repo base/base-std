@@ -41,7 +41,7 @@ flowchart TD
 
 ### Policy Registry
 
-The Policy Registry is a singleton precompile that stores policies. B20 tokens consult it by calling `isAuthorized(policyId, account)` with the policy ID from the relevant scope, including `TRANSFER_FROM`, `TRANSFER_TO`, and `SEIZE_HOLDER`.
+The Policy Registry is a singleton precompile that stores policies. B20 tokens consult it by calling `isAuthorized(policyId, account)` with the policy ID from the relevant scope, including `TRANSFER_FROM`, `TRANSFER_TO`, and `SEIZE_EXEMPT`.
 
 Existing policies are simple `ALLOWLIST` and `BLOCKLIST` types, and they are the only valid children of a composite.
 

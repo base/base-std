@@ -106,7 +106,7 @@ interface IB20 {
     error UnsupportedPolicyType(bytes32 policyScope);
 
     /// @notice `seizeWithMemo` was called against a `from` account that is not seizable under
-    ///         `SEIZE_HOLDER_POLICY`.
+    ///         `SEIZE_EXEMPT_POLICY`.
     /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
     error AccountNotSeizable(address account);
 
@@ -262,14 +262,14 @@ interface IB20 {
     /// @return Policy scope constant.
     function MINT_RECEIVER_POLICY() external view returns (bytes32);
 
-    /// @notice Policy slot consulted against `from` by `seizeWithMemo`.
+    /// @notice Policy slot consulted against `from` by `seizeWithMemo`. An authorized account is seize-exempt.
     /// @dev A `from` is seizable only when `isAuthorized(policyId, from)` returns false.
     /// @dev This uses the inverse of the normal transfer-style gating: accounts are seizable when
     ///      `isAuthorized(...)` returns false, not true.
-    /// @dev An unset slot reads as `0` (always-allow), so no account is seizable until an issuer
+    /// @dev An unset slot reads as `0` (always-allow), so every account is seize-exempt until an issuer
     ///      explicitly configures the slot.
     /// @return Policy scope constant.
-    function SEIZE_HOLDER_POLICY() external view returns (bytes32);
+    function SEIZE_EXEMPT_POLICY() external view returns (bytes32);
 
     /// @notice Policy slot consulted against `to` by `seizeWithMemo`.
     /// @dev Mirrors `MINT_RECEIVER_POLICY`: always enforced on the seize destination. An unset slot reads
@@ -446,7 +446,7 @@ interface IB20 {
     ///         Emits `Transfer(from, address(0), amount)` and `BurnedBlocked(caller, from, amount)`.
     ///
     /// @dev Gated by `BURN_BLOCKED_ROLE` and the `BURN` pause vector (not `SEIZE`). Its blocked check
-    ///      reads `TRANSFER_SENDER_POLICY`, distinct from `seizeWithMemo`'s `SEIZE_HOLDER_POLICY`.
+    ///      reads `TRANSFER_SENDER_POLICY`, distinct from `seizeWithMemo`'s `SEIZE_EXEMPT_POLICY`.
     /// @dev Reverts with `ContractPaused(BURN)` when `BURN` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `BURN_BLOCKED_ROLE`.
     /// @dev Reverts with `AccountNotBlocked` when `from` is currently authorized under `TRANSFER_SENDER_POLICY`.
@@ -461,14 +461,14 @@ interface IB20 {
     ///         `Seized(caller, from, to, amount)`. A memo of `bytes32(0)` is permitted.
     ///
     /// @dev Admin operation: skips allowance and the transfer policies. The membership checks are that
-    ///      `from` is blocked under `SEIZE_HOLDER_POLICY` and `to` is authorized under `SEIZE_RECEIVER_POLICY`.
+    ///      `from` is not authorized under `SEIZE_EXEMPT_POLICY` and `to` is authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev `to` is gated by `SEIZE_RECEIVER_POLICY`, which defaults to always-allow when unset, so an
     ///      unconfigured token may seize to any destination (a treasury need not be allowlisted).
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `from == to`.
     /// @dev Reverts with `InvalidSender` when `from == address(0)`.
-    /// @dev Reverts with `AccountNotSeizable` when `from` is authorized under `SEIZE_HOLDER_POLICY`.
+    /// @dev Reverts with `AccountNotSeizable` when `from` is authorized under `SEIZE_EXEMPT_POLICY`.
     /// @dev Reverts with `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)` when `to` is not authorized under `SEIZE_RECEIVER_POLICY`.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
     ///

@@ -15,7 +15,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
 ///         4. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         5. SELF-SEIZE (`from == to`) → `InvalidReceiver`
-///         6. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
+///         6. BLOCKED (`isAuthorized(exemptPolicyId, from) == true`) → `AccountNotSeizable`
 ///         7. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
 ///         8. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20SeizeWithMemoRevertOrderTest is B20Test {
@@ -51,7 +51,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
     function test_seizeWithMemo_revertOrder_zeroActors_beats_blocked(address from) public {
         _assumeValidActor(from);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → `from` would be "not blocked", but `to == 0` fires first.
+        // SEIZE_EXEMPT_POLICY left at ALWAYS_ALLOW → `from` would be "not blocked", but `to == 0` fires first.
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
@@ -72,7 +72,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
     function test_seizeWithMemo_revertOrder_zeroSender_beats_blocked(address to) public {
         _assumeValidActor(to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → the zero address is NOT blocked (not seizable).
+        // SEIZE_EXEMPT_POLICY left at ALWAYS_ALLOW → the zero address is NOT blocked (not seizable).
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
@@ -97,7 +97,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
     function test_seizeWithMemo_revertOrder_selfSeize_beats_blocked(address account) public {
         _assumeValidActor(account);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → `account` is NOT blocked (not seizable either).
+        // SEIZE_EXEMPT_POLICY left at ALWAYS_ALLOW → `account` is NOT blocked (not seizable either).
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, account));
@@ -110,7 +110,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         _assumeValidActor(to);
         vm.assume(from != to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        // Default SEIZE_HOLDER_POLICY is ALWAYS_ALLOW → `from` is NOT blocked; zero balance too.
+        // Default SEIZE_EXEMPT_POLICY is ALWAYS_ALLOW → `from` is NOT blocked; zero balance too.
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccountNotSeizable.selector, from));
@@ -123,7 +123,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         _assumeValidActor(to);
         vm.assume(from != to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
-        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → `from` is NOT blocked (not seizable).
+        // SEIZE_EXEMPT_POLICY left at ALWAYS_ALLOW → `from` is NOT blocked (not seizable).
         _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(seizer);
@@ -138,7 +138,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         vm.assume(from != to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
         // `from` IS seizable (blocked), `to` IS forbidden by the receiver policy, and balance is zero.
-        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZE_EXEMPT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _setPolicy(B20Constants.SEIZE_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(seizer);
@@ -157,7 +157,7 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         vm.assume(from != to);
         _grantRole(B20Constants.SEIZE_ROLE, seizer);
         _pause(IB20.PausableFeature.SEIZE);
-        // SEIZE_HOLDER_POLICY left at ALWAYS_ALLOW → `from` "not blocked", but pause fires first.
+        // SEIZE_EXEMPT_POLICY left at ALWAYS_ALLOW → `from` "not blocked", but pause fires first.
 
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
