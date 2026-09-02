@@ -9,6 +9,7 @@ Building something?
 
 - [Seize a holder's B20 balance](guides/seizeing-assets.md)
 - [Schedule a UI multiplier change](guides/scheduling-multiplier-changes.md)
+- [Announce a corporate action](guides/announcing-corporate-actions.md)
 
 Looking for exact technical details?
 
