@@ -15,7 +15,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
 ///         4. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         5. SELF-SEIZE (`from == to`) → `InvalidReceiver`
-///         6. BLOCKED (`isAuthorized(seizablePolicyId, from) == true`) → `AccountNotSeizable`
+///         6. BLOCKED (`isAuthorized(exemptPolicyId, from) == true`) → `AccountNotSeizable`
 ///         7. RECEIVER (`isAuthorized(seizeReceiverPolicyId, to) == false`) → `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)`
 ///         8. BALANCE (`fromBalance < amount` in `_moveBalance`) → `InsufficientBalance`
 contract B20SeizeWithMemoRevertOrderTest is B20Test {

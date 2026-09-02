@@ -179,7 +179,7 @@ The field is packed into a single 256-bit slot:
 
 | Bits    | Lane | Field      | Scope                   |
 | ------- | ---- | ---------- | ----------------------- |
-| 0–63    | 0    | `seizable` | `SEIZE_EXEMPT_POLICY`   |
+| 0–63    | 0    | `exempt`   | `SEIZE_EXEMPT_POLICY`   |
 | 64–127  | 1    | `receiver` | `SEIZE_RECEIVER_POLICY` |
 | 128–255 | 2–3  | reserved   | unused, pinned to zero  |
 

@@ -511,7 +511,7 @@ abstract contract MockB20 is IB20 {
         if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.sender;
         if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;
         if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;
-        if (policyScope == SEIZE_EXEMPT_POLICY) return $.seizePolicyIds.seizable;
+        if (policyScope == SEIZE_EXEMPT_POLICY) return $.seizePolicyIds.exempt;
         if (policyScope == SEIZE_RECEIVER_POLICY) return $.seizePolicyIds.receiver;
         if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;
         revert UnsupportedPolicyType(policyScope);
@@ -536,7 +536,7 @@ abstract contract MockB20 is IB20 {
         } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds.executor = newPolicyId;
         } else if (policyScope == SEIZE_EXEMPT_POLICY) {
-            $.seizePolicyIds.seizable = newPolicyId;
+            $.seizePolicyIds.exempt = newPolicyId;
         } else if (policyScope == SEIZE_RECEIVER_POLICY) {
             $.seizePolicyIds.receiver = newPolicyId;
         } else {
@@ -794,8 +794,8 @@ abstract contract MockB20 is IB20 {
     ///      authorized under `SEIZE_EXEMPT_POLICY` (authorized = seize-exempt).
     ///      Enforced unconditionally, including in the factory bootstrap window.
     function _requireSeizable(address from) internal view {
-        uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
-        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {
+        uint64 exemptPolicyId = MockB20Storage.layout().seizePolicyIds.exempt;
+        if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(exemptPolicyId, from)) {
             revert AccountNotSeizable(from);
         }
     }

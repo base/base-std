@@ -28,8 +28,7 @@ contract B20UpdatePolicyTest is B20Test {
                 );
         }
         if (policyScope == B20Constants.SEIZE_EXEMPT_POLICY) {
-            return
-                MockB20Storage.seizablePolicyId(uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot())));
+            return MockB20Storage.exemptPolicyId(uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot())));
         }
         if (policyScope == B20Constants.SEIZE_RECEIVER_POLICY) {
             return

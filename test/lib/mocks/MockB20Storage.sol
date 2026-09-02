@@ -63,11 +63,11 @@ library MockB20Storage {
 
     /// @notice Seize policy IDs (read by the seize operation `seizeWithMemo`).
     /// @dev    Bit layout:
-    ///           bits   0.. 63 : seizable (`SEIZE_EXEMPT_POLICY`)
+    ///           bits   0.. 63 : exempt (`SEIZE_EXEMPT_POLICY`)
     ///           bits  64..127 : receiver (`SEIZE_RECEIVER_POLICY`)
     ///           bits 128..255 : reserved (implicit)
     struct SeizePolicyIds {
-        uint64 seizable;
+        uint64 exempt;
         uint64 receiver;
     }
 
@@ -145,7 +145,7 @@ library MockB20Storage {
         mapping(address owner => uint256 nonce) nonces;
         // ---------- Seize policies (PACKED, per-operation) ----------
         // Placed before the mock-only `initialized` flag so the Rust precompile
-        // — which stores no `initialized` field — lands `seizable_policy_id` at
+        // — which stores no `initialized` field — lands `exempt_policy_id` at
         // this same offset with no filler slot. Distinct per-operation group
         // (seize is cold-path and spans transfer + burn), mirroring how mint
         // policies are grouped separately from transfer policies.
@@ -194,7 +194,7 @@ library MockB20Storage {
     uint256 internal constant PAUSED_VECTORS_OFFSET = 11;
     uint256 internal constant SUPPLY_CAP_OFFSET = 12;
     uint256 internal constant NONCES_OFFSET = 13;
-    // Placed before the mock-only `initialized` flag so the Rust precompile lands its seizable
+    // Placed before the mock-only `initialized` flag so the Rust precompile lands its exempt
     // slot at this offset with no filler; see the field-level natspec above.
     uint256 internal constant SEIZE_POLICY_IDS_OFFSET = 14;
     // Mock-only bootstrap flag, kept last so the Rust precompile omits it.
@@ -325,8 +325,8 @@ library MockB20Storage {
         return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128);
     }
 
-    /// @notice Extracts the seize-exempt policy id (lane 0) from the seize packed slot.
-    function seizablePolicyId(uint256 packed) internal pure returns (uint64) {
+    /// @notice Extracts the SEIZE_EXEMPT policy id (lane 0) from the seize packed slot.
+    function exemptPolicyId(uint256 packed) internal pure returns (uint64) {
         return uint64(packed);
     }
 
@@ -337,8 +337,8 @@ library MockB20Storage {
 
     /// @notice Composes the seize packed slot from its two defined lanes.
     /// @dev Lanes 2..3 are reserved and pinned to zero.
-    function packSeizePolicyIds(uint64 seizableId, uint64 receiverId) internal pure returns (uint256) {
-        return uint256(seizableId) | (uint256(receiverId) << 64);
+    function packSeizePolicyIds(uint64 exemptId, uint64 receiverId) internal pure returns (uint256) {
+        return uint256(exemptId) | (uint256(receiverId) << 64);
     }
 
     /// @notice Extracts the MINT_RECEIVER policy id (lane 0) from the packed slot.
