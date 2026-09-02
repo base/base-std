@@ -54,6 +54,7 @@ PYTHONPATH=script script/smoke/.venv/bin/python -m fork --match-test test_transf
 | `PORT` | `8546` | local RPC port for anvil |
 | `ACTIVATION_ADMIN` | `0x9965…A4dc` | address authorized to activate features |
 | `ANVIL_LOG` | `/tmp/anvil.log` | anvil stdout/stderr log path |
+| `BASE_UPGRADE` | _(none)_ | historical Base upgrade to register (e.g. `beryl`, `cobalt`), forwarded as `--base <upgrade>`; unset uses anvil's default upgrade (bare `--base`) |
 | `SKIP_ACTIVATE` | _(none)_ | comma-separated feature names or `0x` ids to leave un-activated (exercises the inactive-feature dispatch path); matched case-insensitively |
 
 ## Exit codes
