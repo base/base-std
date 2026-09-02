@@ -131,7 +131,7 @@ asset.announce(calls, id, description, uri);
 
 Direct `updateUIMultiplier` with no `announce` still works. Indexers should flag it as undisclosed.
 
-For the schedule itself, see [Schedule a UI multiplier change](scheduling-multiplier-changes.md).
+For the schedule itself, see [Schedule a stock split](scheduling-stock-splits.md).
 
 ### Scenario 2 — dividend issuance or additional mint
 
@@ -197,7 +197,7 @@ An inner Solidity `Panic` (for example overflow) propagates raw. It is not wrapp
 
 ## Related Concepts
 
-- [Schedule a UI multiplier change](scheduling-multiplier-changes.md)
+- [Schedule a stock split](scheduling-stock-splits.md)
 - [Roles and Pause](../concepts/roles-and-pause.md)
 
 ## Reference

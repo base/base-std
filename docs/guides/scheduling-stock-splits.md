@@ -1,10 +1,10 @@
-# Schedule a UI multiplier change
+# Schedule a stock split
 
 ## Goal
 
-Make a corporate action take effect at an agreed time without rewriting anyone's raw balance — for example a 2-for-1 stock split at the start of the next trading day.
+At the agreed time, every holder's displayed balance doubles for a 2-for-1 split, or shrinks for a reverse split. Raw `balanceOf`, `totalSupply`, and transfer amounts stay the same, so DeFi that reads raw units keeps working.
 
-Exchanges, custodians, wallets, and accounting systems need that time in advance so they can prepare UI balances, prices, and books. You schedule the change on-chain ahead of it. At the effective timestamp, displayed holdings double (or shrink for a reverse split). Raw `balanceOf`, `totalSupply`, and transfer amounts stay the same, so DeFi that reads raw units keeps working.
+Exchanges, custodians, wallets, and accounting systems need that time in advance so they can prepare UI balances, prices, and books. You schedule the split on-chain ahead of it.
 
 `updateUIMultiplier` is the path for that schedule ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)). The multiplier is an 18-decimal WAD: `1e18` is `1.0` (`WAD_PRECISION`). A 2-for-1 split uses `2e18`. A reverse split uses a value below `1e18`.
 

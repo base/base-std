@@ -8,7 +8,7 @@ New to B20?
 Building something?
 
 - [Seize a holder's B20 balance](guides/seizeing-assets.md)
-- [Schedule a UI multiplier change](guides/scheduling-multiplier-changes.md)
+- [Schedule a stock split](guides/scheduling-stock-splits.md)
 - [Announce a corporate action](guides/announcing-corporate-actions.md)
 
 Looking for exact technical details?

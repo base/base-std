@@ -188,7 +188,7 @@ If you want to understand how B20 works internally:
 If you are integrating B20:
 
 → [Seize a holder's B20 balance](./guides/seizeing-assets.md)
-→ [Schedule a UI multiplier change](./guides/scheduling-multiplier-changes.md)
+→ [Schedule a stock split](./guides/scheduling-stock-splits.md)
 
 For exact interfaces and protocol definitions:
 
