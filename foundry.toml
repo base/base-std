@@ -45,7 +45,7 @@ vibenet = "https://rpc.vibes.base.org/"
 runs = 10
 
 [profile.fork]
-base = true
+base = "beryl"
 
 [fmt]
 line_length = 120
