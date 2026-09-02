@@ -95,7 +95,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant TRANSFER_RECEIVER_POLICY = B20Constants.TRANSFER_RECEIVER_POLICY;
     bytes32 public constant TRANSFER_EXECUTOR_POLICY = B20Constants.TRANSFER_EXECUTOR_POLICY;
     bytes32 public constant MINT_RECEIVER_POLICY = B20Constants.MINT_RECEIVER_POLICY;
-    bytes32 public constant SEIZE_HOLDER_POLICY = B20Constants.SEIZE_HOLDER_POLICY;
+    bytes32 public constant SEIZE_EXEMPT_POLICY = B20Constants.SEIZE_EXEMPT_POLICY;
     bytes32 public constant SEIZE_RECEIVER_POLICY = B20Constants.SEIZE_RECEIVER_POLICY;
 
     /// @notice Maximum value the supply cap may be set to. Because `mint`
@@ -332,8 +332,8 @@ abstract contract MockB20 is IB20 {
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
     /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`
-    ///      or `from == to`, and `InvalidSender` when `from == 0`. `from` must be blocked under
-    ///      `SEIZE_HOLDER_POLICY`; `to` must be authorized under `SEIZE_RECEIVER_POLICY` (mirrors
+    ///      or `from == to`, and `InvalidSender` when `from == 0`. `from` must be unauthorized under
+    ///      `SEIZE_EXEMPT_POLICY`; `to` must be authorized under `SEIZE_RECEIVER_POLICY` (mirrors
     ///      `MINT_RECEIVER_POLICY`: unset slot = always-allow).
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
@@ -511,7 +511,7 @@ abstract contract MockB20 is IB20 {
         if (policyScope == TRANSFER_SENDER_POLICY) return $.transferPolicyIds.sender;
         if (policyScope == TRANSFER_RECEIVER_POLICY) return $.transferPolicyIds.receiver;
         if (policyScope == TRANSFER_EXECUTOR_POLICY) return $.transferPolicyIds.executor;
-        if (policyScope == SEIZE_HOLDER_POLICY) return $.seizePolicyIds.seizable;
+        if (policyScope == SEIZE_EXEMPT_POLICY) return $.seizePolicyIds.seizable;
         if (policyScope == SEIZE_RECEIVER_POLICY) return $.seizePolicyIds.receiver;
         if (policyScope == MINT_RECEIVER_POLICY) return $.mintPolicyIds.receiver;
         revert UnsupportedPolicyType(policyScope);
@@ -535,7 +535,7 @@ abstract contract MockB20 is IB20 {
             $.transferPolicyIds.receiver = newPolicyId;
         } else if (policyScope == TRANSFER_EXECUTOR_POLICY) {
             $.transferPolicyIds.executor = newPolicyId;
-        } else if (policyScope == SEIZE_HOLDER_POLICY) {
+        } else if (policyScope == SEIZE_EXEMPT_POLICY) {
             $.seizePolicyIds.seizable = newPolicyId;
         } else if (policyScope == SEIZE_RECEIVER_POLICY) {
             $.seizePolicyIds.receiver = newPolicyId;
@@ -790,9 +790,9 @@ abstract contract MockB20 is IB20 {
         emit Transfer(from, to, amount);
     }
 
-    /// @dev Seize gate: reverts `AccountNotSeizable(from)` unless `from` is a
-    ///      member of `SEIZE_HOLDER_POLICY` (i.e. NOT authorized). Enforced
-    ///      unconditionally, including in the factory bootstrap window.
+    /// @dev Seize gate: reverts `AccountNotSeizable(from)` when `from` is
+    ///      authorized under `SEIZE_EXEMPT_POLICY` (authorized = seize-exempt).
+    ///      Enforced unconditionally, including in the factory bootstrap window.
     function _requireSeizable(address from) internal view {
         uint64 seizablePolicyId = MockB20Storage.layout().seizePolicyIds.seizable;
         if (IPolicyRegistry(POLICY_REGISTRY).isAuthorized(seizablePolicyId, from)) {

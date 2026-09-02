@@ -221,6 +221,31 @@ contract B20RenamesTest is B20AssetTest {
     }
 
     // ============================================================
+    //                    SEIZE EXEMPT POLICY
+    // ============================================================
+
+    /// @notice Verifies the seize-from policy is exposed as `SEIZE_EXEMPT_POLICY`.
+    /// @dev The wire value (`keccak256("SEIZE_EXEMPT_POLICY")`) and library source-of-truth must agree.
+    function test_seizeExemptPolicy_success_renamedFromSeizeHolder() public view {
+        assertEq(
+            token.SEIZE_EXEMPT_POLICY(),
+            keccak256("SEIZE_EXEMPT_POLICY"),
+            "SEIZE_EXEMPT_POLICY must equal its keccak preimage"
+        );
+        assertEq(
+            token.SEIZE_EXEMPT_POLICY(), B20Constants.SEIZE_EXEMPT_POLICY, "SEIZE_EXEMPT_POLICY must match B20Constants"
+        );
+    }
+
+    /// @notice Verifies the pre-rename `SEIZE_HOLDER_POLICY()` selector no longer resolves.
+    function test_seizeHolderPolicy_revert_selectorRemoved() public {
+        _assertSelectorRemoved(
+            abi.encodeWithSignature("SEIZE_HOLDER_POLICY()"),
+            "SEIZE_HOLDER_POLICY() must not resolve (renamed to SEIZE_EXEMPT_POLICY)"
+        );
+    }
+
+    // ============================================================
     //               ACTIVATION FEATURE NAMESPACE
     // ============================================================
 

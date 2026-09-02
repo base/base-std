@@ -63,7 +63,7 @@ library MockB20Storage {
 
     /// @notice Seize policy IDs (read by the seize operation `seizeWithMemo`).
     /// @dev    Bit layout:
-    ///           bits   0.. 63 : seizable (`SEIZE_HOLDER_POLICY`)
+    ///           bits   0.. 63 : seizable (`SEIZE_EXEMPT_POLICY`)
     ///           bits  64..127 : receiver (`SEIZE_RECEIVER_POLICY`)
     ///           bits 128..255 : reserved (implicit)
     struct SeizePolicyIds {
@@ -325,7 +325,7 @@ library MockB20Storage {
         return uint256(senderId) | (uint256(receiverId) << 64) | (uint256(executorId) << 128);
     }
 
-    /// @notice Extracts the seize-holder policy id (lane 0) from the seize packed slot.
+    /// @notice Extracts the seize-exempt policy id (lane 0) from the seize packed slot.
     function seizablePolicyId(uint256 packed) internal pure returns (uint64) {
         return uint64(packed);
     }

@@ -16,7 +16,7 @@ contract B20UpdatePolicyTest is B20Test {
     ///         slots:
     ///         - `transferPolicyIds` (lane 0: SENDER, 1: RECEIVER, 2: EXECUTOR)
     ///         - `mintPolicyIds` (lane 0: RECEIVER)
-    ///         - `seizePolicyIds` (lane 0: SEIZE_HOLDER, 1: SEIZE_RECEIVER)
+    ///         - `seizePolicyIds` (lane 0: SEIZE_EXEMPT, 1: SEIZE_RECEIVER)
     ///         This helper routes to the right slot + lane decoder so
     ///         tests can assert the slot reflects the surface
     ///         `policyId(policyScope)` return.
@@ -27,7 +27,7 @@ contract B20UpdatePolicyTest is B20Test {
                     uint256(vm.load(address(token), MockB20Storage.mintPolicyIdsSlot()))
                 );
         }
-        if (policyScope == B20Constants.SEIZE_HOLDER_POLICY) {
+        if (policyScope == B20Constants.SEIZE_EXEMPT_POLICY) {
             return
                 MockB20Storage.seizablePolicyId(uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot())));
         }

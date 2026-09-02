@@ -226,10 +226,10 @@ contract MockB20SlotHelpersTest is B20Test {
         );
     }
 
-    /// @notice Verifies `seizePolicyIdsSlot()` locates the seize-holder lane.
-    /// @dev Write to SEIZE_HOLDER_POLICY via `updatePolicy`; lane decoder reads back from its own slot.
+    /// @notice Verifies `seizePolicyIdsSlot()` locates the seize-exempt lane.
+    /// @dev Write to SEIZE_EXEMPT_POLICY via `updatePolicy`; lane decoder reads back from its own slot.
     function test_seizePolicyIdsSlot_success_decodesSeizableLane() public {
-        _setPolicy(B20Constants.SEIZE_HOLDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.SEIZE_EXEMPT_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         uint256 packed = uint256(vm.load(address(token), MockB20Storage.seizePolicyIdsSlot()));
         assertEq(
