@@ -118,11 +118,18 @@ def assert_port_free(port: int) -> None:
 
 
 @contextmanager
-def anvil_running(anvil: Path, port: int, admin: str, log_path: Path) -> Iterator[Web3]:
-    """Launch anvil --base, yield a Web3 once the RPC is live, and tear it down on exit (any outcome)."""
+def anvil_running(
+    anvil: Path, port: int, admin: str, log_path: Path, base_upgrade: str | None = None
+) -> Iterator[Web3]:
+    """Launch anvil --base, yield a Web3 once the RPC is live, and tear it down on exit (any outcome).
+
+    A bare --base registers anvil's default upgrade; passing base_upgrade forwards
+    --base <upgrade> to select a specific historical upgrade instead.
+    """
+    base_flag = ["--base"] if not base_upgrade else ["--base", base_upgrade]
     with open(log_path, "w") as logf:
         proc = subprocess.Popen(
-            [str(anvil), "--base", "--base-activation-admin", admin, "--port", str(port)],
+            [str(anvil), *base_flag, "--base-activation-admin", admin, "--port", str(port)],
             stdout=logf,
             stderr=subprocess.STDOUT,
         )
@@ -199,6 +206,7 @@ def main(forge_args: list[str]) -> int:
         os.environ.get("ACTIVATION_ADMIN", "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc")
     )
     log_path = Path(os.environ.get("ANVIL_LOG", "/tmp/anvil.log"))
+    base_upgrade = os.environ.get("BASE_UPGRADE") or None  # empty string == unset
     skip = skip_set()
 
     anvil, forge = discover_binaries()
@@ -209,10 +217,11 @@ def main(forge_args: list[str]) -> int:
     log(f"port:             {port}")
     log(f"activation admin: {admin}")
     log(f"log file:         {log_path}")
+    log(f"base upgrade:     {base_upgrade or '<default>'}")
     log(f"skip-activate:    {os.environ.get('SKIP_ACTIVATE') or '<none>'}")
 
     log("starting anvil…")
-    with anvil_running(anvil, port, admin, log_path) as w3:
+    with anvil_running(anvil, port, admin, log_path, base_upgrade) as w3:
         reconcile_feature_state(w3, admin, skip)
 
         rpc_url = f"http://localhost:{port}"
