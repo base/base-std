@@ -14,9 +14,13 @@ A collection of Solidity interfaces, libraries, and mock implementations for Bas
 
 ## Products
 
-- [**ActivationRegistry**](docs/ActivationRegistry/README.md) — Feature flags controlled by Base team to activate/deactivate features.
-- [**PolicyRegistry**](docs/PolicyRegistry/README.md) — Membership sets controlled by custom admins, initially providing allow and block lists for B20 token operations.
-- [**B20**](docs/B20/README.md) — Standard ERC-20 implementation with extensions for roles, policies, memos, pausing, ERC-2612 permits, and a variant system.
+- [**ActivationRegistry**](src/interfaces/IActivationRegistry.sol) — Feature flags controlled by Base team to activate/deactivate features.
+- [**PolicyRegistry**](docs/concepts/policies.md) — Membership sets controlled by custom admins, initially providing allow and block lists for B20 token operations.
+- [**B20**](docs/overview.md) — Standard ERC-20 implementation with extensions for roles, policies, memos, pausing, ERC-2612 permits, and a variant system.
+
+## Documentation
+
+See [`docs/`](docs/README.md) for the full documentation map: overview, architecture, audience guides (integrator/indexer), concepts, and reference.
 
 ## Changelog
 
