@@ -112,44 +112,34 @@ branching.
 This repo's invariant is slot-for-slot storage parity with the Rust precompiles plus a stable
 public ABI for integrators — a change is breaking if it violates either.
 
-**The test**: take any function that already shipped, with its selector and inputs held fixed. Can
-its outcome differ from what it is today — succeeds where it used to revert, reverts where it used
-to succeed, reverts with a different error, or returns/emits something different? If yes, it's
-breaking, *regardless of whether the ABI itself gained or lost anything*. New errors, new events, and
-new functions are not automatically non-breaking — only check where they're reachable from.
+**The test**: fix an already-shipped selector and its inputs. If the outcome can differ from what
+it is today — succeeds where it reverted, reverts where it succeeded, reverts with a different
+error, or returns/emits something different — it's breaking, regardless of whether the ABI itself
+gained or lost anything. A new error or event isn't automatically non-breaking; check what it's
+reachable from.
 
-**Breaking** — requires a MAJOR bump, never a MINOR/PATCH:
-- Removing or renaming an existing function, event, or error (selector-changing).
-- Changing an existing function's signature, parameter types, or return types.
-- Adding a new revert path — a new `error` — reachable from an existing, otherwise-unmodified
-  function. The error itself is new, but an input that used to succeed on that selector now
-  reverts, which is exactly the kind of caller-visible change MAJOR exists for.
-- Removing an existing revert path, or changing which error an existing one throws — an input that
-  used to fail now succeeds, or fails differently.
-- Moving, resizing, retyping, or reordering the storage slot of any *existing* field (see
-  `MockB20Storage.sol`) — this diverges from the Rust precompile's real layout, breaks
-  `vm.load` slot assertions and live-precompile cross-validation, and breaks any external tooling
-  that reads that state by raw slot.
+**Breaking** (MAJOR only):
+- Removing, renaming, or changing the signature/return type of an existing function, event, or error.
+- Adding, removing, or changing a revert path on an existing, otherwise-unmodified function — any of
+  these changes what that selector does for some input that already worked.
+- Moving, resizing, retyping, or reordering an *existing* field's storage slot (see
+  `MockB20Storage.sol`) — diverges from the Rust precompile's real layout and breaks `vm.load` /
+  live-precompile parity.
 - Changing precompile addresses or feature IDs in `src/StdPrecompiles.sol` /
-  `script/smoke/config.py` / `ActivationRegistryFeatureList.sol` (canonical constants shared with
-  base/base — coordinate there first, see Boundaries below).
+  `script/smoke/config.py` / `ActivationRegistryFeatureList.sol` (canonical, shared with base/base —
+  coordinate there first, see Boundaries below).
 - Any other change to what an existing, unchanged selector returns or emits for the same inputs.
 
-**Non-breaking** — fine within a MINOR or PATCH:
-- Adding an entirely new function (new selector), including any events or errors that are only
-  reachable through that new function — no existing selector's behavior changes, so no existing
-  caller is affected.
-- Adding a new event emitted only from a new function, for the same reason.
-- Appending new state via the existing ERC-7201 namespaced-storage pattern — new fields land in new
-  slots, and every existing field keeps the slot it already has (how Cobalt added
+**Non-breaking** (MINOR/PATCH):
+- A new function, and any event or error only reachable through it.
+- Appending new ERC-7201 namespaced state — new slots, existing ones untouched (how Cobalt added
   `SEIZE_EXEMPT_POLICY`/`SEIZE_RECEIVER_POLICY` without touching Beryl's layout).
-- Deprecating a symbol (NatSpec `@deprecated` + changelog note) while leaving it callable, unchanged.
-- Documentation, test, tooling, harness, or CI changes.
+- Deprecating a symbol (NatSpec `@deprecated`) while it stays callable, unchanged.
+- Docs, tests, tooling, harness, or CI.
 
-**Worked example**: adding `error AlreadySeized()` and having `seizeWithMemo` (a brand-new
-function) revert with it → non-breaking, nothing could call `seizeWithMemo` before. Adding
-`error TransferPaused()` and having the *existing* `transfer` throw it under some new condition →
-breaking, because a `transfer` call that used to succeed can now revert.
+**Example**: `seizeWithMemo` (a new function) reverting with a new `AlreadySeized` error is
+non-breaking — nothing could call it before. The existing `transfer` gaining a new revert condition
+is breaking — a call that used to succeed can now fail.
 
 ### Branching model
 
