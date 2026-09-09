@@ -88,16 +88,24 @@ Deeper reading: `LIVE_PRECOMPILE_TESTING.md` (cross-validation architecture), `d
 
 ## Cutting releases
 
-Versioning maps onto hardforks, not onto arbitrary feature batches:
+Versioning is `vMAJOR.MINOR.PATCH`, and which digit moves is decided by the breaking-vs-non-breaking
+test below — **not** by whether a hardfork boundary is involved. Hardforks in this repo are additive
+by design, so most of them land as MINOR, same as any other additive change:
 
-- **MAJOR** (`vN.0.0`): a new hardfork boundary. Cutting the tag freezes the Solidity interface for
-  that hardfork — this can happen before on-chain activation, not after. Pick `N` from the
-  hardfork's ordinal in `changelog/README.md`'s [Hardfork ordinals](changelog/README.md#hardfork-ordinals)
-  table (`01` Beryl → `v1`, `02` Cobalt → `v2`, ...).
-- **MINOR** (`vN.M.0`): additive, non-breaking interface changes to the *current*, not-yet-frozen
-  hardfork — new selectors, events, or errors layered onto what's already tagged.
-- **PATCH** (`vN.M.P`): no interface change — tooling, harness, docs, or CI fixes on an
-  already-frozen release (e.g. `v1.0.1`'s fork-profile pin).
+- **MAJOR**: a change that fails the breaking test. Expect this to be rare — it fires whenever an
+  actual breaking change ships, whether or not that coincides with a hardfork.
+- **MINOR**: a hardfork's frozen interface, once it's fully additive (the common case) — increments
+  once per hardfork, matching the ordinal in `changelog/README.md`'s
+  [Hardfork ordinals](changelog/README.md#hardfork-ordinals) table shifted down by one (`01` Beryl →
+  `1.0`, `02` Cobalt → `1.1`, `03` (next hardfork) → `1.2`, ...). Also covers any other additive,
+  non-breaking interface change outside a hardfork boundary. Freezing happens at tag time, which can
+  be before on-chain activation, not after.
+- **PATCH**: no interface change — tooling, harness, docs, or CI fixes on an already-frozen release
+  (e.g. the fork-profile pin that shipped in `v1.0.1`).
+
+If a hardfork's interface *does* contain a breaking change, that pushes MAJOR instead of MINOR (and
+resets MINOR/PATCH to `0`) — see [Branching model](#branching-model) for what that means for
+branching.
 
 ### Breaking vs. non-breaking
 
@@ -110,7 +118,7 @@ to succeed, reverts with a different error, or returns/emits something different
 breaking, *regardless of whether the ABI itself gained or lost anything*. New errors, new events, and
 new functions are not automatically non-breaking — only check where they're reachable from.
 
-**Breaking** — requires a new MAJOR/hardfork boundary, never a MINOR/PATCH:
+**Breaking** — requires a MAJOR bump, never a MINOR/PATCH:
 - Removing or renaming an existing function, event, or error (selector-changing).
 - Changing an existing function's signature, parameter types, or return types.
 - Adding a new revert path — a new `error` — reachable from an existing, otherwise-unmodified
@@ -143,62 +151,77 @@ function) revert with it → non-breaking, nothing could call `seizeWithMemo` be
 `error TransferPaused()` and having the *existing* `transfer` throw it under some new condition →
 breaking, because a `transfer` call that used to succeed can now revert.
 
+### Branching model
+
+There is **one ongoing release branch per MAJOR line**, `releases/vN.x` — not one per hardfork and
+not one per minor. As long as no breaking change has shipped, `releases/vN.x` just tracks `main`:
+every MINOR and PATCH is cut by fast-forwarding it to the freeze commit and tagging, no divergence,
+no backport needed.
+
+A second branch, `releases/v(N+1).x`, only gets cut the day a breaking change is actually ready to
+ship. At that point `releases/vN.x` stops tracking `main` and becomes the maintenance line for the
+old MAJOR — from then on, fixes for `vN.x` need the [Backporting](#backporting) procedure, because
+`main` has moved on to work that `vN.x` can't take wholesale.
+
 ### Process
 
 1. Land the frozen interface and its `changelog/<ordinal>_<Hardfork>_*.md` entries on `main` (see
    `changelog/AGENTS.md`), and add the hardfork's summary to root `CHANGELOG.md`.
-2. Cut `releases/vN.0.x` from `main` at the freeze commit (or fast-forward it, if the branch already
-   exists for an in-progress hardfork).
-3. Tag from that branch: `git tag vN.0.0 && git push origin vN.0.0`.
-4. `gh release create vN.0.0 --title "vN.0.0 — Base <Hardfork>" --notes-file <notes>` — title and
+2. Fast-forward `releases/vN.x` to that commit (`git push origin main:releases/vN.x`, or open a PR
+   if the branch is protected). Only cut a *new* `releases/v(N+1).x` branch if this release is
+   itself the breaking change that bumps MAJOR — see [Branching model](#branching-model).
+3. Tag from that branch: `git tag vN.M.P && git push origin vN.M.P`.
+4. `gh release create vN.M.P --title "vN.M.P — Base <Hardfork>" --notes-file <notes>` — title and
    body follow the existing releases (`v1.0.0`, `v1.0.1`): state compatibility with the prior
    hardfork, link each changelog entry, and link the aligned tag in
    [base/base](https://github.com/base/base) if one exists.
-5. Patch fixes land on `main` first, then backport to the `releases/vN.0.x` branch (see
-   [Backporting](#backporting)) before tagging `vN.0.P`.
+5. Once a second MAJOR line exists, patch fixes for the *old* line land on `main` (or its current
+   MAJOR's branch) first, then backport via the procedure below before tagging that line's next
+   PATCH.
 
 ### Backporting
 
-Patch fixes always land on `main` first, then get ported to the release branch — never commit
-directly to `releases/vN.0.x`.
+Only relevant once more than one MAJOR line is being maintained — before that, `releases/vN.x` just
+tracks `main` and there's nothing to backport. Patch fixes always land upstream first, then get
+ported to the older release branch — never commit directly to `releases/vN.x`.
 
 1. Ground truth is the tip-to-tip diff, not commit history:
-   `git diff origin/releases/vN.0.x origin/main -- <paths>`. Empty output means that path is fully
+   `git diff origin/releases/vN.x origin/main -- <paths>`. Empty output means that path is fully
    backported; anything else is missing.
 2. For each differing file, find the commit on `main` that introduced the difference:
    ```bash
-   MERGE_BASE=$(git merge-base origin/releases/vN.0.x origin/main)
+   MERGE_BASE=$(git merge-base origin/releases/vN.x origin/main)
    git log --oneline $MERGE_BASE..origin/main -- <file>
    ```
    Group files by commit SHA so you backport one PR per upstream commit, not one PR per file.
 3. Branch from the release branch, cherry-pick, push, and open a PR back against the release
    branch — never against `main`:
    ```bash
-   git checkout -b backport/pr-<NUM>-to-vN.0.x origin/releases/vN.0.x
+   git checkout -b backport/pr-<NUM>-to-vN.x origin/releases/vN.x
    git cherry-pick <SHA>
-   git push origin backport/pr-<NUM>-to-vN.0.x
-   gh pr create --base releases/vN.0.x --title "[backport] <original PR title>"
+   git push origin backport/pr-<NUM>-to-vN.x
+   gh pr create --base releases/vN.x --title "[backport] <original PR title>"
    ```
    On a conflict, take `main`'s version for straightforward/additive cases
    (`git checkout origin/main -- <file> && git add <file> && git cherry-pick --continue`); for
    anything non-trivial, resolve deliberately rather than guessing — a backport must produce the
    same code as `main` for those files.
-4. Re-run the diff in step 1 after merging. Repeat until it's empty, then tag `vN.0.P`.
+4. Re-run the diff in step 1 after merging. Repeat until it's empty, then tag `vN.M.P`.
 
 ### Draft releases
 
-- Cut the git tag first (`git tag vN.0.0 && git push origin vN.0.0`), *then*
-  `gh release create vN.0.0 --draft --notes-file <notes>` — a draft anchored to a real, pushed tag.
+- Cut the git tag first (`git tag vN.M.P && git push origin vN.M.P`), *then*
+  `gh release create vN.M.P --draft --notes-file <notes>` — a draft anchored to a real, pushed tag.
   GitHub still shows a synthetic `releases/tag/untagged-<hash>` URL for drafts; that's expected and
   resolves once you publish, not a sign the tag is wrong.
 - Only create the draft once the release branch tip is where you actually intend to freeze —
   don't draft speculatively against a commit that's about to get more changes. If the branch moves,
   delete and recreate the draft (and re-tag) rather than editing notes to describe a different commit.
 - Write notes via `--notes-file`, not an inline `--notes` string, so they're easy to proofread and
-  diff before publishing — read the rendered draft back (`gh release view vN.0.0`) before leaving it.
+  diff before publishing — read the rendered draft back (`gh release view vN.M.P`) before leaving it.
 - Keep at most one open draft per version. A stale, unpublished draft sitting next to a moved tag is
   a false signal to other maintainers about what's about to ship — delete it
-  (`gh release delete vN.0.0 --yes`) the moment it's superseded, don't leave it for cleanup later.
+  (`gh release delete vN.M.P --yes`) the moment it's superseded, don't leave it for cleanup later.
 
 ## Boundaries
 
