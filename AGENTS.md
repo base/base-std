@@ -118,7 +118,10 @@ new functions are not automatically non-breaking — only check where they're re
   reverts, which is exactly the kind of caller-visible change MAJOR exists for.
 - Removing an existing revert path, or changing which error an existing one throws — an input that
   used to fail now succeeds, or fails differently.
-- Changing the storage slot layout for existing state (see `MockB20Storage.sol`).
+- Moving, resizing, retyping, or reordering the storage slot of any *existing* field (see
+  `MockB20Storage.sol`) — this diverges from the Rust precompile's real layout, breaks
+  `vm.load` slot assertions and live-precompile cross-validation, and breaks any external tooling
+  that reads that state by raw slot.
 - Changing precompile addresses or feature IDs in `src/StdPrecompiles.sol` /
   `script/smoke/config.py` / `ActivationRegistryFeatureList.sol` (canonical constants shared with
   base/base — coordinate there first, see Boundaries below).
@@ -129,6 +132,9 @@ new functions are not automatically non-breaking — only check where they're re
   reachable through that new function — no existing selector's behavior changes, so no existing
   caller is affected.
 - Adding a new event emitted only from a new function, for the same reason.
+- Appending new state via the existing ERC-7201 namespaced-storage pattern — new fields land in new
+  slots, and every existing field keeps the slot it already has (how Cobalt added
+  `SEIZE_EXEMPT_POLICY`/`SEIZE_RECEIVER_POLICY` without touching Beryl's layout).
 - Deprecating a symbol (NatSpec `@deprecated` + changelog note) while leaving it callable, unchanged.
 - Documentation, test, tooling, harness, or CI changes.
 
