@@ -129,8 +129,36 @@ public ABI for integrators — a change is breaking if it violates either.
    body follow the existing releases (`v1.0.0`, `v1.0.1`): state compatibility with the prior
    hardfork, link each changelog entry, and link the aligned tag in
    [base/base](https://github.com/base/base) if one exists.
-5. Patch fixes land on `main` first, then backport to the `releases/vN.0.x` branch (the
-   `backport-loop` skill automates finding/porting them) before tagging `vN.0.P`.
+5. Patch fixes land on `main` first, then backport to the `releases/vN.0.x` branch (see
+   [Backporting](#backporting)) before tagging `vN.0.P`.
+
+### Backporting
+
+Patch fixes always land on `main` first, then get ported to the release branch — never commit
+directly to `releases/vN.0.x`.
+
+1. Ground truth is the tip-to-tip diff, not commit history:
+   `git diff origin/releases/vN.0.x origin/main -- <paths>`. Empty output means that path is fully
+   backported; anything else is missing.
+2. For each differing file, find the commit on `main` that introduced the difference:
+   ```bash
+   MERGE_BASE=$(git merge-base origin/releases/vN.0.x origin/main)
+   git log --oneline $MERGE_BASE..origin/main -- <file>
+   ```
+   Group files by commit SHA so you backport one PR per upstream commit, not one PR per file.
+3. Branch from the release branch, cherry-pick, push, and open a PR back against the release
+   branch — never against `main`:
+   ```bash
+   git checkout -b backport/pr-<NUM>-to-vN.0.x origin/releases/vN.0.x
+   git cherry-pick <SHA>
+   git push origin backport/pr-<NUM>-to-vN.0.x
+   gh pr create --base releases/vN.0.x --title "[backport] <original PR title>"
+   ```
+   On a conflict, take `main`'s version for straightforward/additive cases
+   (`git checkout origin/main -- <file> && git add <file> && git cherry-pick --continue`); for
+   anything non-trivial, resolve deliberately rather than guessing — a backport must produce the
+   same code as `main` for those files.
+4. Re-run the diff in step 1 after merging. Repeat until it's empty, then tag `vN.0.P`.
 
 ### Draft releases
 
