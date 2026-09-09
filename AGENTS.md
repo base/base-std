@@ -150,8 +150,8 @@ no backport needed.
 
 A second branch, `releases/v(N+1).x`, only gets cut the day a breaking change is actually ready to
 ship. At that point `releases/vN.x` stops tracking `main` and becomes the maintenance line for the
-old MAJOR — from then on, fixes for `vN.x` need the [Backporting](#backporting) procedure, because
-`main` has moved on to work that `vN.x` can't take wholesale.
+old MAJOR — from then on, `main` has moved on to work `vN.x` can't take wholesale, so fixes for
+`vN.x` need a deliberate backport PR rather than a fast-forward.
 
 ### Process
 
@@ -166,37 +166,8 @@ old MAJOR — from then on, fixes for `vN.x` need the [Backporting](#backporting
    hardfork, link each changelog entry, and link the aligned tag in
    [base/base](https://github.com/base/base) if one exists.
 5. Once a second MAJOR line exists, patch fixes for the *old* line land on `main` (or its current
-   MAJOR's branch) first, then backport via the procedure below before tagging that line's next
-   PATCH.
-
-### Backporting
-
-Only relevant once more than one MAJOR line is being maintained — before that, `releases/vN.x` just
-tracks `main` and there's nothing to backport. Patch fixes always land upstream first, then get
-ported to the older release branch — never commit directly to `releases/vN.x`.
-
-1. Ground truth is the tip-to-tip diff, not commit history:
-   `git diff origin/releases/vN.x origin/main -- <paths>`. Empty output means that path is fully
-   backported; anything else is missing.
-2. For each differing file, find the commit on `main` that introduced the difference:
-   ```bash
-   MERGE_BASE=$(git merge-base origin/releases/vN.x origin/main)
-   git log --oneline $MERGE_BASE..origin/main -- <file>
-   ```
-   Group files by commit SHA so you backport one PR per upstream commit, not one PR per file.
-3. Branch from the release branch, cherry-pick, push, and open a PR back against the release
-   branch — never against `main`:
-   ```bash
-   git checkout -b backport/pr-<NUM>-to-vN.x origin/releases/vN.x
-   git cherry-pick <SHA>
-   git push origin backport/pr-<NUM>-to-vN.x
-   gh pr create --base releases/vN.x --title "[backport] <original PR title>"
-   ```
-   On a conflict, take `main`'s version for straightforward/additive cases
-   (`git checkout origin/main -- <file> && git add <file> && git cherry-pick --continue`); for
-   anything non-trivial, resolve deliberately rather than guessing — a backport must produce the
-   same code as `main` for those files.
-4. Re-run the diff in step 1 after merging. Repeat until it's empty, then tag `vN.M.P`.
+   MAJOR's branch) first, then get backported to that line via a normal PR before tagging its next
+   PATCH — never commit directly to the old branch.
 
 ### Draft releases
 
