@@ -114,28 +114,6 @@ succeeds where it reverted, reverts where it succeeded, reverts with a different
 returns/emits something different — it's breaking, regardless of whether the ABI itself gained or
 lost anything. A new error or event isn't automatically non-breaking; check what it's reachable from.
 
-**Breaking** (MAJOR only):
-- Removing, renaming, or changing the signature/return type of an existing function, event, or error.
-- Adding, removing, or changing a revert path on an existing, otherwise-unmodified function.
-- Moving, resizing, retyping, or reordering an *existing* field's storage slot (see
-  `MockB20Storage.sol`) — diverges from the Rust precompile's real layout and breaks `vm.load` /
-  live-precompile parity.
-- Changing precompile addresses or feature IDs in `src/StdPrecompiles.sol` /
-  `script/smoke/config.py` / `ActivationRegistryFeatureList.sol` (canonical, shared with base/base —
-  coordinate there first, see Boundaries below).
-- Any other change to what an existing, unchanged selector returns or emits for the same inputs.
-
-**Non-breaking** (MINOR/PATCH):
-- A new function, and any event or error only reachable through it.
-- Appending new ERC-7201 namespaced state — new slots, existing ones untouched (how Cobalt added
-  `SEIZE_EXEMPT_POLICY`/`SEIZE_RECEIVER_POLICY` without touching Beryl's layout).
-- Deprecating a symbol (NatSpec `@deprecated`) while it stays callable, unchanged.
-- Docs, tests, tooling, harness, or CI.
-
-**Example**: `seizeWithMemo` (a new function) reverting with a new `AlreadySeized` error is
-non-breaking — nothing could call it before. The existing `transfer` gaining a new revert condition
-is breaking — a call that used to succeed can now fail.
-
 ### Drafting a release
 
 There is one ongoing release branch per MAJOR line, `releases/vN.x`, fast-forwarded to `main` at
