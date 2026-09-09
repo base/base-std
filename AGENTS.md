@@ -104,19 +104,38 @@ Versioning maps onto hardforks, not onto arbitrary feature batches:
 This repo's invariant is slot-for-slot storage parity with the Rust precompiles plus a stable
 public ABI for integrators — a change is breaking if it violates either.
 
+**The test**: take any function that already shipped, with its selector and inputs held fixed. Can
+its outcome differ from what it is today — succeeds where it used to revert, reverts where it used
+to succeed, reverts with a different error, or returns/emits something different? If yes, it's
+breaking, *regardless of whether the ABI itself gained or lost anything*. New errors, new events, and
+new functions are not automatically non-breaking — only check where they're reachable from.
+
 **Breaking** — requires a new MAJOR/hardfork boundary, never a MINOR/PATCH:
 - Removing or renaming an existing function, event, or error (selector-changing).
 - Changing an existing function's signature, parameter types, or return types.
+- Adding a new revert path — a new `error` — reachable from an existing, otherwise-unmodified
+  function. The error itself is new, but an input that used to succeed on that selector now
+  reverts, which is exactly the kind of caller-visible change MAJOR exists for.
+- Removing an existing revert path, or changing which error an existing one throws — an input that
+  used to fail now succeeds, or fails differently.
 - Changing the storage slot layout for existing state (see `MockB20Storage.sol`).
 - Changing precompile addresses or feature IDs in `src/StdPrecompiles.sol` /
   `script/smoke/config.py` / `ActivationRegistryFeatureList.sol` (canonical constants shared with
   base/base — coordinate there first, see Boundaries below).
-- Changing the observable behavior of an existing, unchanged selector.
+- Any other change to what an existing, unchanged selector returns or emits for the same inputs.
 
 **Non-breaking** — fine within a MINOR or PATCH:
-- Adding a new function, event, or error that doesn't collide with an existing selector.
+- Adding an entirely new function (new selector), including any events or errors that are only
+  reachable through that new function — no existing selector's behavior changes, so no existing
+  caller is affected.
+- Adding a new event emitted only from a new function, for the same reason.
 - Deprecating a symbol (NatSpec `@deprecated` + changelog note) while leaving it callable, unchanged.
 - Documentation, test, tooling, harness, or CI changes.
+
+**Worked example**: adding `error AlreadySeized()` and having `seizeWithMemo` (a brand-new
+function) revert with it → non-breaking, nothing could call `seizeWithMemo` before. Adding
+`error TransferPaused()` and having the *existing* `transfer` throw it under some new condition →
+breaking, because a `transfer` call that used to succeed can now revert.
 
 ### Process
 
