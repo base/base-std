@@ -86,6 +86,67 @@ Deeper reading: `LIVE_PRECOMPILE_TESTING.md` (cross-validation architecture), `d
 - CI on every PR: `forge build`, `forge test`, `forge fmt --check`,
   `python3 script/check-coverage.py`, coverage comment. Live-precompile tests run in a separate workflow.
 
+## Cutting releases
+
+Versioning maps onto hardforks, not onto arbitrary feature batches:
+
+- **MAJOR** (`vN.0.0`): a new hardfork boundary. Cutting the tag freezes the Solidity interface for
+  that hardfork — this can happen before on-chain activation, not after. Pick `N` from the
+  hardfork's ordinal in `changelog/README.md`'s [Hardfork ordinals](changelog/README.md#hardfork-ordinals)
+  table (`01` Beryl → `v1`, `02` Cobalt → `v2`, ...).
+- **MINOR** (`vN.M.0`): additive, non-breaking interface changes to the *current*, not-yet-frozen
+  hardfork — new selectors, events, or errors layered onto what's already tagged.
+- **PATCH** (`vN.M.P`): no interface change — tooling, harness, docs, or CI fixes on an
+  already-frozen release (e.g. `v1.0.1`'s fork-profile pin).
+
+### Breaking vs. non-breaking
+
+This repo's invariant is slot-for-slot storage parity with the Rust precompiles plus a stable
+public ABI for integrators — a change is breaking if it violates either.
+
+**Breaking** — requires a new MAJOR/hardfork boundary, never a MINOR/PATCH:
+- Removing or renaming an existing function, event, or error (selector-changing).
+- Changing an existing function's signature, parameter types, or return types.
+- Changing the storage slot layout for existing state (see `MockB20Storage.sol`).
+- Changing precompile addresses or feature IDs in `src/StdPrecompiles.sol` /
+  `script/smoke/config.py` / `ActivationRegistryFeatureList.sol` (canonical constants shared with
+  base/base — coordinate there first, see Boundaries below).
+- Changing the observable behavior of an existing, unchanged selector.
+
+**Non-breaking** — fine within a MINOR or PATCH:
+- Adding a new function, event, or error that doesn't collide with an existing selector.
+- Deprecating a symbol (NatSpec `@deprecated` + changelog note) while leaving it callable, unchanged.
+- Documentation, test, tooling, harness, or CI changes.
+
+### Process
+
+1. Land the frozen interface and its `changelog/<ordinal>_<Hardfork>_*.md` entries on `main` (see
+   `changelog/AGENTS.md`), and add the hardfork's summary to root `CHANGELOG.md`.
+2. Cut `releases/vN.0.x` from `main` at the freeze commit (or fast-forward it, if the branch already
+   exists for an in-progress hardfork).
+3. Tag from that branch: `git tag vN.0.0 && git push origin vN.0.0`.
+4. `gh release create vN.0.0 --title "vN.0.0 — Base <Hardfork>" --notes-file <notes>` — title and
+   body follow the existing releases (`v1.0.0`, `v1.0.1`): state compatibility with the prior
+   hardfork, link each changelog entry, and link the aligned tag in
+   [base/base](https://github.com/base/base) if one exists.
+5. Patch fixes land on `main` first, then backport to the `releases/vN.0.x` branch (the
+   `backport-loop` skill automates finding/porting them) before tagging `vN.0.P`.
+
+### Draft releases
+
+- Cut the git tag first (`git tag vN.0.0 && git push origin vN.0.0`), *then*
+  `gh release create vN.0.0 --draft --notes-file <notes>` — a draft anchored to a real, pushed tag.
+  GitHub still shows a synthetic `releases/tag/untagged-<hash>` URL for drafts; that's expected and
+  resolves once you publish, not a sign the tag is wrong.
+- Only create the draft once the release branch tip is where you actually intend to freeze —
+  don't draft speculatively against a commit that's about to get more changes. If the branch moves,
+  delete and recreate the draft (and re-tag) rather than editing notes to describe a different commit.
+- Write notes via `--notes-file`, not an inline `--notes` string, so they're easy to proofread and
+  diff before publishing — read the rendered draft back (`gh release view vN.0.0`) before leaving it.
+- Keep at most one open draft per version. A stale, unpublished draft sitting next to a moved tag is
+  a false signal to other maintainers about what's about to ship — delete it
+  (`gh release delete vN.0.0 --yes`) the moment it's superseded, don't leave it for cleanup later.
+
 ## Boundaries
 
 - **Don't change the precompile addresses** in `src/StdPrecompiles.sol` or the feature IDs in
