@@ -371,7 +371,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         policyId = _basePolicyId(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
         if (!_isWellFormed(policyId)) return false;
-  
+
         return MockPolicyRegistryStorage.policyExistsFromPacked(MockPolicyRegistryStorage.layout().policies[policyId]);
     }
 
@@ -384,7 +384,6 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      `_isAuthorized` per child, each of which resolves via the simple path
     ///      (or a built-in short-circuit).
     function _isAuthorized(uint64 policyId, address account) internal view returns (bool) {
-      
         bool isInverted = policyId & INVERTED_POLICY_BIT != 0;
         if (isInverted) {
             uint64 base = _basePolicyId(policyId);

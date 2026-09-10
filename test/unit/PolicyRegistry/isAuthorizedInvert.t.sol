@@ -106,9 +106,8 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         uint64 x = _createAllowlist();
         _addAllowlistMember(a, account);
         uint64 invertedX = x | INVERTED_POLICY_BIT;
-        uint64 composite = policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedX)
-        );
+        uint64 composite =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedX));
 
         // account is on A and NOT on X -> authorized.
         assertTrue(policyRegistry.isAuthorized(composite, account));
@@ -127,9 +126,8 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         uint64 a = _createAllowlist();
         uint64 x = _createAllowlist();
         uint64 invertedX = x | INVERTED_POLICY_BIT;
-        uint64 composite = policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedX)
-        );
+        uint64 composite =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedX));
         uint64[] memory children = policyRegistry.compositePolicyChildIds(composite);
         assertEq(children[1], invertedX);
     }
@@ -141,9 +139,7 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         uint64 missing = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(9999);
         uint64 invertedMissing = missing | INVERTED_POLICY_BIT;
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
-        policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedMissing)
-        );
+        policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedMissing));
     }
 
     /// @notice An inverted COMPOSITE child is rejected: the invert flag must not let a
@@ -154,12 +150,8 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         uint64 inner = policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.UNION, _childIds(a, b));
         uint64 invertedInner = inner | INVERTED_POLICY_BIT;
         uint64 c = _createAllowlist();
-        vm.expectRevert(
-            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, invertedInner)
-        );
-        policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(c, invertedInner)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, invertedInner));
+        policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(c, invertedInner));
     }
 
     // ============================================================
