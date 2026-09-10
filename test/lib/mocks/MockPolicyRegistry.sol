@@ -23,11 +23,7 @@ library PolicyRegistryConstants {
     uint64 internal constant ALWAYS_BLOCK_ID = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | 1;
 
     /// @notice High bit of a `uint64` policy ID that inverts the base policy.
-    /// @dev    All view functions see an inverted ID as an extension of the base —
-    ///         same existence, admin, pending admin, and child set; `isAuthorized`
-    ///         returns the negated base result. A missing or malformed base is denied
-    ///         later, at `isAuthorized`. The counter occupies only the low 56 bits
-    ///         (type byte at `[63:56]`), so bit 63 never collides with an issued ID.
+    /// @dev    All view functions see an inverted ID as an extension of the base — policy ID
     uint64 internal constant INVERTED_POLICY_BIT = uint64(1) << 63;
 
     /// @notice Number of built-in policies the registry initializes on
