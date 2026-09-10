@@ -114,7 +114,7 @@ interface IB20Asset is
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Required to call `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, and
-    ///         `updateMultiplier`. The metadata setters (`updateName`, `updateSymbol`,
+    ///         `updateUIMultiplier`. The metadata setters (`updateName`, `updateSymbol`,
     ///         `updateExtraMetadata`) are gated by the inherited `METADATA_ROLE` instead.
     /// @return Role constant.
     function OPERATOR_ROLE() external view returns (bytes32);

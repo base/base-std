@@ -258,3 +258,4 @@ sequenceDiagram
 | `EmptyFeatureSet()`                                     | `pause`/`unpause` called with an empty array                                  |
 | `LastAdminCannotRenounce()`                             | `revokeRole`/`renounceRole` would remove the last `DEFAULT_ADMIN_ROLE` holder |
 | `NotSoleAdmin()`                                        | `renounceLastAdmin` called while other admins still exist                     |
+

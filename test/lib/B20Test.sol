@@ -40,8 +40,6 @@ contract B20Test is B20FactoryTest {
     address internal burnBlocker = makeAddr("burnBlocker");
     address internal authorizedSpender = makeAddr("authorizedSpender");
 
-    bytes32 internal constant AUTHORIZED_SPENDER_ROLE = keccak256("AUTHORIZED_SPENDER_ROLE");
-
     // -- Token under test --
     /// @notice Asset-variant `IB20` token deployed in `setUp`.
     IB20 internal token;

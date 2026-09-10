@@ -51,7 +51,7 @@ library B20FactoryLib {
     }
 
     /// @notice Bootstrap role-grant bundle for `B20Variant.ASSET`. Superset of `B20RoleHolders`
-    ///         with an `OPERATOR_ROLE` convenience slot.
+    ///         with an `OPERATOR_ROLE` slot.
     ///
     /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20AssetCreateParams.initialAdmin`, not this struct.
     /// @dev    Append `encodeGrantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, spender)` when needed.

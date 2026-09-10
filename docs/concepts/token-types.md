@@ -46,7 +46,7 @@ Asset is the general-purpose variant. That includes real-world assets (RWAs). It
 
 Creation sets immutable `decimals` in `[6, 18]`. Values outside that range revert `InvalidDecimals`. Asset has no `currency()`.
 
-It adds the Asset-only calls: `announce` for a corporate-action disclosure with a single-use `id` and optional inner calls, scheduled `updateUIMultiplier` / `cancelUIMultiplierUpdate` ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)), an extra-metadata key/value store, and `batchMint`. The Asset-only `OPERATOR_ROLE` gates `announce` and multiplier updates. Name, symbol, contract URI, and extra metadata still use inherited `METADATA_ROLE`.
+It adds the Asset-only calls: `announce` for a corporate-action disclosure with a single-use `id` and optional inner calls, scheduled `updateUIMultiplier` / `cancelUIMultiplierUpdate` ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)), an extra-metadata key/value store, and `batchMint`. `OPERATOR_ROLE` is Asset-only and gates `announce` and multiplier updates. Name, symbol, contract URI, and extra metadata still use inherited `METADATA_ROLE`.
 
 Asset-specific state lives in `base.b20.asset`: `decimals`, `multiplier`, used announcement IDs, extra metadata, and the pending multiplier. Shared ERC-20, role, policy, and pause state stays in `base.b20`.
 

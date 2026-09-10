@@ -11,7 +11,7 @@ import {
     IScaledUIAmountConversion
 } from "base-std/interfaces/IERC8056.sol";
 
-import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
+import {MockB20} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20AssetStorage, MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 /// @title MockB20Asset
@@ -62,7 +62,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     //                          CONSTANTS
     // ============================================================
 
-    bytes32 public constant OPERATOR_ROLE = B20Constants.OPERATOR_ROLE;
+    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     /// @notice Fixed-point precision for the multiplier. `1e18` (one
     ///         WAD) is the standard DeFi convention; `toScaledBalance`

@@ -348,3 +348,4 @@ If the issuer later needs the same KYC list or-ed with a token-specific partner 
 | `ChildPoliciesOutsideOfRange()`     | A composite's child count is outside `[2, 4]`                                      |
 | `InvalidChildPolicy(childPolicyId)` | A composite child is not an existing simple policy                                 |
 | `NonPayable()`                      | ETH was attached to a registry call                                                |
+
