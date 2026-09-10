@@ -433,17 +433,11 @@ contract MockPolicyRegistry is IPolicyRegistry {
     }
 
     /// @dev Requires every composite child to be a created, custom, SIMPLE policy:
-    ///      its base must exist, must not be a built-in sentinel (ALWAYS_ALLOW /
-    ///      ALWAYS_BLOCK), and must not itself be a composite. Two passes so
-    ///      `PolicyNotFound` takes precedence over `InvalidChildPolicy` across the whole
-    ///      set (matches the canonical revert order the Rust precompile mirrors).
-    ///
-    ///      A child may carry the invert flag (`base | INVERTED_POLICY_BIT`) to express
-    ///      "NOT on this list" — e.g. `INTERSECT[A, ~X]` reads as "on A and not on X".
-    ///      Validation resolves the base (bit stripped): a composite base is still
-    ///      rejected, so the invert flag cannot smuggle a nested gate past the flat-tree
-    ///      invariant. The child is stored verbatim (flag intact); `_isAuthorized`
-    ///      inverts that leaf during evaluation.
+    ///      it must exist, must not be a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK),
+    ///      and must not itself be a composite. Two passes so `PolicyNotFound` takes
+    ///      precedence over `InvalidChildPolicy` across the whole set (matches the
+    ///      canonical revert order the Rust precompile mirrors).
+    /// @dev An inverted valid policy ID counts as a valid composite child.
     function _requireCreatedSimplePolicies(uint64[] calldata childPolicyIds) internal view {
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         // Pass 1: existence of the base (an inverted child references its base's members).
