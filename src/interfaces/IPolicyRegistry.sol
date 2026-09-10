@@ -5,15 +5,6 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 /// @notice Singleton registry of simple and composite policies. Policies are referenced by
 ///         `uint64 policyId` and queried via `isAuthorized(policyId, account)`.
-///
-/// @dev Policy ID layout: bits `[63:56]` are the type byte, bits `[55:0]` the counter.
-///      The `PolicyType` discriminant occupies the low two bits of the type byte; the top
-///      bit (bit 63, `B20Constants.POLICY_INVERT_BIT`) is the **invert flag** and is
-///      orthogonal to the type. When set, a query resolves the base policy
-///      (`policyId & ~POLICY_INVERT_BIT`) and `isAuthorized` returns the opposite of the
-///      base's decision — so one membership set can be evaluated as include or exclude
-///      without a mirror list. The flag is fail-closed (see `isAuthorized`) and is not a
-///      `PolicyType`; the enum is never extended to carry it.
 interface IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
@@ -136,10 +127,8 @@ interface IPolicyRegistry {
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite
     ///      and never a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK). The child-policy set is
     ///      capped at 4.
-    /// @dev A child may carry the invert flag (`base | POLICY_INVERT_BIT`) to mean "NOT on this
-    ///      list" — e.g. `INTERSECT[A, ~X]` reads as "on A and not on X". Validation resolves the
-    ///      base (flag stripped); the base must still be an existing simple policy, so an inverted
-    ///      composite child is rejected with `InvalidChildPolicy`. The child is stored verbatim.
+    /// @dev A child policy ID may be inverted. If so, the top bit of the type byte is flipped
+    ///      (`POLICY_INVERT_BIT`) and the child is evaluated as the inverse of the base.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is not in
@@ -240,14 +229,9 @@ interface IPolicyRegistry {
     ///         BLOCKLIST -> true).
     ///
     /// @dev Callers that store policy IDs MUST validate `policyExists(policyId)` at write time.
-    /// @dev Invert flag: when bit 63 (`B20Constants.POLICY_INVERT_BIT`) is set, the base policy
-    ///      `policyId & ~POLICY_INVERT_BIT` is evaluated and the result is negated — the inverse
-    ///      of any policy, including a whole composite. The flag applies after a defined base
-    ///      result, so it is **fail-closed**: an inverted ID whose base does not exist or is
-    ///      malformed returns `false`, never allow-everyone. (This differs from the plain
-    ///      empty-member-set semantics above, which are only reached without the flag.) An
-    ///      inverted composite child (`base | POLICY_INVERT_BIT` inside a child set) negates
-    ///      that leaf before the gate combines it.
+    /// @dev Invert flag (`POLICY_INVERT_BIT`): flipping bit 63 of the ID negates the
+    ///      `isAuthorized` result of the base. Applies to every policy type, including a
+    ///      whole composite.
     ///
     /// @param policyId Policy to query.
     /// @param account  Account to check.
@@ -318,4 +302,18 @@ interface IPolicyRegistry {
     ///
     /// @return Child policy IDs, or an empty array.
     function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory);
+
+    /// @notice Returns the inverted form of `policyId` — its invert flag toggled
+    ///         (`policyId ^ POLICY_INVERT_BIT`). Never reverts and reads no state.
+    ///
+    /// @dev Involutive: `invertedPolicyId(invertedPolicyId(id)) == id`. For an existing base,
+    ///      `isAuthorized(invertedPolicyId(id), account) == !isAuthorized(id, account)`. The
+    ///      returned ID is not validated here — an inverted ID over a non-existent or malformed
+    ///      base is fail-closed only at `isAuthorized` time (returns false). This is the
+    ///      ABI-discoverable counterpart to the on-chain `B20Constants.invertPolicy` helper.
+    ///
+    /// @param policyId Policy to invert.
+    ///
+    /// @return The policy ID with its invert flag toggled.
+    function invertedPolicyId(uint64 policyId) external view returns (uint64);
 }

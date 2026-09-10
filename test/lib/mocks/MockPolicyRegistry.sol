@@ -310,6 +310,14 @@ contract MockPolicyRegistry is IPolicyRegistry {
         return MockPolicyRegistryStorage.layout().children[policyId];
     }
 
+    /// @inheritdoc IPolicyRegistry
+    /// @dev Delegates to the shared `B20Constants.invertPolicy` helper so the mock and the
+    ///      library can never disagree on the invert bit. `pure` is a valid override of the
+    ///      `view` interface declaration.
+    function invertedPolicyId(uint64 policyId) external pure returns (uint64) {
+        return B20Constants.invertPolicy(policyId);
+    }
+
     // ============================================================
     //                       INTERNAL HELPERS
     // ============================================================

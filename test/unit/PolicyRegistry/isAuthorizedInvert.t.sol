@@ -214,4 +214,30 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
             policyRegistry.isAuthorized(base | INVERT_BIT, account)
         );
     }
+
+    // ============================================================
+    //                 invertedPolicyId() VIEW
+    // ============================================================
+
+    /// @notice The registry view toggles the invert flag, is involutive, and never reverts —
+    ///         including for unknown/malformed IDs (it reads no state).
+    function test_invertedPolicyId_success_togglesAndRoundTrips(uint64 base) public view {
+        uint64 inverted = policyRegistry.invertedPolicyId(base);
+        assertEq(inverted, base ^ INVERT_BIT);
+        assertEq(policyRegistry.invertedPolicyId(inverted), base);
+    }
+
+    /// @notice The view agrees with the on-chain `B20Constants.invertPolicy` helper.
+    function test_invertedPolicyId_success_matchesLibraryHelper(uint64 base) public view {
+        assertEq(policyRegistry.invertedPolicyId(base), B20Constants.invertPolicy(base));
+    }
+
+    /// @notice End-to-end: authorizing against the view's result negates the base decision.
+    function test_invertedPolicyId_success_negatesAuthorization(address account) public {
+        uint64 base = _createAllowlist();
+        _addAllowlistMember(base, account);
+        uint64 inverted = policyRegistry.invertedPolicyId(base);
+        assertTrue(policyRegistry.isAuthorized(base, account));
+        assertFalse(policyRegistry.isAuthorized(inverted, account));
+    }
 }
