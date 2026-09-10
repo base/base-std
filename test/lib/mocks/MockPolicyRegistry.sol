@@ -478,9 +478,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         return policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID;
     }
 
-    /// @dev Drops the invert flag so storage keys, type decode, and existence
-    ///      resolve against the issued ID. Invert is query-time only; it is never
-    ///      written as its own record.
+    /// @dev Strips the invert flag from the policy ID.
     function _basePolicyId(uint64 policyId) internal pure returns (uint64) {
         return policyId & ~INVERTED_POLICY_BIT;
     }

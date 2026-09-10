@@ -6,16 +6,8 @@ import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 import {PolicyRegistryTest} from "base-std-test/lib/PolicyRegistryTest.sol";
 import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
-/// @notice Covers the invert (NOT) flag on the policy ID: `isAuthorized` resolves the
-///         base policy (`policyId & ~INVERTED_POLICY_BIT`) and returns the opposite of its
-///         decision, so one membership set can be evaluated as include or exclude
-///         without maintaining a mirror list.
-///
-/// @dev    The load-bearing property is FAIL-CLOSED: an inverted ID over an unknown or
-///         malformed base must deny, never flip a would-be deny into allow-everyone on a
-///         gated mint / transfer / seize path. Those cases lead the suite.
+/// @notice Covers the invert (NOT) flag on the policy ID. IsAuthrized evaluates the base policy and inverts the result.
 contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
-    /// @dev The shared invert flag (bit 63 of the ID); single source of truth.
     uint64 internal constant INVERTED_POLICY_BIT = PolicyRegistryConstants.INVERTED_POLICY_BIT;
 
     function _addAllowlistMember(uint64 policyId, address account) internal {
@@ -37,16 +29,13 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
     // ============================================================
 
     /// @notice Inverting an uncreated (unknown) base denies rather than allowing everyone.
-    /// @dev The whole reason the invert flag is gated on base existence. Without the gate
-    ///      a garbage or typo'd ID with the bit set would authorize every account.
     function test_isAuthorized_success_invertUnknownAllowlistBaseDenies(uint56 counter, address account) public view {
         vm.assume(counter > 1);
         uint64 base = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(counter);
         assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
     }
 
-    /// @notice Inverting an uncreated BLOCKLIST base also denies (fail-closed), even though
-    ///         a plain unknown blocklist authorizes — existence is what gates the flip.
+    /// @notice Inverting an uncreated BLOCKLIST base also denies (fail-closed)
     function test_isAuthorized_success_invertUnknownBlocklistBaseDenies(uint56 counter, address account) public view {
         vm.assume(counter > 1);
         uint64 base = (uint64(uint8(IPolicyRegistry.PolicyType.BLOCKLIST)) << 56) | uint64(counter);
@@ -56,8 +45,7 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
     }
 
-    /// @notice Inverting a malformed base (type byte above the enum, after stripping the
-    ///         invert flag) denies.
+    /// @notice Inverting a malformed base denies.
     function test_isAuthorized_success_invertMalformedBaseDenies(uint64 seed, address account) public view {
         uint64 base = _malformedPolicyId(seed) & ~INVERTED_POLICY_BIT;
         assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
@@ -117,9 +105,9 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         uint64 a = _createAllowlist();
         uint64 x = _createAllowlist();
         _addAllowlistMember(a, account);
-
+        uint64 invertedX = x | INVERTED_POLICY_BIT;
         uint64 composite = policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, x | INVERTED_POLICY_BIT)
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedX)
         );
 
         // account is on A and NOT on X -> authorized.
@@ -138,11 +126,12 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
     function test_createCompositePolicy_success_invertedSimpleChild() public {
         uint64 a = _createAllowlist();
         uint64 x = _createAllowlist();
+        uint64 invertedX = x | INVERTED_POLICY_BIT;
         uint64 composite = policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, x | INVERTED_POLICY_BIT)
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedX)
         );
         uint64[] memory children = policyRegistry.compositePolicyChildIds(composite);
-        assertEq(children[1], x | INVERTED_POLICY_BIT);
+        assertEq(children[1], invertedX);
     }
 
     /// @notice An inverted child whose base does not exist reverts with PolicyNotFound —
@@ -150,9 +139,10 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
     function test_createCompositePolicy_revert_invertedChildBaseNotFound() public {
         uint64 a = _createAllowlist();
         uint64 missing = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(9999);
+        uint64 invertedMissing = missing | INVERTED_POLICY_BIT;
         vm.expectRevert(IPolicyRegistry.PolicyNotFound.selector);
         policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, missing | INVERTED_POLICY_BIT)
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, invertedMissing)
         );
     }
 
@@ -162,13 +152,13 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         uint64 a = _createAllowlist();
         uint64 b = _createAllowlist();
         uint64 inner = policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.UNION, _childIds(a, b));
-
+        uint64 invertedInner = inner | INVERTED_POLICY_BIT;
         uint64 c = _createAllowlist();
         vm.expectRevert(
-            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, inner | INVERTED_POLICY_BIT)
+            abi.encodeWithSelector(IPolicyRegistry.InvalidChildPolicy.selector, invertedInner)
         );
         policyRegistry.createCompositePolicy(
-            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(c, inner | INVERTED_POLICY_BIT)
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(c, invertedInner)
         );
     }
 
@@ -189,8 +179,7 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
         assertEq(children[1], x | INVERTED_POLICY_BIT, "inverted child returned with flag set");
     }
 
-    /// @notice Querying the composite's own inverse returns the identical child set (only the
-    ///         queried ID's flag is stripped; the children are untouched).
+    /// @notice Querying the composite's own inverse returns the identical child set
     function test_compositePolicyChildIds_success_invertedCompositeIdReturnsSameSet() public {
         uint64 a = _createAllowlist();
         uint64 x = _createAllowlist();
@@ -227,8 +216,7 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
     // ============================================================
 
     /// @notice policyExists(~id) mirrors policyExists(id): the inverse of a created policy
-    ///         reports existing (so a token can store and re-validate ~id), and the inverse
-    ///         of an unknown base reports non-existent.
+    ///         reports existing
     function test_policyExists_success_invertMirrorsBase(uint56 counter) public {
         vm.assume(counter > 1);
         uint64 created = _createAllowlist();
