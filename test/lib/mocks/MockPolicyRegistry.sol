@@ -262,7 +262,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @dev An inverted ID has no record of its own; it resolves to its base's admin,
     ///      matching `policyExists` (`policyAdmin(~id) == policyAdmin(id)`).
     function policyAdmin(uint64 policyId) external view returns (address) {
-        policyId = policyId & ~INVERTED_POLICY_BIT;
+        policyId = _basePolicyId(policyId);
         if (!_isWellFormed(policyId)) return address(0);
         // No fast path for built-in IDs needed: lazy init writes them with
         // a zero admin, so the normal storage read returns address(0) for
@@ -287,7 +287,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         // below would also return `address(0)` for built-ins in normal
         // operation (they never have a pending admin staged), but the
         // explicit branch removes that assumption from the trust boundary.
-        policyId = policyId & ~INVERTED_POLICY_BIT;
+        policyId = _basePolicyId(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         if (!_isWellFormed(policyId)) return address(0);
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
@@ -299,7 +299,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      child recorded with its invert flag comes back with the flag set — so any
     ///      per-child invert remains visible to indexers.
     function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory) {
-        policyId = policyId & ~INVERTED_POLICY_BIT;
+        policyId = _basePolicyId(policyId);
         if (!_isWellFormed(policyId)) return new uint64[](0);
         if (!_isComposite(policyId)) return new uint64[](0);
         return MockPolicyRegistryStorage.layout().children[policyId];
@@ -377,7 +377,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      fail-closed guard in `_isAuthorized`. Strips the invert flag first, so an
     ///      inverted ID exists iff its base exists. Never reverts.
     function _policyExists(uint64 policyId) internal view returns (bool) {
-        policyId = policyId & ~INVERTED_POLICY_BIT;
+        policyId = _basePolicyId(policyId);
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
         if (!_isWellFormed(policyId)) return false;
         // Typed `policyExistsFromPacked` rather than a raw `packed != 0` test: identical
@@ -403,8 +403,9 @@ contract MockPolicyRegistry is IPolicyRegistry {
         // allow-everyone — the one property that makes the invert flag safe on gated
         // mint / transfer / seize paths. The base's decision is only inverted once it is
         // known to resolve against a real policy.
-        if (policyId & INVERTED_POLICY_BIT != 0) {
-            uint64 base = policyId & ~INVERTED_POLICY_BIT;
+        bool isInverted = policyId & INVERTED_POLICY_BIT != 0;
+        if (isInverted) {
+            uint64 base = _basePolicyId(policyId);
             if (!_policyExists(base)) return false;
             return !_isAuthorized(base, account);
         }
@@ -465,11 +466,11 @@ contract MockPolicyRegistry is IPolicyRegistry {
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         // Pass 1: existence of the base (an inverted child references its base's members).
         for (uint256 i = 0; i < childPolicyIds.length; ++i) {
-            if ($.policies[childPolicyIds[i] & ~INVERTED_POLICY_BIT] == 0) revert PolicyNotFound();
+            if ($.policies[_basePolicyId(childPolicyIds[i])] == 0) revert PolicyNotFound();
         }
         // Pass 2: the base must be a simple policy (never a sentinel or a composite).
         for (uint256 i = 0; i < childPolicyIds.length; ++i) {
-            uint64 base = childPolicyIds[i] & ~INVERTED_POLICY_BIT;
+            uint64 base = _basePolicyId(childPolicyIds[i]);
             if (_isBuiltin(base) || _isComposite(base)) revert InvalidChildPolicy(childPolicyIds[i]);
         }
     }
@@ -489,6 +490,13 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      Sentinels are reserved and may not be used as composite children.
     function _isBuiltin(uint64 policyId) internal pure returns (bool) {
         return policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID;
+    }
+
+    /// @dev Drops the invert flag so storage keys, type decode, and existence
+    ///      resolve against the issued ID. Invert is query-time only; it is never
+    ///      written as its own record.
+    function _basePolicyId(uint64 policyId) internal pure returns (uint64) {
+        return policyId & ~INVERTED_POLICY_BIT;
     }
 
     function _makeId(PolicyType policyType, uint56 counter) internal pure returns (uint64) {
