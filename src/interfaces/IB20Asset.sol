@@ -110,16 +110,6 @@ interface IB20Asset is
     event EndAnnouncement(string id);
 
     /*//////////////////////////////////////////////////////////////
-                              ROLE CONSTANTS
-    //////////////////////////////////////////////////////////////*/
-
-    /// @notice Required to call `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, and
-    ///         `updateUIMultiplier`. The metadata setters (`updateName`, `updateSymbol`,
-    ///         `updateExtraMetadata`) are gated by the inherited `METADATA_ROLE` instead.
-    /// @return Role constant.
-    function OPERATOR_ROLE() external view returns (bytes32);
-
-    /*//////////////////////////////////////////////////////////////
                               PRECISION
     //////////////////////////////////////////////////////////////*/
 

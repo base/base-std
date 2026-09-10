@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 
-/// @notice Folds the seven trivial role-constant readers into one
+/// @notice Folds the eight trivial role-constant readers into one
 ///         file since each is a one-stub assertion against a fixed keccak
 ///         digest. Substantive role-related functions (`grantRole`,
 ///         `revokeRole`, etc.) live in their own files.
@@ -58,5 +58,12 @@ contract B20RoleConstantsTest is B20Test {
     function test_METADATA_ROLE_success_matchesExpected() public view {
         assertEq(token.METADATA_ROLE(), keccak256("METADATA_ROLE"), "B20Constants.METADATA_ROLE digest");
         assertEq(token.METADATA_ROLE(), B20Constants.METADATA_ROLE, "must match B20Test's local constant");
+    }
+
+    /// @notice Verifies OPERATOR_ROLE returns keccak256("OPERATOR_ROLE")
+    /// @dev Constant stability for operator allowance and Asset administration.
+    function test_OPERATOR_ROLE_success_matchesExpected() public view {
+        assertEq(token.OPERATOR_ROLE(), keccak256("OPERATOR_ROLE"), "B20Constants.OPERATOR_ROLE digest");
+        assertEq(token.OPERATOR_ROLE(), B20Constants.OPERATOR_ROLE, "must match B20Test's local constant");
     }
 }

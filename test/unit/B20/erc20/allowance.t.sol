@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {B20Test} from "base-std-test/lib/B20Test.sol";
+import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
+import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
 
 contract B20AllowanceTest is B20Test {
     /// @notice Verifies allowance returns zero for any unconfigured (owner, spender) pair
@@ -54,5 +56,37 @@ contract B20AllowanceTest is B20Test {
         assertEq(
             token.allowance(owner, spender), allowanceAmount - spendAmount, "allowance must decrease by spent amount"
         );
+    }
+
+    /// @notice Verifies every holder reports an infinite allowance for an operator
+    /// @dev Role membership overrides the allowance view without changing the stored allowance.
+    function test_allowance_success_operatorReadsAsInfinite(address owner, uint256 storedAllowance) public {
+        _assumeValidActor(owner);
+
+        vm.prank(owner);
+        token.approve(operator, storedAllowance);
+        _grantOperator();
+
+        assertEq(token.allowance(owner, operator), type(uint256).max, "operator allowance must read as infinite");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, operator))),
+            storedAllowance,
+            "operator role must not overwrite stored allowance"
+        );
+    }
+
+    /// @notice Verifies revoking OPERATOR_ROLE restores the holder's stored allowance
+    /// @dev Role revocation removes only the synthetic infinite allowance.
+    function test_allowance_success_revokedOperatorReadsStoredAllowance(address owner, uint256 storedAllowance) public {
+        _assumeValidActor(owner);
+
+        vm.prank(owner);
+        token.approve(operator, storedAllowance);
+        _grantOperator();
+
+        vm.prank(admin);
+        token.revokeRole(B20Constants.OPERATOR_ROLE, operator);
+
+        assertEq(token.allowance(owner, operator), storedAllowance, "revoked operator must read stored allowance");
     }
 }

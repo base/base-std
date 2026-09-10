@@ -46,7 +46,7 @@ Asset is the general-purpose variant. That includes real-world assets (RWAs). It
 
 Creation sets immutable `decimals` in `[6, 18]`. Values outside that range revert `InvalidDecimals`. Asset has no `currency()`.
 
-It adds the Asset-only calls: `announce` for a corporate-action disclosure with a single-use `id` and optional inner calls, scheduled `updateUIMultiplier` / `cancelUIMultiplierUpdate` ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)), an extra-metadata key/value store, and `batchMint`. `OPERATOR_ROLE` is Asset-only and gates `announce` and multiplier updates. Name, symbol, contract URI, and extra metadata still use inherited `METADATA_ROLE`.
+It adds the Asset-only calls: `announce` for a corporate-action disclosure with a single-use `id` and optional inner calls, scheduled `updateUIMultiplier` / `cancelUIMultiplierUpdate` ([ERC-8056](https://eips.ethereum.org/EIPS/eip-8056)), an extra-metadata key/value store, and `batchMint`. The inherited `OPERATOR_ROLE` also gates `announce` and multiplier updates. Name, symbol, contract URI, and extra metadata still use inherited `METADATA_ROLE`.
 
 Asset-specific state lives in `base.b20.asset`: `decimals`, `multiplier`, used announcement IDs, extra metadata, and the pending multiplier. Shared ERC-20, role, policy, and pause state stays in `base.b20`.
 
@@ -58,7 +58,7 @@ Stablecoin is the fiat-pegged variant.
 
 `decimals` is hardcoded to `6`. The issuer does not pass decimals.
 
-The extra surface on top of `IB20` is `currency()`. Stablecoin has no announce, multiplier, extra metadata, `batchMint`, or `OPERATOR_ROLE`.
+The extra surface on top of `IB20` is `currency()`. Stablecoin has no announce, multiplier, extra metadata, or `batchMint`. It inherits the shared `OPERATOR_ROLE` allowance behavior from `IB20`.
 
 Stablecoin-specific state lives in `base.b20.stablecoin` (`currency` only). Shared ERC-20, role, policy, and pause state stays in `base.b20`.
 
@@ -70,7 +70,7 @@ The same issuer can create both types. Different salts produce different address
 
 ### 6.1 Creating a Stablecoin
 
-Predict the address with `getB20Address(STABLECOIN, sender, saltB)`. Then call `createB20` with `B20StablecoinCreateParams`: `version` `1`, name, symbol, `initialAdmin`, and `currency: "USD"`.
+Predict the address with `getB20Address(STABLECOIN, sender, saltB)`. Then call `createB20` with `B20StablecoinCreateParams`: `version` `1`, name, symbol, `initialAdmin`, and `currency: "USD"`. Optional `initCalls` can grant `OPERATOR_ROLE` through the standard `grantRole` encoder.
 
 ```mermaid
 sequenceDiagram

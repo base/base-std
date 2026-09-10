@@ -38,6 +38,28 @@ contract B20SetRoleAdminTest is B20Test {
         );
     }
 
+    /// @notice Verifies OPERATOR_ROLE administration can be delegated from DEFAULT_ADMIN_ROLE
+    /// @dev Pins the selected governance model for the exact operator role.
+    function test_setRoleAdmin_success_delegatesOperatorRoleAdministration(address delegatedAdmin) public {
+        _assumeValidCaller(delegatedAdmin);
+        vm.assume(delegatedAdmin != admin);
+        bytes32 customAdminRole = keccak256("CUSTOM_ADMIN_ROLE");
+
+        vm.startPrank(admin);
+        token.grantRole(customAdminRole, delegatedAdmin);
+        token.setRoleAdmin(B20Constants.OPERATOR_ROLE, customAdminRole);
+        vm.stopPrank();
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, customAdminRole));
+        token.grantRole(B20Constants.OPERATOR_ROLE, operator);
+
+        vm.prank(delegatedAdmin);
+        token.grantRole(B20Constants.OPERATOR_ROLE, operator);
+
+        assertTrue(token.hasRole(B20Constants.OPERATOR_ROLE, operator), "delegated admin must grant operator role");
+    }
+
     /// @notice Verifies setRoleAdmin emits RoleAdminChanged(role, previousAdminRole, newAdminRole)
     /// @dev Event integrity; canonical RoleAdminChanged emission test.
     ///      Every role on a fresh token is unconfigured, so the previous

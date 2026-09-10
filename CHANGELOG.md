@@ -5,6 +5,32 @@ Each section is a complete summary of that hardfork's changes. For selector-leve
 function selectors, event topics, error codes, and edge-case behavior), see the corresponding entry
 in [`changelog/`](changelog/README.md).
 
+## Denim
+
+### Status
+
+Denim has not activated yet. Operator allowance behavior remains unavailable until Denim selects B20 logic v3.
+
+### Compatibility
+
+Denim changes the behavior of existing `allowance`, `transferFrom`, and `transferFromWithMemo` selectors. It also moves the existing Asset `OPERATOR_ROLE()` getter onto the shared `IB20` surface, which makes that selector available on Stablecoin.
+
+### Summary of changes
+
+| Product | Feature | Change | Details |
+| --- | --- | --- | --- |
+| B20 (Asset and Stablecoin) | Issuer-approved operators | An account with `OPERATOR_ROLE` reads as having infinite allowance from every holder. Operator transfers do not consume stored allowances, but pause and transfer policies remain active. | [03_Denim_B20_operator_allowance](changelog/03_Denim_B20_operator_allowance.md) |
+
+### Migration guidance
+
+#### Issuers
+
+Audit every existing `OPERATOR_ROLE` holder before Denim activates. Asset already uses this role for announcements and multiplier administration, so those accounts gain authority to move holder balances. Stablecoin issuers must also audit generic grants of the same role hash. Revoke any assignment that should not gain this authority.
+
+#### Wallets and integrators
+
+Treat `allowance(owner, spender) == type(uint256).max` as possible role-based authority. A holder cannot revoke that authority with `approve(spender, 0)`; only the role administrator can remove it. Continue to enforce transfer policy failures and paused-transfer failures for operator calls.
+
 ## Cobalt
 
 ### Status

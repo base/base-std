@@ -33,10 +33,12 @@ Two functions always require `DEFAULT_ADMIN_ROLE`: `updatePolicy` and `updateSup
 | `PAUSE_ROLE`         | `pause`                                                                                                 |
 | `UNPAUSE_ROLE`       | `unpause`                                                                                               |
 | `METADATA_ROLE`      | `updateName`, `updateSymbol`, `updateContractURI`; Asset also gates `updateExtraMetadata`               |
-| `OPERATOR_ROLE`      | Asset-only: `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, deprecated `updateMultiplier` |
+| `OPERATOR_ROLE`      | Infinite `transferFrom` allowance from every holder; Asset also gates `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, deprecated `updateMultiplier` |
 
 
-`OPERATOR_ROLE` exists only on Asset. See [Token Types](token-types.md). `approve` is not role-gated. Holder `transfer` is not role-gated. A holder can always move their own balance, subject to pause and policy.
+`OPERATOR_ROLE` is shared by Asset and Stablecoin. For any holder and operator, `allowance(holder, operator)` returns `type(uint256).max`. The operator can call `transferFrom` or `transferFromWithMemo` without holder approval, and those calls do not change the holder's stored allowance. `approve(operator, 0)` does not opt the holder out. The role administrator must revoke `OPERATOR_ROLE` to remove the authority.
+
+Operator transfers still use the `TRANSFER` pause vector and all three transfer policy scopes. The role waives only the allowance check. On Asset, the same role also gates announcements and multiplier updates. `approve` and holder `transfer` are not role-gated.
 
 ### 2.3 Granting and revoking
 
@@ -255,5 +257,4 @@ sequenceDiagram
 | `EmptyFeatureSet()`                                     | `pause`/`unpause` called with an empty array                                  |
 | `LastAdminCannotRenounce()`                             | `revokeRole`/`renounceRole` would remove the last `DEFAULT_ADMIN_ROLE` holder |
 | `NotSoleAdmin()`                                        | `renounceLastAdmin` called while other admins still exist                     |
-
 

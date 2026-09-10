@@ -97,6 +97,8 @@ This is the routine corporate-action path.
 asset.grantRole(asset.OPERATOR_ROLE(), operator);
 ```
 
+`OPERATOR_ROLE` also grants infinite `transferFrom` authority from every holder. Grant it only to an account that may move holder balances.
+
 Until this grant lands, every multiplier setter reverts `AccessControlUnauthorizedAccount`.
 
 #### Call `updateUIMultiplier`

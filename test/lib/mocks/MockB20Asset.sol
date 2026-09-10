@@ -62,8 +62,6 @@ contract MockB20Asset is MockB20, IB20Asset {
     //                          CONSTANTS
     // ============================================================
 
-    bytes32 public constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
-
     /// @notice Fixed-point precision for the multiplier. `1e18` (one
     ///         WAD) is the standard DeFi convention; `toScaledBalance`
     ///         and `scaledBalanceOf` divide by this after multiplying

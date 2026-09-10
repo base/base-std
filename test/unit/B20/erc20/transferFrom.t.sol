@@ -57,6 +57,28 @@ contract B20TransferFromTest is B20Test {
         token.transferFrom(from, to, amount);
     }
 
+    /// @notice Verifies OPERATOR_ROLE does not bypass TRANSFER_EXECUTOR_POLICY
+    /// @dev The role waives allowance only; executor policy remains active.
+    function test_transferFrom_revert_operatorExecutorPolicyForbids(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(operator != from);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _grantOperator();
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transferFrom(from, to, amount);
+    }
+
     /// @notice Verifies transferFrom reverts when from is not authorized under TRANSFER_SENDER_POLICY
     /// @dev Sender-side policy guard fires inside _transfer.
     function test_transferFrom_revert_senderPolicyForbids(address caller, address from, address to, uint256 amount)
@@ -73,6 +95,27 @@ contract B20TransferFromTest is B20Test {
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
         vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_SENDER_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transferFrom(from, to, amount);
+    }
+
+    /// @notice Verifies OPERATOR_ROLE does not bypass TRANSFER_SENDER_POLICY
+    /// @dev The role waives allowance only; sender policy remains active.
+    function test_transferFrom_revert_operatorSenderPolicyForbids(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _grantOperator();
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(operator);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IB20.PolicyForbids.selector,
@@ -109,6 +152,27 @@ contract B20TransferFromTest is B20Test {
         token.transferFrom(from, to, amount);
     }
 
+    /// @notice Verifies OPERATOR_ROLE does not bypass TRANSFER_RECEIVER_POLICY
+    /// @dev The role waives allowance only; receiver policy remains active.
+    function test_transferFrom_revert_operatorReceiverPolicyForbids(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _grantOperator();
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(operator);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_RECEIVER_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transferFrom(from, to, amount);
+    }
+
     /// @notice Verifies transferFrom reverts when caller's allowance is insufficient
     /// @dev Allowance precondition fires first when caller != from; checks InsufficientAllowance
     function test_transferFrom_revert_insufficientAllowance(address caller, address from, address to, uint256 amount)
@@ -123,6 +187,24 @@ contract B20TransferFromTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, caller, 0, amount));
+        token.transferFrom(from, to, amount);
+    }
+
+    /// @notice Verifies a revoked operator must use the holder's stored allowance
+    /// @dev Revocation removes the allowance bypass immediately.
+    function test_transferFrom_revert_revokedOperatorInsufficientAllowance(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        amount = bound(amount, 1, type(uint256).max);
+
+        _grantOperator();
+        vm.prank(admin);
+        token.revokeRole(B20Constants.OPERATOR_ROLE, operator);
+
+        vm.prank(operator);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, operator, 0, amount));
         token.transferFrom(from, to, amount);
     }
 
@@ -249,6 +331,62 @@ contract B20TransferFromTest is B20Test {
             uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, caller))),
             type(uint256).max,
             "allowances[from][caller] slot must still hold the infinite sentinel"
+        );
+    }
+
+    /// @notice Verifies approving zero does not opt a holder out of operator spending
+    /// @dev OPERATOR_ROLE supplies independent infinite authority over every holder balance.
+    function test_transferFrom_success_operatorSpendsAfterHolderApprovesZero(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _mint(from, amount);
+        vm.prank(from);
+        token.approve(operator, 0);
+        _grantOperator();
+
+        vm.prank(operator);
+        token.transferFrom(from, to, amount);
+
+        assertEq(token.balanceOf(to), amount, "operator must spend despite zero stored allowance");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, operator))),
+            0,
+            "zero stored allowance must remain unchanged"
+        );
+    }
+
+    /// @notice Verifies operator spending does not consume a finite stored allowance
+    /// @dev Role authority and holder-managed allowance accounting remain independent.
+    function test_transferFrom_success_operatorPreservesStoredAllowance(
+        address from,
+        address to,
+        uint256 storedAllowance,
+        uint256 amount
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        storedAllowance = bound(storedAllowance, 0, type(uint256).max - 1);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _mint(from, amount);
+        vm.prank(from);
+        token.approve(operator, storedAllowance);
+        _grantOperator();
+
+        vm.prank(operator);
+        token.transferFrom(from, to, amount);
+
+        assertEq(token.allowance(from, operator), type(uint256).max, "operator allowance must remain infinite");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, operator))),
+            storedAllowance,
+            "stored allowance must not be consumed"
         );
     }
 

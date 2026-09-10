@@ -46,7 +46,7 @@ Convert a single amount with `toUIAmount(raw)` and `fromUIAmount(ui)` at that ef
 
 ### What it preserves
 
-`balanceOf`, `transfer` amounts, `totalSupply`, and allowances stay raw. Protocols that use that ERC-20 surface do not see the split.
+`balanceOf`, `transfer` amounts, `totalSupply`, and stored allowances stay raw. Protocols that use that ERC-20 surface do not see the split. The separate `OPERATOR_ROLE` rule can make `allowance(owner, operator)` return `type(uint256).max`; that value does not use the UI multiplier.
 
 The UI views above are opt-in. Protocols that call `balanceOfUI`, `scaledBalanceOf`, or `totalSupplyUI` do see the split.
 
@@ -101,4 +101,3 @@ A reverse split uses the same path. A 1-for-2 uses `5e17`.
 - [Roles and Pause](roles-and-pause.md) — `OPERATOR_ROLE`.
 - [Schedule a stock split](../guides/scheduling-stock-splits.md) — how to schedule, cancel, override; events and errors.
 - [Announce a corporate action](../guides/announcing-corporate-actions.md) — disclosure wrapper around the schedule.
-

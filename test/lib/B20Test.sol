@@ -19,7 +19,7 @@ import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 ///
 /// On top of the inherited factory actors, this contract adds the
 /// token-specific role-holders (`minter`, `burner`, `pauser`,
-/// `unpauser`, `burnBlocker`) so role-gated tests have explicit named
+/// `unpauser`, `burnBlocker`, `operator`) so role-gated tests have explicit named
 /// accounts to grant roles to in setUp's initCalls.
 contract B20Test is B20FactoryTest {
     // Role constants (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
@@ -27,7 +27,8 @@ contract B20Test is B20FactoryTest {
     // policy-type constants (TRANSFER_SENDER_POLICY, TRANSFER_RECEIVER_POLICY,
     // TRANSFER_EXECUTOR_POLICY, MINT_RECEIVER_POLICY) are NOT redeclared here.
     // Tests reference them directly from MockB20 as `MINT_ROLE`
-    // etc. — single source of truth, no drift risk.
+    // etc. — single source of truth, no drift risk. The local OPERATOR_ROLE
+    // copy remains for Asset test call sites that need a compile-time value.
     //
     // Built-in policy sentinel IDs likewise live on MockPolicyRegistry as
     // `ALWAYS_ALLOW_ID` / `ALWAYS_BLOCK_ID`.
@@ -38,6 +39,9 @@ contract B20Test is B20FactoryTest {
     address internal pauser = makeAddr("pauser");
     address internal unpauser = makeAddr("unpauser");
     address internal burnBlocker = makeAddr("burnBlocker");
+    address internal operator = makeAddr("operator");
+
+    bytes32 internal constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 
     // -- Token under test --
     /// @notice Asset-variant `IB20` token deployed in `setUp`.
@@ -52,6 +56,7 @@ contract B20Test is B20FactoryTest {
         vm.label(pauser, "pauser");
         vm.label(unpauser, "unpauser");
         vm.label(burnBlocker, "burnBlocker");
+        vm.label(operator, "operator");
 
         token = _deployToken();
         vm.label(address(token), "token");
@@ -105,6 +110,13 @@ contract B20Test is B20FactoryTest {
     function _grantRole(bytes32 role, address account) internal {
         vm.prank(admin);
         token.grantRole(role, account);
+    }
+
+    /// @notice Grants `OPERATOR_ROLE` to the `operator` actor as the admin, idempotently.
+    function _grantOperator() internal {
+        if (!token.hasRole(B20Constants.OPERATOR_ROLE, operator)) {
+            _grantRole(B20Constants.OPERATOR_ROLE, operator);
+        }
     }
 
     /// @notice Mints `amount` to `to`, lazily granting `MINT_ROLE` to the

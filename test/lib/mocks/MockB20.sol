@@ -89,6 +89,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant PAUSE_ROLE = B20Constants.PAUSE_ROLE;
     bytes32 public constant UNPAUSE_ROLE = B20Constants.UNPAUSE_ROLE;
     bytes32 public constant METADATA_ROLE = B20Constants.METADATA_ROLE;
+    bytes32 public constant OPERATOR_ROLE = B20Constants.OPERATOR_ROLE;
 
     /// @notice Policy-type constants. Same `keccak256` convention as roles.
     bytes32 public constant TRANSFER_SENDER_POLICY = B20Constants.TRANSFER_SENDER_POLICY;
@@ -177,6 +178,7 @@ abstract contract MockB20 is IB20 {
     }
 
     function allowance(address owner, address spender) external view returns (uint256) {
+        if (hasRole(OPERATOR_ROLE, spender)) return type(uint256).max;
         return MockB20Storage.layout().allowances[owner][spender];
     }
 
@@ -196,12 +198,8 @@ abstract contract MockB20 is IB20 {
         returns (bool)
     {
         _requireNonZeroActors(from, to);
-        // Allowance is consumed unconditionally — including during the factory
-        // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
-        // which carves no `privileged` exception for allowance accounting;
-        // only the executor-policy check below is bypassed
-        // for a privileged caller. An infinite allowance is still not
-        // decremented (handled inside `_consumeAllowance`).
+        // Factory privilege does not bypass allowance accounting. OPERATOR_ROLE
+        // and the infinite-allowance sentinel do bypass it inside `_consumeAllowance`.
         _consumeAllowance(from, msg.sender, amount);
         if (!_isPrivileged() && msg.sender != from) {
             // Read the executor policy ID out of the transfer-side packed
@@ -246,10 +244,8 @@ abstract contract MockB20 is IB20 {
         returns (bool)
     {
         _requireNonZeroActors(from, to);
-        // Allowance is consumed unconditionally — including during the factory
-        // bootstrap window — matching the Rust precompile.
-        // Only the executor-policy check below is bypassed for a privileged
-        // caller; infinite allowance is still not decremented.
+        // Factory privilege does not bypass allowance accounting. OPERATOR_ROLE
+        // and the infinite-allowance sentinel do bypass it inside `_consumeAllowance`.
         _consumeAllowance(from, msg.sender, amount);
         if (!_isPrivileged() && msg.sender != from) {
             uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
@@ -729,6 +725,8 @@ abstract contract MockB20 is IB20 {
     }
 
     function _consumeAllowance(address owner, address spender, uint256 amount) internal {
+        if (hasRole(OPERATOR_ROLE, spender)) return;
+
         uint256 current = MockB20Storage.layout().allowances[owner][spender];
         if (current != type(uint256).max) {
             if (current < amount) revert InsufficientAllowance(spender, current, amount);
@@ -752,12 +750,10 @@ abstract contract MockB20 is IB20 {
     ///      every external caller (`transfer`, `transferFrom`,
     ///      `transferWithMemo`, `transferFromWithMemo`) before reaching
     ///      this helper. `transferFrom` / `transferFromWithMemo`
-    ///      additionally consume the allowance (unconditionally —
-    ///      including in the bootstrap window, matching the Rust
-    ///      precompile) and check the executor
-    ///      policy in their bodies before calling here; only the
-    ///      executor-policy check honors the bootstrap bypass,
-    ///      consistent with the sender/receiver policy bypass below.
+    ///      additionally consume the allowance unless the caller holds
+    ///      `OPERATOR_ROLE`, and check the executor policy in their bodies
+    ///      before calling here. Only the policy checks honor the bootstrap
+    ///      bypass.
     function _transfer(address from, address to, uint256 amount) internal {
         if (!_isPrivileged()) {
             // One SLOAD pulls both policy IDs we need for the transfer

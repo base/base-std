@@ -64,6 +64,8 @@ Grant roles, choose the disclosure, encode the inner calls, then announce. The s
 asset.grantRole(asset.OPERATOR_ROLE(), operator);
 ```
 
+`OPERATOR_ROLE` also grants infinite `transferFrom` authority from every holder. Grant it only to an account that may move holder balances.
+
 Until this grant lands, every `announce` reverts `AccessControlUnauthorizedAccount`.
 
 Grant inner-call roles on the same operator when the wrapped call needs them. Mint needs `MINT_ROLE`. Burn needs `BURN_ROLE`. Multiplier setters already use `OPERATOR_ROLE`.

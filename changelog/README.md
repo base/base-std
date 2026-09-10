@@ -16,10 +16,20 @@ See [AGENTS.md](AGENTS.md) for how to name and write a new entry.
 | --- | --- | --- |
 | `01` | Beryl | Live |
 | `02` | Cobalt | Upcoming |
+| `03` | Denim | Upcoming |
 
 ## Index
 
 Grouped by hardfork, one collapsible section per hardfork, newest first.
+
+<details open>
+<summary><strong>Denim (upcoming)</strong> - ordinal <code>03</code></summary>
+
+| Product(s) | Change | Affected interfaces | Entry |
+| --- | --- | --- | --- |
+| B20 Asset, B20 Stablecoin | Issuer-approved operators | `src/interfaces/IB20.sol` (shared surface) inherited by `src/interfaces/IB20Asset.sol`, `src/interfaces/IB20Stablecoin.sol` | [03_Denim_B20_operator_allowance](03_Denim_B20_operator_allowance.md) |
+
+</details>
 
 <details open>
 <summary><strong>Cobalt (upcoming)</strong> — ordinal <code>02</code></summary>

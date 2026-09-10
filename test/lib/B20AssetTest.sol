@@ -10,17 +10,13 @@ import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 /// Extends `B20Test` for the inherited test surface (actors, labels,
 /// setUp wiring, the `_singleFeature` helper, the `_grantRole` /
 /// `_mint` / `_pause` action wrappers, and the asset-variant token
-/// deployed by `_deployToken`). Adds the variant-specific role holder
-/// (`operator`) plus helpers for the announcement, multiplier,
-/// and extra-metadata surfaces.
+/// deployed by `_deployToken`). Adds helpers for the announcement,
+/// multiplier, and extra-metadata surfaces.
 ///
 /// The inherited `token` member is typed `IB20`. Tests that need the
 /// variant-only surface (`announce`, `batchMint`, etc.) cast inline via
 /// the `asset` view-helper.
 contract B20AssetTest is B20Test {
-    // -- Asset-variant role-holder actors --
-    address internal operator = makeAddr("operator");
-
     // ============================================================
     //           ASSET-VARIANT EXTRA-METADATA FIXTURES
     // ============================================================
@@ -42,12 +38,6 @@ contract B20AssetTest is B20Test {
     /// @notice Example metadata-entry key #3.
     string internal constant METADATA_EXAMPLE_3 = "reference";
 
-    // -- Setup --
-    function setUp() public virtual override {
-        super.setUp();
-        vm.label(operator, "operator");
-    }
-
     // ============================================================
     //                   VARIANT CAST CONVENIENCE
     // ============================================================
@@ -56,17 +46,6 @@ contract B20AssetTest is B20Test {
     ///         `IB20Asset(address(token))` at every callsite.
     function asset() internal view returns (IB20Asset) {
         return IB20Asset(address(token));
-    }
-
-    // ============================================================
-    //                    ASSET-ROLE HELPERS
-    // ============================================================
-
-    /// @notice Grants `OPERATOR_ROLE` to the `operator` actor as
-    ///         the admin, idempotent.
-    function _grantOperator() internal {
-        bytes32 role = asset().OPERATOR_ROLE();
-        if (!token.hasRole(role, operator)) _grantRole(role, operator);
     }
 
     // ============================================================
@@ -144,16 +123,4 @@ contract B20AssetTest is B20Test {
         blobs = new bytes[](1);
         blobs[0] = blob;
     }
-
-    // ============================================================
-    //                      VARIANT-ONLY CONSTANTS
-    // ============================================================
-    // Compile-time copies of the contract's variant-only constants.
-    // Tests reference these when they need the value in a context that
-    // can't make a contract call (e.g. inside a struct literal). The
-    // values match `asset().OPERATOR_ROLE()` etc. by construction;
-    // the per-constant test in `test/unit/B20Asset/constants/` pins
-    // that down.
-
-    bytes32 internal constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 }
