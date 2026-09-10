@@ -60,10 +60,16 @@ contract B20RoleConstantsTest is B20Test {
         assertEq(token.METADATA_ROLE(), B20Constants.METADATA_ROLE, "must match B20Test's local constant");
     }
 
-    /// @notice Verifies OPERATOR_ROLE returns keccak256("OPERATOR_ROLE")
-    /// @dev Constant stability for operator allowance and Asset administration.
-    function test_OPERATOR_ROLE_success_matchesExpected() public view {
-        assertEq(token.OPERATOR_ROLE(), keccak256("OPERATOR_ROLE"), "B20Constants.OPERATOR_ROLE digest");
-        assertEq(token.OPERATOR_ROLE(), B20Constants.OPERATOR_ROLE, "must match B20Test's local constant");
+    /// @notice Verifies AUTHORIZED_SPENDER_ROLE returns keccak256("AUTHORIZED_SPENDER_ROLE")
+    /// @dev Constant stability for issuer-authorized spending.
+    function test_AUTHORIZED_SPENDER_ROLE_success_matchesExpected() public view {
+        assertEq(
+            token.AUTHORIZED_SPENDER_ROLE(),
+            keccak256("AUTHORIZED_SPENDER_ROLE"),
+            "B20Constants.AUTHORIZED_SPENDER_ROLE digest"
+        );
+        assertEq(
+            token.AUTHORIZED_SPENDER_ROLE(), B20Constants.AUTHORIZED_SPENDER_ROLE, "must match B20Test's local constant"
+        );
     }
 }

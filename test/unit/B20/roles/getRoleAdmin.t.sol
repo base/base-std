@@ -5,13 +5,13 @@ import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 
 contract B20GetRoleAdminTest is B20Test {
-    /// @notice Verifies OPERATOR_ROLE is administered by DEFAULT_ADMIN_ROLE on a fresh token
-    /// @dev Pins the selected governance default for issuer-approved operators.
-    function test_getRoleAdmin_success_operatorDefaultsToAdminRole() public view {
+    /// @notice Verifies AUTHORIZED_SPENDER_ROLE is administered by DEFAULT_ADMIN_ROLE on a fresh token
+    /// @dev Pins the selected governance default for issuer-authorized spenders.
+    function test_getRoleAdmin_success_authorizedSpenderDefaultsToAdminRole() public view {
         assertEq(
-            token.getRoleAdmin(B20Constants.OPERATOR_ROLE),
+            token.getRoleAdmin(B20Constants.AUTHORIZED_SPENDER_ROLE),
             B20Constants.DEFAULT_ADMIN_ROLE,
-            "operator role must default to DEFAULT_ADMIN_ROLE"
+            "authorized spender role must default to DEFAULT_ADMIN_ROLE"
         );
     }
 

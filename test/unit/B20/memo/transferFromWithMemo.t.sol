@@ -31,9 +31,9 @@ contract B20TransferFromWithMemoTest is B20Test {
         token.transferFromWithMemo(from, to, amount, memo);
     }
 
-    /// @notice Verifies OPERATOR_ROLE does not bypass the memo transfer's executor policy
+    /// @notice Verifies AUTHORIZED_SPENDER_ROLE does not bypass the memo transfer's executor policy
     /// @dev The memo variant preserves the same policy boundary as transferFrom.
-    function test_transferFromWithMemo_revert_operatorExecutorPolicyForbids(
+    function test_transferFromWithMemo_revert_authorizedSpenderExecutorPolicyForbids(
         address from,
         address to,
         uint256 amount,
@@ -41,13 +41,13 @@ contract B20TransferFromWithMemoTest is B20Test {
     ) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
-        vm.assume(operator != from);
+        vm.assume(authorizedSpender != from);
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
-        _grantOperator();
+        _grantAuthorizedSpender();
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
-        vm.prank(operator);
+        vm.prank(authorizedSpender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IB20.PolicyForbids.selector,
@@ -155,9 +155,9 @@ contract B20TransferFromWithMemoTest is B20Test {
         assertTrue(token.transferFromWithMemo(from, to, amount, memo), "transferFromWithMemo must return true");
     }
 
-    /// @notice Verifies approving zero does not opt a holder out of memo transfers by an operator
-    /// @dev OPERATOR_ROLE bypasses allowance without changing the stored zero value.
-    function test_transferFromWithMemo_success_operatorSpendsAfterHolderApprovesZero(
+    /// @notice Verifies approving zero does not opt a holder out of memo transfers by an authorized spender
+    /// @dev AUTHORIZED_SPENDER_ROLE bypasses allowance without changing the stored zero value.
+    function test_transferFromWithMemo_success_authorizedSpenderSpendsAfterHolderApprovesZero(
         address from,
         address to,
         uint256 amount,
@@ -170,15 +170,15 @@ contract B20TransferFromWithMemoTest is B20Test {
 
         _mint(from, amount);
         vm.prank(from);
-        token.approve(operator, 0);
-        _grantOperator();
+        token.approve(authorizedSpender, 0);
+        _grantAuthorizedSpender();
 
-        vm.prank(operator);
+        vm.prank(authorizedSpender);
         token.transferFromWithMemo(from, to, amount, memo);
 
-        assertEq(token.balanceOf(to), amount, "operator memo transfer must move the balance");
+        assertEq(token.balanceOf(to), amount, "authorized spender memo transfer must move the balance");
         assertEq(
-            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, operator))),
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, authorizedSpender))),
             0,
             "zero stored allowance must remain unchanged"
         );

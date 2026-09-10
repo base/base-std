@@ -38,26 +38,29 @@ contract B20SetRoleAdminTest is B20Test {
         );
     }
 
-    /// @notice Verifies OPERATOR_ROLE administration can be delegated from DEFAULT_ADMIN_ROLE
-    /// @dev Pins the selected governance model for the exact operator role.
-    function test_setRoleAdmin_success_delegatesOperatorRoleAdministration(address delegatedAdmin) public {
+    /// @notice Verifies AUTHORIZED_SPENDER_ROLE administration can be delegated from DEFAULT_ADMIN_ROLE
+    /// @dev Pins the selected governance model for the exact authorized spender role.
+    function test_setRoleAdmin_success_delegatesAuthorizedSpenderRoleAdministration(address delegatedAdmin) public {
         _assumeValidCaller(delegatedAdmin);
         vm.assume(delegatedAdmin != admin);
         bytes32 customAdminRole = keccak256("CUSTOM_ADMIN_ROLE");
 
         vm.startPrank(admin);
         token.grantRole(customAdminRole, delegatedAdmin);
-        token.setRoleAdmin(B20Constants.OPERATOR_ROLE, customAdminRole);
+        token.setRoleAdmin(B20Constants.AUTHORIZED_SPENDER_ROLE, customAdminRole);
         vm.stopPrank();
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, customAdminRole));
-        token.grantRole(B20Constants.OPERATOR_ROLE, operator);
+        token.grantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
 
         vm.prank(delegatedAdmin);
-        token.grantRole(B20Constants.OPERATOR_ROLE, operator);
+        token.grantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
 
-        assertTrue(token.hasRole(B20Constants.OPERATOR_ROLE, operator), "delegated admin must grant operator role");
+        assertTrue(
+            token.hasRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender),
+            "delegated admin must grant authorized spender role"
+        );
     }
 
     /// @notice Verifies setRoleAdmin emits RoleAdminChanged(role, previousAdminRole, newAdminRole)

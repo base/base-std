@@ -27,7 +27,7 @@ Grouped by hardfork, one collapsible section per hardfork, newest first.
 
 | Product(s) | Change | Affected interfaces | Entry |
 | --- | --- | --- | --- |
-| B20 Asset, B20 Stablecoin | Issuer-approved operators | `src/interfaces/IB20.sol` (shared surface) inherited by `src/interfaces/IB20Asset.sol`, `src/interfaces/IB20Stablecoin.sol` | [03_Denim_B20_operator_allowance](03_Denim_B20_operator_allowance.md) |
+| B20 Asset, B20 Stablecoin | Issuer-authorized spenders | `src/interfaces/IB20.sol` (shared surface) inherited by `src/interfaces/IB20Asset.sol`, `src/interfaces/IB20Stablecoin.sol` | [03_Denim_B20_authorized_spender](03_Denim_B20_authorized_spender.md) |
 
 </details>
 

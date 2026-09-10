@@ -89,7 +89,7 @@ abstract contract MockB20 is IB20 {
     bytes32 public constant PAUSE_ROLE = B20Constants.PAUSE_ROLE;
     bytes32 public constant UNPAUSE_ROLE = B20Constants.UNPAUSE_ROLE;
     bytes32 public constant METADATA_ROLE = B20Constants.METADATA_ROLE;
-    bytes32 public constant OPERATOR_ROLE = B20Constants.OPERATOR_ROLE;
+    bytes32 public constant AUTHORIZED_SPENDER_ROLE = B20Constants.AUTHORIZED_SPENDER_ROLE;
 
     /// @notice Policy-type constants. Same `keccak256` convention as roles.
     bytes32 public constant TRANSFER_SENDER_POLICY = B20Constants.TRANSFER_SENDER_POLICY;
@@ -178,7 +178,7 @@ abstract contract MockB20 is IB20 {
     }
 
     function allowance(address owner, address spender) external view returns (uint256) {
-        if (hasRole(OPERATOR_ROLE, spender)) return type(uint256).max;
+        if (hasRole(AUTHORIZED_SPENDER_ROLE, spender)) return type(uint256).max;
         return MockB20Storage.layout().allowances[owner][spender];
     }
 
@@ -198,7 +198,7 @@ abstract contract MockB20 is IB20 {
         returns (bool)
     {
         _requireNonZeroActors(from, to);
-        // Factory privilege does not bypass allowance accounting. OPERATOR_ROLE
+        // Factory privilege does not bypass allowance accounting. AUTHORIZED_SPENDER_ROLE
         // and the infinite-allowance sentinel do bypass it inside `_consumeAllowance`.
         _consumeAllowance(from, msg.sender, amount);
         if (!_isPrivileged() && msg.sender != from) {
@@ -244,7 +244,7 @@ abstract contract MockB20 is IB20 {
         returns (bool)
     {
         _requireNonZeroActors(from, to);
-        // Factory privilege does not bypass allowance accounting. OPERATOR_ROLE
+        // Factory privilege does not bypass allowance accounting. AUTHORIZED_SPENDER_ROLE
         // and the infinite-allowance sentinel do bypass it inside `_consumeAllowance`.
         _consumeAllowance(from, msg.sender, amount);
         if (!_isPrivileged() && msg.sender != from) {
@@ -725,7 +725,7 @@ abstract contract MockB20 is IB20 {
     }
 
     function _consumeAllowance(address owner, address spender, uint256 amount) internal {
-        if (hasRole(OPERATOR_ROLE, spender)) return;
+        if (hasRole(AUTHORIZED_SPENDER_ROLE, spender)) return;
 
         uint256 current = MockB20Storage.layout().allowances[owner][spender];
         if (current != type(uint256).max) {
@@ -751,7 +751,7 @@ abstract contract MockB20 is IB20 {
     ///      `transferWithMemo`, `transferFromWithMemo`) before reaching
     ///      this helper. `transferFrom` / `transferFromWithMemo`
     ///      additionally consume the allowance unless the caller holds
-    ///      `OPERATOR_ROLE`, and check the executor policy in their bodies
+    ///      `AUTHORIZED_SPENDER_ROLE`, and check the executor policy in their bodies
     ///      before calling here. Only the policy checks honor the bootstrap
     ///      bypass.
     function _transfer(address from, address to, uint256 amount) internal {

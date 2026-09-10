@@ -204,7 +204,7 @@ Most scopes deny when `isAuthorized` is `false` and revert `PolicyForbids`. `SEI
 | `SEIZE_HOLDER_POLICY`      | `seizeWithMemo`. Unset (`ALWAYS_ALLOW`) means no account is seizable.                            | `from`                              | `true`                        | `AccountNotSeizable` |
 | `SEIZE_RECEIVER_POLICY`    | `seizeWithMemo`. Unset (`ALWAYS_ALLOW`) means seize may send to any destination.                 | `to`                                | `false`                       | `PolicyForbids`      |
 
-`OPERATOR_ROLE` does not bypass these scopes. An operator skips only the allowance check in `transferFrom` and `transferFromWithMemo`. The executor, sender, and receiver policy checks still run.
+`AUTHORIZED_SPENDER_ROLE` does not bypass these scopes. An authorized spender skips only the allowance check in `transferFrom` and `transferFromWithMemo`. The executor, sender, and receiver policy checks still run.
 
 ## 4. Example
 
@@ -348,4 +348,3 @@ If the issuer later needs the same KYC list or-ed with a token-specific partner 
 | `ChildPoliciesOutsideOfRange()`     | A composite's child count is outside `[2, 4]`                                      |
 | `InvalidChildPolicy(childPolicyId)` | A composite child is not an existing simple policy                                 |
 | `NonPayable()`                      | ETH was attached to a registry call                                                |
-

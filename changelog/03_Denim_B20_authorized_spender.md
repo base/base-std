@@ -1,0 +1,92 @@
+# Denim: Issuer-Authorized Spenders
+
+- **Feature Name**: authorized_spender
+- **Start Date**: 2026-09-10
+- **Title**: Issuer-authorized infinite allowances through `AUTHORIZED_SPENDER_ROLE`
+
+## Summary
+
+Denim lets a B20 issuer grant an account permission to spend from every holder without holder approvals. The dedicated `AUTHORIZED_SPENDER_ROLE` keeps this authority separate from the Asset-only `OPERATOR_ROLE`.
+
+## Motivation
+
+Some token integrations need one contract, such as a router or settlement system, to spend from every holder. Requiring each holder to call `approve` adds a transaction and prevents the integration from working for holders that cannot make an approval call.
+
+## Specs
+
+### Interface changes
+
+`AUTHORIZED_SPENDER_ROLE()` is added to the shared [`IB20`](../src/interfaces/IB20.sol) interface.
+
+| Function | Selector | Denim change |
+| --- | --- | --- |
+| `AUTHORIZED_SPENDER_ROLE()` | `0xef97aa21` | New shared role getter on Asset and Stablecoin. |
+| `allowance(address,address)` | `0xdd62ed3e` | Returns `type(uint256).max` when `spender` holds `AUTHORIZED_SPENDER_ROLE`. |
+| `transferFrom(address,address,uint256)` | `0x23b872dd` | Skips allowance validation and consumption when the caller holds `AUTHORIZED_SPENDER_ROLE`. |
+| `transferFromWithMemo(address,address,uint256,bytes32)` | `0x929c2539` | Applies the same authorized spender behavior as `transferFrom`. |
+
+The role value is:
+
+```solidity
+keccak256("AUTHORIZED_SPENDER_ROLE")
+// 0xb0e3ae34a3ebd864ed280a15abe71cbcaf59103e086737862f5bbccae6a44b37
+```
+
+No new mutator, event, error, or storage slot is added. Issuers manage membership with `grantRole`, `revokeRole`, and `renounceRole`. `getRoleAdmin(AUTHORIZED_SPENDER_ROLE)` defaults to `DEFAULT_ADMIN_ROLE` and remains delegable through `setRoleAdmin`.
+
+### Behavioral changes
+
+For a caller that holds `AUTHORIZED_SPENDER_ROLE`:
+
+- `allowance(owner, caller)` returns `type(uint256).max` for every `owner`.
+- `transferFrom` and `transferFromWithMemo` do not read or decrement the stored allowance.
+- A finite stored allowance remains unchanged and becomes visible again if the role is revoked.
+- `approve(caller, 0)` does not opt the holder out.
+- `TRANSFER_EXECUTOR_POLICY`, `TRANSFER_SENDER_POLICY`, and `TRANSFER_RECEIVER_POLICY` still run.
+- The `TRANSFER` pause vector and balance checks still run.
+
+For any other caller, allowance behavior remains unchanged. A finite allowance decrements by the transferred amount, and `type(uint256).max` remains the non-decrementing ERC-20 sentinel.
+
+### Storage layout
+
+There is no storage change. Authorized spender membership uses the existing role mapping. Holder allowances remain in their existing slots while the spender holds `AUTHORIZED_SPENDER_ROLE`.
+
+## Example
+
+```solidity
+bytes32 spenderRole = token.AUTHORIZED_SPENDER_ROLE();
+token.grantRole(spenderRole, address(router));
+
+// Returns type(uint256).max even when alice never approved the router.
+uint256 effectiveAllowance = token.allowance(alice, address(router));
+
+// The router calls token.transferFrom(alice, recipient, amount)
+// from its own execution context.
+```
+
+## Design Decisions
+
+- Add a dedicated role to keep holder-spending authority separate from Asset operations.
+- Reuse the existing RBAC set instead of adding a spender registry or policy scope.
+- Keep the set empty by default. No address, including Permit2, receives implicit authority.
+- Grant infinite authority only. Per-spender caps are not supported.
+- Do not add holder opt-out state. Issuer role revocation is the removal path.
+- Reuse `DEFAULT_ADMIN_ROLE` as the default role administrator.
+- Waive only allowance checks. Compliance policies and pause remain independent controls.
+
+## Migration Steps
+
+### Issuers
+
+1. Check for any historical generic grant of the `AUTHORIZED_SPENDER_ROLE` hash.
+2. Check `getRoleAdmin(AUTHORIZED_SPENDER_ROLE)` if the role hash was already configured.
+3. Grant the role only to contracts and accounts that may move every holder's balance.
+4. Keep `OPERATOR_ROLE` assignments unchanged unless the Asset operator itself also needs spending authority.
+
+### Integrators
+
+1. Do not assume that `allowance == type(uint256).max` came from holder approval.
+2. Do not present `approve(spender, 0)` as a revocation path for role-based authority.
+3. Continue to handle `ContractPaused`, `PolicyForbids`, and `InsufficientBalance` on authorized spender transfers.
+
+Both variants gain the additive `AUTHORIZED_SPENDER_ROLE()` selector. Existing `OPERATOR_ROLE` assignments retain their previous capabilities. The existing ERC-20 selectors change behavior only for accounts that hold the new role hash.

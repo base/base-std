@@ -34,7 +34,7 @@ library B20FactoryLib {
     ///         `address(0)` fields are skipped at bootstrap.
     ///
     /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20StablecoinCreateParams.initialAdmin`, not this struct.
-    /// @dev    Append `encodeGrantRole(B20Constants.OPERATOR_ROLE, operator)` when the Stablecoin needs an operator.
+    /// @dev    Append `encodeGrantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, spender)` when needed.
     struct B20RoleHolders {
         /// @dev Account granted `MINT_ROLE`.
         address minter;
@@ -54,6 +54,7 @@ library B20FactoryLib {
     ///         with an `OPERATOR_ROLE` convenience slot.
     ///
     /// @dev    `DEFAULT_ADMIN_ROLE` is assigned via `B20AssetCreateParams.initialAdmin`, not this struct.
+    /// @dev    Append `encodeGrantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, spender)` when needed.
     struct B20AssetRoleHolders {
         /// @dev Account granted `MINT_ROLE`.
         address minter;

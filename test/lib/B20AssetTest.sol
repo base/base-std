@@ -17,6 +17,9 @@ import {IB20Asset} from "base-std/interfaces/IB20Asset.sol";
 /// variant-only surface (`announce`, `batchMint`, etc.) cast inline via
 /// the `asset` view-helper.
 contract B20AssetTest is B20Test {
+    // -- Asset-variant role-holder actors --
+    address internal operator = makeAddr("operator");
+
     // ============================================================
     //           ASSET-VARIANT EXTRA-METADATA FIXTURES
     // ============================================================
@@ -38,6 +41,12 @@ contract B20AssetTest is B20Test {
     /// @notice Example metadata-entry key #3.
     string internal constant METADATA_EXAMPLE_3 = "reference";
 
+    // -- Setup --
+    function setUp() public virtual override {
+        super.setUp();
+        vm.label(operator, "operator");
+    }
+
     // ============================================================
     //                   VARIANT CAST CONVENIENCE
     // ============================================================
@@ -46,6 +55,15 @@ contract B20AssetTest is B20Test {
     ///         `IB20Asset(address(token))` at every callsite.
     function asset() internal view returns (IB20Asset) {
         return IB20Asset(address(token));
+    }
+
+    // ============================================================
+    //                    ASSET-ROLE HELPERS
+    // ============================================================
+
+    /// @notice Grants `OPERATOR_ROLE` to the `operator` actor as the admin, idempotently.
+    function _grantOperator() internal {
+        if (!token.hasRole(OPERATOR_ROLE, operator)) _grantRole(OPERATOR_ROLE, operator);
     }
 
     // ============================================================
@@ -123,4 +141,6 @@ contract B20AssetTest is B20Test {
         blobs = new bytes[](1);
         blobs[0] = blob;
     }
+
+    bytes32 internal constant OPERATOR_ROLE = keccak256("OPERATOR_ROLE");
 }

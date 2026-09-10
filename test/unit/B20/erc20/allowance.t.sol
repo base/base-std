@@ -58,35 +58,45 @@ contract B20AllowanceTest is B20Test {
         );
     }
 
-    /// @notice Verifies every holder reports an infinite allowance for an operator
+    /// @notice Verifies every holder reports an infinite allowance for an authorized spender
     /// @dev Role membership overrides the allowance view without changing the stored allowance.
-    function test_allowance_success_operatorReadsAsInfinite(address owner, uint256 storedAllowance) public {
+    function test_allowance_success_authorizedSpenderReadsAsInfinite(address owner, uint256 storedAllowance) public {
         _assumeValidActor(owner);
 
         vm.prank(owner);
-        token.approve(operator, storedAllowance);
-        _grantOperator();
+        token.approve(authorizedSpender, storedAllowance);
+        _grantAuthorizedSpender();
 
-        assertEq(token.allowance(owner, operator), type(uint256).max, "operator allowance must read as infinite");
         assertEq(
-            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, operator))),
+            token.allowance(owner, authorizedSpender),
+            type(uint256).max,
+            "authorized spender allowance must read as infinite"
+        );
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, authorizedSpender))),
             storedAllowance,
-            "operator role must not overwrite stored allowance"
+            "authorized spender role must not overwrite stored allowance"
         );
     }
 
-    /// @notice Verifies revoking OPERATOR_ROLE restores the holder's stored allowance
+    /// @notice Verifies revoking AUTHORIZED_SPENDER_ROLE restores the holder's stored allowance
     /// @dev Role revocation removes only the synthetic infinite allowance.
-    function test_allowance_success_revokedOperatorReadsStoredAllowance(address owner, uint256 storedAllowance) public {
+    function test_allowance_success_revokedAuthorizedSpenderReadsStoredAllowance(address owner, uint256 storedAllowance)
+        public
+    {
         _assumeValidActor(owner);
 
         vm.prank(owner);
-        token.approve(operator, storedAllowance);
-        _grantOperator();
+        token.approve(authorizedSpender, storedAllowance);
+        _grantAuthorizedSpender();
 
         vm.prank(admin);
-        token.revokeRole(B20Constants.OPERATOR_ROLE, operator);
+        token.revokeRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
 
-        assertEq(token.allowance(owner, operator), storedAllowance, "revoked operator must read stored allowance");
+        assertEq(
+            token.allowance(owner, authorizedSpender),
+            storedAllowance,
+            "revoked authorized spender must read stored allowance"
+        );
     }
 }
