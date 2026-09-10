@@ -172,6 +172,56 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
     }
 
     // ============================================================
+    //        compositePolicyChildIds RETURNS CHILDREN VERBATIM
+    // ============================================================
+
+    /// @notice The read returns child IDs exactly as stored: a plain child is returned plain,
+    ///         an inverted child is returned with its invert flag intact.
+    function test_compositePolicyChildIds_success_returnsChildrenVerbatim() public {
+        uint64 a = _createAllowlist();
+        uint64 x = _createAllowlist();
+        uint64 composite = policyRegistry.createCompositePolicy(
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, x | INVERT_BIT)
+        );
+        uint64[] memory children = policyRegistry.compositePolicyChildIds(composite);
+        assertEq(children[0], a, "plain child returned unchanged");
+        assertEq(children[1], x | INVERT_BIT, "inverted child returned with flag set");
+    }
+
+    /// @notice Querying the composite's own inverse returns the identical child set (only the
+    ///         queried ID's flag is stripped; the children are untouched).
+    function test_compositePolicyChildIds_success_invertedCompositeIdReturnsSameSet() public {
+        uint64 a = _createAllowlist();
+        uint64 x = _createAllowlist();
+        uint64 composite = policyRegistry.createCompositePolicy(
+            admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, x | INVERT_BIT)
+        );
+        uint64[] memory viaBase = policyRegistry.compositePolicyChildIds(composite);
+        uint64[] memory viaInverse = policyRegistry.compositePolicyChildIds(composite | INVERT_BIT);
+        assertEq(viaInverse.length, viaBase.length);
+        for (uint256 i = 0; i < viaBase.length; ++i) {
+            assertEq(viaInverse[i], viaBase[i]);
+        }
+    }
+
+    /// @notice updateComposite preserves the verbatim-return contract: after replacing the
+    ///         child set, an inverted child still reads back with its flag set.
+    function test_compositePolicyChildIds_success_returnsInvertedChildVerbatimAfterUpdate() public {
+        uint64 a = _createAllowlist();
+        uint64 x = _createAllowlist();
+        uint64 y = _createAllowlist();
+        uint64 composite =
+            policyRegistry.createCompositePolicy(admin, IPolicyRegistry.PolicyType.INTERSECT, _childIds(a, x));
+
+        vm.prank(admin);
+        policyRegistry.updateComposite(composite, _childIds(a, y | INVERT_BIT));
+
+        uint64[] memory children = policyRegistry.compositePolicyChildIds(composite);
+        assertEq(children[0], a);
+        assertEq(children[1], y | INVERT_BIT, "inverted child persists verbatim after update");
+    }
+
+    // ============================================================
     //                  GETTER STRIP SEMANTICS
     // ============================================================
 

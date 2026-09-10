@@ -229,9 +229,8 @@ interface IPolicyRegistry {
     ///         BLOCKLIST -> true).
     ///
     /// @dev Callers that store policy IDs MUST validate `policyExists(policyId)` at write time.
-    /// @dev Invert flag (`POLICY_INVERT_BIT`): flipping bit 63 of the ID negates the
-    ///      `isAuthorized` result of the base. Applies to every policy type, including a
-    ///      whole composite.
+    /// @dev Invert: `isAuthorized(invertedPolicyId(id), account)` returns the negated
+    ///      result of the base. Applies to every policy type.
     ///
     /// @param policyId Policy to query.
     /// @param account  Account to check.
@@ -255,9 +254,9 @@ interface IPolicyRegistry {
 
     /// @notice Returns whether `policyId` is a built-in sentinel or a previously-assigned custom ID. Never reverts.
     ///
-    /// @dev The invert flag is stripped first, so an inverted ID resolves to its base:
-    ///      `policyExists(base | POLICY_INVERT_BIT) == policyExists(base)`. A token may store an
-    ///      inverted policy ID per scope and re-validate it here exactly as a plain one.
+    /// @dev `policyExists(invertedPolicyId(id)) == policyExists(id)`. Invert is not its
+    ///      own record; a token can store an inverted ID and re-validate it here like a
+    ///      plain one.
     ///
     /// @param policyId Policy to query.
     ///
@@ -294,9 +293,11 @@ interface IPolicyRegistry {
     /// @dev An empty return unambiguously means "not a composite".
     /// @dev The registry preserves the caller's ordering verbatim and neither sorts nor
     ///      de-duplicates.
-    /// @dev The invert flag on `policyId` is stripped first, so an inverted composite ID
-    ///      resolves to the base composite's child set. Child IDs are returned verbatim,
-    ///      including any per-child invert flag, so indexers can render `NOT` per child.
+    /// @dev Only the invert flag on the queried `policyId` is stripped, so a composite and its
+    ///      inverse return the same set: `compositePolicyChildIds(id | POLICY_INVERT_BIT) ==
+    ///      compositePolicyChildIds(id)`. The child IDs themselves are NOT stripped — each is
+    ///      returned exactly as stored, so a child recorded with the invert flag is returned
+    ///      with the flag set, letting indexers render `NOT` per child.
     ///
     /// @param policyId Policy to query.
     ///

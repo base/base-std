@@ -300,9 +300,10 @@ contract MockPolicyRegistry is IPolicyRegistry {
     }
 
     /// @inheritdoc IPolicyRegistry
-    /// @dev An inverted composite ID resolves to the base composite's child set. Child
-    ///      IDs are returned verbatim as stored, so any per-child invert flag remains
-    ///      visible to indexers.
+    /// @dev Only the queried composite's own invert flag is stripped (so a composite and its
+    ///      inverse return the same set). The child IDs are returned exactly as stored — a
+    ///      child recorded with its invert flag comes back with the flag set — so any
+    ///      per-child invert remains visible to indexers.
     function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory) {
         policyId = policyId & ~INVERT_BIT;
         if (!_isWellFormed(policyId)) return new uint64[](0);
