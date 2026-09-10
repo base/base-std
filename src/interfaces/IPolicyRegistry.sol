@@ -5,6 +5,10 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 /// @notice Singleton registry of simple and composite policies. Policies are referenced by
 ///         `uint64 policyId` and queried via `isAuthorized(policyId, account)`.
+///
+/// @dev Invert (`invertedPolicyId`): all view functions see an inverted policy ID as an
+///      extension of the base policy — same existence, admin, pending admin, and child
+///      set as the base; `isAuthorized` returns the negated base result.
 interface IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
@@ -127,8 +131,8 @@ interface IPolicyRegistry {
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite
     ///      and never a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK). The child-policy set is
     ///      capped at 4.
-    /// @dev A child policy ID may be inverted. If so, the top bit of the type byte is flipped
-    ///      (`POLICY_INVERT_BIT`) and the child is evaluated as the inverse of the base.
+    /// @dev A child policy ID may be inverted (its invert flag, bit 63, set via
+    ///      `invertedPolicyId`), in which case the child is evaluated as the inverse of the base.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is not in
@@ -254,10 +258,6 @@ interface IPolicyRegistry {
 
     /// @notice Returns whether `policyId` is a built-in sentinel or a previously-assigned custom ID. Never reverts.
     ///
-    /// @dev `policyExists(invertedPolicyId(id)) == policyExists(id)`. Invert is not its
-    ///      own record; a token can store an inverted ID and re-validate it here like a
-    ///      plain one.
-    ///
     /// @param policyId Policy to query.
     ///
     /// @return Whether the policy exists.
@@ -265,9 +265,6 @@ interface IPolicyRegistry {
 
     /// @notice Returns the current admin of `policyId`, or `address(0)` for built-in sentinels,
     ///         renounced policies, unknown IDs, and malformed IDs. Never reverts.
-    ///
-    /// @dev The invert flag is stripped first; an inverted ID has no record of its own and
-    ///      resolves to its base's admin (`policyAdmin(base | POLICY_INVERT_BIT) == policyAdmin(base)`).
     ///
     /// @param policyId Policy to query.
     ///
@@ -277,8 +274,6 @@ interface IPolicyRegistry {
     /// @notice Returns the currently-staged pending admin for `policyId`, or `address(0)` when
     ///         no transfer is in flight or for built-in sentinels, unknown IDs, and malformed IDs.
     ///         Never reverts.
-    ///
-    /// @dev The invert flag is stripped first; an inverted ID resolves to its base's pending admin.
     ///
     /// @param policyId Policy to query.
     ///
@@ -293,25 +288,18 @@ interface IPolicyRegistry {
     /// @dev An empty return unambiguously means "not a composite".
     /// @dev The registry preserves the caller's ordering verbatim and neither sorts nor
     ///      de-duplicates.
-    /// @dev Only the invert flag on the queried `policyId` is stripped, so a composite and its
-    ///      inverse return the same set: `compositePolicyChildIds(id | POLICY_INVERT_BIT) ==
-    ///      compositePolicyChildIds(id)`. The child IDs themselves are NOT stripped — each is
-    ///      returned exactly as stored, so a child recorded with the invert flag is returned
-    ///      with the flag set, letting indexers render `NOT` per child.
+    /// @dev Child IDs are returned as stored, including any per-child invert.
     ///
     /// @param policyId Policy to query.
     ///
     /// @return Child policy IDs, or an empty array.
     function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory);
 
-    /// @notice Returns the inverted form of `policyId` — its invert flag toggled
-    ///         (`policyId ^ POLICY_INVERT_BIT`). Never reverts and reads no state.
+    /// @notice Returns `policyId` with its invert flag (bit 63) flipped. Never reverts
+    ///         and reads no state.
     ///
-    /// @dev Involutive: `invertedPolicyId(invertedPolicyId(id)) == id`. For an existing base,
-    ///      `isAuthorized(invertedPolicyId(id), account) == !isAuthorized(id, account)`. The
-    ///      returned ID is not validated here — an inverted ID over a non-existent or malformed
-    ///      base is fail-closed only at `isAuthorized` time (returns false). This is the
-    ///      ABI-discoverable counterpart to the on-chain `B20Constants.invertPolicy` helper.
+    /// @dev This call does not check that `policyId` exists; a missing
+    ///      or malformed base is denied later, at `isAuthorized`.
     ///
     /// @param policyId Policy to invert.
     ///

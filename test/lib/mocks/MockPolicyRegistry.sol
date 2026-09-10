@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
-import {B20Constants} from "base-std/lib/B20Constants.sol";
 
 import {MockPolicyRegistryStorage} from "base-std-test/lib/mocks/MockPolicyRegistryStorage.sol";
 
@@ -22,6 +21,14 @@ library PolicyRegistryConstants {
     /// @notice Built-in policy ID that always rejects any account.
     /// @dev    Encodes as an ALLOWLIST at counter 1 (empty allowlist → block all).
     uint64 internal constant ALWAYS_BLOCK_ID = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | 1;
+
+    /// @notice High bit of a `uint64` policy ID that inverts the base policy.
+    /// @dev    All view functions see an inverted ID as an extension of the base —
+    ///         same existence, admin, pending admin, and child set; `isAuthorized`
+    ///         returns the negated base result. A missing or malformed base is denied
+    ///         later, at `isAuthorized`. The counter occupies only the low 56 bits
+    ///         (type byte at `[63:56]`), so bit 63 never collides with an issued ID.
+    uint64 internal constant INVERTED_POLICY_BIT = uint64(1) << 63;
 
     /// @notice Number of built-in policies the registry initializes on
     ///         first use. The global counter is advanced to this value
@@ -71,23 +78,10 @@ contract MockPolicyRegistry is IPolicyRegistry {
     // Policy ID encoding: top byte = uint8(PolicyType), low 56 bits = counter.
     uint64 internal constant POLICY_ID_TYPE_SHIFT = 56;
 
-    /// @notice Invert (NOT) flag carved from the high bit of the policy-ID type byte.
-    /// @dev    Bits `[57:56]` hold the `PolicyType` discriminant (0..3); bits `[62:58]`
-    ///         are unused. Bit 63 — the top bit of the type byte — is reserved as the
-    ///         invert flag: when set, `isAuthorized` resolves the base policy
-    ///         (`policyId & ~INVERT_BIT`) and returns the OPPOSITE of its decision.
-    ///         The base's members are shared, never copied, so one membership set can be
-    ///         evaluated as include or exclude without maintaining a mirror list.
-    ///
-    ///         Fail-closed by construction: an inverted ID whose base does not exist or
-    ///         is malformed denies (returns false), never flips an unknown-ID deny into
-    ///         allow-everyone. See `_isAuthorized`.
-    ///
-    ///         A live counter never reaches bit 63 (it is a 56-bit value under the type
-    ///         byte), so no previously-issued ID collides with the invert encoding.
-    /// @dev    Aliases `B20Constants.POLICY_INVERT_BIT` — the single source of truth shared
-    ///         with consumers — so the mock and callers can never disagree on the bit.
-    uint64 internal constant INVERT_BIT = B20Constants.POLICY_INVERT_BIT;
+    /// @notice Invert flag on a policy ID: bit 63.
+    /// @dev    Sourced from `PolicyRegistryConstants` so the mock and tests share one
+    ///         definition of the bit.
+    uint64 internal constant INVERTED_POLICY_BIT = PolicyRegistryConstants.INVERTED_POLICY_BIT;
 
     /// @notice Per-call membership-batch limit. `createPolicyWithAccounts`,
     ///         `updateAllowlist`, and `updateBlocklist` revert with
@@ -268,7 +262,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     /// @dev An inverted ID has no record of its own; it resolves to its base's admin,
     ///      matching `policyExists` (`policyAdmin(~id) == policyAdmin(id)`).
     function policyAdmin(uint64 policyId) external view returns (address) {
-        policyId = policyId & ~INVERT_BIT;
+        policyId = policyId & ~INVERTED_POLICY_BIT;
         if (!_isWellFormed(policyId)) return address(0);
         // No fast path for built-in IDs needed: lazy init writes them with
         // a zero admin, so the normal storage read returns address(0) for
@@ -293,7 +287,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
         // below would also return `address(0)` for built-ins in normal
         // operation (they never have a pending admin staged), but the
         // explicit branch removes that assumption from the trust boundary.
-        policyId = policyId & ~INVERT_BIT;
+        policyId = policyId & ~INVERTED_POLICY_BIT;
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return address(0);
         if (!_isWellFormed(policyId)) return address(0);
         return MockPolicyRegistryStorage.layout().pendingAdmins[policyId];
@@ -305,18 +299,17 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      child recorded with its invert flag comes back with the flag set — so any
     ///      per-child invert remains visible to indexers.
     function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory) {
-        policyId = policyId & ~INVERT_BIT;
+        policyId = policyId & ~INVERTED_POLICY_BIT;
         if (!_isWellFormed(policyId)) return new uint64[](0);
         if (!_isComposite(policyId)) return new uint64[](0);
         return MockPolicyRegistryStorage.layout().children[policyId];
     }
 
     /// @inheritdoc IPolicyRegistry
-    /// @dev Delegates to the shared `B20Constants.invertPolicy` helper so the mock and the
-    ///      library can never disagree on the invert bit. `pure` is a valid override of the
-    ///      `view` interface declaration.
+    /// @dev Pure toggle of the invert flag; never reverts and reads no state. `pure` is a
+    ///      valid override of the `view` interface declaration.
     function invertedPolicyId(uint64 policyId) external pure returns (uint64) {
-        return B20Constants.invertPolicy(policyId);
+        return policyId ^ INVERTED_POLICY_BIT;
     }
 
     // ============================================================
@@ -384,7 +377,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      fail-closed guard in `_isAuthorized`. Strips the invert flag first, so an
     ///      inverted ID exists iff its base exists. Never reverts.
     function _policyExists(uint64 policyId) internal view returns (bool) {
-        policyId = policyId & ~INVERT_BIT;
+        policyId = policyId & ~INVERTED_POLICY_BIT;
         if (policyId == ALWAYS_ALLOW_ID || policyId == ALWAYS_BLOCK_ID) return true;
         if (!_isWellFormed(policyId)) return false;
         // Typed `policyExistsFromPacked` rather than a raw `packed != 0` test: identical
@@ -410,8 +403,8 @@ contract MockPolicyRegistry is IPolicyRegistry {
         // allow-everyone — the one property that makes the invert flag safe on gated
         // mint / transfer / seize paths. The base's decision is only inverted once it is
         // known to resolve against a real policy.
-        if (policyId & INVERT_BIT != 0) {
-            uint64 base = policyId & ~INVERT_BIT;
+        if (policyId & INVERTED_POLICY_BIT != 0) {
+            uint64 base = policyId & ~INVERTED_POLICY_BIT;
             if (!_policyExists(base)) return false;
             return !_isAuthorized(base, account);
         }
@@ -462,7 +455,7 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      `PolicyNotFound` takes precedence over `InvalidChildPolicy` across the whole
     ///      set (matches the canonical revert order the Rust precompile mirrors).
     ///
-    ///      A child may carry the invert flag (`base | INVERT_BIT`) to express
+    ///      A child may carry the invert flag (`base | INVERTED_POLICY_BIT`) to express
     ///      "NOT on this list" — e.g. `INTERSECT[A, ~X]` reads as "on A and not on X".
     ///      Validation resolves the base (bit stripped): a composite base is still
     ///      rejected, so the invert flag cannot smuggle a nested gate past the flat-tree
@@ -472,11 +465,11 @@ contract MockPolicyRegistry is IPolicyRegistry {
         MockPolicyRegistryStorage.Layout storage $ = MockPolicyRegistryStorage.layout();
         // Pass 1: existence of the base (an inverted child references its base's members).
         for (uint256 i = 0; i < childPolicyIds.length; ++i) {
-            if ($.policies[childPolicyIds[i] & ~INVERT_BIT] == 0) revert PolicyNotFound();
+            if ($.policies[childPolicyIds[i] & ~INVERTED_POLICY_BIT] == 0) revert PolicyNotFound();
         }
         // Pass 2: the base must be a simple policy (never a sentinel or a composite).
         for (uint256 i = 0; i < childPolicyIds.length; ++i) {
-            uint64 base = childPolicyIds[i] & ~INVERT_BIT;
+            uint64 base = childPolicyIds[i] & ~INVERTED_POLICY_BIT;
             if (_isBuiltin(base) || _isComposite(base)) revert InvalidChildPolicy(childPolicyIds[i]);
         }
     }
