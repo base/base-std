@@ -248,8 +248,8 @@ interface IB20 {
     /// @return Policy scope constant.
     function TRANSFER_RECEIVER_POLICY() external view returns (bytes32);
 
-    /// @notice Policy slot consulted against `msg.sender` on `transferFrom` when distinct from `from`.
-    ///         Not consulted on `transfer`.
+    /// @notice Policy slot consulted against `msg.sender` (the initiator) on every transfer,
+    ///         including when `msg.sender == from`.
     /// @dev Bypassed for factory-originated calls during the creation (bootstrap) window; see
     ///      `IB20Factory.createB20`.
     /// @return Policy scope constant.
@@ -317,6 +317,7 @@ interface IB20 {
     /// @dev Reverts with `ContractPaused(TRANSFER)` when `TRANSFER` is paused.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
     /// @dev Reverts with `InvalidSender` when `msg.sender == address(0)`.
+    /// @dev Reverts with `PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...)` when `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `InsufficientBalance` when `msg.sender`'s balance is below `amount`.
@@ -333,7 +334,7 @@ interface IB20 {
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
     /// @dev Reverts with `InvalidSender` when `from == address(0)`.
     /// @dev Reverts with `InsufficientAllowance` when the caller's allowance from `from` is below `amount`.
-    /// @dev Reverts with `PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...)` when `msg.sender != from` and `msg.sender` is not authorized.
+    /// @dev Reverts with `PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...)` when `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `from` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.

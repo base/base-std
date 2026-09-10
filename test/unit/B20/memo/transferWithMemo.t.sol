@@ -6,6 +6,7 @@ import {IB20} from "base-std/interfaces/IB20.sol";
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20TransferWithMemoTest is B20Test {
     /// @notice Verifies transferWithMemo applies the same pause / policy / balance checks as transfer
@@ -21,6 +22,28 @@ contract B20TransferWithMemoTest is B20Test {
 
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
+        token.transferWithMemo(to, amount, memo);
+    }
+
+    /// @notice Verifies transferWithMemo enforces TRANSFER_EXECUTOR_POLICY like transfer
+    /// @dev The memo variant routes through the same `_transfer`, so a blocked executor
+    ///      (msg.sender == from) must revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...).
+    ///      Concrete executor-scope tests live in transfer.t.sol; this pins parity for the memo path.
+    function test_transferWithMemo_revert_executorPolicyForbids(address from, address to, uint256 amount, bytes32 memo)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.transferWithMemo(to, amount, memo);
     }
 

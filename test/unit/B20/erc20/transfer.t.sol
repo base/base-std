@@ -60,6 +60,28 @@ contract B20TransferTest is B20Test {
         token.transfer(to, amount);
     }
 
+    /// @notice Verifies transfer reverts when the executor (msg.sender) is not authorized under
+    ///         TRANSFER_EXECUTOR_POLICY
+    /// @dev On the direct `transfer` path the executor is `msg.sender` (== `from`). The executor
+    ///      gate is enforced in `_transfer` before the sender/receiver gates, so a blocked executor
+    ///      reverts PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...) even for a holder moving their own
+    ///      tokens. No balance needed — the policy check fires first.
+    function test_transfer_revert_executorPolicyForbids(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transfer(to, amount);
+    }
+
     /// @notice Verifies transfer reverts when sender balance is insufficient
     /// @dev Balance precondition; checks InsufficientBalance(sender, balance, amount) error
     function test_transfer_revert_insufficientBalance(address from, address to, uint256 amount) public {
@@ -297,6 +319,74 @@ contract B20TransferTest is B20Test {
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER_POLICY, id));
         token.transfer(to, amount);
+    }
+
+    /// @notice Verifies transfer succeeds when the executor (msg.sender) is a member of a custom
+    ///         ALLOWLIST policy
+    /// @dev Exercises the external-registry authorization path for the executor scope: only an
+    ///      allowlisted initiator can move tokens. Here the holder `from` is on the allowlist, so
+    ///      their own `transfer` clears the executor gate.
+    function test_transfer_success_externalExecutorPolicyAllows(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        uint64 id = _createAllowlist(from, true);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, id);
+        _mint(from, amount);
+
+        vm.prank(from);
+        token.transfer(to, amount);
+
+        assertEq(token.balanceOf(to), amount, "transfer must succeed when executor is allowlisted");
+    }
+
+    /// @notice Verifies transfer reverts when the executor (msg.sender) is NOT a member of a custom
+    ///         ALLOWLIST policy
+    /// @dev Negative external-registry path for the executor scope: an allowlist without membership
+    ///      for `from` resolves isAuthorized to false, so the executor gate reverts PolicyForbids
+    ///      with the custom id. This is the case an issuer uses to restrict transfers to specific
+    ///      initiators (e.g. a settlement contract). No balance needed — the policy check fires first.
+    function test_transfer_revert_externalExecutorPolicyDenies(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+
+        uint64 id = _createAllowlist(from, false); // create the allowlist but do NOT add `from`
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, id);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_EXECUTOR_POLICY, id));
+        token.transfer(to, amount);
+    }
+
+    /// @notice Verifies a privileged (factory bootstrap) transfer bypasses the TRANSFER_EXECUTOR_POLICY
+    /// @dev Executor mirror of the sender/receiver bootstrap bypasses: the initCalls set the executor
+    ///      policy to ALWAYS_BLOCK and transfer from the factory. A non-privileged transfer would
+    ///      revert PolicyForbids(EXECUTOR, ...); the privileged init-call transfer must succeed,
+    ///      proving the executor gate honors the bootstrap bypass on the direct transfer path. Runs
+    ///      the real factory bootstrap path with no vm.store cheat, so it holds under LIVE_PRECOMPILES.
+    function test_transfer_success_privilegedBypassesExecutorPolicy(address to, uint256 amount) public {
+        _assumeValidActor(to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        bytes32 salt = keccak256("privileged-executor-bypass");
+        // The fuzzed recipient must not collide with the to-be-created token's own address.
+        vm.assume(to != factory.getB20Address(IB20Factory.B20Variant.ASSET, alice, salt));
+
+        bytes[] memory initCalls = new bytes[](3);
+        initCalls[0] = abi.encodeWithSelector(IB20.mint.selector, address(factory), amount);
+        initCalls[1] = abi.encodeWithSelector(
+            IB20.updatePolicy.selector, B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID
+        );
+        initCalls[2] = abi.encodeWithSelector(IB20.transfer.selector, to, amount);
+
+        address newToken = _createAsset(alice, salt, _assetParams(), initCalls);
+
+        assertEq(
+            IB20(newToken).balanceOf(to), amount, "privileged transfer must succeed despite blocked executor policy"
+        );
     }
 
     /// @notice Creates a custom ALLOWLIST policy administered by `admin`, optionally seeding

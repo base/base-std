@@ -198,21 +198,11 @@ abstract contract MockB20 is IB20 {
         _requireNonZeroActors(from, to);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
-        // which carves no `privileged` exception for allowance accounting;
-        // only the executor-policy check below is bypassed
-        // for a privileged caller. An infinite allowance is still not
-        // decremented (handled inside `_consumeAllowance`).
+        // which carves no `privileged` exception for allowance accounting. An
+        // infinite allowance is still not decremented (handled inside
+        // `_consumeAllowance`). The executor policy is enforced centrally in
+        // `_transfer` (on `msg.sender`), which honors the bootstrap bypass.
         _consumeAllowance(from, msg.sender, amount);
-        if (!_isPrivileged() && msg.sender != from) {
-            // Read the executor policy ID out of the transfer-side packed
-            // slot. Cold here; warm by the time _transfer reads the same
-            // slot for sender + receiver. Skipped when the caller is the
-            // owner — sender-policy already covers `from` inside _transfer.
-            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
-            }
-        }
         _transfer(from, to, amount);
         return true;
     }
@@ -247,16 +237,10 @@ abstract contract MockB20 is IB20 {
     {
         _requireNonZeroActors(from, to);
         // Allowance is consumed unconditionally — including during the factory
-        // bootstrap window — matching the Rust precompile.
-        // Only the executor-policy check below is bypassed for a privileged
-        // caller; infinite allowance is still not decremented.
+        // bootstrap window — matching the Rust precompile. Infinite allowance
+        // is still not decremented. The executor policy is enforced centrally
+        // in `_transfer` (on `msg.sender`), which honors the bootstrap bypass.
         _consumeAllowance(from, msg.sender, amount);
-        if (!_isPrivileged() && msg.sender != from) {
-            uint64 executorPolicyId = MockB20Storage.layout().transferPolicyIds.executor;
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(executorPolicyId, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicyId);
-            }
-        }
         _transfer(from, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -754,18 +738,22 @@ abstract contract MockB20 is IB20 {
     ///      this helper. `transferFrom` / `transferFromWithMemo`
     ///      additionally consume the allowance (unconditionally —
     ///      including in the bootstrap window, matching the Rust
-    ///      precompile) and check the executor
-    ///      policy in their bodies before calling here; only the
-    ///      executor-policy check honors the bootstrap bypass,
-    ///      consistent with the sender/receiver policy bypass below.
+    ///      precompile) before calling here.
+    ///
+    ///      Enforces the executor (`msg.sender`), sender (`from`), and receiver
+    ///      (`to`) policies. Gating the executor here — not just on delegated
+    ///      `transferFrom` — lets an executor allowlist restrict who may
+    ///      initiate any transfer, including a holder moving their own tokens.
+    ///      All honor the bootstrap bypass; an unset lane is always-allow.
     function _transfer(address from, address to, uint256 amount) internal {
         if (!_isPrivileged()) {
-            // One SLOAD pulls both policy IDs we need for the transfer
-            // check (and was already warmed if we came in via transferFrom,
-            // which reads the executor lane of the same slot first).
-            // Solidity emits a single SLOAD for the struct read + masked
-            // extracts for the named fields.
+            // One SLOAD pulls all three policy IDs we need for the transfer
+            // check. Solidity emits a single SLOAD for the struct read +
+            // masked extracts for the named fields.
             MockB20Storage.TransferPolicyIds memory packed = MockB20Storage.layout().transferPolicyIds;
+            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.executor, msg.sender)) {
+                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, packed.executor);
+            }
             if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.sender, from)) {
                 revert PolicyForbids(TRANSFER_SENDER_POLICY, packed.sender);
             }
