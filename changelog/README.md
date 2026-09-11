@@ -16,10 +16,20 @@ See [AGENTS.md](AGENTS.md) for how to name and write a new entry.
 | --- | --- | --- |
 | `01` | Beryl | Live |
 | `02` | Cobalt | Upcoming |
+| `03` | Denim | Upcoming |
 
 ## Index
 
 Grouped by hardfork, one collapsible section per hardfork, newest first.
+
+<details open>
+<summary><strong>Denim (upcoming)</strong> — ordinal <code>03</code></summary>
+
+| Product(s) | Change | Affected interfaces | Entry |
+| --- | --- | --- | --- |
+| PolicyRegistry | NOT / invert policies | `src/interfaces/IPolicyRegistry.sol` | [03_Denim_PolicyRegistry_not_policy](03_Denim_PolicyRegistry_not_policy.md) |
+
+</details>
 
 <details open>
 <summary><strong>Cobalt (upcoming)</strong> — ordinal <code>02</code></summary>
