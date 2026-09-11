@@ -12,7 +12,7 @@
 | `AccessControlUnauthorizedAccount(address account, bytes32 neededRole)` | `0xe2517d3f` | `account` does not hold `neededRole`. |
 | `Unauthorized()` | `0x82b42900` | Caller failed a positional authorization check that isn't expressible as "missing role X". |
 | `ContractPaused(uint8 feature)` | `0xfd8c4245` | The `PausableFeature` covering the operation is currently paused. |
-| `InsufficientAllowance(address spender, uint256 allowance, uint256 needed)` | `0x192b9e4e` | `spender`'s allowance is less than `needed` for the requested `transferFrom`. |
+| `InsufficientAllowance(address spender, uint256 allowance, uint256 needed)` | `0x192b9e4e` | `spender` does not hold `PREAUTHORIZED_SPENDER_ROLE`, and its allowance is less than `needed` for the requested `transferFrom`. |
 | `InsufficientBalance(address sender, uint256 balance, uint256 needed)` | `0xdb42144d` | `sender`'s balance is less than `needed` for the requested transfer or burn. |
 | `InvalidSender(address sender)` | `0x4c14f64c` | The transfer's source address is invalid (typically `address(0)`). |
 | `InvalidReceiver(address receiver)` | `0x9cfea583` | The transfer's destination address is invalid (typically `address(0)`). |

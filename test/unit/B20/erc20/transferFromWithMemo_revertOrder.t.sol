@@ -12,7 +12,8 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 /// @notice `transferFromWithMemo` carries the same preconditions as
 ///         `transferFrom`; the memo parameter adds no new revert conditions.
 ///
-///         **Canonical order (Solidity reference, when `msg.sender != from`):**
+///         **Canonical order (Solidity reference, when `msg.sender != from` and the caller lacks
+///         `PREAUTHORIZED_SPENDER_ROLE`):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
 ///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`

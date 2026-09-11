@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 
-/// @notice Folds the seven trivial role-constant readers into one
+/// @notice Folds the eight trivial role-constant readers into one
 ///         file since each is a one-stub assertion against a fixed keccak
 ///         digest. Substantive role-related functions (`grantRole`,
 ///         `revokeRole`, etc.) live in their own files.
@@ -58,5 +58,20 @@ contract B20RoleConstantsTest is B20Test {
     function test_METADATA_ROLE_success_matchesExpected() public view {
         assertEq(token.METADATA_ROLE(), keccak256("METADATA_ROLE"), "B20Constants.METADATA_ROLE digest");
         assertEq(token.METADATA_ROLE(), B20Constants.METADATA_ROLE, "must match B20Test's local constant");
+    }
+
+    /// @notice Verifies PREAUTHORIZED_SPENDER_ROLE returns keccak256("PREAUTHORIZED_SPENDER_ROLE")
+    /// @dev Constant stability for issuer-controlled spending.
+    function test_PREAUTHORIZED_SPENDER_ROLE_success_matchesExpected() public view {
+        assertEq(
+            token.PREAUTHORIZED_SPENDER_ROLE(),
+            keccak256("PREAUTHORIZED_SPENDER_ROLE"),
+            "B20Constants.PREAUTHORIZED_SPENDER_ROLE digest"
+        );
+        assertEq(
+            token.PREAUTHORIZED_SPENDER_ROLE(),
+            B20Constants.PREAUTHORIZED_SPENDER_ROLE,
+            "must match B20Test's local constant"
+        );
     }
 }

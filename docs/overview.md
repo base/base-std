@@ -78,9 +78,11 @@ The Activation Registry is a Base-operated safety switch that turns Factory and 
 
 ## Configuring Roles
 
-Roles let an issuer assign each privileged operation to a specific account. An admin can grant minting to a minter, seizing to a compliance operator, and pausing of a single feature (`TRANSFER`, `MINT`, `BURN`, or `SEIZE`) without pausing the rest of the token.
+Roles let an issuer assign each privileged operation to a specific account. An admin can grant minting to a minter, seizing to a compliance operator, spending to a preauthorized spender, and pausing of a single feature (`TRANSFER`, `MINT`, `BURN`, or `SEIZE`) without pausing the rest of the token.
 
 B20 implements this with [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control) on the token. Roles are not a separate registry. One `DEFAULT_ADMIN_ROLE` holder grants and revokes the operating roles. A privileged call checks the role first, then the matching pause vector. Holder `transfer` skips the role check; it still hits the `TRANSFER` pause vector and policy.
+
+`PREAUTHORIZED_SPENDER_ROLE` gives its holder an infinite allowance from every token holder. `allowance(owner, spender)` returns `type(uint256).max`, and `transferFrom` does not consume the holder's stored allowance. The transfer pause vector and sender, receiver, and executor policies still apply. A holder cannot opt out by approving zero; the role admin must revoke the role.
 
 The full role list and what each role gates is in [Roles](./concepts/roles.md). A role-gated call looks like this:
 

@@ -6,6 +6,7 @@ import {IB20} from "base-std/interfaces/IB20.sol";
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 import {MockB20Storage} from "base-std-test/lib/mocks/MockB20Storage.sol";
+import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 
 contract B20TransferFromWithMemoTest is B20Test {
     /// @notice Verifies transferFromWithMemo inherits all transferFrom guards
@@ -27,6 +28,33 @@ contract B20TransferFromWithMemoTest is B20Test {
 
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, caller, 0, amount));
+        token.transferFromWithMemo(from, to, amount, memo);
+    }
+
+    /// @notice Verifies PREAUTHORIZED_SPENDER_ROLE does not bypass the memo transfer's executor policy
+    /// @dev The memo variant preserves the same policy boundary as transferFrom.
+    function test_transferFromWithMemo_revert_preauthorizedSpenderExecutorPolicyForbids(
+        address from,
+        address to,
+        uint256 amount,
+        bytes32 memo
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(preauthorizedSpender != from);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _grantPreauthorizedSpender();
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(preauthorizedSpender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.transferFromWithMemo(from, to, amount, memo);
     }
 
@@ -125,6 +153,35 @@ contract B20TransferFromWithMemoTest is B20Test {
 
         vm.prank(caller);
         assertTrue(token.transferFromWithMemo(from, to, amount, memo), "transferFromWithMemo must return true");
+    }
+
+    /// @notice Verifies approving zero does not opt a holder out of memo transfers by a preauthorized spender
+    /// @dev PREAUTHORIZED_SPENDER_ROLE bypasses allowance without changing the stored zero value.
+    function test_transferFromWithMemo_success_preauthorizedSpenderSpendsAfterHolderApprovesZero(
+        address from,
+        address to,
+        uint256 amount,
+        bytes32 memo
+    ) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        _mint(from, amount);
+        vm.prank(from);
+        token.approve(preauthorizedSpender, 0);
+        _grantPreauthorizedSpender();
+
+        vm.prank(preauthorizedSpender);
+        token.transferFromWithMemo(from, to, amount, memo);
+
+        assertEq(token.balanceOf(to), amount, "preauthorized spender memo transfer must move the balance");
+        assertEq(
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(from, preauthorizedSpender))),
+            0,
+            "zero stored allowance must remain unchanged"
+        );
     }
 
     // ============================================================
