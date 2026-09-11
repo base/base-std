@@ -6,11 +6,11 @@
 
 ## Summary
 
-Denim lets a B20 issuer grant an account permission to spend from every holder without holder approvals. The dedicated `AUTHORIZED_SPENDER_ROLE` keeps this authority separate from the Asset-only `OPERATOR_ROLE`.
+Denim lets a B20 issuer grant an account permission to spend from every holder without holder approvals.
 
 ## Motivation
 
-Some token integrations need one contract, such as a router or settlement system, to spend from every holder. Requiring each holder to call `approve` adds a transaction and prevents the integration from working for holders that cannot make an approval call.
+Some token integrations need one contract, such as a router or settlement system, to spend from every holder. For example, an issuer can authorize Permit2 to unlock signature-based transfers. This provides a workaround when a smart contract account cannot use token-native permit functionality. Requiring each holder to call `approve` adds a transaction and prevents these integrations from working for holders that cannot make an approval call.
 
 ## Specs
 
@@ -55,16 +55,17 @@ There is no storage change. Authorized spender membership uses the existing role
 
 ```solidity
 bytes32 spenderRole = token.AUTHORIZED_SPENDER_ROLE();
-token.grantRole(spenderRole, address(router));
+token.grantRole(spenderRole, address(permit2));
 
-// Returns type(uint256).max even when alice never approved the router.
-uint256 effectiveAllowance = token.allowance(alice, address(router));
+// Returns type(uint256).max even when alice never approved Permit2.
+uint256 effectiveAllowance = token.allowance(alice, address(permit2));
 
-// The router calls token.transferFrom(alice, recipient, amount)
-// from its own execution context.
+// Permit2 can execute signature-based transfers against alice's token balance.
 ```
 
-## Design Decisions
+## Design Decisions and Alternatives Considered
+
+### Selected design
 
 - Add a dedicated role to keep holder-spending authority separate from Asset operations.
 - Reuse the existing RBAC set instead of adding a spender registry or policy scope.
@@ -74,6 +75,18 @@ uint256 effectiveAllowance = token.allowance(alice, address(router));
 - Reuse `DEFAULT_ADMIN_ROLE` as the default role administrator.
 - Waive only allowance checks. Compliance policies and pause remain independent controls.
 
+### Alternatives considered
+
+| Alternative | Reason not selected |
+| --- | --- |
+| Dedicated spender mapping with `isAuthorizedSpender`, `setAuthorizedSpender`, and a new event | Adds storage, mutators, and an event when the existing RBAC set already provides membership management. |
+| New Policy Registry scope | An unset policy ID means always allow. Special-casing that default for spender grants would invert existing policy semantics and create a severe configuration risk. |
+| Explicit token API backed by a Policy Registry policy | Requires both a token-level policy reference and registry configuration, which adds two moving parts for one permission. |
+| Reuse the Asset `OPERATOR_ROLE` | Combines holder-spending authority with announcements and multiplier administration. A separate role keeps each capability explicit. |
+| Fixed Permit2 authorization | Restricts issuers to one integration. The selected design supports Permit2 and other issuer-chosen spenders without granting any address by default. |
+| Per-holder opt-out | Adds per-holder state and another transfer branch without changing the issuer trust model. Role revocation remains the authority-removal path. |
+| Dedicated admin role or delayed grants | Adds administration and pending-grant state. The existing delegable role-admin model supports separation when an issuer needs it, while keeping grants and revocations immediate. |
+
 ## Migration Steps
 
 ### Issuers
@@ -81,7 +94,6 @@ uint256 effectiveAllowance = token.allowance(alice, address(router));
 1. Check for any historical generic grant of the `AUTHORIZED_SPENDER_ROLE` hash.
 2. Check `getRoleAdmin(AUTHORIZED_SPENDER_ROLE)` if the role hash was already configured.
 3. Grant the role only to contracts and accounts that may move every holder's balance.
-4. Keep `OPERATOR_ROLE` assignments unchanged unless the Asset operator itself also needs spending authority.
 
 ### Integrators
 
@@ -89,4 +101,4 @@ uint256 effectiveAllowance = token.allowance(alice, address(router));
 2. Do not present `approve(spender, 0)` as a revocation path for role-based authority.
 3. Continue to handle `ContractPaused`, `PolicyForbids`, and `InsufficientBalance` on authorized spender transfers.
 
-Both variants gain the additive `AUTHORIZED_SPENDER_ROLE()` selector. Existing `OPERATOR_ROLE` assignments retain their previous capabilities. The existing ERC-20 selectors change behavior only for accounts that hold the new role hash.
+Both variants gain the additive `AUTHORIZED_SPENDER_ROLE()` selector. The existing ERC-20 selectors change behavior only for accounts that hold the new role hash.
