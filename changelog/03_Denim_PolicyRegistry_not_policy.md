@@ -7,17 +7,17 @@
 
 ## Summary
 
-Issuers may want the inverse of a specific list without maintaining two lists. For example, they may authorize an account only when it is not on a sanctions blocklist. This change adds a query-time invert (NOT) flag in bit 63 of a `uint64` policy ID. When that bit is set, `isAuthorized` resolves the base policy and returns the opposite of that policy's decision.
+This change allows any policy ID to reference the opposite (NOT) of its original outcome at query time. When bit 63 is set, `isAuthorized` resolves the base policy and returns the opposite of that policy's decision.
 
 Members stay on the base policy and are shared, not copied, so an update to the base updates its inverse. Invert therefore creates no new record, no new create path, and no extra storage load (`SLOAD`). The flag applies to every policy type: `ALLOWLIST`, `BLOCKLIST`, and `UNION` / `INTERSECT` composites. 
 
 ## Motivation
 
-Issuers may want the inverse of a specific list, and the registry cannot express that. They may authorize an account only when it is not on a sanctions blocklist, or only when it is not Know Your Customer (KYC) verified. Composites often need the same negation: "allowed to transfer" is frequently "on list A and not on list B", where list B is a sanctions list, a blocked list, or a non-KYC'd list. There is no way to say "the opposite of this policy."
+Issuers may want the inverse of a specific list, and the registry cannot express that. They may authorize an account only when it is not on a sanctions blocklist, or only when it is not Know Your Customer (KYC) verified. Composites often need the same negation: "allowed to transfer" is frequently "on list A and not on list B", where list B is a sanctions list, a blocked list, or a non-KYC'd list. They may also need both sides inverted: "not on list A and not on list B". There is no way to say "the opposite of this policy."
 
-The workaround is to maintain two mirror lists: an allowlist and a blocklist seeded with the same addresses. Every membership change must land on both lists. Any lag rejects valid accounts or admits invalid ones. Composite policies do not remove that second list.
+Without invert, the only way to get the opposite outcome is to create a second policy of the other type and copy the same addresses into it: an allowlist mirrored as a blocklist, or the reverse. Every membership change must then land on both policies. If one update lags, valid accounts are rejected or invalid ones are admitted. A composite that needs "NOT A" still has to point at that second, mirrored policy. It cannot reuse A.
 
-The goal is to let one membership set be evaluated as include or exclude, so issuers never maintain two policies for the same address group.
+The goal is to let one membership set be evaluated as include or exclude, so issuers never maintain two or more policies for the same address group. A composite can invert one child or several: "A AND NOT B", or "NOT A AND NOT B".
 
 ## Background
 
@@ -44,9 +44,6 @@ The structure of a policy ID is:
 
 - Bits `[0:55]` hold a unique counter value. The type is not stored in a slot.
 - Bits `[56:63]` are reserved for `PolicyType`. Only four types are used today (`0–3`: `BLOCKLIST`, `ALLOWLIST`, `UNION`, `INTERSECT`), occupying bits `56–57`. Bits `58–63` are unused.
-
-Built-in sentinels are `ALWAYS_ALLOW` (id 0) and `ALWAYS_BLOCK` (id 1). The counter starts at 2.
-
 
 ## Specs
 
