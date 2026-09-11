@@ -1,8 +1,8 @@
-# Denim: Issuer-Authorized Spenders
+# Denim: Preauthorized Spenders
 
-- **Feature Name**: authorized_spender
-- **Start Date**: 2026-09-10
-- **Title**: Issuer-authorized infinite allowances through `AUTHORIZED_SPENDER_ROLE`
+- **Feature Name**: preauthorized_spender
+- **Start Date**: 2026-09-11
+- **Title**: Issuer-controlled infinite allowances through `PREAUTHORIZED_SPENDER_ROLE`
 
 ## Summary
 
@@ -10,33 +10,33 @@ Denim lets a B20 issuer grant an account permission to spend from every holder w
 
 ## Motivation
 
-Some token integrations need one contract, such as a router or settlement system, to spend from every holder. For example, an issuer can authorize Permit2 to unlock signature-based transfers. This provides a workaround when a smart contract account cannot use token-native permit functionality. Requiring each holder to call `approve` adds a transaction and prevents these integrations from working for holders that cannot make an approval call.
+Some token integrations need one contract, such as a router or settlement system, to spend from every holder. For example, an issuer can preauthorize Permit2 to unlock signature-based transfers. This provides a workaround when a smart contract account cannot use token-native permit functionality and removes the per-holder approval transaction.
 
 ## Specs
 
 ### Interface changes
 
-`AUTHORIZED_SPENDER_ROLE()` is added to the shared [`IB20`](../src/interfaces/IB20.sol) interface.
+`PREAUTHORIZED_SPENDER_ROLE()` is added to the shared [`IB20`](../src/interfaces/IB20.sol) interface.
 
 | Function | Selector | Denim change |
 | --- | --- | --- |
-| `AUTHORIZED_SPENDER_ROLE()` | `0xef97aa21` | New shared role getter on Asset and Stablecoin. |
-| `allowance(address,address)` | `0xdd62ed3e` | Returns `type(uint256).max` when `spender` holds `AUTHORIZED_SPENDER_ROLE`. |
-| `transferFrom(address,address,uint256)` | `0x23b872dd` | Skips allowance validation and consumption when the caller holds `AUTHORIZED_SPENDER_ROLE`. |
-| `transferFromWithMemo(address,address,uint256,bytes32)` | `0x929c2539` | Applies the same authorized spender behavior as `transferFrom`. |
+| `PREAUTHORIZED_SPENDER_ROLE()` | `0x6c0f8b76` | New shared role getter on Asset and Stablecoin. |
+| `allowance(address,address)` | `0xdd62ed3e` | Returns `type(uint256).max` when `spender` holds `PREAUTHORIZED_SPENDER_ROLE`. |
+| `transferFrom(address,address,uint256)` | `0x23b872dd` | Skips allowance validation and consumption when the caller holds `PREAUTHORIZED_SPENDER_ROLE`. |
+| `transferFromWithMemo(address,address,uint256,bytes32)` | `0x929c2539` | Applies the same preauthorized spender behavior as `transferFrom`. |
 
 The role value is:
 
 ```solidity
-keccak256("AUTHORIZED_SPENDER_ROLE")
-// 0xb0e3ae34a3ebd864ed280a15abe71cbcaf59103e086737862f5bbccae6a44b37
+keccak256("PREAUTHORIZED_SPENDER_ROLE")
+// 0xb90b441c392e1b39b562e08d16a15eab44f161ced0b6366c03aa7d09a22f1a41
 ```
 
-No new mutator, event, error, or storage slot is added. Issuers manage membership with `grantRole`, `revokeRole`, and `renounceRole`. `getRoleAdmin(AUTHORIZED_SPENDER_ROLE)` defaults to `DEFAULT_ADMIN_ROLE` and remains delegable through `setRoleAdmin`.
+No new mutator, event, error, or storage slot is added. Issuers manage membership with `grantRole`, `revokeRole`, and `renounceRole`. `getRoleAdmin(PREAUTHORIZED_SPENDER_ROLE)` defaults to `DEFAULT_ADMIN_ROLE` and remains delegable through `setRoleAdmin`.
 
 ### Behavioral changes
 
-For a caller that holds `AUTHORIZED_SPENDER_ROLE`:
+For a caller that holds `PREAUTHORIZED_SPENDER_ROLE`:
 
 - `allowance(owner, caller)` returns `type(uint256).max` for every `owner`.
 - `transferFrom` and `transferFromWithMemo` do not read or decrement the stored allowance.
@@ -49,12 +49,20 @@ For any other caller, allowance behavior remains unchanged. A finite allowance d
 
 ### Storage layout
 
-There is no storage change. Authorized spender membership uses the existing role mapping. Holder allowances remain in their existing slots while the spender holds `AUTHORIZED_SPENDER_ROLE`.
+There is no storage change. Preauthorized spender membership uses the existing role mapping. Holder allowances remain in their existing slots while the spender holds `PREAUTHORIZED_SPENDER_ROLE`.
+
+### Gas considerations
+
+- `allowance` adds a role-membership read. A preauthorized spender returns after that read and skips the stored allowance read.
+- `transferFrom` and `transferFromWithMemo` add a role-membership read for all callers.
+- A preauthorized spender skips the allowance read and any finite-allowance write.
+- A caller without the role pays for the additional role read and then follows the existing allowance path.
+- Exact native gas costs depend on the B20 logic v3 implementation and must be benchmarked with that implementation.
 
 ## Example
 
 ```solidity
-bytes32 spenderRole = token.AUTHORIZED_SPENDER_ROLE();
+bytes32 spenderRole = token.PREAUTHORIZED_SPENDER_ROLE();
 token.grantRole(spenderRole, address(permit2));
 
 // Returns type(uint256).max even when alice never approved Permit2.
@@ -91,14 +99,14 @@ uint256 effectiveAllowance = token.allowance(alice, address(permit2));
 
 ### Issuers
 
-1. Check for any historical generic grant of the `AUTHORIZED_SPENDER_ROLE` hash.
-2. Check `getRoleAdmin(AUTHORIZED_SPENDER_ROLE)` if the role hash was already configured.
+1. Check for any historical generic grant of the `PREAUTHORIZED_SPENDER_ROLE` hash.
+2. Check `getRoleAdmin(PREAUTHORIZED_SPENDER_ROLE)` if the role hash was already configured.
 3. Grant the role only to contracts and accounts that may move every holder's balance.
 
 ### Integrators
 
 1. Do not assume that `allowance == type(uint256).max` came from holder approval.
 2. Do not present `approve(spender, 0)` as a revocation path for role-based authority.
-3. Continue to handle `ContractPaused`, `PolicyForbids`, and `InsufficientBalance` on authorized spender transfers.
+3. Continue to handle `ContractPaused`, `PolicyForbids`, and `InsufficientBalance` on preauthorized spender transfers.
 
-Both variants gain the additive `AUTHORIZED_SPENDER_ROLE()` selector. The existing ERC-20 selectors change behavior only for accounts that hold the new role hash.
+Both variants gain the additive `PREAUTHORIZED_SPENDER_ROLE()` selector. The existing ERC-20 selectors change behavior only for accounts that hold the new role hash.

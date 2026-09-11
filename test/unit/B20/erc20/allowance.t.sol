@@ -58,45 +58,46 @@ contract B20AllowanceTest is B20Test {
         );
     }
 
-    /// @notice Verifies every holder reports an infinite allowance for an authorized spender
+    /// @notice Verifies every holder reports an infinite allowance for a preauthorized spender
     /// @dev Role membership overrides the allowance view without changing the stored allowance.
-    function test_allowance_success_authorizedSpenderReadsAsInfinite(address owner, uint256 storedAllowance) public {
+    function test_allowance_success_preauthorizedSpenderReadsAsInfinite(address owner, uint256 storedAllowance) public {
         _assumeValidActor(owner);
 
         vm.prank(owner);
-        token.approve(authorizedSpender, storedAllowance);
-        _grantAuthorizedSpender();
+        token.approve(preauthorizedSpender, storedAllowance);
+        _grantPreauthorizedSpender();
 
         assertEq(
-            token.allowance(owner, authorizedSpender),
+            token.allowance(owner, preauthorizedSpender),
             type(uint256).max,
-            "authorized spender allowance must read as infinite"
+            "preauthorized spender allowance must read as infinite"
         );
         assertEq(
-            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, authorizedSpender))),
+            uint256(vm.load(address(token), MockB20Storage.allowanceSlot(owner, preauthorizedSpender))),
             storedAllowance,
-            "authorized spender role must not overwrite stored allowance"
+            "preauthorized spender role must not overwrite stored allowance"
         );
     }
 
-    /// @notice Verifies revoking AUTHORIZED_SPENDER_ROLE restores the holder's stored allowance
+    /// @notice Verifies revoking PREAUTHORIZED_SPENDER_ROLE restores the holder's stored allowance
     /// @dev Role revocation removes only the synthetic infinite allowance.
-    function test_allowance_success_revokedAuthorizedSpenderReadsStoredAllowance(address owner, uint256 storedAllowance)
-        public
-    {
+    function test_allowance_success_revokedPreauthorizedSpenderReadsStoredAllowance(
+        address owner,
+        uint256 storedAllowance
+    ) public {
         _assumeValidActor(owner);
 
         vm.prank(owner);
-        token.approve(authorizedSpender, storedAllowance);
-        _grantAuthorizedSpender();
+        token.approve(preauthorizedSpender, storedAllowance);
+        _grantPreauthorizedSpender();
 
         vm.prank(admin);
-        token.revokeRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
+        token.revokeRole(B20Constants.PREAUTHORIZED_SPENDER_ROLE, preauthorizedSpender);
 
         assertEq(
-            token.allowance(owner, authorizedSpender),
+            token.allowance(owner, preauthorizedSpender),
             storedAllowance,
-            "revoked authorized spender must read stored allowance"
+            "revoked preauthorized spender must read stored allowance"
         );
     }
 }

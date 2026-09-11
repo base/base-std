@@ -9,27 +9,27 @@ in [`changelog/`](changelog/README.md).
 
 ### Status
 
-Denim has not activated yet. Authorized spender allowance behavior remains unavailable until Denim selects B20 logic v3.
+Denim has not activated yet. Preauthorized spender allowance behavior remains unavailable until Denim selects B20 logic v3.
 
 ### Compatibility
 
-Denim adds the shared `AUTHORIZED_SPENDER_ROLE()` getter and changes the behavior of existing `allowance`, `transferFrom`, and `transferFromWithMemo` selectors for accounts that hold this role.
+Denim adds the shared `PREAUTHORIZED_SPENDER_ROLE()` getter and changes the behavior of existing `allowance`, `transferFrom`, and `transferFromWithMemo` selectors for accounts that hold this role.
 
 ### Summary of changes
 
 | Product | Feature | Change | Details |
 | --- | --- | --- | --- |
-| B20 (Asset and Stablecoin) | Issuer-authorized spenders | An account with `AUTHORIZED_SPENDER_ROLE` reads as having infinite allowance from every holder. Authorized spender transfers do not consume stored allowances, but pause and transfer policies remain active. | [03_Denim_B20_authorized_spender](changelog/03_Denim_B20_authorized_spender.md) |
+| B20 (Asset and Stablecoin) | Preauthorized spenders | An account with `PREAUTHORIZED_SPENDER_ROLE` reads as having infinite allowance from every holder. Preauthorized spender transfers do not consume stored allowances, but pause and transfer policies remain active. | [03_Denim_B20_preauthorized_spender](changelog/03_Denim_B20_preauthorized_spender.md) |
 
 ### Migration guidance
 
 #### Issuers
 
-Grant `AUTHORIZED_SPENDER_ROLE` only to contracts and accounts that may move every holder's balance. Existing Asset `OPERATOR_ROLE` assignments keep their announcement and multiplier capabilities and do not gain spending authority.
+Grant `PREAUTHORIZED_SPENDER_ROLE` only to contracts and accounts that may move every holder's balance. Existing Asset `OPERATOR_ROLE` assignments keep their announcement and multiplier capabilities and do not gain spending authority.
 
 #### Wallets and integrators
 
-Treat `allowance(owner, spender) == type(uint256).max` as possible role-based authority. A holder cannot revoke that authority with `approve(spender, 0)`; only the role administrator can remove it. Continue to enforce transfer policy failures and paused-transfer failures for authorized spender calls.
+Treat `allowance(owner, spender) == type(uint256).max` as possible role-based authority. A holder cannot revoke that authority with `approve(spender, 0)`; only the role administrator can remove it. Continue to enforce transfer policy failures and paused-transfer failures for preauthorized spender calls.
 
 ## Cobalt
 

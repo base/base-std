@@ -19,7 +19,7 @@ import {B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
 ///
 /// On top of the inherited factory actors, this contract adds the
 /// token-specific role-holders (`minter`, `burner`, `pauser`,
-/// `unpauser`, `burnBlocker`, `authorizedSpender`) so role-gated tests have explicit named
+/// `unpauser`, `burnBlocker`, `preauthorizedSpender`) so role-gated tests have explicit named
 /// accounts to grant roles to in setUp's initCalls.
 contract B20Test is B20FactoryTest {
     // Role constants (DEFAULT_ADMIN_ROLE, MINT_ROLE, BURN_ROLE,
@@ -38,7 +38,7 @@ contract B20Test is B20FactoryTest {
     address internal pauser = makeAddr("pauser");
     address internal unpauser = makeAddr("unpauser");
     address internal burnBlocker = makeAddr("burnBlocker");
-    address internal authorizedSpender = makeAddr("authorizedSpender");
+    address internal preauthorizedSpender = makeAddr("preauthorizedSpender");
 
     // -- Token under test --
     /// @notice Asset-variant `IB20` token deployed in `setUp`.
@@ -53,7 +53,7 @@ contract B20Test is B20FactoryTest {
         vm.label(pauser, "pauser");
         vm.label(unpauser, "unpauser");
         vm.label(burnBlocker, "burnBlocker");
-        vm.label(authorizedSpender, "authorizedSpender");
+        vm.label(preauthorizedSpender, "preauthorizedSpender");
 
         token = _deployToken();
         vm.label(address(token), "token");
@@ -109,10 +109,10 @@ contract B20Test is B20FactoryTest {
         token.grantRole(role, account);
     }
 
-    /// @notice Grants `AUTHORIZED_SPENDER_ROLE` to the `authorizedSpender` actor as the admin, idempotently.
-    function _grantAuthorizedSpender() internal {
-        if (!token.hasRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender)) {
-            _grantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
+    /// @notice Grants `PREAUTHORIZED_SPENDER_ROLE` to the `preauthorizedSpender` actor as the admin, idempotently.
+    function _grantPreauthorizedSpender() internal {
+        if (!token.hasRole(B20Constants.PREAUTHORIZED_SPENDER_ROLE, preauthorizedSpender)) {
+            _grantRole(B20Constants.PREAUTHORIZED_SPENDER_ROLE, preauthorizedSpender);
         }
     }
 

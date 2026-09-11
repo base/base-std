@@ -26,7 +26,7 @@
 | `PAUSE_ROLE` | `keccak256("PAUSE_ROLE")`<br>`0x139c2898040ef16910dc9f44dc697df79363da767d8bc92f2e310312b816e46d` | Required to call `pause`. |
 | `UNPAUSE_ROLE` | `keccak256("UNPAUSE_ROLE")`<br>`0x265b220c5a8891efdd9e1b1b7fa72f257bd5169f8d87e319cf3dad6ff52b94ae` | Required to call `unpause`. |
 | `METADATA_ROLE` | `keccak256("METADATA_ROLE")`<br>`0x6bd6b5318a46e5fff572d5e4258a20774aab40cc35ac7680654b9081fcc82f80` | Required to call `updateName`, `updateSymbol`, `updateContractURI`, and `updateExtraMetadata`. |
-| `AUTHORIZED_SPENDER_ROLE` | `keccak256("AUTHORIZED_SPENDER_ROLE")`<br>`0xb0e3ae34a3ebd864ed280a15abe71cbcaf59103e086737862f5bbccae6a44b37` | Grants infinite allowance from every holder. |
+| `PREAUTHORIZED_SPENDER_ROLE` | `keccak256("PREAUTHORIZED_SPENDER_ROLE")`<br>`0xb90b441c392e1b39b562e08d16a15eab44f161ced0b6366c03aa7d09a22f1a41` | Grants infinite allowance from every holder. |
 | `OPERATOR_ROLE` | `keccak256("OPERATOR_ROLE")`<br>`0x97667070c54ef182b0f5858b034beac1b6f3089aa2d3188bb1e8929f4fa9b929` | B20Asset-only. Required to call `announce`, `updateUIMultiplier`, `cancelUIMultiplierUpdate`, and the deprecated `updateMultiplier`. |
 
 ## Policy types

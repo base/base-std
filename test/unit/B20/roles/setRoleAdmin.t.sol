@@ -38,28 +38,28 @@ contract B20SetRoleAdminTest is B20Test {
         );
     }
 
-    /// @notice Verifies AUTHORIZED_SPENDER_ROLE administration can be delegated from DEFAULT_ADMIN_ROLE
-    /// @dev Pins the selected governance model for the exact authorized spender role.
-    function test_setRoleAdmin_success_delegatesAuthorizedSpenderRoleAdministration(address delegatedAdmin) public {
+    /// @notice Verifies PREAUTHORIZED_SPENDER_ROLE administration can be delegated from DEFAULT_ADMIN_ROLE
+    /// @dev Pins the selected governance model for the exact preauthorized spender role.
+    function test_setRoleAdmin_success_delegatesPreauthorizedSpenderRoleAdministration(address delegatedAdmin) public {
         _assumeValidCaller(delegatedAdmin);
         vm.assume(delegatedAdmin != admin);
         bytes32 customAdminRole = keccak256("CUSTOM_ADMIN_ROLE");
 
         vm.startPrank(admin);
         token.grantRole(customAdminRole, delegatedAdmin);
-        token.setRoleAdmin(B20Constants.AUTHORIZED_SPENDER_ROLE, customAdminRole);
+        token.setRoleAdmin(B20Constants.PREAUTHORIZED_SPENDER_ROLE, customAdminRole);
         vm.stopPrank();
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, admin, customAdminRole));
-        token.grantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
+        token.grantRole(B20Constants.PREAUTHORIZED_SPENDER_ROLE, preauthorizedSpender);
 
         vm.prank(delegatedAdmin);
-        token.grantRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender);
+        token.grantRole(B20Constants.PREAUTHORIZED_SPENDER_ROLE, preauthorizedSpender);
 
         assertTrue(
-            token.hasRole(B20Constants.AUTHORIZED_SPENDER_ROLE, authorizedSpender),
-            "delegated admin must grant authorized spender role"
+            token.hasRole(B20Constants.PREAUTHORIZED_SPENDER_ROLE, preauthorizedSpender),
+            "delegated admin must grant preauthorized spender role"
         );
     }
 

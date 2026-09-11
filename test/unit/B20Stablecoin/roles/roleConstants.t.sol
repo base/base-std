@@ -12,16 +12,18 @@ contract B20StablecoinRoleConstantsTest is B20StablecoinTest {
         assertFalse(success, "Stablecoin must not expose OPERATOR_ROLE");
     }
 
-    /// @notice Verifies Stablecoin exposes the shared AUTHORIZED_SPENDER_ROLE constant
+    /// @notice Verifies Stablecoin exposes the shared PREAUTHORIZED_SPENDER_ROLE constant
     /// @dev Pins the shared selector and role value on the Stablecoin variant.
-    function test_AUTHORIZED_SPENDER_ROLE_success_matchesExpected() public view {
+    function test_PREAUTHORIZED_SPENDER_ROLE_success_matchesExpected() public view {
         assertEq(
-            token.AUTHORIZED_SPENDER_ROLE(), keccak256("AUTHORIZED_SPENDER_ROLE"), "AUTHORIZED_SPENDER_ROLE digest"
+            token.PREAUTHORIZED_SPENDER_ROLE(),
+            keccak256("PREAUTHORIZED_SPENDER_ROLE"),
+            "PREAUTHORIZED_SPENDER_ROLE digest"
         );
         assertEq(
-            token.AUTHORIZED_SPENDER_ROLE(),
-            B20Constants.AUTHORIZED_SPENDER_ROLE,
-            "AUTHORIZED_SPENDER_ROLE library value"
+            token.PREAUTHORIZED_SPENDER_ROLE(),
+            B20Constants.PREAUTHORIZED_SPENDER_ROLE,
+            "PREAUTHORIZED_SPENDER_ROLE library value"
         );
     }
 }

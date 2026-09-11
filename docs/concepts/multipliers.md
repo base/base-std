@@ -46,7 +46,7 @@ Convert a single amount with `toUIAmount(raw)` and `fromUIAmount(ui)` at that ef
 
 ### What it preserves
 
-`balanceOf`, `transfer` amounts, `totalSupply`, and stored allowances stay raw. Protocols that use that ERC-20 surface do not see the split. The separate `AUTHORIZED_SPENDER_ROLE` rule can make `allowance(owner, spender)` return `type(uint256).max`; that value does not use the UI multiplier.
+`balanceOf`, `transfer` amounts, `totalSupply`, and stored allowances stay raw. Protocols that use that ERC-20 surface do not see the split. The separate `PREAUTHORIZED_SPENDER_ROLE` rule can make `allowance(owner, spender)` return `type(uint256).max`; that value does not use the UI multiplier.
 
 The UI views above are opt-in. Protocols that call `balanceOfUI`, `scaledBalanceOf`, or `totalSupplyUI` do see the split.
 

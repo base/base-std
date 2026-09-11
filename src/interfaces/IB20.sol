@@ -234,7 +234,7 @@ interface IB20 {
 
     /// @notice Grants an infinite allowance from every holder for `transferFrom` and `transferFromWithMemo`.
     /// @return Role constant.
-    function AUTHORIZED_SPENDER_ROLE() external view returns (bytes32);
+    function PREAUTHORIZED_SPENDER_ROLE() external view returns (bytes32);
 
     /*//////////////////////////////////////////////////////////////
                           POLICY TYPE CONSTANTS
@@ -309,7 +309,7 @@ interface IB20 {
     function balanceOf(address account) external view returns (uint256);
 
     /// @notice Allowance granted by `owner` to `spender`. Returns `type(uint256).max` when `spender` holds
-    ///         `AUTHORIZED_SPENDER_ROLE`, regardless of the stored allowance.
+    ///         `PREAUTHORIZED_SPENDER_ROLE`, regardless of the stored allowance.
     ///
     /// @param owner   Allowance owner.
     /// @param spender Allowance spender.
@@ -333,12 +333,12 @@ interface IB20 {
     function transfer(address to, uint256 amount) external returns (bool);
 
     /// @notice Transfers `amount` from `from` to `to` using `msg.sender`'s allowance or
-    ///         `AUTHORIZED_SPENDER_ROLE`. Emits `Transfer`.
+    ///         `PREAUTHORIZED_SPENDER_ROLE`. Emits `Transfer`.
     ///
     /// @dev Reverts with `ContractPaused(TRANSFER)` when `TRANSFER` is paused.
     /// @dev Reverts with `InvalidReceiver` when `to == address(0)`.
     /// @dev Reverts with `InvalidSender` when `from == address(0)`.
-    /// @dev Reverts with `InsufficientAllowance` when the caller does not hold `AUTHORIZED_SPENDER_ROLE` and its
+    /// @dev Reverts with `InsufficientAllowance` when the caller does not hold `PREAUTHORIZED_SPENDER_ROLE` and its
     ///      allowance from `from` is below `amount`.
     /// @dev Reverts with `PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...)` when `msg.sender != from` and `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `from` is not authorized.
@@ -353,7 +353,7 @@ interface IB20 {
     function transferFrom(address from, address to, uint256 amount) external returns (bool);
 
     /// @notice Sets `spender`'s stored allowance to `amount`. Not gated by any policy or by pause. Emits `Approval`.
-    ///         This does not limit a spender that holds `AUTHORIZED_SPENDER_ROLE`.
+    ///         This does not limit a spender that holds `PREAUTHORIZED_SPENDER_ROLE`.
     ///
     /// @dev Reverts with `InvalidApprover` when `msg.sender == address(0)`.
     /// @dev Reverts with `InvalidSpender` when `spender == address(0)`.

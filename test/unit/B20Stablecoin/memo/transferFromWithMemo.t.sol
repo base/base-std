@@ -19,16 +19,16 @@ contract B20StablecoinTransferFromWithMemoTest is B20StablecoinTest {
         _assumeValidActor(from);
         _assumeValidActor(to);
         amount = bound(amount, 1, type(uint256).max);
-        _grantRole(B20Constants.OPERATOR_ROLE, authorizedSpender);
+        _grantRole(B20Constants.OPERATOR_ROLE, preauthorizedSpender);
 
-        vm.prank(authorizedSpender);
-        vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, authorizedSpender, 0, amount));
+        vm.prank(preauthorizedSpender);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientAllowance.selector, preauthorizedSpender, 0, amount));
         token.transferFromWithMemo(from, to, amount, memo);
     }
 
-    /// @notice Verifies a Stablecoin authorized spender memo transfer remains subject to executor policy
+    /// @notice Verifies a Stablecoin preauthorized spender memo transfer remains subject to executor policy
     /// @dev The memo variant preserves the same policy boundary as transferFrom.
-    function test_transferFromWithMemo_revert_authorizedSpenderExecutorPolicyForbids(
+    function test_transferFromWithMemo_revert_preauthorizedSpenderExecutorPolicyForbids(
         address from,
         address to,
         uint256 amount,
@@ -36,13 +36,13 @@ contract B20StablecoinTransferFromWithMemoTest is B20StablecoinTest {
     ) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
-        vm.assume(authorizedSpender != from);
+        vm.assume(preauthorizedSpender != from);
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
-        _grantAuthorizedSpender();
+        _grantPreauthorizedSpender();
         _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
-        vm.prank(authorizedSpender);
+        vm.prank(preauthorizedSpender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IB20.PolicyForbids.selector,
@@ -53,9 +53,9 @@ contract B20StablecoinTransferFromWithMemoTest is B20StablecoinTest {
         token.transferFromWithMemo(from, to, amount, memo);
     }
 
-    /// @notice Verifies a Stablecoin authorized spender can spend with a memo and zero allowance
+    /// @notice Verifies a Stablecoin preauthorized spender can spend with a memo and zero allowance
     /// @dev Confirms the shared memo allowance bypass applies to the Stablecoin variant.
-    function test_transferFromWithMemo_success_authorizedSpenderSpendsWithoutAllowance(
+    function test_transferFromWithMemo_success_preauthorizedSpenderSpendsWithoutAllowance(
         address from,
         address to,
         uint256 amount,
@@ -67,11 +67,11 @@ contract B20StablecoinTransferFromWithMemoTest is B20StablecoinTest {
         amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
 
         _mint(from, amount);
-        _grantAuthorizedSpender();
+        _grantPreauthorizedSpender();
 
-        vm.prank(authorizedSpender);
+        vm.prank(preauthorizedSpender);
         token.transferFromWithMemo(from, to, amount, memo);
 
-        assertEq(token.balanceOf(to), amount, "authorized spender memo transfer must move holder balance");
+        assertEq(token.balanceOf(to), amount, "preauthorized spender memo transfer must move holder balance");
     }
 }
