@@ -61,7 +61,7 @@ A **composite** policy combines two to four existing simple policies. It does no
 | `INTERSECT` | Every child authorizes the account |
 
 
-Children must be existing `ALLOWLIST` or `BLOCKLIST` policies. Another composite is not a valid child. The built-in sentinels in [§2.4](#24-built-in-sentinels) are not valid children either. Updating a child's members changes every composite that references it. There is no flatten-and-copy step.
+Children must be existing `ALLOWLIST` or `BLOCKLIST` policies. Another composite is not a valid child. The built-in sentinels in [§2.5](#25-built-in-sentinels) are not valid children either. Updating a child's members changes every composite that references it. There is no flatten-and-copy step. Any of these types can also be inverted. See [§2.3](#23-inverting-a-policy).
 
 ```mermaid
 flowchart TD
@@ -78,17 +78,38 @@ flowchart TD
 
 
 
-### 2.3 Creating and updating
+### 2.3 Inverting a policy
+
+An issuer may want the opposite of an existing policy without a second member set. Bit 63 of a policy ID is the invert (NOT) flag. That is not a new policy type and not a create path. Members stay on the base. An update to the base updates the inverse.
+
+Call `invertedPolicyId(policyId)` to set or clear that bit. You can also set bit 63 yourself. Bind the inverted ID to a token scope, or pass it as a composite child ("A AND NOT X"). The flag applies to every type: `ALLOWLIST`, `BLOCKLIST`, `UNION`, and `INTERSECT`.
+
+`isAuthorized` on an inverted ID returns the opposite of the base. If the base does not exist, the result is `false`. That fail-closed guard prevents a mistyped inverted ID from becoming allow-everyone.
+
+Read views strip bit 63 and load the base. `policyExists` and `policyAdmin` on an inverted ID match the base. An inverted ID has no record of its own.
+
+```mermaid
+flowchart TD
+    Q["isAuthorized(policyId, account)"] --> Inv{"bit 63 set?"}
+    Inv -->|no| T[Dispatch on policy type]
+    Inv -->|yes| E{"policyExists(base)?"}
+    E -->|no| F[false]
+    E -->|yes| N["not isAuthorized(base)"]
+```
+
+A composite child ID may carry the invert bit. The registry checks existence and simple type against the base. An inverted simple child is valid. An inverted composite child reverts `InvalidChildPolicy`. Across the whole child set, `PolicyNotFound` still takes precedence over `InvalidChildPolicy`.
+
+### 2.4 Creating and updating
 
 Anyone can create a policy. The create call names a single `admin`. That address is the only one that can later change membership, replace a composite's children, transfer administration, or renounce. The creator does not have to be the admin. `admin` cannot be `address(0)`.
 
 You can also skip creation and reuse an existing policy. If another issuer already maintains the list you need, bind their policy ID to your token. You do not become that policy's admin by attaching it.
 
-#### 2.3.1 Creating a policy
+#### 2.4.1 Creating a policy
 
 A simple policy starts as an `ALLOWLIST` or a `BLOCKLIST`. Call `createPolicy(admin, ALLOWLIST)` or `createPolicy(admin, BLOCKLIST)`. The registry assigns a new policy ID and returns it. The member set is empty. `createPolicyWithAccounts(admin, policyType, accounts)` does the same and seeds the set in that call. Membership batches are capped at 64 accounts.
 
-A composite starts from policies that already exist. Call `createCompositePolicy(admin, UNION | INTERSECT, childPolicyIds)`. The child count must be in `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]` (`2` through `4`). The registry stores references, not a snapshot of the children's members.
+A composite starts from policies that already exist. Call `createCompositePolicy(admin, UNION | INTERSECT, childPolicyIds)`. The child count must be in `[MIN_COMPOSITE_CHILD_POLICIES, MAX_COMPOSITE_CHILD_POLICIES]` (`2` through `4`). The registry stores references, not a snapshot of the children's members. A child ID may be inverted. The registry validates the base and stores the child ID with the invert bit set. See [§2.3](#23-inverting-a-policy).
 
 Both paths emit `PolicyCreated` and `PolicyAdminUpdated(policyId, address(0), admin)`. `policyAdmin(policyId)` then returns that admin.
 
@@ -104,7 +125,7 @@ sequenceDiagram
 
 
 
-#### 2.3.2 Updating a policy
+#### 2.4.2 Updating a policy
 
 After creation, only the current admin can change the policy. Any other caller reverts `Unauthorized`. The update must match the policy's type or it reverts `IncompatiblePolicyType`.
 
@@ -126,7 +147,7 @@ sequenceDiagram
 
 
 
-#### 2.3.3 Changing the admin
+#### 2.4.3 Changing the admin
 
 A policy has one admin at a time. To hand it off, the current admin calls `stageUpdateAdmin(policyId, newAdmin)`. That does not change who can update the policy yet. `policyAdmin` still returns the current admin. `pendingPolicyAdmin` returns `newAdmin`. Passing `address(0)` clears a nomination that has not been finalized.
 
@@ -154,7 +175,7 @@ sequenceDiagram
 
 To freeze a policy instead of handing it off, the current admin calls `renounceAdmin(policyId)`. Administration is gone for good. Membership and child sets cannot change. `isAuthorized` keeps working. There is no call that assigns a new admin after renounce.
 
-### 2.4 Built-in sentinels
+### 2.5 Built-in sentinels
 
 Two policy IDs exist without being created:
 
@@ -173,7 +194,7 @@ A scope is an identifier for the policy that runs on a specific function. It wor
 
 ### 3.1 Updating a scope
 
-`updatePolicy(policyScope, newPolicyId)` binds a policy ID to a scope. It requires `DEFAULT_ADMIN_ROLE`. The ID must be a built-in sentinel or an existing registry policy. Otherwise the call reverts `PolicyNotFound`. An unknown `policyScope` reverts `UnsupportedPolicyType`.
+`updatePolicy(policyScope, newPolicyId)` binds a policy ID to a scope. It requires `DEFAULT_ADMIN_ROLE`. The ID must be a built-in sentinel or an existing registry policy. Otherwise the call reverts `PolicyNotFound`. An inverted ID is valid when its base exists, because `policyExists` strips bit 63. The token treats the ID as an opaque `uint64`. An unknown `policyScope` reverts `UnsupportedPolicyType`.
 
 The write takes effect on the next call that hits that scope. It emits `PolicyUpdated`. Until you update a scope, it reads as `0` (`ALWAYS_ALLOW`), so the check passes for every address. The same policy ID can sit on more than one scope and on more than one token. `policyId(policyScope)` reads the current binding.
 
@@ -206,7 +227,7 @@ Most scopes deny when `isAuthorized` is `false` and revert `PolicyForbids`. `SEI
 
 ## 4. Example
 
-Start with a receiver allowlist. Then combine it with a sanctions blocklist so a transfer requires both.
+Start with a receiver allowlist. Then combine it with a sanctions blocklist so a transfer requires both. Then invert an exclusion allowlist so the same gate can say "on KYC and not on that list" without a second member set.
 
 ### 4.1 One allowlist
 
@@ -300,6 +321,61 @@ Alice and Dave are on the KYC list and not on the sanctions list, so both childr
 A later `updateBlocklist` that adds or removes Carol changes the composite on the next call. The token still holds `gateId`. The issuer does not call `updatePolicy` again.
 
 If the issuer later needs the same KYC list or-ed with a token-specific partner allowlist, they create a `UNION` of those two allowlists instead. The token bind step is the same.
+
+### 4.3 Invert: KYC and not on an exclusion allowlist
+
+Section 4.2 stores sanctioned addresses as a `BLOCKLIST`, so "not sanctioned" is already the blocklist's authorization result. Invert is for the other case: the exclusion list is an `ALLOWLIST` of addresses you want to keep out, and you need the opposite of that list without copying it into a blocklist.
+
+Create a KYC allowlist and an exclusion allowlist. Invert the exclusion ID. Pass both into an `INTERSECT` composite.
+
+```mermaid
+flowchart TD
+    C["INTERSECT composite"] --> K[KYC ALLOWLIST]
+    C --> N["inverted exclusion ALLOWLIST"]
+    N --> X[exclusion ALLOWLIST]
+    K --> A1[Alice: member]
+    K --> A2[Bob: not a member]
+    K --> A3[Carol: member]
+    X --> B1[Alice: not listed]
+    X --> B2[Bob: not listed]
+    X --> B3[Carol: listed]
+```
+
+```mermaid
+sequenceDiagram
+    participant Admin
+    participant Registry as Policy Registry
+    participant Token as B20 token
+    participant Alice
+    participant Dave
+    participant Carol
+
+    Admin->>Registry: createPolicy(admin, ALLOWLIST)
+    Registry-->>Admin: kycId
+    Admin->>Registry: updateAllowlist(kycId, true, [Alice, Dave, Carol])
+    Admin->>Registry: createPolicy(admin, ALLOWLIST)
+    Registry-->>Admin: exclusionId
+    Admin->>Registry: updateAllowlist(exclusionId, true, [Carol])
+    Admin->>Registry: invertedPolicyId(exclusionId)
+    Registry-->>Admin: notExcluded
+    Admin->>Registry: createCompositePolicy(admin, INTERSECT, [kycId, notExcluded])
+    Registry-->>Admin: gateId
+    Admin->>Token: updatePolicy(TRANSFER_RECEIVER_POLICY, gateId)
+
+    Alice->>Token: transfer(Dave, amount)
+    Token->>Registry: isAuthorized(gateId, Dave)
+    Registry-->>Token: true
+    Token-->>Alice: allowed
+
+    Alice->>Token: transfer(Carol, amount)
+    Token->>Registry: isAuthorized(gateId, Carol)
+    Registry-->>Token: false
+    Token-->>Alice: revert PolicyForbids(TRANSFER_RECEIVER_POLICY, gateId)
+```
+
+Alice and Dave are on the KYC list and not on the exclusion list. The inverted child authorizes them, so the `INTERSECT` returns `true`. Carol is KYC'd but on the exclusion list. The inverted child returns `false`, so the composite returns `false` and the transfer reverts. Bob is not on the KYC list, so he is denied even though he is not excluded.
+
+A later `updateAllowlist` that adds or removes Carol on `exclusionId` changes the inverted child on the next call. The token still holds `gateId`. The issuer does not call `updatePolicy` again.
 
 ## Events and Errors
 

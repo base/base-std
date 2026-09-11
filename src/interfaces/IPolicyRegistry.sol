@@ -5,6 +5,10 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 /// @notice Singleton registry of simple and composite policies. Policies are referenced by
 ///         `uint64 policyId` and queried via `isAuthorized(policyId, account)`.
+///
+/// @dev Invert (`invertedPolicyId`): all view functions see an inverted policy ID as an
+///      extension of the base policy — same existence, admin, pending admin, and child
+///      set as the base; `isAuthorized` returns the negated base result.
 interface IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
@@ -127,6 +131,8 @@ interface IPolicyRegistry {
     /// @dev Child policies must be simple policies (ALLOWLIST or BLOCKLIST), never another composite
     ///      and never a built-in sentinel (ALWAYS_ALLOW / ALWAYS_BLOCK). The child-policy set is
     ///      capped at 4.
+    /// @dev A child policy ID may be inverted (its invert flag, bit 63, set via
+    ///      `invertedPolicyId`), in which case the child is evaluated as the inverse of the base.
     /// @dev Reverts with `IncompatiblePolicyType` when `policyType` is not UNION or INTERSECT.
     /// @dev Reverts with `ZeroAddress` when `admin` is `address(0)`.
     /// @dev Reverts with `ChildPoliciesOutsideOfRange` when `childPolicyIds.length` is not in
@@ -227,6 +233,8 @@ interface IPolicyRegistry {
     ///         BLOCKLIST -> true).
     ///
     /// @dev Callers that store policy IDs MUST validate `policyExists(policyId)` at write time.
+    /// @dev Invert: `isAuthorized(invertedPolicyId(id), account)` returns the negated
+    ///      result of the base. Applies to every policy type.
     ///
     /// @param policyId Policy to query.
     /// @param account  Account to check.
@@ -280,9 +288,21 @@ interface IPolicyRegistry {
     /// @dev An empty return unambiguously means "not a composite".
     /// @dev The registry preserves the caller's ordering verbatim and neither sorts nor
     ///      de-duplicates.
+    /// @dev Child IDs are returned as stored, including any per-child invert.
     ///
     /// @param policyId Policy to query.
     ///
     /// @return Child policy IDs, or an empty array.
     function compositePolicyChildIds(uint64 policyId) external view returns (uint64[] memory);
+
+    /// @notice Returns `policyId` with its invert flag (bit 63) flipped. Never reverts
+    ///         and reads no state.
+    ///
+    /// @dev This call does not check that `policyId` exists; a missing
+    ///      or malformed base is denied later, at `isAuthorized`.
+    ///
+    /// @param policyId Policy to invert.
+    ///
+    /// @return The policy ID with its invert flag toggled.
+    function invertedPolicyId(uint64 policyId) external view returns (uint64);
 }
