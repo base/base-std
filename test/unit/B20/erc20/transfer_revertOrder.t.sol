@@ -13,12 +13,14 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
 ///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
-///         4. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
-///         5. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
-///         6. BALANCE (`_transfer` body) → `InsufficientBalance`
+///         4. EXECUTOR-POLICY (`_transfer` body) → `PolicyForbids(EXECUTOR, ...)`
+///         5. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
+///         6. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
+///         7. BALANCE (`_transfer` body) → `InsufficientBalance`
 ///
-///         The public `transfer(to, amount)` entry sets `from = msg.sender`, so
-///         pairs involving ZERO-SENDER require pranking `address(0)`. C(6, 2) = 15 pairs.
+///         The public `transfer(to, amount)` entry sets `from = msg.sender`, so the executor
+///         is `msg.sender` (== `from`): a blocked EXECUTOR policy reverts even on this direct
+///         path. Pairs involving ZERO-SENDER require pranking `address(0)`. C(7, 2) = 21 pairs.
 contract B20TransferRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
@@ -45,6 +47,15 @@ contract B20TransferRevertOrderTest is B20Test {
     function test_transfer_revertOrder_zeroReceiver_beats_zeroSender(uint256 amount) public {
         // Both `to` and `from` are address(0) — receiver check fires first.
         vm.prank(address(0));
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
+        token.transfer(address(0), amount);
+    }
+
+    function test_transfer_revertOrder_zeroReceiver_beats_executorPolicy(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.transfer(address(0), amount);
     }
@@ -78,6 +89,15 @@ contract B20TransferRevertOrderTest is B20Test {
     }
 
     // --- Pairs where ZERO-SENDER wins (PAUSE not violated; requires pranking address(0)) ---
+
+    function test_transfer_revertOrder_zeroSender_beats_executorPolicy(address to, uint256 amount) public {
+        _assumeValidActor(to);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(address(0));
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
+        token.transfer(to, amount);
+    }
 
     function test_transfer_revertOrder_zeroSender_beats_senderPolicy(address to, uint256 amount) public {
         _assumeValidActor(to);
@@ -119,6 +139,17 @@ contract B20TransferRevertOrderTest is B20Test {
         token.transfer(to, amount);
     }
 
+    function test_transfer_revertOrder_pause_beats_executorPolicy(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        _pause(IB20.PausableFeature.TRANSFER);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
+        token.transfer(to, amount);
+    }
+
     function test_transfer_revertOrder_pause_beats_receiverPolicy(address from, address to, uint256 amount) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
@@ -138,6 +169,63 @@ contract B20TransferRevertOrderTest is B20Test {
 
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
+        token.transfer(to, amount);
+    }
+
+    // --- Pairs where EXECUTOR-POLICY wins (executor == msg.sender == from) ---
+
+    function test_transfer_revertOrder_executorPolicy_beats_senderPolicy(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transfer(to, amount);
+    }
+
+    function test_transfer_revertOrder_executorPolicy_beats_receiverPolicy(address from, address to, uint256 amount)
+        public
+    {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transfer(to, amount);
+    }
+
+    function test_transfer_revertOrder_executorPolicy_beats_balance(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        amount = bound(amount, 1, type(uint128).max);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
         token.transfer(to, amount);
     }
 

@@ -49,7 +49,7 @@ library MockB20Storage {
     // not declared as a field is simply uninitialized (zero) and the
     // struct cannot accidentally write to it.
 
-    /// @notice Transfer-side policy IDs (read by `_transfer` and `transferFrom*`).
+    /// @notice Transfer-side policy IDs (all three lanes read by `_transfer`).
     /// @dev    Bit layout (Solidity LSB-first):
     ///           bits   0.. 63 : sender
     ///           bits  64..127 : receiver
@@ -119,8 +119,8 @@ library MockB20Storage {
         // access (`$.transferPolicyIds.sender = id;`) instead of inline
         // shifts and mask operations.
         //
-        // Transfer-side policies (read by `_transfer`, `transferFrom*`,
-        // and the blocked check in the deprecated `burnBlocked`).
+        // Transfer-side policies (read by `_transfer`, and the sender lane
+        // by the blocked check in the deprecated `burnBlocked`).
         TransferPolicyIds transferPolicyIds;
         // Mint-side policies (read by `_mint`). Only `MINT_RECEIVER_POLICY`
         // is defined today; future granular mint-side policy types (e.g.

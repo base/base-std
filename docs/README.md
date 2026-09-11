@@ -10,6 +10,7 @@ Building something?
 - [Seize a holder's B20 balance](guides/seizeing-assets.md)
 - [Schedule a stock split](guides/scheduling-stock-splits.md)
 - [Announce a corporate action](guides/announcing-corporate-actions.md)
+- [Restrict who can initiate transfers](guides/restricting-transfer-initiators.md)
 
 Looking for exact technical details?
 
