@@ -321,6 +321,8 @@ interface IB20 {
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `InsufficientBalance` when `msg.sender`'s balance is below `amount`.
+    /// @dev The executor check runs even when `msg.sender == from`, so an executor allowlist can
+    ///      restrict holder-initiated transfers.
     ///
     /// @param to     Destination address.
     /// @param amount Amount to transfer.
@@ -338,6 +340,8 @@ interface IB20 {
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `from` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `InsufficientBalance` when `from`'s balance is below `amount`.
+    /// @dev The executor check runs even when `msg.sender == from`, so an executor allowlist can
+    ///      restrict holder-initiated transfers.
     ///
     /// @param from   Source address.
     /// @param to     Destination address.

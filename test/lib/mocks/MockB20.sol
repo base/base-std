@@ -503,8 +503,8 @@ abstract contract MockB20 is IB20 {
 
     /// @dev Writes a policy ID to storage. Hot-path types update their
     ///      named field on the per-operation packed-struct slot
-    ///      (`TransferPolicyIds.sender` etc.); Solidity emits the
-    ///      appropriate mask/shift sequence to preserve the other
+    ///      (`TransferPolicyIds.sender` etc.); Solidity compiles this to
+    ///      the appropriate mask/shift sequence to preserve the other
     ///      lanes in the slot. Anything else reverts
     ///      `UnsupportedPolicyType` — the token has no slot for it.
     ///      Variants override to handle their own policy types before
@@ -741,16 +741,15 @@ abstract contract MockB20 is IB20 {
     ///      precompile) before calling here.
     ///
     ///      Enforces the executor (`msg.sender`), sender (`from`), and receiver
-    ///      (`to`) policies. Gating the executor here — not just on delegated
-    ///      `transferFrom` — lets an executor allowlist restrict who may
-    ///      initiate any transfer, including a holder moving their own tokens.
-    ///      All honor the bootstrap bypass; an unset lane is always-allow.
+    ///      (`to`) policies. All honor the bootstrap bypass; an unset lane is
+    ///      always-allow.
     function _transfer(address from, address to, uint256 amount) internal {
         if (!_isPrivileged()) {
             // One SLOAD pulls all three policy IDs we need for the transfer
-            // check. Solidity emits a single SLOAD for the struct read +
-            // masked extracts for the named fields. Cache the registry handle
-            // and unpacked IDs: each ID is used twice (check + revert payload).
+            // check. Solidity compiles this to a single SLOAD for the struct
+            // read + masked extracts for the named fields. Cache the registry
+            // handle and unpacked IDs: each ID is used twice (check + revert
+            // payload).
             MockB20Storage.TransferPolicyIds memory packed = MockB20Storage.layout().transferPolicyIds;
             IPolicyRegistry registry = IPolicyRegistry(POLICY_REGISTRY);
             uint64 executorPolicy = packed.executor;
@@ -762,8 +761,8 @@ abstract contract MockB20 is IB20 {
             // Same (policyId, account) as the executor check — skip the second
             // registry call. Distinct IDs or a spender (`msg.sender != from`)
             // still need both lookups.
-            bool skipSender = msg.sender == from && executorPolicy == senderPolicy;
-            if (!skipSender && !registry.isAuthorized(senderPolicy, from)) {
+            bool skipSenderPolicyCheck = msg.sender == from && executorPolicy == senderPolicy;
+            if (!skipSenderPolicyCheck && !registry.isAuthorized(senderPolicy, from)) {
                 revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicy);
             }
             if (!registry.isAuthorized(receiverPolicy, to)) {
