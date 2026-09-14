@@ -16,24 +16,27 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
 ///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
-///         4. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
-///         5. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
-///         6. BALANCE (`_transfer` body) → `InsufficientBalance`
+///         4. EXECUTOR-POLICY (`_transfer` body) → `PolicyForbids(EXECUTOR, ...)`
+///         5. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
+///         6. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
+///         7. BALANCE (`_transfer` body) → `InsufficientBalance`
 ///
 ///         The public `transferWithMemo(to, amount, memo)` entry sets
-///         `from = msg.sender`. The single test below activates all six
-///         violations simultaneously, then fixes them one at a time in
-///         canonical order, asserting that the next-priority revert fires
-///         at each step.
+///         `from = msg.sender`, so the executor is `msg.sender` (== `from`).
+///         The single test below activates all seven violations
+///         simultaneously, then fixes them one at a time in canonical order,
+///         asserting that the next-priority revert fires at each step.
 contract B20TransferWithMemoRevertOrderTest is B20Test {
     function test_transferWithMemo_revertOrder(address from, address to, uint256 amount, bytes32 memo) public {
         _assumeValidActor(from);
         _assumeValidActor(to);
         amount = bound(amount, 1, type(uint128).max);
 
-        // Activate all six violations: TRANSFER paused, from=address(0) (via prank),
-        // to=address(0), sender policy blocks, receiver policy blocks, from has zero balance.
+        // Activate all seven violations: TRANSFER paused, from=address(0) (via prank),
+        // to=address(0), executor policy blocks, sender policy blocks, receiver policy blocks,
+        // from has zero balance.
         _pause(IB20.PausableFeature.TRANSFER);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
 
@@ -56,7 +59,20 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidSender.selector, address(0)));
         token.transferWithMemo(to, amount, memo);
 
-        // 4. SENDER-POLICY fires (all earlier cleared; sender policy blocks, receiver also blocks).
+        // 4. EXECUTOR-POLICY fires (all earlier cleared; executor == msg.sender == from is
+        //    blocked; sender/receiver also block, but executor is checked first in _transfer).
+        vm.prank(from);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IB20.PolicyForbids.selector,
+                B20Constants.TRANSFER_EXECUTOR_POLICY,
+                PolicyRegistryConstants.ALWAYS_BLOCK_ID
+            )
+        );
+        token.transferWithMemo(to, amount, memo);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
+
+        // 5. SENDER-POLICY fires (all earlier cleared; sender policy blocks, receiver also blocks).
         vm.prank(from);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -68,7 +84,7 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         token.transferWithMemo(to, amount, memo);
         _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
-        // 5. RECEIVER-POLICY fires (all earlier cleared; receiver policy still blocks).
+        // 6. RECEIVER-POLICY fires (all earlier cleared; receiver policy still blocks).
         vm.prank(from);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -80,7 +96,7 @@ contract B20TransferWithMemoRevertOrderTest is B20Test {
         token.transferWithMemo(to, amount, memo);
         _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_ALLOW_ID);
 
-        // 6. BALANCE fires (all earlier cleared; from has zero balance, amount>0).
+        // 7. BALANCE fires (all earlier cleared; from has zero balance, amount>0).
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.InsufficientBalance.selector, from, 0, amount));
         token.transferWithMemo(to, amount, memo);
