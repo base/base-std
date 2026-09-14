@@ -9,11 +9,15 @@
 
 This change makes `TRANSFER_EXECUTOR_POLICY` apply to every transfer path. The executor gate now checks `msg.sender` on `transfer`, `transferFrom`, `transferWithMemo`, and `transferFromWithMemo`, including when `msg.sender == from`. Previously the check ran only on the delegated `transferFrom` paths, and only when `msg.sender != from`.
 
-The change is purely behavioral. It adds no new selectors, events, errors, or storage. A token that never sets `TRANSFER_EXECUTOR_POLICY` keeps the unset always-allow default, so it is unaffected.
+This is a breaking change for a token that already set a restrictive `TRANSFER_EXECUTOR_POLICY`. Holders who moved their own tokens with `transfer` or self-`transferFrom` must now be authorized as initiators. A token that never set the policy keeps the unset always-allow default and is unaffected.
+
+The change is purely behavioral. It adds no new selectors, events, errors, or storage.
 
 ## Motivation
 
-An issuer may want an executor allowlist: only specific, approved contracts or accounts may initiate a transfer, for example a settlement contract that moves tokens on a holder's behalf. `TRANSFER_EXECUTOR_POLICY` exists for this, but the previous scope could not enforce it consistently with `TRANSFER_SENDER_POLICY` and `TRANSFER_RECEIVER_POLICY`, which already run on every transfer path.
+An issuer of a restricted security token may need every transfer to go through a registered transfer agent. In that model, only the transfer agent's contract may initiate a move. A holder cannot call `transfer` themselves, even to an already-eligible counterparty. The holder approves the transfer agent, and the transfer agent calls `transferFrom`.
+
+`TRANSFER_EXECUTOR_POLICY` is the initiator allowlist for that pattern. The previous scope could not enforce it consistently with `TRANSFER_SENDER_POLICY` and `TRANSFER_RECEIVER_POLICY`, which already run on every transfer path.
 
 The previous scope left two initiator-side gaps:
 
@@ -44,11 +48,13 @@ All three scopes are bypassed during the factory bootstrap window (`_isPrivilege
 
 ### Interface Changes
 
-This change adds no new functions, events, errors, or selectors, changes are behavioural to the underlying Transfer Functions. 
+This change adds no new functions, events, errors, or selectors. The change is behavioural: it alters how the existing transfer functions enforce `TRANSFER_EXECUTOR_POLICY`.
 
 ### Behavioural Changes
 
 The executor check moves from the `transferFrom` and `transferFromWithMemo` bodies into `_transfer`, where it runs first, before the existing sender and receiver checks, and under the same `_isPrivileged()` bootstrap bypass. The `msg.sender == from` carve-out that previously skipped the check is removed. `transfer` and `transferWithMemo` route through the same `_transfer` function, so they gain the check with no entrypoint-specific code.
+
+Pause, zero-actor, and allowance checks stay in the entrypoints. This change only moves the three transfer-side policy checks into the helper.
 
 The previous order, by entrypoint:
 
@@ -100,9 +106,17 @@ flowchart TD
     end
 ```
 
-When more than one check would fail, the caller sees the first revert in that order:
+When more than one check would fail, the caller sees the first revert in that order.
 
-There are no new storage slots. The `TRANSFER_EXECUTOR_POLICY` policy ID is read from the same packed slot as before; `_transfer` now reads all three transfer-side policy IDs from that slot in one `SLOAD` instead of the executor lane being pre-warmed by a separate read in `transferFrom`'s body.
+### Gas
+
+This change adds no new storage slots. `_transfer` reads all three transfer-side policy IDs from the existing packed slot in one `SLOAD`.
+
+On `transferFrom` and `transferFromWithMemo`, the previous implementation read the executor lane in the entrypoint body, then read the same packed slot again in `_transfer` (warm). The helper now performs the only `SLOAD`.
+
+On `transfer` and `transferWithMemo`, the previous implementation did not consult the executor policy. Those paths now make one extra `isAuthorized` call against `msg.sender`. Sender and receiver checks are unchanged.
+
+An unset executor slot remains `ALWAYS_ALLOW_ID` (`0`). The Policy Registry still answers that call. The extra work is one `isAuthorized` lookup, not a storage write.
 
 ### Examples
 
@@ -115,14 +129,14 @@ vm.prank(alice);
 token.transfer(bob, amount); // reverts PolicyForbids(TRANSFER_EXECUTOR_POLICY, ALWAYS_BLOCK_ID)
 ```
 
-An executor allowlist restricts initiation to approved accounts. A holder who is a member can move their own tokens; one who is not, cannot:
+An executor allowlist restricts initiation to approved accounts, such as a transfer agent. A holder who is a member can move their own tokens. A holder who is not a member cannot:
 
 ```solidity
-uint64 executorAllowlist = policyRegistry.createPolicyWithAccounts(admin, ALLOWLIST, [settlementContract]);
+uint64 executorAllowlist = policyRegistry.createPolicyWithAccounts(admin, ALLOWLIST, [transferAgent]);
 token.updatePolicy(TRANSFER_EXECUTOR_POLICY, executorAllowlist);
 
-vm.prank(settlementContract);
-token.transferFrom(alice, bob, amount); // succeeds: settlementContract is allowlisted
+vm.prank(transferAgent);
+token.transferFrom(alice, bob, amount); // succeeds: transferAgent is allowlisted
 
 vm.prank(alice);
 token.transfer(bob, amount); // reverts PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...): alice is not allowlisted
@@ -146,6 +160,12 @@ factory.createB20(..., initCalls); // succeeds: bootstrap window bypasses the ex
 The executor check moves into the shared `_transfer` helper. `transfer`, `transferFrom`, `transferWithMemo`, and `transferFromWithMemo` already call `_transfer`, so they all run the same executor check on `msg.sender`. `transferWithMemo` and `transferFromWithMemo` therefore get the same coverage as the non-memo paths, with no entrypoint-specific code. The check has no `msg.sender == from` carve-out and still honors the existing `_isPrivileged()` bypass.
 
 This approach was chosen because it is the smallest change that closes both gaps described in Motivation, adds no new interface surface, and brings `TRANSFER_EXECUTOR_POLICY` in line with how `TRANSFER_SENDER_POLICY` and `TRANSFER_RECEIVER_POLICY` are already enforced: once, in `_transfer`, on every path.
+
+Pause, zero-actor, and allowance stay in the entrypoints. Pause is a modifier shared with mint, burn, and seize. Allowance is unique to `transferFrom` / `transferFromWithMemo` and must run after the zero-actor checks and before the transfer-side policies, so the canonical revert order stays pause → zero-receiver → zero-sender → allowance → policies → balance.
+
+### Alternative — fold pause, zero-actor, and allowance into `_transfer`
+
+This option would move every remaining transfer-family check into the helper. It was rejected because allowance is entrypoint-specific. Folding it in would require a consume-allowance flag, and moving zero-actor checks after allowance would change revert order. This change only relocates the executor policy check.
 
 ### Alternative — keep the check in `transferFrom` only, add it to `transfer` separately
 

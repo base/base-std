@@ -749,16 +749,21 @@ abstract contract MockB20 is IB20 {
         if (!_isPrivileged()) {
             // One SLOAD pulls all three policy IDs we need for the transfer
             // check. Solidity emits a single SLOAD for the struct read +
-            // masked extracts for the named fields.
+            // masked extracts for the named fields. Cache the registry handle
+            // and unpacked IDs: each ID is used twice (check + revert payload).
             MockB20Storage.TransferPolicyIds memory packed = MockB20Storage.layout().transferPolicyIds;
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.executor, msg.sender)) {
-                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, packed.executor);
+            IPolicyRegistry registry = IPolicyRegistry(POLICY_REGISTRY);
+            uint64 executorPolicy = packed.executor;
+            uint64 senderPolicy = packed.sender;
+            uint64 receiverPolicy = packed.receiver;
+            if (!registry.isAuthorized(executorPolicy, msg.sender)) {
+                revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicy);
             }
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.sender, from)) {
-                revert PolicyForbids(TRANSFER_SENDER_POLICY, packed.sender);
+            if (!registry.isAuthorized(senderPolicy, from)) {
+                revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicy);
             }
-            if (!IPolicyRegistry(POLICY_REGISTRY).isAuthorized(packed.receiver, to)) {
-                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, packed.receiver);
+            if (!registry.isAuthorized(receiverPolicy, to)) {
+                revert PolicyForbids(TRANSFER_RECEIVER_POLICY, receiverPolicy);
             }
         }
 
