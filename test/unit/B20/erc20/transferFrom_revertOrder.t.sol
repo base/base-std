@@ -9,28 +9,28 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 
 /// @title Differential check-order tests for `transferFrom`.
 ///
-/// @notice `transferFrom` layers two body-level preconditions
-///         (ALLOWANCE and EXECUTOR-POLICY) on top of `_transfer`'s
-///         policy / balance checks. The PAUSE / ZERO-RECEIVER /
-///         ZERO-SENDER guards run before the allowance / executor-policy
-///         work in the entrypoint body.
+/// @notice `transferFrom` consumes the allowance in the entrypoint body, then
+///         defers to `_transfer` for the policy / balance checks. The PAUSE /
+///         ZERO-RECEIVER / ZERO-SENDER guards run before the allowance work in
+///         the entrypoint body; the EXECUTOR / SENDER / RECEIVER / BALANCE
+///         checks all run inside `_transfer`, with EXECUTOR first.
 ///
-///         **Canonical order (Solidity reference, when
-///         `msg.sender != from`):**
+///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
 ///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         4. ALLOWANCE (`_consumeAllowance`) → `InsufficientAllowance`
-///         5. EXECUTOR-POLICY (`isAuthorized(executorPolicyId, msg.sender)`)
+///         5. EXECUTOR-POLICY (`_transfer` body: `isAuthorized(executor, msg.sender)`)
 ///            → `PolicyForbids(EXECUTOR, ...)`
-///         6..N. All `_transfer` body checks — see `transfer_revertOrder.t.sol`
+///         6..N. Remaining `_transfer` body checks — see `transfer_revertOrder.t.sol`
 ///               (SENDER-POLICY → RECEIVER-POLICY → BALANCE).
 ///
-///         The full pair matrix between body-level ALLOWANCE/EXECUTOR-POLICY
-///         and the PAUSE/ZERO-RECEIVER/ZERO-SENDER guards is pinned below;
-///         one test against a representative `_transfer` body check
-///         (SENDER-POLICY) proves ALLOWANCE and EXECUTOR-POLICY both
-///         fire before `_transfer` is entered.
+///         The executor gate is enforced on every transfer path, not only when
+///         `msg.sender != from`; this suite exercises the delegated path with a
+///         distinct caller (the self-caller case is pinned in `transferFrom.t.sol`).
+///         The pair matrix between the body-level ALLOWANCE guard, the
+///         PAUSE/ZERO-RECEIVER/ZERO-SENDER guards, and the leading `_transfer`
+///         EXECUTOR-POLICY check is pinned below.
 contract B20TransferFromRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
@@ -186,10 +186,9 @@ contract B20TransferFromRevertOrderTest is B20Test {
 
     // --- Pair where EXECUTOR-POLICY wins (everything earlier satisfied) ---
 
-    /// @notice EXECUTOR-POLICY beats anything in `_transfer` (representative: SENDER-POLICY).
-    /// @dev Allowance is set high enough to pass the allowance check, so the
-    ///      executor-policy check runs next and fires before `_transfer` is
-    ///      entered.
+    /// @notice EXECUTOR-POLICY beats the other `_transfer` checks (representative: SENDER-POLICY).
+    /// @dev Allowance is set high enough to pass the allowance check, so `_transfer` is entered;
+    ///      the executor gate is checked first inside `_transfer` and fires before SENDER-POLICY.
     function test_transferFrom_revertOrder_executorPolicy_beats_transferBody(
         address caller,
         address from,

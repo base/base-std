@@ -16,10 +16,20 @@ See [AGENTS.md](AGENTS.md) for how to name and write a new entry.
 | --- | --- | --- |
 | `01` | Beryl | Live |
 | `02` | Cobalt | Upcoming |
+| `03` | Denim | Upcoming |
 
 ## Index
 
 Grouped by hardfork, one collapsible section per hardfork, newest first.
+
+<details open>
+<summary><strong>Denim (upcoming)</strong> — ordinal <code>03</code></summary>
+
+| Product(s) | Change | Affected interfaces | Entry |
+| --- | --- | --- | --- |
+| B20 | Transfer executor policy on every transfer path | `src/interfaces/IB20.sol` | [03_Denim_B20_transfer_executor_enforcement](03_Denim_B20_transfer_executor_enforcement.md) |
+
+</details>
 
 <details open>
 <summary><strong>Cobalt (upcoming)</strong> — ordinal <code>02</code></summary>
