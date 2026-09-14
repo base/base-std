@@ -13,11 +13,15 @@ Members stay on the base policy and are shared, not copied, so an update to the 
 
 ## Motivation
 
-Issuers may want the inverse of a specific list, and the registry cannot express that. They may authorize an account only when it is not on a sanctions blocklist, or only when it is not Know Your Customer (KYC) verified. Composites often need the same negation: "allowed to transfer" is frequently "on list A and not on list B", where list B is a sanctions list, a blocked list, or a non-KYC'd list. They may also need both sides inverted: "not on list A and not on list B". There is no way to say "the opposite of this policy."
+The Policy Registry is increasingly used less as a standalone ruleset and more as a shared registry of addresses that other policies compose around.
 
-Without invert, the only way to get the opposite outcome is to create a second policy of the other type and copy the same addresses into it: an allowlist mirrored as a blocklist, or the reverse. Every membership change must then land on both policies. If one update lags, valid accounts are rejected or invalid ones are admitted. A composite that needs "NOT A" still has to point at that second, mirrored policy. It cannot reuse A.
+Invert policies build on that model. A single address list can represent either side of a rule. The same underlying list behaves as an allowlist or a blocklist depending on whether the policy is evaluated normally or inverted.
 
-The goal is to let one membership set be evaluated as include or exclude, so issuers never maintain two or more policies for the same address group. A composite can invert one child or several: "A AND NOT B", or "NOT A AND NOT B".
+For example, an issuer may maintain a shared Know Your Customer (KYC) list. Whether that list means "only these addresses are allowed" or "these addresses are excluded" should not require a second list or duplicated state. That choice is a property of how the policy is referenced.
+
+Without invert, the opposite outcome requires a second policy of the other type and a copy of the same addresses: an allowlist mirrored as a blocklist, or the reverse. Every membership change must then land on both policies. If one update lags, valid accounts are rejected or invalid ones are admitted. A composite that needs "NOT A" still has to point at that second, mirrored policy. It cannot reuse A.
+
+By encoding inversion in the policy reference, the same registry entry becomes a reusable building block for standalone policies and composites. Expressions such as A OR B, A AND NOT B, or NOT A do not need additional policies solely to represent the inverse of existing state.
 
 ## Background
 
