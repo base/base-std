@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {IB20} from "base-std/interfaces/IB20.sol";
+import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
+import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 
 import {B20Test} from "base-std-test/lib/B20Test.sol";
 import {MockB20, B20Constants} from "base-std-test/lib/mocks/MockB20.sol";
@@ -506,5 +508,46 @@ contract B20TransferFromTest is B20Test {
 
         assertEq(token.balanceOf(to), amount, "privileged transferFrom must succeed despite blocked executor policy");
         assertEq(token.allowance(from, address(factory)), 0, "allowance must still be consumed under privilege");
+    }
+
+    /// @notice Verifies transferFrom still checks `from` when executor and sender share a policy ID
+    ///         but `msg.sender != from`
+    /// @dev Coalescing the sender lookup is only valid for the same `(policyId, account)` pair. An
+    ///      allowlisted spender must not inherit the holder's sender authorization: `from` off the
+    ///      shared allowlist must still revert PolicyForbids(TRANSFER_SENDER_POLICY, ...).
+    function test_transferFrom_revert_sharedExecutorSenderPolicy_spenderIsNotFrom(
+        address caller,
+        address from,
+        address to,
+        uint256 amount
+    ) public {
+        _assumeValidActor(caller);
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(caller != from);
+        vm.assume(from != to);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
+
+        vm.prank(from);
+        token.approve(caller, amount);
+
+        uint64 id = _createAllowlist(caller, true);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, id);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, id);
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.PolicyForbids.selector, B20Constants.TRANSFER_SENDER_POLICY, id));
+        token.transferFrom(from, to, amount);
+    }
+
+    function _createAllowlist(address member, bool addMember) private returns (uint64 id) {
+        vm.prank(admin);
+        id = StdPrecompiles.POLICY_REGISTRY.createPolicy(admin, IPolicyRegistry.PolicyType.ALLOWLIST);
+        if (addMember) {
+            address[] memory accounts = new address[](1);
+            accounts[0] = member;
+            vm.prank(admin);
+            StdPrecompiles.POLICY_REGISTRY.updateAllowlist(id, true, accounts);
+        }
     }
 }

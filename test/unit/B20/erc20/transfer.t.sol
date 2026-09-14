@@ -361,6 +361,27 @@ contract B20TransferTest is B20Test {
         token.transfer(to, amount);
     }
 
+    /// @notice Verifies a holder `transfer` succeeds when executor and sender share one allowlist
+    /// @dev `msg.sender == from` and both scopes hold the same policy ID, so `_transfer` coalesces
+    ///      the sender lookup into the executor check. The transfer must still succeed when that
+    ///      single lookup authorizes the holder.
+    function test_transfer_success_sharedExecutorSenderPolicyAllows(address from, address to, uint256 amount) public {
+        _assumeValidActor(from);
+        _assumeValidActor(to);
+        vm.assume(from != to);
+        amount = bound(amount, 0, B20Constants.MAX_SUPPLY_CAP);
+
+        uint64 id = _createAllowlist(from, true);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, id);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, id);
+        _mint(from, amount);
+
+        vm.prank(from);
+        token.transfer(to, amount);
+
+        assertEq(token.balanceOf(to), amount, "shared executor/sender policy must authorize a holder transfer");
+    }
+
     /// @notice Verifies a privileged (factory bootstrap) transfer bypasses the TRANSFER_EXECUTOR_POLICY
     /// @dev Executor mirror of the sender/receiver bootstrap bypasses: the initCalls set the executor
     ///      policy to ALWAYS_BLOCK and transfer from the factory. A non-privileged transfer would

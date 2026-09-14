@@ -114,9 +114,9 @@ This change adds no new storage slots. `_transfer` reads all three transfer-side
 
 On `transferFrom` and `transferFromWithMemo`, the previous implementation read the executor lane in the entrypoint body, then read the same packed slot again in `_transfer` (warm). The helper now performs the only `SLOAD`.
 
-On `transfer` and `transferWithMemo`, the previous implementation did not consult the executor policy. Those paths now make one extra `isAuthorized` call against `msg.sender`. Sender and receiver checks are unchanged.
+On `transfer` and `transferWithMemo`, the previous implementation did not consult the executor policy. Those paths now check `msg.sender` under `TRANSFER_EXECUTOR_POLICY`. When that policy ID equals `TRANSFER_SENDER_POLICY` and `from == msg.sender` — including both slots unset (`ALWAYS_ALLOW_ID`) — `_transfer` reuses the executor result and does not call `isAuthorized` again for the sender. Distinct policy IDs, or a `transferFrom` where `msg.sender != from`, still make both calls. Receiver checks are unchanged.
 
-An unset executor slot remains `ALWAYS_ALLOW_ID` (`0`). The Policy Registry still answers that call. The extra work is one `isAuthorized` lookup, not a storage write.
+An unset executor slot remains `ALWAYS_ALLOW_ID` (`0`). On a default `transfer` the extra executor lookup is the same `(0, msg.sender)` pair as the sender lookup, so the sender call is skipped and the path still makes two `isAuthorized` calls.
 
 ### Examples
 

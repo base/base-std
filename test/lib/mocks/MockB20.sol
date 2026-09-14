@@ -759,7 +759,11 @@ abstract contract MockB20 is IB20 {
             if (!registry.isAuthorized(executorPolicy, msg.sender)) {
                 revert PolicyForbids(TRANSFER_EXECUTOR_POLICY, executorPolicy);
             }
-            if (!registry.isAuthorized(senderPolicy, from)) {
+            // Same (policyId, account) as the executor check — skip the second
+            // registry call. Distinct IDs or a spender (`msg.sender != from`)
+            // still need both lookups.
+            bool skipSender = msg.sender == from && executorPolicy == senderPolicy;
+            if (!skipSender && !registry.isAuthorized(senderPolicy, from)) {
                 revert PolicyForbids(TRANSFER_SENDER_POLICY, senderPolicy);
             }
             if (!registry.isAuthorized(receiverPolicy, to)) {
