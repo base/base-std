@@ -116,7 +116,7 @@ flowchart TD
     T -->|yes| OK["Accept child ID as stored, invert bit kept"]
 ```
 
-#### State / gas
+### State / Gas
 
 There are no new storage slots. Invert is query-time only. Storage keys, type decode, and existence always resolve against the issued (stripped) ID.
 

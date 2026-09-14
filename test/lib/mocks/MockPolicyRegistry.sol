@@ -384,16 +384,19 @@ contract MockPolicyRegistry is IPolicyRegistry {
     ///      `_isAuthorized` per child, each of which resolves via the simple path
     ///      (or a built-in short-circuit).
     function _isAuthorized(uint64 policyId, address account) internal view returns (bool) {
+        // Built-in short-circuits precede any SLOAD; sentinels have no
+        // storage entry. Invert runs after: a negated ALWAYS_ALLOW is a
+        // different ID and must not take this short-circuit.
+        if (policyId == ALWAYS_ALLOW_ID) return true;
+        if (policyId == ALWAYS_BLOCK_ID) return false;
+
         bool isInverted = policyId & INVERTED_POLICY_BIT != 0;
         if (isInverted) {
             uint64 base = _basePolicyId(policyId);
             if (!_policyExists(base)) return false;
             return !_isAuthorized(base, account);
         }
-        // Built-in short-circuits precede any SLOAD; sentinels have no
-        // storage entry.
-        if (policyId == ALWAYS_ALLOW_ID) return true;
-        if (policyId == ALWAYS_BLOCK_ID) return false;
+
         // Short-circuit malformed IDs so the `_typeOf` enum cast can't panic.
         if (!_isWellFormed(policyId)) return false;
 

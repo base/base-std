@@ -5,10 +5,6 @@ pragma solidity >=0.8.20 <0.9.0;
 ///
 /// @notice Singleton registry of simple and composite policies. Policies are referenced by
 ///         `uint64 policyId` and queried via `isAuthorized(policyId, account)`.
-///
-/// @dev Invert (`invertedPolicyId`): all view functions see an inverted policy ID as an
-///      extension of the base policy — same existence, admin, pending admin, and child
-///      set as the base; `isAuthorized` returns the negated base result.
 interface IPolicyRegistry {
     /*//////////////////////////////////////////////////////////////
                                   TYPES
@@ -258,6 +254,9 @@ interface IPolicyRegistry {
 
     /// @notice Returns whether `policyId` is a built-in sentinel or a previously-assigned custom ID. Never reverts.
     ///
+    /// @dev Invert: an inverted ID is an extension of the base —
+    ///      `policyExists(invertedPolicyId(id)) == policyExists(id)`.
+    ///
     /// @param policyId Policy to query.
     ///
     /// @return Whether the policy exists.
@@ -265,6 +264,8 @@ interface IPolicyRegistry {
 
     /// @notice Returns the current admin of `policyId`, or `address(0)` for built-in sentinels,
     ///         renounced policies, unknown IDs, and malformed IDs. Never reverts.
+    ///
+    /// @dev Invert: an inverted ID returns the base's admin.
     ///
     /// @param policyId Policy to query.
     ///
@@ -274,6 +275,8 @@ interface IPolicyRegistry {
     /// @notice Returns the currently-staged pending admin for `policyId`, or `address(0)` when
     ///         no transfer is in flight or for built-in sentinels, unknown IDs, and malformed IDs.
     ///         Never reverts.
+    ///
+    /// @dev Invert: an inverted ID returns the base's pending admin.
     ///
     /// @param policyId Policy to query.
     ///
@@ -288,6 +291,7 @@ interface IPolicyRegistry {
     /// @dev An empty return unambiguously means "not a composite".
     /// @dev The registry preserves the caller's ordering verbatim and neither sorts nor
     ///      de-duplicates.
+    /// @dev Invert: querying an inverted composite ID returns the same child set as the base.
     /// @dev Child IDs are returned as stored, including any per-child invert.
     ///
     /// @param policyId Policy to query.
@@ -300,6 +304,7 @@ interface IPolicyRegistry {
     ///
     /// @dev This call does not check that `policyId` exists; a missing
     ///      or malformed base is denied later, at `isAuthorized`.
+    /// @dev Inversion is involutive: `invertedPolicyId(invertedPolicyId(id)) == id`.
     ///
     /// @param policyId Policy to invert.
     ///
