@@ -29,9 +29,7 @@ By encoding inversion in the policy reference, the same registry entry becomes a
 
 The Policy Registry is a singleton precompile at `0x8453000000000000000000000000000000000002`. B20 tokens call it for pre-operation compliance checks on an address.
 
-B20 stores a `uint64` policy ID per scope (`TRANSFER_FROM`, `TRANSFER_TO`, `MINT_RECEIVER`, `SEIZE_EXEMPT`, and other scopes) and calls `isAuthorized(policyId, account)` before gated operations.
-
-`isAuthorized` never reverts. A malformed or unknown ID returns `false` (deny).
+B20 stores a `uint64` policy ID per scope (`TRANSFER_FROM`, `TRANSFER_TO`, `MINT_RECEIVER`, `SEIZE_EXEMPT`, and other scopes) and calls `isAuthorized(policyId, account)` before gated operations. Invert is a query-time flip of that result, so it inherits the existing contract: `isAuthorized` never reverts, and a malformed or unknown ID returns `false` (deny).
 
 ### Policy ID layout
 
@@ -147,16 +145,12 @@ Round-trip: `invertedPolicyId(invertedPolicyId(id)) == id` (involutive). `policy
 
 ## Design Decisions & Alternatives Considered
 
-Three options were weighed. The team converged on Option 2 (invert bit on the ID), implemented as Option 2a: Option 2 plus a base-existence guard that makes it fail-closed.
-
-### Chosen: invert bit on the ID
-
-The chosen approach encodes NOT in bit 63 of the policy ID. `isAuthorized` strips the bit, runs the existing dispatch, and returns the opposite result. There is no new storage and no create path. Any policy, simple or composite, can be inverted on its own.
+The chosen design encodes NOT in bit 63 of the policy ID. `isAuthorized` strips the bit, runs the existing dispatch, and returns the opposite result. A missing or malformed base is denied (fail-closed). There is no new storage and no create path. Any policy, simple or composite, can be inverted on its own.
 
 This approach was chosen because:
 
 - There is no extra `SLOAD` for the common case of inverting an `ALLOWLIST` or `BLOCKLIST`.
-- Performance matches Alternative 3, while a simple policy can be inverted standalone, which Alternative 3 cannot do.
+- Performance matches Alternative 2, while a simple policy can be inverted standalone, which Alternative 2 cannot do.
 - It aligns with treating membership as a single address list whose include/exclude polarity is chosen by the consumer, rather than baked into `ALLOWLIST` vs `BLOCKLIST`.
 
 Tradeoff: the flag occupies unused `PolicyType` bitspace, and every getter must strip it through `_basePolicyId`.
@@ -165,9 +159,9 @@ Tradeoff: the flag occupies unused `PolicyType` bitspace, and every getter must 
 
 `createNot(admin, base)` allocates a fresh record pointing at a base. A first-class NOT node wraps any policy, with the clearest explorer legibility.
 
-This option was rejected. Standalone NOT costs about 3 `SLOAD`s versus 1 for a mirror blocklist. "A AND NOT X" costs about 6 versus the bitmask's 4. The option also adds a new create path. As a composite child it deepens hot-path recursion. It was ruled out on performance. It would be preferable only if performance were a non-issue, for its structural consistency.
+This option was rejected. Standalone NOT costs about 3 `SLOAD`s versus 1 for a mirror blocklist. "A AND NOT X" costs about 6 versus Alternative 2's 4. The option also adds a new create path. As a composite child it deepens hot-path recursion. It was ruled out on performance. It would be preferable only if performance were a non-issue, for its structural consistency.
 
-### Alternative 3 — Per-child invert bitmask on the composite (doc's original recommendation)
+### Alternative 2 — Per-child invert bitmask on the composite
 
 This option stores a ≤4-bit mask packed into the children length word. Bit `i` flips `children[i]` before the gate. `mask = 0` reproduces today's behavior, so existing composites need no migration. It keeps polarity off the policy IDs.
 
