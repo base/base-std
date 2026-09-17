@@ -185,7 +185,7 @@ abstract contract MockB20 is IB20 {
     // ============================================================
 
     function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
-        _requireNonZeroActors(msg.sender, to);
+        _requireValidTransferActors(msg.sender, to);
         _transfer(msg.sender, to, amount);
         return true;
     }
@@ -195,7 +195,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroActors(from, to);
+        _requireValidTransferActors(from, to);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
         // which carves no `privileged` exception for allowance accounting. An
@@ -224,7 +224,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroActors(msg.sender, to);
+        _requireValidTransferActors(msg.sender, to);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -235,7 +235,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroActors(from, to);
+        _requireValidTransferActors(from, to);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window — matching the Rust precompile. Infinite allowance
         // is still not decremented. The executor policy is enforced centrally
@@ -740,11 +740,11 @@ abstract contract MockB20 is IB20 {
         return (uint160(account) >> 80) == (uint160(0xB2) << 72);
     }
 
-    /// @dev Receiver-then-sender check shared by every transfer-family
-    ///      entrypoint. Reverts `InvalidReceiver(to)` before
+    /// @dev Validates transfer-family actors, checking receiver before sender.
+    ///      Reverts `InvalidReceiver(to)` before
     ///      `InvalidSender(from)` so the precedence between the two
     ///      matches the canonical order.
-    function _requireNonZeroActors(address from, address to) internal pure {
+    function _requireValidTransferActors(address from, address to) internal pure {
         _requireValidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
     }
