@@ -116,6 +116,13 @@ def _edges(c: Chain, tok) -> None:
     step(7, "zero destination -> InvalidReceiver (seize is a reassignment, not a burn)")
     c.expect_revert("InvalidReceiver", tok.functions.seizeWithMemo(c.ALICE, config.ZERO, 1, MEMO), c.DEPLOYER)
 
+    step("7b", "token destination -> InvalidReceiver (Denim; skipped pre-Denim)")
+    try:
+        tok.functions.seizeWithMemo(c.ALICE, tok.address, 1, MEMO).call({"from": c.DEPLOYER})
+        log("seize to token address still allowed — chain is pre-Denim; skipping")
+    except ContractLogicError:
+        c.expect_revert("InvalidReceiver", tok.functions.seizeWithMemo(c.ALICE, tok.address, 1, MEMO), c.DEPLOYER)
+
     step(8, "zero source -> InvalidSender (seize is a reassignment, not a mint)")
     c.expect_revert("InvalidSender", tok.functions.seizeWithMemo(config.ZERO, c.BOB, 1, MEMO), c.DEPLOYER)
 

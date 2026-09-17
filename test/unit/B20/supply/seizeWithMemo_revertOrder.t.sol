@@ -12,7 +12,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 /// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(SEIZE_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         3. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         4. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         5. SELF-SEIZE (`from == to`) → `InvalidReceiver`
 ///         6. BLOCKED (`isAuthorized(exemptPolicyId, from) == true`) → `AccountNotSeizable`
@@ -65,6 +65,49 @@ contract B20SeizeWithMemoRevertOrderTest is B20Test {
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.seizeWithMemo(address(0), address(0), 1, bytes32(0));
+    }
+
+    /// @notice TOKEN-RECIPIENT beats ZERO-SENDER (`to == token` reverts before the `from == 0` check).
+    function test_seizeWithMemo_revertOrder_tokenRecipient_beats_zeroSender() public {
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.seizeWithMemo(address(0), address(token), 1, bytes32(0));
+    }
+
+    /// @notice TOKEN-RECIPIENT beats BLOCKED (`to == token` reverts before the seizable check on `from`).
+    function test_seizeWithMemo_revertOrder_tokenRecipient_beats_blocked(address from) public {
+        _assumeValidActor(from);
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.seizeWithMemo(from, address(token), 1, bytes32(0));
+    }
+
+    /// @notice PAUSE beats TOKEN-RECIPIENT.
+    function test_seizeWithMemo_revertOrder_pause_beats_tokenRecipient(address from) public {
+        _assumeValidActor(from);
+        _grantRole(B20Constants.SEIZE_ROLE, seizer);
+        _pause(IB20.PausableFeature.SEIZE);
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.SEIZE));
+        token.seizeWithMemo(from, address(token), 1, bytes32(0));
+    }
+
+    /// @notice ROLE beats TOKEN-RECIPIENT.
+    function test_seizeWithMemo_revertOrder_role_beats_tokenRecipient(address caller, address from) public {
+        _assumeValidCaller(caller);
+        _assumeValidActor(from);
+        vm.assume(caller != admin);
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.SEIZE_ROLE)
+        );
+        token.seizeWithMemo(from, address(token), 1, bytes32(0));
     }
 
     /// @notice ZERO-SENDER beats BLOCKED (`from == 0` reverts even though the zero address would also
