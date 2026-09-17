@@ -8,7 +8,8 @@ vector — plus the gates that must reject (`AccountNotSeizable`, role,
 `InvalidReceiver`, `ContractPaused`), the admin-op decoupling from the *transfer*
 receiver policy on `to`, and the `SEIZE_RECEIVER_POLICY` gate on `to` (mirrors
 `MINT_RECEIVER_POLICY`: unset = allow-any, configured = the destination must be
-authorized).
+authorized). It also verifies that `seizeWithMemo` does not consult the regular
+`TRANSFER_EXECUTOR_POLICY` initiator gate.
 
 Fork-gated: the whole surface is Cobalt-only. The journey probes the
 `SEIZE_EXEMPT_POLICY()` getter and cleanly SKIPS on a pre-Cobalt chain (where the
@@ -125,16 +126,37 @@ def _edges(c: Chain, tok) -> None:
 
 
 def _decoupling(c: Chain, tok) -> None:
-    step(10, "seize ignores the receiver policy on `to`: block bob on TRANSFER_RECEIVER_POLICY, seize still lands")
+    step(
+        10,
+        "seize ignores transfer receiver and executor policies: block bob as receiver and every transfer executor",
+    )
     recv_pid = c.create_policy(c.DEPLOYER, config.POLICY_TYPE_BLOCKLIST)
     c.send(tok.functions.updatePolicy(config.TRANSFER_RECEIVER_POLICY, recv_pid), c.deployer)
     c.send(c.policy.functions.updateBlocklist(recv_pid, True, [c.BOB]), c.deployer)
     c.assert_eq(c.policy.functions.isAuthorized(recv_pid, c.BOB).call(), False, "bob blocked as a receiver")
-    # A normal transfer to bob would revert PolicyForbids; seize is an admin op and does not consult it.
+    c.send(
+        tok.functions.updatePolicy(config.TRANSFER_EXECUTOR_POLICY, config.ALWAYS_BLOCK_ID),
+        c.deployer,
+    )
+    c.assert_eq(
+        tok.functions.policyId(config.TRANSFER_EXECUTOR_POLICY).call(),
+        config.ALWAYS_BLOCK_ID,
+        "every transfer executor blocked",
+    )
+    # A normal transfer to bob would revert PolicyForbids. Seize is an admin operation: it consults
+    # neither the regular transfer receiver policy nor the regular transfer executor policy.
     c.expect_revert("PolicyForbids", tok.functions.transfer(c.BOB, 1), c.DEPLOYER)
     c.send(tok.functions.seizeWithMemo(c.ALICE, c.BOB, config.amt(100, 18), MEMO), c.deployer)
-    c.assert_eq(tok.functions.balanceOf(c.BOB).call(), config.amt(500, 18), "bob received the seize despite receiver policy")
+    c.assert_eq(
+        tok.functions.balanceOf(c.BOB).call(),
+        config.amt(500, 18),
+        "bob received the seize despite transfer policies",
+    )
     c.assert_eq(tok.functions.balanceOf(c.ALICE).call(), config.amt(500, 18), "alice debited")
+    c.send(
+        tok.functions.updatePolicy(config.TRANSFER_EXECUTOR_POLICY, config.ALWAYS_ALLOW_ID),
+        c.deployer,
+    )
 
 
 def _pause(c: Chain, tok) -> None:

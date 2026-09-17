@@ -109,6 +109,52 @@ def _journey(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.totalSupply().call(), config.amt(1430, 18), "total supply after burn")
 
 
+def _executor_policy(c: Chain, tok) -> None:
+    """Verify the executor policy gates direct transfer and transferWithMemo initiators."""
+    step("10b", "allowlist deployer as the only transfer executor")
+    executor_policy = c.create_policy_with_accounts(
+        c.DEPLOYER,
+        config.POLICY_TYPE_ALLOWLIST,
+        [c.DEPLOYER],
+    )
+    c.send(tok.functions.updatePolicy(config.TRANSFER_EXECUTOR_POLICY, executor_policy), c.deployer)
+    c.assert_eq(
+        tok.functions.TRANSFER_EXECUTOR_POLICY().call(),
+        config.TRANSFER_EXECUTOR_POLICY,
+        "TRANSFER_EXECUTOR_POLICY scope",
+    )
+    c.assert_eq(
+        tok.functions.policyId(config.TRANSFER_EXECUTOR_POLICY).call(),
+        executor_policy,
+        "executor policy attached",
+    )
+
+    step("10c", "authorized deployer can use transfer and transferWithMemo")
+    c.send(tok.functions.transfer(c.ALICE, config.amt(1, 18)), c.deployer)
+    receipt = c.send(tok.functions.transferWithMemo(c.ALICE, config.amt(1, 18), MEMO), c.deployer)
+    c.assert_log_order(
+        receipt,
+        "Transfer(address,address,uint256)",
+        "Memo(address,bytes32)",
+        "authorized transferWithMemo emits Memo immediately after Transfer",
+    )
+
+    step("10d", "unlisted user2 is blocked from direct transfer and transferWithMemo before balance checks")
+    c.expect_revert("PolicyForbids", tok.functions.transfer(c.ALICE, config.amt(1, 18)), c.USER2)
+    c.expect_revert(
+        "PolicyForbids",
+        tok.functions.transferWithMemo(c.ALICE, config.amt(1, 18), MEMO),
+        c.USER2,
+    )
+
+    # Later lifecycle edges intentionally assert other transfer guards (allowance and pause), so restore
+    # the default policy after this focused executor-policy check.
+    c.send(
+        tok.functions.updatePolicy(config.TRANSFER_EXECUTOR_POLICY, config.ALWAYS_ALLOW_ID),
+        c.deployer,
+    )
+
+
 def _edges(c: Chain, tok) -> None:
     step(11, "supply cap: lower cap to current supply, then mint 1 -> SupplyCapExceeded")
     total = tok.functions.totalSupply().call()
@@ -169,6 +215,9 @@ def _events(c: Chain, v2: bool) -> None:
         "B20Created(address,uint8,string,string,uint8,bytes)",
         "RoleGranted(bytes32,address,address)",
         "SupplyCapUpdated(address,uint256,uint256)",
+        "PolicyCreated(uint64,address,uint8)",
+        "AllowlistUpdated(uint64,address,bool,address[])",
+        "PolicyUpdated(bytes32,uint64,uint64)",
         "Transfer(address,address,uint256)",
         "Memo(address,bytes32)",
         "Approval(address,address,uint256)",
@@ -192,6 +241,7 @@ def run(c: Chain) -> None:
     v2 = c.supports_erc165(tok, config.SCALED_UI_AMOUNT_ID)
     log(f"multiplier surface: {'ERC-8056 / AssetV2 (UIMultiplierUpdated)' if v2 else 'V1 (MultiplierUpdated)'}")
     _journey(c, tok)
+    _executor_policy(c, tok)
     _edges(c, tok)
     _events(c, v2)
     log("asset-lifecycle: OK")
