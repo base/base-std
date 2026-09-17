@@ -272,8 +272,8 @@ class Chain:
     def expect_abi_decode_failed(self, desc: str, fn, frm: ChecksumAddress) -> None:
         """Simulate `fn` via eth_call; assert Rust precompile AbiDecodeFailed revert shape.
 
-        Dispatch decode failures encode as `function_selector || utf8_error`, not a typed
-        custom error such as InvalidVariant().
+        Dispatch decode failures encode as a bare `function_selector` (no message; the error
+        string was dropped), not a typed custom error such as InvalidVariant().
         """
         fn_selector = bytes(HexBytes(fn.selector))
         try:
@@ -302,7 +302,7 @@ class Chain:
         if raw is None:
             self._diagnose(f"expected ABI decode failure: {desc}", repro_fn, repro_overrides, repro_call)
             die(f"expected ABI decode failure for {desc} but revert had no data")
-        if len(raw) <= 4:
+        if len(raw) < 4:
             self._diagnose(f"expected ABI decode failure: {desc}", repro_fn, repro_overrides, repro_call)
             die(f"expected ABI decode failure for {desc} but revert was only {len(raw)} byte(s): 0x{raw.hex()}")
         if raw[:4] != fn_selector:
@@ -323,7 +323,7 @@ class Chain:
         value: int = 0,
         frm: ChecksumAddress | None = None,
     ) -> None:
-        """Assert hand-built calldata reverts with AbiDecodeFailed (selector || utf8)."""
+        """Assert hand-built calldata reverts with AbiDecodeFailed (bare selector, no message)."""
         if len(data) < 4:
             die(f"expected ABI decode failure for {desc} but calldata is shorter than 4 bytes")
         fn_selector = data[:4]
