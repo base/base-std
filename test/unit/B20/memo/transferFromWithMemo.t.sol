@@ -30,6 +30,20 @@ contract B20TransferFromWithMemoTest is B20Test {
         token.transferFromWithMemo(from, to, amount, memo);
     }
 
+    /// @notice Verifies transferFromWithMemo reverts when the recipient is the token itself
+    /// @dev Same InvalidReceiver(token) guard as transferFrom; fires before allowance.
+    function test_transferFromWithMemo_revert_tokenRecipient(address caller, address from, uint256 amount, bytes32 memo)
+        public
+    {
+        _assumeValidCaller(caller);
+        _assumeValidActor(from);
+        vm.assume(caller != from);
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transferFromWithMemo(from, address(token), amount, memo);
+    }
+
     /// @notice Verifies transferFromWithMemo performs the same balance and allowance updates as transferFrom
     /// @dev Accounting and spend-tracking unchanged from transferFrom.
     ///      Paired slot assertions confirm both balance slots and the

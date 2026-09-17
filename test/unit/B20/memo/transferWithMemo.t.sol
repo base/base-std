@@ -47,6 +47,16 @@ contract B20TransferWithMemoTest is B20Test {
         token.transferWithMemo(to, amount, memo);
     }
 
+    /// @notice Verifies transferWithMemo reverts when the recipient is the token itself
+    /// @dev Same InvalidReceiver(token) guard as transfer; the memo adds no new revert path.
+    function test_transferWithMemo_revert_tokenRecipient(address from, uint256 amount, bytes32 memo) public {
+        _assumeValidActor(from);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transferWithMemo(address(token), amount, memo);
+    }
+
     /// @notice Verifies transferWithMemo performs the same balance movement as transfer
     /// @dev Same accounting effect as transfer; the memo does not alter accounting.
     ///      Paired slot assertions confirm both balance slots reflect the move.

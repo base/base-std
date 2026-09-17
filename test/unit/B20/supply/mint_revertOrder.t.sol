@@ -19,13 +19,15 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "base-std-test/lib/moc
 ///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(MINT)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(MINT_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         3. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         4. POLICY (`_mint` body) → `PolicyForbids`
 ///         5. SUPPLY-CAP (`_mint` body) → `SupplyCapExceeded`
 ///
 ///         A `mint` call that violates two or more preconditions must always
-///         revert with the selector for the earliest-listed violation. The 10
-///         tests below enumerate every pair (C(5, 2) = 10).
+///         revert with the selector for the earliest-listed violation.
+///         `address(0)` and `address(this)` are two triggers of the same
+///         invalid-receiver step; token-recipient pairs vs later checks are
+///         pinned below.
 contract B20MintRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
@@ -53,6 +55,16 @@ contract B20MintRevertOrderTest is B20Test {
         vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.MINT));
         token.mint(address(0), amount);
+    }
+
+    /// @notice With PAUSE and TOKEN-RECIPIENT violated, PAUSE fires first.
+    function test_mint_revertOrder_pause_beats_tokenRecipient(uint256 amount) public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        _pause(IB20.PausableFeature.MINT);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.MINT));
+        token.mint(address(token), amount);
     }
 
     /// @notice With PAUSE and POLICY violated, PAUSE fires first.
@@ -95,6 +107,18 @@ contract B20MintRevertOrderTest is B20Test {
             abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.MINT_ROLE)
         );
         token.mint(address(0), amount);
+    }
+
+    /// @notice With both ROLE and TOKEN-RECIPIENT violated, ROLE fires first.
+    function test_mint_revertOrder_role_beats_tokenRecipient(address caller, uint256 amount) public {
+        _assumeValidCaller(caller);
+        vm.assume(caller != admin);
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(IB20.AccessControlUnauthorizedAccount.selector, caller, B20Constants.MINT_ROLE)
+        );
+        token.mint(address(token), amount);
     }
 
     /// @notice With both ROLE and POLICY violated, ROLE fires first.
@@ -153,6 +177,28 @@ contract B20MintRevertOrderTest is B20Test {
         vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.mint(address(0), amount);
+    }
+
+    /// @notice With TOKEN-RECIPIENT and POLICY violated, TOKEN-RECIPIENT fires first.
+    function test_mint_revertOrder_tokenRecipient_beats_policy(uint256 amount) public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        _setPolicy(B20Constants.MINT_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.mint(address(token), amount);
+    }
+
+    /// @notice With TOKEN-RECIPIENT and CAP violated, TOKEN-RECIPIENT fires first.
+    function test_mint_revertOrder_tokenRecipient_beats_cap(uint256 amount) public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        amount = bound(amount, 1, type(uint128).max);
+        vm.prank(admin);
+        token.updateSupplyCap(0);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.mint(address(token), amount);
     }
 
     // --- Pair where POLICY wins (PAUSE + ROLE + ZERO satisfied) ---

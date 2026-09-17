@@ -8,9 +8,12 @@ flow-level event check.
 
 from __future__ import annotations
 
+from web3.exceptions import ContractLogicError
+
 from .. import config
 from ..chain import Chain, die, log, ok, step
 from ..codec import AssetCreateParams, init_call
+from ..errors import ERROR_BY_SELECTOR
 
 MEMO = b"smoke".ljust(32, b"\x00")
 
@@ -109,6 +112,36 @@ def _journey(c: Chain, tok) -> None:
     c.assert_eq(tok.functions.totalSupply().call(), config.amt(1430, 18), "total supply after burn")
 
 
+def _token_recipient_rejected(tok, frm) -> bool:
+    """Denim probe: `transfer` to the token address reverts `InvalidReceiver`.
+
+    Pre-Denim the call succeeds (zero-amount), so the token-recipient edges must
+    skip rather than fail. Uses eth_call so a pre-Denim success does not lock tokens.
+    """
+    try:
+        tok.functions.transfer(tok.address, 0).call({"from": frm})
+    except ContractLogicError as exc:
+        data = getattr(exc, "data", None)
+        if isinstance(data, str) and data.startswith("0x") and len(data) >= 10:
+            return ERROR_BY_SELECTOR.get(data[:10].lower()) == "InvalidReceiver"
+        return False
+    return False
+
+
+def _assert_token_recipient_rejected(c: Chain, tok) -> None:
+    if not _token_recipient_rejected(tok, c.DEPLOYER):
+        log("token-as-recipient still allowed — chain is pre-Denim; skipping InvalidReceiver edges")
+        return
+    step("11d", "transfer to token address -> InvalidReceiver")
+    c.expect_revert("InvalidReceiver", tok.functions.transfer(tok.address, 1), c.DEPLOYER)
+    step("11e", "transferFrom to token address -> InvalidReceiver")
+    c.expect_revert("InvalidReceiver", tok.functions.transferFrom(c.DEPLOYER, tok.address, 1), c.USER2)
+    step("11f", "mint to token address -> InvalidReceiver")
+    c.expect_revert("InvalidReceiver", tok.functions.mint(tok.address, 1), c.DEPLOYER)
+    step("11g", "batchMint including token address -> InvalidReceiver")
+    c.expect_revert("InvalidReceiver", tok.functions.batchMint([c.ALICE, tok.address], [1, 1]), c.DEPLOYER)
+
+
 def _edges(c: Chain, tok) -> None:
     step(11, "supply cap: lower cap to current supply, then mint 1 -> SupplyCapExceeded")
     total = tok.functions.totalSupply().call()
@@ -120,6 +153,8 @@ def _edges(c: Chain, tok) -> None:
 
     step("11c", "transferFrom insufficient allowance -> InsufficientAllowance (allowance consumed in step 5)")
     c.expect_revert("InsufficientAllowance", tok.functions.transferFrom(c.DEPLOYER, c.BOB, config.amt(1, 18)), c.USER2)
+
+    _assert_token_recipient_rejected(c, tok)
 
     step(12, "pause TRANSFER: transfer AND transferFrom revert ContractPaused; unpause restores")
     # Approve user2 first so transferFrom clears the allowance check and the pause gate is the binding revert.

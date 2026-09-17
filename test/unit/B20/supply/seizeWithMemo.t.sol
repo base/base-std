@@ -53,6 +53,18 @@ contract B20SeizeWithMemoTest is B20Test {
         token.seizeWithMemo(from, address(0), amount, bytes32(0));
     }
 
+    /// @notice Reverts with InvalidReceiver when `to` is the token itself.
+    /// @dev Credits to `address(this)` would lock the seized balance; `from == address(this)`
+    ///      remains allowed so already-stuck tokens can still be recovered.
+    function test_seizeWithMemo_revert_tokenRecipient(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _armSeize();
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.seizeWithMemo(from, address(token), amount, bytes32(0));
+    }
+
     /// @notice Reverts InvalidSender when `from == address(0)`. A non-default `SeizeHolder` can treat
     ///         the zero address as seizable; without this guard a zero-amount seize from the zero
     ///         address would emit a misleading `Transfer(0x0, to, 0)` that indexers read as a mint.
@@ -238,5 +250,23 @@ contract B20SeizeWithMemoTest is B20Test {
         emit IB20.Seized(seizer, from, to, amount);
         vm.prank(seizer);
         token.seizeWithMemo(from, to, amount, memo);
+    }
+
+    /// @notice Recovers a balance already sitting at the token address.
+    /// @dev Seeds `balances[token]` directly because mint/transfer to the token now revert.
+    ///      Seize from the token is the recovery path for pre-activation stuck credits.
+    function test_seizeWithMemo_success_fromTokenAddress(address to, uint256 amount) public {
+        _assumeValidActor(to);
+        amount = bound(amount, 1, B20Constants.MAX_SUPPLY_CAP);
+        vm.store(address(token), MockB20Storage.balanceSlot(address(token)), bytes32(amount));
+        vm.store(address(token), MockB20Storage.totalSupplySlot(), bytes32(amount));
+        _armSeize();
+
+        vm.prank(seizer);
+        token.seizeWithMemo(address(token), to, amount, bytes32(0));
+
+        assertEq(token.balanceOf(address(token)), 0, "token balance must be drained");
+        assertEq(token.balanceOf(to), amount, "treasury must receive the recovered amount");
+        assertEq(token.totalSupply(), amount, "seize is a transfer: totalSupply is unchanged");
     }
 }
