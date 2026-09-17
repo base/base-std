@@ -147,9 +147,9 @@ MUTATIONS: list[Mutation] = [
     # === MockB20: valid-receiver check skipped ===
     Mutation(
         MOCK_B20,
-        "    function _requireValidReceiver(address to) internal view {\n        if (to == address(0) || to == address(this)) revert InvalidReceiver(to);",
-        "    function _requireValidReceiver(address to) internal view {\n        // if (to == address(0) || to == address(this)) revert InvalidReceiver(to);",
-        "_requireValidReceiver: drop zero-and-token-recipient guard",
+        "    function _requireValidReceiver(address to) internal pure {\n        if (to == address(0) || _isB20Prefix(to)) revert InvalidReceiver(to);",
+        "    function _requireValidReceiver(address to) internal pure {\n        // if (to == address(0) || _isB20Prefix(to)) revert InvalidReceiver(to);",
+        "_requireValidReceiver: drop zero-and-B20-prefix-recipient guard",
     ),
     # === MockB20: more mutations on accounting / event integrity ===
     Mutation(

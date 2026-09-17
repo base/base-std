@@ -140,6 +140,19 @@ contract B20TransferFromTest is B20Test {
         token.transferFrom(from, address(token), amount);
     }
 
+    /// @notice Verifies transferFrom reverts when the recipient is a different B20 token
+    function test_transferFrom_revert_otherB20Recipient(address caller, address from, uint256 amount) public {
+        _assumeValidActor(caller);
+        _assumeValidActor(from);
+        vm.assume(caller != from);
+        address other = _createAsset(alice, keccak256("other-b20-recipient"), _assetParams(), new bytes[](0));
+        vm.assume(other != address(token));
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, other));
+        token.transferFrom(from, other, amount);
+    }
+
     /// @notice Verifies transferFrom reverts when from's balance is insufficient
     /// @dev Balance precondition fires inside _transfer, after allowance consumption.
     function test_transferFrom_revert_insufficientBalance(address caller, address from, address to, uint256 amount)

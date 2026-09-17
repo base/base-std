@@ -117,13 +117,24 @@ contract B20MintTest is B20Test {
     }
 
     /// @notice Verifies mint reverts when the recipient is the token itself
-    /// @dev Credits to `address(this)` would lock newly issued supply; checks InvalidReceiver(token)
+    /// @dev Credits to a B20-prefix address would lock newly issued supply; checks InvalidReceiver(token)
     function test_mint_revert_tokenRecipient(uint256 amount) public {
         _grantRole(B20Constants.MINT_ROLE, minter);
 
         vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
         token.mint(address(token), amount);
+    }
+
+    /// @notice Verifies mint reverts when the recipient is a different B20 token
+    function test_mint_revert_otherB20Recipient(uint256 amount) public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+        address other = _createAsset(alice, keccak256("other-b20-recipient"), _assetParams(), new bytes[](0));
+        vm.assume(other != address(token));
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, other));
+        token.mint(other, amount);
     }
 
     /// @notice Verifies mint credits the recipient balance by amount

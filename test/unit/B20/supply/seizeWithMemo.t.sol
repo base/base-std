@@ -54,8 +54,8 @@ contract B20SeizeWithMemoTest is B20Test {
     }
 
     /// @notice Reverts with InvalidReceiver when `to` is the token itself.
-    /// @dev Credits to `address(this)` would lock the seized balance; `from == address(this)`
-    ///      remains allowed so already-stuck tokens can still be recovered.
+    /// @dev Credits to a B20-prefix address would lock the seized balance; `from` may still be
+    ///      a B20 address so already-stuck tokens can be recovered.
     function test_seizeWithMemo_revert_tokenRecipient(address from, uint256 amount) public {
         _assumeValidActor(from);
         _armSeize();
@@ -63,6 +63,18 @@ contract B20SeizeWithMemoTest is B20Test {
         vm.prank(seizer);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
         token.seizeWithMemo(from, address(token), amount, bytes32(0));
+    }
+
+    /// @notice Reverts with InvalidReceiver when `to` is a different B20 token.
+    function test_seizeWithMemo_revert_otherB20Recipient(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _armSeize();
+        address other = _createAsset(alice, keccak256("other-b20-recipient"), _assetParams(), new bytes[](0));
+        vm.assume(other != address(token));
+
+        vm.prank(seizer);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, other));
+        token.seizeWithMemo(from, other, amount, bytes32(0));
     }
 
     /// @notice Reverts InvalidSender when `from == address(0)`. A non-default `SeizeHolder` can treat

@@ -27,7 +27,7 @@ Grouped by hardfork, one collapsible section per hardfork, newest first.
 
 | Product(s) | Change | Affected interfaces | Entry |
 | --- | --- | --- | --- |
-| B20 | Reject the token as a credit recipient | `src/interfaces/IB20.sol`, `src/interfaces/IB20Asset.sol` | [03_Denim_B20_token_receiver](03_Denim_B20_token_receiver.md) |
+| B20 | Reject B20-prefix addresses as credit recipients | `src/interfaces/IB20.sol`, `src/interfaces/IB20Asset.sol` | [03_Denim_B20_token_receiver](03_Denim_B20_token_receiver.md) |
 | B20 | Transfer executor policy on every transfer path | `src/interfaces/IB20.sol` | [03_Denim_B20_transfer_executor_enforcement](03_Denim_B20_transfer_executor_enforcement.md) |
 | PolicyRegistry | NOT / invert policies | `src/interfaces/IPolicyRegistry.sol` | [03_Denim_PolicyRegistry_not_policy](03_Denim_PolicyRegistry_not_policy.md) |
 

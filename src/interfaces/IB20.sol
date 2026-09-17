@@ -66,8 +66,8 @@ interface IB20 {
     error InvalidSender(address sender);
 
     /// @notice The transfer's destination address is invalid. Fires for `address(0)` and for
-    ///         the token's own address (`address(this)`), which would otherwise lock the
-    ///         credited balance with no holder-side way to move it.
+    ///         any B20-prefix address (byte `[0] = 0xB2`, bytes `[1:10]` zero), which would
+    ///         otherwise lock the credited balance with no holder-side way to move it.
     error InvalidReceiver(address receiver);
 
     /// @notice The approval's `owner` address is invalid (typically `address(0)`).
@@ -317,7 +317,7 @@ interface IB20 {
     /// @notice Transfers `amount` from `msg.sender` to `to`. Emits `Transfer`.
     ///
     /// @dev Reverts with `ContractPaused(TRANSFER)` when `TRANSFER` is paused.
-    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `to == address(this)`.
+    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `to` has a B20 address prefix.
     /// @dev Reverts with `InvalidSender` when `msg.sender == address(0)`.
     /// @dev Reverts with `PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...)` when `msg.sender` is not authorized.
     /// @dev Reverts with `PolicyForbids(TRANSFER_SENDER_POLICY, ...)` when `msg.sender` is not authorized.
@@ -335,7 +335,7 @@ interface IB20 {
     /// @notice Transfers `amount` from `from` to `to` using `msg.sender`'s allowance. Emits `Transfer`.
     ///
     /// @dev Reverts with `ContractPaused(TRANSFER)` when `TRANSFER` is paused.
-    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `to == address(this)`.
+    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `to` has a B20 address prefix.
     /// @dev Reverts with `InvalidSender` when `from == address(0)`.
     /// @dev Reverts with `InsufficientAllowance` when the caller's allowance from `from` is below `amount`.
     /// @dev Reverts with `PolicyForbids(TRANSFER_EXECUTOR_POLICY, ...)` when `msg.sender` is not authorized.
@@ -414,7 +414,7 @@ interface IB20 {
     ///
     /// @dev Reverts with `ContractPaused(MINT)` when `MINT` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `MINT_ROLE`.
-    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `to == address(this)`.
+    /// @dev Reverts with `InvalidReceiver` when `to == address(0)` or `to` has a B20 address prefix.
     /// @dev Reverts with `PolicyForbids(MINT_RECEIVER_POLICY, ...)` when `to` is not authorized.
     /// @dev Reverts with `SupplyCapExceeded` when `totalSupply + amount > supplyCap`.
     ///
@@ -473,9 +473,9 @@ interface IB20 {
     ///      unconfigured token may seize to any destination (a treasury need not be allowlisted).
     /// @dev Reverts with `ContractPaused(SEIZE)` when `SEIZE` is paused.
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `SEIZE_ROLE`.
-    /// @dev Reverts with `InvalidReceiver` when `to == address(0)`, `to == address(this)`, or
-    ///      `from == to`. `from == address(this)` is allowed so a balance already at the token
-    ///      can be recovered to a treasury.
+    /// @dev Reverts with `InvalidReceiver` when `to == address(0)`, `to` has a B20 address
+    ///      prefix, or `from == to`. `from` may be a B20 address so a balance already stuck
+    ///      at a token can be recovered to a treasury.
     /// @dev Reverts with `InvalidSender` when `from == address(0)`.
     /// @dev Reverts with `AccountNotSeizable` when `from` is authorized under `SEIZE_EXEMPT_POLICY`.
     /// @dev Reverts with `PolicyForbids(SEIZE_RECEIVER_POLICY, ...)` when `to` is not authorized under `SEIZE_RECEIVER_POLICY`.
