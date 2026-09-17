@@ -104,7 +104,7 @@ summary. A journey whose surface the live chain does not yet ship is reported as
 
 ## What it checks
 
-Seven "journeys", run as a whole suite (a single journey can still be run via the CLI for debugging):
+Eight "journeys", run as a whole suite (a single journey can still be run via the CLI for debugging):
 
 | Journey | What it exercises |
 |---|---|
@@ -114,6 +114,7 @@ Seven "journeys", run as a whole suite (a single journey can still be run via th
 | `stablecoin` | Stablecoin-variant deltas (fixed 6 decimals, immutable currency) plus the regulated freeze-and-seize path (blocklist policy + `burnBlocked`). |
 | `seize` | Transfer-based seize (AssetV2 @ Cobalt): the `SEIZE_EXEMPT_POLICY` membership gate + `SEIZE_ROLE`, `seizeWithMemo` (`Transfer` -> `Memo` -> `Seized`, supply-preserving), its reject gates (`AccountNotSeizable`, role, `InvalidReceiver`, `ContractPaused`), the admin-op decoupling from the transfer receiver policy on `to`, the `SEIZE_RECEIVER_POLICY` gate on `to` (unset = allow-any, configured = destination must be authorized, else `PolicyForbids`), and the independent `SEIZE` pause vector. **Skips** cleanly on a pre-Cobalt chain (probed via the `SEIZE_EXEMPT_POLICY()` getter). Complements `stablecoin`, which covers the legacy burn-based `burnBlocked`. |
 | `policy` | Policy creation (both types), membership, built-in sentinels, the two-step admin transfer lifecycle, and a token actually *enforcing* a policy (`PolicyForbids` on transfer + mint). |
+| `policy-invert` | Denim query-time policy inversion: all policy read views on plain and inverted IDs, a simple allowlist's NOT form attached to a token, and an inverted composite `INTERSECT[KYC, NOT sanctions]` attached to another token. Membership changes in each base policy immediately flip the attached token's authorization result. **Skips** cleanly before Denim (probed via `invertedPolicyId(uint64)`). |
 | `invariants` | EVM-context invariants a precompile must implement explicitly: payable rejection, unknown-selector revert, strict ABI decode, dirty-bit canonicalization, `STATICCALL` read-only enforcement, returndata fidelity, OOG containment, revert atomicity, and gas independence from a force-fed balance. Uses the `PrecompileProbe` + `ForceFeeder` helpers under `test/lib/`. |
 
 Each lifecycle journey ends with a flow-level check that every expected event
@@ -220,6 +221,6 @@ script/smoke/
   abis.py             # interface ABIs + probe/feeder artifacts, read from out/
   codec.py            # the one hand-written encode: createB20 params + initCalls
   errors.py           # selector -> custom-error-name map (from the ABIs)
-  journeys/           # factory, asset_lifecycle, scheduled_multiplier, stablecoin_lifecycle, seize, policy_registry, precompile_invariants
+  journeys/           # factory, asset_lifecycle, scheduled_multiplier, stablecoin_lifecycle, seize, policy_registry, policy_invert, precompile_invariants
   requirements.txt
 ```
