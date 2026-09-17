@@ -52,6 +52,8 @@ MAX_CHILD_POLICIES = 4
 # Built-in policy IDs: ALWAYS_ALLOW = 0, ALWAYS_BLOCK = (uint64(ALLOWLIST) << 56) | 1.
 ALWAYS_ALLOW_ID = 0
 ALWAYS_BLOCK_ID = (1 << 56) | 1
+# Bit 63 is a query-time NOT flag. The registry's invertedPolicyId view toggles it.
+INVERTED_POLICY_BIT = 1 << 63
 
 # PausableFeature enum (IB20). SEIZE (Cobalt) governs `seizeWithMemo`.
 FEATURE_TRANSFER = 0

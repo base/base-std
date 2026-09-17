@@ -1,11 +1,11 @@
 """CLI: python -m smoke <journey> [<journey> ...] [-k]
 
-Journeys: factory, asset, multiplier, stablecoin, seize, policy, invariants — or `all` to run
-every journey in sequence. Env (RPC_URL / DEPLOYER_PK / USER2_PK) is sourced by the
-Makefile from .env; running directly requires it exported. A preflight liveness
-probe checks the b20 precompiles are actually active on the target chain (fork
->= Beryl); if not, the journey is skipped rather than reporting environment state
-(inactive feature → account-state fall-through) as contract defects.
+Journeys: factory, asset, multiplier, stablecoin, seize, policy, policy-invert, invariants — or
+`all` to run every journey in sequence. Env (RPC_URL / DEPLOYER_PK / USER2_PK) is sourced by the
+Makefile from .env; running directly requires it exported. A preflight liveness probe checks the
+b20 precompiles are actually active on the target chain (fork >= Beryl); if not, the journey is
+skipped rather than reporting environment state (inactive feature → account-state fall-through) as
+contract defects.
 
 Flags:
   -k, --keep-going   Run every selected journey even if one fails, print a summary,
@@ -29,11 +29,21 @@ JOURNEYS = {
     "stablecoin": "smoke.journeys.stablecoin_lifecycle",
     "seize": "smoke.journeys.seize",
     "policy": "smoke.journeys.policy_registry",
+    "policy-invert": "smoke.journeys.policy_invert",
     "invariants": "smoke.journeys.precompile_invariants",
 }
 
 # Canonical run order; also the expansion of `all`.
-ORDER = ["factory", "asset", "multiplier", "stablecoin", "seize", "policy", "invariants"]
+ORDER = [
+    "factory",
+    "asset",
+    "multiplier",
+    "stablecoin",
+    "seize",
+    "policy",
+    "policy-invert",
+    "invariants",
+]
 
 
 def _usage() -> str:
