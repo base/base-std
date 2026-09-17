@@ -31,7 +31,7 @@ contract B20TransferFromWithMemoTest is B20Test {
     }
 
     /// @notice Verifies transferFromWithMemo reverts when the recipient is the token itself
-    /// @dev Same InvalidReceiver(token) guard as transferFrom; fires before allowance.
+    /// @dev Same InvalidReceiver B20-prefix guard as transferFrom; fires before allowance.
     function test_transferFromWithMemo_revert_tokenRecipient(address caller, address from, uint256 amount, bytes32 memo)
         public
     {

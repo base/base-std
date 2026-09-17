@@ -316,10 +316,10 @@ abstract contract MockB20 is IB20 {
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
     /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`,
-    ///      `to == address(this)`, or `from == to`, and `InvalidSender` when `from == 0`. `from` must
-    ///      be unauthorized under `SEIZE_EXEMPT_POLICY`; `to` must be authorized under
+    ///      `to` has a B20 address prefix, or `from == to`, and `InvalidSender` when `from == 0`.
+    ///      `from` must be unauthorized under `SEIZE_EXEMPT_POLICY`; `to` must be authorized under
     ///      `SEIZE_RECEIVER_POLICY` (mirrors `MINT_RECEIVER_POLICY`: unset slot = always-allow).
-    ///      `from == address(this)` is allowed so a balance already at the token can be recovered.
+    ///      `from` may be a B20 address so a balance already stuck at a token can be recovered.
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
@@ -723,20 +723,28 @@ abstract contract MockB20 is IB20 {
         }
     }
 
-    /// @dev Rejects `address(0)` and the token itself as a credit destination.
-    ///      Crediting `address(this)` would lock the balance: the precompile
-    ///      cannot call `transfer` on its own behalf, so only `seizeWithMemo`
-    ///      from the token address can recover it. Shared by transfer, mint,
-    ///      seize, and batchMint.
-    function _requireValidReceiver(address to) internal view {
-        if (to == address(0) || to == address(this)) revert InvalidReceiver(to);
+    /// @dev Rejects `address(0)` and any B20-prefix address as a credit destination.
+    ///      B20 addresses match the factory layout (byte `[0] = 0xB2`, bytes `[1:10]`
+    ///      zero). Crediting such an address would lock the balance: the precompile
+    ///      cannot call `transfer` on its own behalf. Shared by transfer, mint,
+    ///      seize, and batchMint. Seize *from* a B20 address remains allowed so
+    ///      already-stuck balances can be recovered.
+    function _requireValidReceiver(address to) internal pure {
+        if (to == address(0) || _isB20Prefix(to)) revert InvalidReceiver(to);
+    }
+
+    /// @dev True iff `account`'s first 10 bytes match the B-20 address prefix
+    ///      (`0xB2` followed by 9 zero bytes). Same bit math as
+    ///      `MockB20Factory._isB20Prefix`.
+    function _isB20Prefix(address account) internal pure returns (bool) {
+        return (uint160(account) >> 80) == (uint160(0xB2) << 72);
     }
 
     /// @dev Receiver-then-sender check shared by every transfer-family
     ///      entrypoint. Reverts `InvalidReceiver(to)` before
     ///      `InvalidSender(from)` so the precedence between the two
     ///      matches the canonical order.
-    function _requireNonZeroActors(address from, address to) internal view {
+    function _requireNonZeroActors(address from, address to) internal pure {
         _requireValidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
     }

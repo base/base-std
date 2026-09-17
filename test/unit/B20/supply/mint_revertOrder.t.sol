@@ -19,13 +19,13 @@ import {MockPolicyRegistry, PolicyRegistryConstants} from "base-std-test/lib/moc
 ///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(MINT)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(MINT_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
+///         3. INVALID-RECEIVER (`to == address(0)` or B20-prefix) → `InvalidReceiver`
 ///         4. POLICY (`_mint` body) → `PolicyForbids`
 ///         5. SUPPLY-CAP (`_mint` body) → `SupplyCapExceeded`
 ///
 ///         A `mint` call that violates two or more preconditions must always
 ///         revert with the selector for the earliest-listed violation.
-///         `address(0)` and `address(this)` are two triggers of the same
+///         `address(0)` and a B20-prefix address are two triggers of the same
 ///         invalid-receiver step; token-recipient pairs vs later checks are
 ///         pinned below.
 contract B20MintRevertOrderTest is B20Test {

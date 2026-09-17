@@ -106,13 +106,25 @@ contract B20TransferTest is B20Test {
     }
 
     /// @notice Verifies transfer reverts when the recipient is the token itself
-    /// @dev Credits to `address(this)` would lock the balance; checks InvalidReceiver(token)
+    /// @dev Credits to a B20-prefix address would lock the balance; checks InvalidReceiver(token)
     function test_transfer_revert_tokenRecipient(address from, uint256 amount) public {
         _assumeValidActor(from);
 
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
         token.transfer(address(token), amount);
+    }
+
+    /// @notice Verifies transfer reverts when the recipient is a different B20 token
+    /// @dev Same B20-prefix guard; covers the cross-token footgun (token A → token B).
+    function test_transfer_revert_otherB20Recipient(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        address other = _createAsset(alice, keccak256("other-b20-recipient"), _assetParams(), new bytes[](0));
+        vm.assume(other != address(token));
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, other));
+        token.transfer(other, amount);
     }
 
     /// @notice Verifies transfer reverts when called by the zero address
