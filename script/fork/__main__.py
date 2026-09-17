@@ -227,7 +227,11 @@ def main(forge_args: list[str]) -> int:
         rpc_url = f"http://localhost:{port}"
         log(f"running forge test --fork-url {rpc_url} {' '.join(forge_args)}")
         # LIVE_PRECOMPILES: skip the mock etch; fork profile: base=true installs the precompiles.
+        # Fork tests run in forge's EVM, so forge must use the same Base upgrade as anvil.
+        # FOUNDRY_BASE overrides the fork profile's `base = true` (which defaults to Cobalt).
         env = {**os.environ, "LIVE_PRECOMPILES": "true", "FOUNDRY_PROFILE": "fork"}
+        if base_upgrade:
+            env["FOUNDRY_BASE"] = base_upgrade
         result = subprocess.run(
             [str(forge), "test", "--fork-url", rpc_url, *forge_args],
             cwd=REPO_ROOT,
