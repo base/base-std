@@ -17,7 +17,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///
 ///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
-///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         2. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         4. ALLOWANCE (`_consumeAllowance`) → `InsufficientAllowance`
 ///         5. EXECUTOR-POLICY (`_transfer` body: `isAuthorized(executor, msg.sender)`)
@@ -107,6 +107,37 @@ contract B20TransferFromRevertOrderTest is B20Test {
         vm.prank(caller);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.transferFrom(from, address(0), amount);
+    }
+
+    /// @notice TOKEN-RECIPIENT beats ALLOWANCE.
+    function test_transferFrom_revertOrder_tokenRecipient_beats_allowance(address caller, address from, uint256 amount)
+        public
+    {
+        _assumeValidCaller(caller);
+        _assumeValidActor(from);
+        vm.assume(caller != from);
+        amount = bound(amount, 1, type(uint128).max);
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transferFrom(from, address(token), amount);
+    }
+
+    /// @notice TOKEN-RECIPIENT beats EXECUTOR-POLICY.
+    function test_transferFrom_revertOrder_tokenRecipient_beats_executorPolicy(
+        address caller,
+        address from,
+        uint256 amount
+    ) public {
+        _assumeValidCaller(caller);
+        _assumeValidActor(from);
+        vm.assume(caller != from);
+        amount = bound(amount, 1, type(uint128).max);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transferFrom(from, address(token), amount);
     }
 
     // --- Pairs where ZERO-SENDER wins (PAUSE + ZERO-RECEIVER not violated) ---

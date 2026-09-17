@@ -14,9 +14,9 @@ contract B20MintTest is B20Test {
     /// @dev Access control: only role-holders can mint; checks AccessControlUnauthorizedAccount.
     ///      The `onlyRole(MINT_ROLE)` modifier on `_mint` runs before any in-body input
     ///      validation, so the role-check path fires regardless of `to`. The
-    ///      InvalidReceiver path is covered by test_mint_revert_zeroRecipient. The
-    ///      `to != 0` filter is kept for clarity (it documents which path each
-    ///      test exercises) but is no longer load-bearing.
+    ///      InvalidReceiver path is covered by test_mint_revert_zeroRecipient and
+    ///      test_mint_revert_tokenRecipient. The `to != 0` filter is kept for clarity
+    ///      (it documents which path each test exercises) but is no longer load-bearing.
     function test_mint_revert_unauthorized(address caller, address to, uint256 amount) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
@@ -114,6 +114,16 @@ contract B20MintTest is B20Test {
         vm.prank(minter);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.mint(address(0), amount);
+    }
+
+    /// @notice Verifies mint reverts when the recipient is the token itself
+    /// @dev Credits to `address(this)` would lock newly issued supply; checks InvalidReceiver(token)
+    function test_mint_revert_tokenRecipient(uint256 amount) public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.mint(address(token), amount);
     }
 
     /// @notice Verifies mint credits the recipient balance by amount

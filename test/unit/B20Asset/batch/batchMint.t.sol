@@ -139,6 +139,29 @@ contract B20AssetBatchMintTest is B20AssetTest {
         assertEq(token.totalSupply(), 0, "all-or-nothing: earlier element's mint must unwind");
     }
 
+    /// @notice Verifies batchMint reverts when any recipient is the token itself
+    /// @dev Same InvalidReceiver(token) guard as mint; a token address in a non-first
+    ///      slot proves the check is per-element, and the earlier element's mint unwinds.
+    function test_batchMint_revert_tokenRecipient(address validRecipient, uint256 a1, uint256 a2) public {
+        _assumeValidActor(validRecipient);
+        a1 = bound(a1, 0, type(uint128).max);
+        a2 = bound(a2, 0, type(uint128).max);
+        _grantRole(B20Constants.MINT_ROLE, minter);
+
+        address[] memory recipients = new address[](2);
+        recipients[0] = validRecipient;
+        recipients[1] = address(token);
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = a1;
+        amounts[1] = a2;
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        asset().batchMint(recipients, amounts);
+
+        assertEq(token.totalSupply(), 0, "all-or-nothing: earlier element's mint must unwind");
+    }
+
     /// @notice Verifies batchMint succeeds with a single recipient and credits the balance
     /// @dev Single-element happy path; total supply and recipient balance both move by amount.
     function test_batchMint_success_singleRecipient(address to, uint256 amount) public {

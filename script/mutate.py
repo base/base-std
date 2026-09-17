@@ -144,12 +144,12 @@ MUTATIONS: list[Mutation] = [
         "// if (spender == address(0)) revert InvalidSpender(spender);",
         "approve: drop zero-spender guard",
     ),
-    # === MockB20: zero-receiver check skipped in _transfer specifically ===
+    # === MockB20: valid-receiver check skipped ===
     Mutation(
         MOCK_B20,
-        "    function _requireNonZeroActors(address from, address to) internal pure {\n        if (to == address(0)) revert InvalidReceiver(to);",
-        "    function _requireNonZeroActors(address from, address to) internal pure {\n        // if (to == address(0)) revert InvalidReceiver(to);",
-        "_requireNonZeroActors: drop zero-recipient guard",
+        "    function _requireValidReceiver(address to) internal view {\n        if (to == address(0) || to == address(this)) revert InvalidReceiver(to);",
+        "    function _requireValidReceiver(address to) internal view {\n        // if (to == address(0) || to == address(this)) revert InvalidReceiver(to);",
+        "_requireValidReceiver: drop zero-and-token-recipient guard",
     ),
     # === MockB20: more mutations on accounting / event integrity ===
     Mutation(

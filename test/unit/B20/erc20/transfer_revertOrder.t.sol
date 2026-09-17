@@ -11,16 +11,19 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
-///         2. ZERO-RECEIVER (`to == address(0)`) → `InvalidReceiver`
+///         2. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         4. EXECUTOR-POLICY (`_transfer` body) → `PolicyForbids(EXECUTOR, ...)`
 ///         5. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
 ///         6. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
 ///         7. BALANCE (`_transfer` body) → `InsufficientBalance`
 ///
-///         The public `transfer(to, amount)` entry sets `from = msg.sender`, so the executor
-///         is `msg.sender` (== `from`): a blocked EXECUTOR policy reverts even on this direct
-///         path. Pairs involving ZERO-SENDER require pranking `address(0)`. C(7, 2) = 21 pairs.
+///         `address(0)` and `address(this)` are two triggers of the same invalid-receiver
+///         step and cannot both be true. Token-recipient pairs vs later checks are pinned
+///         below; zero-receiver pairs stay as written. The public `transfer(to, amount)`
+///         entry sets `from = msg.sender`, so the executor is `msg.sender` (== `from`): a
+///         blocked EXECUTOR policy reverts even on this direct path. Pairs involving
+///         ZERO-SENDER require pranking `address(0)`.
 contract B20TransferRevertOrderTest is B20Test {
     // --- Pairs where PAUSE wins (PAUSE is canonical first) ---
 
@@ -86,6 +89,59 @@ contract B20TransferRevertOrderTest is B20Test {
         vm.prank(from);
         vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(0)));
         token.transfer(address(0), amount);
+    }
+
+    // --- Pairs where TOKEN-RECIPIENT wins (PAUSE not violated; to == address(this)) ---
+
+    function test_transfer_revertOrder_pause_beats_tokenRecipient(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _pause(IB20.PausableFeature.TRANSFER);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.ContractPaused.selector, IB20.PausableFeature.TRANSFER));
+        token.transfer(address(token), amount);
+    }
+
+    function test_transfer_revertOrder_tokenRecipient_beats_zeroSender(uint256 amount) public {
+        vm.prank(address(0));
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transfer(address(token), amount);
+    }
+
+    function test_transfer_revertOrder_tokenRecipient_beats_executorPolicy(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _setPolicy(B20Constants.TRANSFER_EXECUTOR_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transfer(address(token), amount);
+    }
+
+    function test_transfer_revertOrder_tokenRecipient_beats_senderPolicy(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _setPolicy(B20Constants.TRANSFER_SENDER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transfer(address(token), amount);
+    }
+
+    function test_transfer_revertOrder_tokenRecipient_beats_receiverPolicy(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        _setPolicy(B20Constants.TRANSFER_RECEIVER_POLICY, PolicyRegistryConstants.ALWAYS_BLOCK_ID);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transfer(address(token), amount);
+    }
+
+    function test_transfer_revertOrder_tokenRecipient_beats_balance(address from, uint256 amount) public {
+        _assumeValidActor(from);
+        amount = bound(amount, 1, type(uint128).max);
+
+        vm.prank(from);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.transfer(address(token), amount);
     }
 
     // --- Pairs where ZERO-SENDER wins (PAUSE not violated; requires pranking address(0)) ---
