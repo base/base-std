@@ -93,7 +93,7 @@ contract B20Test is B20FactoryTest {
     /// turn success-path tests into revert tests.
     function _assumeValidActor(address account) internal view {
         _assumeValidCaller(account);
-        // Same bit math as MockB20._isB20Prefix / MockB20Factory._isB20Prefix.
+        // Same bit math as MockB20._hasB20Prefix / MockB20Factory._hasB20Prefix.
         vm.assume((uint160(account) >> 80) != (uint160(0xB2) << 72));
     }
 

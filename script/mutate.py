@@ -147,8 +147,8 @@ MUTATIONS: list[Mutation] = [
     # === MockB20: valid-receiver check skipped ===
     Mutation(
         MOCK_B20,
-        "    function _requireValidReceiver(address to) internal pure {\n        if (to == address(0) || _isB20Prefix(to)) revert InvalidReceiver(to);",
-        "    function _requireValidReceiver(address to) internal pure {\n        // if (to == address(0) || _isB20Prefix(to)) revert InvalidReceiver(to);",
+        "    function _requireValidReceiver(address to) internal pure {\n        if (to == address(0) || _hasB20Prefix(to)) revert InvalidReceiver(to);",
+        "    function _requireValidReceiver(address to) internal pure {\n        // if (to == address(0) || _hasB20Prefix(to)) revert InvalidReceiver(to);",
         "_requireValidReceiver: drop zero-and-B20-prefix-recipient guard",
     ),
     # === MockB20: more mutations on accounting / event integrity ===
@@ -246,13 +246,13 @@ MUTATIONS: list[Mutation] = [
         MOCK_FACTORY,
         "return (uint160(token) >> 80) == (uint160(0xB2) << 72);",
         "return (uint160(token) >> 80) == (uint160(0xB3) << 72);",
-        "_isB20Prefix: compares against wrong prefix byte (no real B-20 ever matches)",
+        "_hasB20Prefix: compares against wrong prefix byte (no real B-20 ever matches)",
     ),
     Mutation(
         MOCK_FACTORY,
         "return (uint160(token) >> 80) == (uint160(0xB2) << 72);",
         "return (uint160(token) >> 88) == (uint160(0xB2) << 72);",
-        "_isB20Prefix: wrong shift amount (compares wrong byte range)",
+        "_hasB20Prefix: wrong shift amount (compares wrong byte range)",
     ),
     # === String encoding short/long boundary ===
     Mutation(

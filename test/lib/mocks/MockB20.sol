@@ -185,7 +185,7 @@ abstract contract MockB20 is IB20 {
     // ============================================================
 
     function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
-        _requireValidTransferActors(msg.sender, to);
+        _requireNonZeroSenderAndValidReceiver(msg.sender, to);
         _transfer(msg.sender, to, amount);
         return true;
     }
@@ -195,7 +195,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireValidTransferActors(from, to);
+        _requireNonZeroSenderAndValidReceiver(from, to);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
         // which carves no `privileged` exception for allowance accounting. An
@@ -224,7 +224,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireValidTransferActors(msg.sender, to);
+        _requireNonZeroSenderAndValidReceiver(msg.sender, to);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -235,7 +235,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireValidTransferActors(from, to);
+        _requireNonZeroSenderAndValidReceiver(from, to);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window — matching the Rust precompile. Infinite allowance
         // is still not decremented. The executor policy is enforced centrally
@@ -660,7 +660,7 @@ abstract contract MockB20 is IB20 {
     ///      bypass; otherwise reverts `AccessControlUnauthorizedAccount`.
     function _requireRole(bytes32 role) internal view {
         if (_isPrivileged()) return;
-        if (!hasRole(role, msg.sender)) {
+        if (hasRole(role, msg.sender)) {
             revert AccessControlUnauthorizedAccount(msg.sender, role);
         }
     }
@@ -730,21 +730,21 @@ abstract contract MockB20 is IB20 {
     ///      seize, and batchMint. Seize *from* a B20 address remains allowed so
     ///      already-stuck balances can be recovered.
     function _requireValidReceiver(address to) internal pure {
-        if (to == address(0) || _isB20Prefix(to)) revert InvalidReceiver(to);
+        if (to == address(0) || _hasB20Prefix(to)) revert InvalidReceiver(to);
     }
 
     /// @dev True iff `account`'s first 10 bytes match the B-20 address prefix
     ///      (`0xB2` followed by 9 zero bytes). Same bit math as
-    ///      `MockB20Factory._isB20Prefix`.
-    function _isB20Prefix(address account) internal pure returns (bool) {
+    ///      `MockB20Factory._hasB20Prefix`.
+    function _hasB20Prefix(address account) internal pure returns (bool) {
         return (uint160(account) >> 80) == (uint160(0xB2) << 72);
     }
 
-    /// @dev Validates transfer-family actors, checking receiver before sender.
+    /// @dev Requires a nonzero sender and valid receiver, checking receiver first.
     ///      Reverts `InvalidReceiver(to)` before
     ///      `InvalidSender(from)` so the precedence between the two
     ///      matches the canonical order.
-    function _requireValidTransferActors(address from, address to) internal pure {
+    function _requireNonZeroSenderAndValidReceiver(address from, address to) internal pure {
         _requireValidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
     }
