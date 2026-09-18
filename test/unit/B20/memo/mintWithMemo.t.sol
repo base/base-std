@@ -23,7 +23,7 @@ contract B20MintWithMemoTest is B20Test {
     }
 
     /// @notice Verifies mintWithMemo reverts when the recipient is the token itself
-    /// @dev Same InvalidReceiver B20-prefix guard as mint; the memo adds no new revert path.
+    /// @dev Same InvalidReceiver `address(this)` guard as mint; the memo adds no new revert path.
     function test_mintWithMemo_revert_tokenRecipient(uint256 amount, bytes32 memo) public {
         _grantRole(B20Constants.MINT_ROLE, minter);
 

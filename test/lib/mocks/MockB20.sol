@@ -316,10 +316,10 @@ abstract contract MockB20 is IB20 {
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
     /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`,
-    ///      `to` has a B20 address prefix, or `from == to`, and `InvalidSender` when `from == 0`.
+    ///      `to == address(this)`, or `from == to`, and `InvalidSender` when `from == 0`.
     ///      `from` must be unauthorized under `SEIZE_EXEMPT_POLICY`; `to` must be authorized under
     ///      `SEIZE_RECEIVER_POLICY` (mirrors `MINT_RECEIVER_POLICY`: unset slot = always-allow).
-    ///      `from` may be a B20 address so a balance already stuck at a token can be recovered.
+    ///      `from` may equal `address(this)` so a balance already stuck at the token can be recovered.
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
@@ -660,7 +660,7 @@ abstract contract MockB20 is IB20 {
     ///      bypass; otherwise reverts `AccessControlUnauthorizedAccount`.
     function _requireRole(bytes32 role) internal view {
         if (_isPrivileged()) return;
-        if (hasRole(role, msg.sender)) {
+        if (!hasRole(role, msg.sender)) {
             revert AccessControlUnauthorizedAccount(msg.sender, role);
         }
     }
@@ -723,28 +723,20 @@ abstract contract MockB20 is IB20 {
         }
     }
 
-    /// @dev Rejects `address(0)` and any B20-prefix address as a credit destination.
-    ///      B20 addresses match the factory layout (byte `[0] = 0xB2`, bytes `[1:10]`
-    ///      zero). Crediting such an address would lock the balance: the precompile
-    ///      cannot call `transfer` on its own behalf. Shared by transfer, mint,
-    ///      seize, and batchMint. Seize *from* a B20 address remains allowed so
-    ///      already-stuck balances can be recovered.
-    function _requireValidReceiver(address to) internal pure {
-        if (to == address(0) || _hasB20Prefix(to)) revert InvalidReceiver(to);
-    }
-
-    /// @dev True iff `account`'s first 10 bytes match the B-20 address prefix
-    ///      (`0xB2` followed by 9 zero bytes). Same bit math as
-    ///      `MockB20Factory._hasB20Prefix`.
-    function _hasB20Prefix(address account) internal pure returns (bool) {
-        return (uint160(account) >> 80) == (uint160(0xB2) << 72);
+    /// @dev Rejects `address(0)` and this token's own address as a credit destination.
+    ///      Crediting `address(this)` would lock the balance: the precompile cannot
+    ///      call `transfer` on its own behalf. Shared by transfer, mint, seize, and
+    ///      batchMint. Seize *from* `address(this)` remains allowed so a balance
+    ///      already stuck at the token can be recovered.
+    function _requireValidReceiver(address to) internal view {
+        if (to == address(0) || to == address(this)) revert InvalidReceiver(to);
     }
 
     /// @dev Requires a nonzero sender and valid receiver, checking receiver first.
     ///      Reverts `InvalidReceiver(to)` before
     ///      `InvalidSender(from)` so the precedence between the two
     ///      matches the canonical order.
-    function _requireNonZeroSenderAndValidReceiver(address from, address to) internal pure {
+    function _requireNonZeroSenderAndValidReceiver(address from, address to) internal view {
         _requireValidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
     }

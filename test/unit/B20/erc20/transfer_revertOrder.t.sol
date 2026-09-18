@@ -11,14 +11,14 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///
 /// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
-///         2. INVALID-RECEIVER (`to == address(0)` or B20-prefix) → `InvalidReceiver`
+///         2. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         4. EXECUTOR-POLICY (`_transfer` body) → `PolicyForbids(EXECUTOR, ...)`
 ///         5. SENDER-POLICY (`_transfer` body) → `PolicyForbids(SENDER, ...)`
 ///         6. RECEIVER-POLICY (`_transfer` body) → `PolicyForbids(RECEIVER, ...)`
 ///         7. BALANCE (`_transfer` body) → `InsufficientBalance`
 ///
-///         `address(0)` and a B20-prefix address are two triggers of the same invalid-receiver
+///         `address(0)` and `address(this)` are two triggers of the same invalid-receiver
 ///         step and cannot both be true. Token-recipient pairs vs later checks are pinned
 ///         below; zero-receiver pairs stay as written. The public `transfer(to, amount)`
 ///         entry sets `from = msg.sender`, so the executor is `msg.sender` (== `from`): a
@@ -91,7 +91,7 @@ contract B20TransferRevertOrderTest is B20Test {
         token.transfer(address(0), amount);
     }
 
-    // --- Pairs where TOKEN-RECIPIENT wins (PAUSE not violated; to is B20-prefix) ---
+    // --- Pairs where TOKEN-RECIPIENT wins (PAUSE not violated; to == address(token)) ---
 
     function test_transfer_revertOrder_pause_beats_tokenRecipient(address from, uint256 amount) public {
         _assumeValidActor(from);

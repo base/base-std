@@ -48,7 +48,7 @@ contract B20TransferWithMemoTest is B20Test {
     }
 
     /// @notice Verifies transferWithMemo reverts when the recipient is the token itself
-    /// @dev Same InvalidReceiver B20-prefix guard as transfer; the memo adds no new revert path.
+    /// @dev Same InvalidReceiver `address(this)` guard as transfer; the memo adds no new revert path.
     function test_transferWithMemo_revert_tokenRecipient(address from, uint256 amount, bytes32 memo) public {
         _assumeValidActor(from);
 

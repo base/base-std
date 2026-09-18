@@ -12,7 +12,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 /// @notice **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(SEIZE)` modifier) → `ContractPaused`
 ///         2. ROLE (`onlyRole(SEIZE_ROLE)` modifier) → `AccessControlUnauthorizedAccount`
-///         3. INVALID-RECEIVER (`to == address(0)` or B20-prefix) → `InvalidReceiver`
+///         3. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         4. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         5. SELF-SEIZE (`from == to`) → `InvalidReceiver`
 ///         6. BLOCKED (`isAuthorized(exemptPolicyId, from) == true`) → `AccountNotSeizable`
