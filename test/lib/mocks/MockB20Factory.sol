@@ -242,7 +242,7 @@ contract MockB20Factory is IB20Factory {
         //       `initialized` lives alone in its own slot at the end
         //       of the base layout, so writing the slot is a plain
         //       1-store with no masking against neighbouring fields.
-        _writeUint(token, MockB20Storage.initializedSlot(), 1);
+        // _writeUint(token, MockB20Storage.initializedSlot(), 1);
     }
 
     /// @dev `DEFAULT_ADMIN_ROLE` per OZ AccessControl convention.
