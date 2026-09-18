@@ -88,13 +88,12 @@ contract B20Test is B20FactoryTest {
     ///         counterparty).
     ///
     /// Extends `BaseTest._assumeValidCaller`'s precompile / VM / zero
-    /// filtering with any B20-prefix address. Crediting a B20 address
-    /// reverts `InvalidReceiver`; using one as a fuzzed actor would
+    /// filtering with `address(token)`. Crediting the token itself
+    /// reverts `InvalidReceiver`; using it as a fuzzed actor would
     /// turn success-path tests into revert tests.
     function _assumeValidActor(address account) internal view {
         _assumeValidCaller(account);
-        // Same bit math as MockB20._hasB20Prefix / MockB20Factory._hasB20Prefix.
-        vm.assume((uint160(account) >> 80) != (uint160(0xB2) << 72));
+        vm.assume(account != address(token));
     }
 
     /// @notice Grants `role` to `account` as the admin actor.

@@ -17,7 +17,7 @@ import {PolicyRegistryConstants} from "base-std-test/lib/mocks/MockPolicyRegistr
 ///
 ///         **Canonical order (Solidity reference):**
 ///         1. PAUSE (`whenNotPaused(TRANSFER)` modifier) → `ContractPaused`
-///         2. INVALID-RECEIVER (`to == address(0)` or B20-prefix) → `InvalidReceiver`
+///         2. INVALID-RECEIVER (`to == address(0)` or `to == address(this)`) → `InvalidReceiver`
 ///         3. ZERO-SENDER (`from == address(0)`) → `InvalidSender`
 ///         4. ALLOWANCE (`_consumeAllowance`) → `InsufficientAllowance`
 ///         5. EXECUTOR-POLICY (`_transfer` body: `isAuthorized(executor, msg.sender)`)

@@ -141,15 +141,6 @@ def _assert_token_recipient_rejected(c: Chain, tok) -> None:
     step("11g", "batchMint including token address -> InvalidReceiver")
     c.expect_revert("InvalidReceiver", tok.functions.batchMint([c.ALICE, tok.address], [1, 1]), c.DEPLOYER)
 
-    step("11h", "transfer to a different B20 address -> InvalidReceiver")
-    other_salt = c.cfg.salt_for("other-b20-recipient")
-    other_params = AssetCreateParams("Other Asset", "OTH", c.DEPLOYER, config.ASSET_DECIMALS).encode()
-    other_addr = c.predict_b20(config.VARIANT_ASSET, other_salt)
-    c.create_b20(config.VARIANT_ASSET, other_salt, other_params, [])
-    c.expect_revert("InvalidReceiver", tok.functions.transfer(other_addr, 1), c.DEPLOYER)
-    step("11i", "mint to a different B20 address -> InvalidReceiver")
-    c.expect_revert("InvalidReceiver", tok.functions.mint(other_addr, 1), c.DEPLOYER)
-
 
 def _edges(c: Chain, tok) -> None:
     step(11, "supply cap: lower cap to current supply, then mint 1 -> SupplyCapExceeded")
