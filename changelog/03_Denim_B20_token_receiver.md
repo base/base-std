@@ -7,19 +7,17 @@
 
 ## Summary
 
-Denim rejects crediting a B20 balance to the token's own address.
+Denim rejects a send whose destination is this token's own address. That destination cannot spend the credited tokens, so the send would lock them.
 
-`transfer`, `transferFrom`, their memo variants, `mint`, `mintWithMemo`, `batchMint`, and `seizeWithMemo` revert `InvalidReceiver(to)` when `to == address(this)`. Holder-to-holder self-transfers (`from == to` for a user) still succeed. `seizeWithMemo` from the token address still succeeds, so an issuer can recover a balance already sitting at the token.
-
-Sends between different B20 tokens are unaffected. The change is behavioral. It adds no new selectors, events, errors, or storage.
+`transfer`, `transferFrom`, their memo variants, `mint`, `mintWithMemo`, `batchMint`, and `seizeWithMemo` revert `InvalidReceiver(to)` when `to` is the token. A holder sending to themselves (`from == to`) still succeeds. An issuer can still recover tokens already credited to the token: `seizeWithMemo` from the token address succeeds.
 
 ## Motivation
 
-A B20 token is a precompile. It never acts as `msg.sender` on its own `transfer`. A holder cannot move a balance credited to the token's own address.
+Users sometimes send tokens to the token's own address. Wallet UX makes that address easy to select, and copy or paste mistakes send to it as well.
 
-The reported failure mode is a paste error: a user targets the token address in a wallet UI and sends the token to itself. Before Denim the call succeeds and the units sit stuck at the token until an issuer seizes them.
+A B20 token is a precompile. It has no holder key and cannot call `transfer` on itself. After a transfer lands at the token address, the sender cannot recover those tokens. Only the issuer can, by calling `seizeWithMemo`.
 
-Denim rejects that specific paste-error path at the token boundary. Issuer recovery through `seizeWithMemo` stays available so pre-activation stuck balances remain recoverable.
+There is no valid use case for crediting this token to its own address. Denim therefore reverts `InvalidReceiver(to)` on that destination so the accidental send fails instead of locking the funds.
 
 ## Background
 
@@ -43,13 +41,15 @@ if (to == address(0) || to == address(this)) revert InvalidReceiver(to);
 
 Canonical order is unchanged. `address(0)` and `address(this)` are two triggers of the same invalid-receiver step. They cannot both be true for a real destination.
 
-| Function | Check order |
-| --- | --- |
-| `transfer` / `transferWithMemo` | pause → **invalid-receiver** → zero-sender → executor policy → sender policy → receiver policy → balance |
-| `transferFrom` / `transferFromWithMemo` | pause → **invalid-receiver** → zero-sender → allowance → executor policy → sender policy → receiver policy → balance |
-| `mint` / `mintWithMemo` | pause → role → **invalid-receiver** → mint-receiver policy → supply cap |
-| `batchMint` | pause → role → length / empty → per-element **invalid-receiver** → `_mint` body |
-| `seizeWithMemo` | pause → role → **invalid-receiver** → zero-sender → self-seize (`from == to`) → seizable → seize-receiver policy → balance |
+
+| Function                                | Check order                                                                                                                |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `transfer` / `transferWithMemo`         | pause → **invalid-receiver** → zero-sender → executor policy → sender policy → receiver policy → balance                   |
+| `transferFrom` / `transferFromWithMemo` | pause → **invalid-receiver** → zero-sender → allowance → executor policy → sender policy → receiver policy → balance       |
+| `mint` / `mintWithMemo`                 | pause → role → **invalid-receiver** → mint-receiver policy → supply cap                                                    |
+| `batchMint`                             | pause → role → length / empty → per-element **invalid-receiver** → `_mint` body                                            |
+| `seizeWithMemo`                         | pause → role → **invalid-receiver** → zero-sender → self-seize (`from == to`) → seizable → seize-receiver policy → balance |
+
 
 `from` may equal `address(this)`. A seize that drains the token into a treasury still succeeds.
 
@@ -94,7 +94,9 @@ The check lives next to the existing zero-receiver guard, not inside `_moveBalan
 
 ### Alternative — reject any B20-prefix address as recipient
 
-That would extend the same protection to sends to *other* B20 tokens (token A → token B). It was rejected: the reported incident is a paste error against the token being called, not cross-token misrouting. Blocking cross-token credits also complicates settlement patterns where a B20 legitimately holds another B20 as an operational balance. Denim scopes the gate to the paste-error case; cross-token stuck credits remain recoverable via `seizeWithMemo`.
+That would also revert when `to` is a different B20-prefix address (token A → token B). It was rejected. A prefix check cannot tell a B20 token from a user-controlled account in that address space, such as a multisig. Rejecting the whole prefix would revert valid transfers to those recipients.
+
+Denim therefore compares `to` against `address(this)` only. Sends to other addresses, including other B20 tokens, still succeed.
 
 ### Alternative — call `isB20Initialized(to)`
 
@@ -114,3 +116,4 @@ Blocking spends from the token address would close the only recovery path for ba
 2. After Denim activation, expect `InvalidReceiver` from a transfer, mint, or seize to `address(token)` that succeeded before Denim.
 3. If a balance is already credited to the token address from before activation, recover it with `seizeWithMemo(address(token), treasury, amount, memo)`. The token must be seizable under `SEIZE_EXEMPT_POLICY`. The caller must hold `SEIZE_ROLE`.
 4. Do not change holder-to-holder self-transfers, approvals, burns, or sends to other B20 tokens. This change does not affect them.
+

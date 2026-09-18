@@ -185,7 +185,8 @@ abstract contract MockB20 is IB20 {
     // ============================================================
 
     function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
-        _requireNonZeroSenderAndValidReceiver(msg.sender, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
         _transfer(msg.sender, to, amount);
         return true;
     }
@@ -195,7 +196,8 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroSenderAndValidReceiver(from, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
         // which carves no `privileged` exception for allowance accounting. An
@@ -224,7 +226,8 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroSenderAndValidReceiver(msg.sender, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -235,7 +238,8 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroSenderAndValidReceiver(from, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window — matching the Rust precompile. Infinite allowance
         // is still not decremented. The executor policy is enforced centrally
@@ -266,7 +270,7 @@ abstract contract MockB20 is IB20 {
     // ============================================================
 
     function mint(address to, uint256 amount) external whenNotPaused(PausableFeature.MINT) onlyRole(MINT_ROLE) {
-        _requireValidReceiver(to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
         _mint(to, amount);
     }
 
@@ -275,7 +279,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.MINT)
         onlyRole(MINT_ROLE)
     {
-        _requireValidReceiver(to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
         _mint(to, amount);
         emit Memo(msg.sender, memo);
     }
@@ -329,7 +333,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.SEIZE)
         onlyRole(SEIZE_ROLE)
     {
-        _requireValidReceiver(to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
         if (from == to) revert InvalidReceiver(to);
         _requireSeizable(from);
@@ -723,22 +727,15 @@ abstract contract MockB20 is IB20 {
         }
     }
 
-    /// @dev Rejects `address(0)` and this token's own address as a credit destination.
-    ///      Crediting `address(this)` would lock the balance: the precompile cannot
-    ///      call `transfer` on its own behalf. Shared by transfer, mint, seize, and
-    ///      batchMint. Seize *from* `address(this)` remains allowed so a balance
-    ///      already stuck at the token can be recovered.
-    function _requireValidReceiver(address to) internal view {
-        if (to == address(0) || to == address(this)) revert InvalidReceiver(to);
-    }
-
-    /// @dev Requires a nonzero sender and valid receiver, checking receiver first.
-    ///      Reverts `InvalidReceiver(to)` before
-    ///      `InvalidSender(from)` so the precedence between the two
-    ///      matches the canonical order.
-    function _requireNonZeroSenderAndValidReceiver(address from, address to) internal view {
-        _requireValidReceiver(to);
-        if (from == address(0)) revert InvalidSender(from);
+    /// @dev True iff `account` is `address(0)` or this token's own address.
+    ///      Crediting either would lock the balance: the precompile cannot
+    ///      call `transfer` on its own behalf, and `address(0)` is the
+    ///      ERC-6093 invalid-receiver sentinel. Callers revert
+    ///      `InvalidReceiver(to)` when this returns true. Seize *from*
+    ///      `address(this)` remains allowed so a balance already stuck at
+    ///      the token can be recovered.
+    function _isContractAddressOrZero(address account) internal view returns (bool) {
+        return account == address(0) || account == address(this);
     }
 
     /// @dev Pure mechanics: policy (with bootstrap bypass) + balance +

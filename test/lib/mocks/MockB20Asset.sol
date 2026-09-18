@@ -271,7 +271,7 @@ contract MockB20Asset is MockB20, IB20Asset {
         if (recipients.length != amounts.length) revert LengthMismatch(recipients.length, amounts.length);
         if (recipients.length == 0) revert EmptyBatch();
         for (uint256 i = 0; i < recipients.length; i++) {
-            _requireValidReceiver(recipients[i]);
+            if (_isContractAddressOrZero(recipients[i])) revert InvalidReceiver(recipients[i]);
             _mint(recipients[i], amounts[i]);
         }
     }

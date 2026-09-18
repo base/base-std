@@ -144,12 +144,12 @@ MUTATIONS: list[Mutation] = [
         "// if (spender == address(0)) revert InvalidSpender(spender);",
         "approve: drop zero-spender guard",
     ),
-    # === MockB20: valid-receiver check skipped ===
+    # === MockB20: valid-receiver predicate always returns false (guard skipped everywhere) ===
     Mutation(
         MOCK_B20,
-        "    function _requireValidReceiver(address to) internal view {\n        if (to == address(0) || to == address(this)) revert InvalidReceiver(to);",
-        "    function _requireValidReceiver(address to) internal view {\n        // if (to == address(0) || to == address(this)) revert InvalidReceiver(to);",
-        "_requireValidReceiver: drop zero-and-self-recipient guard",
+        "return account == address(0) || account == address(this);",
+        "return false;",
+        "_isContractAddressOrZero: predicate always false (drops zero-and-self-recipient guard at every callsite)",
     ),
     # === MockB20: more mutations on accounting / event integrity ===
     Mutation(
