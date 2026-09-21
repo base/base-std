@@ -260,7 +260,7 @@ contract MockB20Asset is MockB20, IB20Asset {
     // ============================================================
 
     /// @dev Pause + role enforced ONCE for the entire batch via the
-    ///      entrypoint modifiers. Per-element zero-receiver guard is
+    ///      entrypoint modifiers. Per-element valid-receiver guard is
     ///      inlined in the loop since `_mint` no longer carries an
     ///      input check.
     function batchMint(address[] calldata recipients, uint256[] calldata amounts)
@@ -271,7 +271,7 @@ contract MockB20Asset is MockB20, IB20Asset {
         if (recipients.length != amounts.length) revert LengthMismatch(recipients.length, amounts.length);
         if (recipients.length == 0) revert EmptyBatch();
         for (uint256 i = 0; i < recipients.length; i++) {
-            if (recipients[i] == address(0)) revert InvalidReceiver(recipients[i]);
+            if (_isContractAddressOrZero(recipients[i])) revert InvalidReceiver(recipients[i]);
             _mint(recipients[i], amounts[i]);
         }
     }

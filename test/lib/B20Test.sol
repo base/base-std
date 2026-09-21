@@ -88,11 +88,9 @@ contract B20Test is B20FactoryTest {
     ///         counterparty).
     ///
     /// Extends `BaseTest._assumeValidCaller`'s precompile / VM / zero
-    /// filtering with the token's own address. Using the token as a
-    /// transfer recipient or balance holder is meaningless: the token
-    /// has no business holding its own balance, and the underlying
-    /// _transfer would still succeed (the policy slots default to
-    /// ALWAYS_ALLOW), producing confusing test state.
+    /// filtering with `address(token)`. Crediting the token itself
+    /// reverts `InvalidReceiver`; using it as a fuzzed actor would
+    /// turn success-path tests into revert tests.
     function _assumeValidActor(address account) internal view {
         _assumeValidCaller(account);
         vm.assume(account != address(token));

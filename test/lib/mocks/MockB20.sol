@@ -185,7 +185,8 @@ abstract contract MockB20 is IB20 {
     // ============================================================
 
     function transfer(address to, uint256 amount) external whenNotPaused(PausableFeature.TRANSFER) returns (bool) {
-        _requireNonZeroActors(msg.sender, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
         _transfer(msg.sender, to, amount);
         return true;
     }
@@ -195,7 +196,8 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroActors(from, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window (`_isPrivileged()`). Matches the Rust precompile,
         // which carves no `privileged` exception for allowance accounting. An
@@ -224,7 +226,8 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroActors(msg.sender, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (msg.sender == address(0)) revert InvalidSender(msg.sender);
         _transfer(msg.sender, to, amount);
         emit Memo(msg.sender, memo);
         return true;
@@ -235,7 +238,8 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.TRANSFER)
         returns (bool)
     {
-        _requireNonZeroActors(from, to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
+        if (from == address(0)) revert InvalidSender(from);
         // Allowance is consumed unconditionally — including during the factory
         // bootstrap window — matching the Rust precompile. Infinite allowance
         // is still not decremented. The executor policy is enforced centrally
@@ -266,7 +270,7 @@ abstract contract MockB20 is IB20 {
     // ============================================================
 
     function mint(address to, uint256 amount) external whenNotPaused(PausableFeature.MINT) onlyRole(MINT_ROLE) {
-        if (to == address(0)) revert InvalidReceiver(to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
         _mint(to, amount);
     }
 
@@ -275,7 +279,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.MINT)
         onlyRole(MINT_ROLE)
     {
-        if (to == address(0)) revert InvalidReceiver(to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
         _mint(to, amount);
         emit Memo(msg.sender, memo);
     }
@@ -315,10 +319,11 @@ abstract contract MockB20 is IB20 {
 
     /// @notice Seizes `amount` of `from`'s balance and reassigns it to `to` in a single admin operation,
     ///         emitting `Transfer`, `Memo`, then `Seized` (in that order).
-    /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`
-    ///      or `from == to`, and `InvalidSender` when `from == 0`. `from` must be unauthorized under
-    ///      `SEIZE_EXEMPT_POLICY`; `to` must be authorized under `SEIZE_RECEIVER_POLICY` (mirrors
-    ///      `MINT_RECEIVER_POLICY`: unset slot = always-allow).
+    /// @dev Admin op: skips transfer policies and allowance. Reverts `InvalidReceiver` when `to == 0`,
+    ///      `to == address(this)`, or `from == to`, and `InvalidSender` when `from == 0`.
+    ///      `from` must be unauthorized under `SEIZE_EXEMPT_POLICY`; `to` must be authorized under
+    ///      `SEIZE_RECEIVER_POLICY` (mirrors `MINT_RECEIVER_POLICY`: unset slot = always-allow).
+    ///      `from` may equal `address(this)` so a balance already stuck at the token can be recovered.
     /// @param from   Account whose balance is being seized.
     /// @param to     Destination address for the seized balance.
     /// @param amount Amount to seize.
@@ -328,7 +333,7 @@ abstract contract MockB20 is IB20 {
         whenNotPaused(PausableFeature.SEIZE)
         onlyRole(SEIZE_ROLE)
     {
-        if (to == address(0)) revert InvalidReceiver(to);
+        if (_isContractAddressOrZero(to)) revert InvalidReceiver(to);
         if (from == address(0)) revert InvalidSender(from);
         if (from == to) revert InvalidReceiver(to);
         _requireSeizable(from);
@@ -722,13 +727,15 @@ abstract contract MockB20 is IB20 {
         }
     }
 
-    /// @dev Receiver-then-sender zero-address check shared by every
-    ///      transfer-family entrypoint. Reverts `InvalidReceiver(to)`
-    ///      before `InvalidSender(from)` so the precedence between the
-    ///      two matches the canonical order.
-    function _requireNonZeroActors(address from, address to) internal pure {
-        if (to == address(0)) revert InvalidReceiver(to);
-        if (from == address(0)) revert InvalidSender(from);
+    /// @dev True iff `account` is `address(0)` or this token's own address.
+    ///      Crediting either would lock the balance: the precompile cannot
+    ///      call `transfer` on its own behalf, and `address(0)` is the
+    ///      ERC-6093 invalid-receiver sentinel. Callers revert
+    ///      `InvalidReceiver(to)` when this returns true. Seize *from*
+    ///      `address(this)` remains allowed so a balance already stuck at
+    ///      the token can be recovered.
+    function _isContractAddressOrZero(address account) internal view returns (bool) {
+        return account == address(0) || account == address(this);
     }
 
     /// @dev Pure mechanics: policy (with bootstrap bypass) + balance +
@@ -809,7 +816,7 @@ abstract contract MockB20 is IB20 {
     }
 
     /// @dev Pure mechanics: policy + supply cap + effects. Pause, role,
-    ///      and the zero-receiver check are enforced upstream by `mint`
+    ///      and the valid-receiver check are enforced upstream by `mint`
     ///      / `mintWithMemo`. The asset variant's `batchMint` carries
     ///      the same `whenNotPaused` + `onlyRole` modifiers ONCE for the
     ///      whole batch and validates per-element receivers inline

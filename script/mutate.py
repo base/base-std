@@ -144,12 +144,12 @@ MUTATIONS: list[Mutation] = [
         "// if (spender == address(0)) revert InvalidSpender(spender);",
         "approve: drop zero-spender guard",
     ),
-    # === MockB20: zero-receiver check skipped in _transfer specifically ===
+    # === MockB20: valid-receiver predicate always returns false (guard skipped everywhere) ===
     Mutation(
         MOCK_B20,
-        "    function _requireNonZeroActors(address from, address to) internal pure {\n        if (to == address(0)) revert InvalidReceiver(to);",
-        "    function _requireNonZeroActors(address from, address to) internal pure {\n        // if (to == address(0)) revert InvalidReceiver(to);",
-        "_requireNonZeroActors: drop zero-recipient guard",
+        "return account == address(0) || account == address(this);",
+        "return false;",
+        "_isContractAddressOrZero: predicate always false (drops zero-and-self-recipient guard at every callsite)",
     ),
     # === MockB20: more mutations on accounting / event integrity ===
     Mutation(
@@ -246,13 +246,13 @@ MUTATIONS: list[Mutation] = [
         MOCK_FACTORY,
         "return (uint160(token) >> 80) == (uint160(0xB2) << 72);",
         "return (uint160(token) >> 80) == (uint160(0xB3) << 72);",
-        "_isB20Prefix: compares against wrong prefix byte (no real B-20 ever matches)",
+        "_hasB20Prefix: compares against wrong prefix byte (no real B-20 ever matches)",
     ),
     Mutation(
         MOCK_FACTORY,
         "return (uint160(token) >> 80) == (uint160(0xB2) << 72);",
         "return (uint160(token) >> 88) == (uint160(0xB2) << 72);",
-        "_isB20Prefix: wrong shift amount (compares wrong byte range)",
+        "_hasB20Prefix: wrong shift amount (compares wrong byte range)",
     ),
     # === String encoding short/long boundary ===
     Mutation(

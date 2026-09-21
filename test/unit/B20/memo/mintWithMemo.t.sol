@@ -22,6 +22,16 @@ contract B20MintWithMemoTest is B20Test {
         token.mintWithMemo(to, amount, memo);
     }
 
+    /// @notice Verifies mintWithMemo reverts when the recipient is the token itself
+    /// @dev Same InvalidReceiver `address(this)` guard as mint; the memo adds no new revert path.
+    function test_mintWithMemo_revert_tokenRecipient(uint256 amount, bytes32 memo) public {
+        _grantRole(B20Constants.MINT_ROLE, minter);
+
+        vm.prank(minter);
+        vm.expectRevert(abi.encodeWithSelector(IB20.InvalidReceiver.selector, address(token)));
+        token.mintWithMemo(address(token), amount, memo);
+    }
+
     /// @notice Verifies mintWithMemo credits the recipient and updates totalSupply
     /// @dev Accounting unchanged from mint; the memo does not alter accounting.
     ///      Paired slot assertions confirm balance and totalSupply slots reflect the mint.

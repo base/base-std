@@ -15,7 +15,7 @@
 | `InsufficientAllowance(address spender, uint256 allowance, uint256 needed)` | `0x192b9e4e` | `spender`'s allowance is less than `needed` for the requested `transferFrom`. |
 | `InsufficientBalance(address sender, uint256 balance, uint256 needed)` | `0xdb42144d` | `sender`'s balance is less than `needed` for the requested transfer or burn. |
 | `InvalidSender(address sender)` | `0x4c14f64c` | The transfer's source address is invalid (typically `address(0)`). |
-| `InvalidReceiver(address receiver)` | `0x9cfea583` | The transfer's destination address is invalid (typically `address(0)`). |
+| `InvalidReceiver(address receiver)` | `0x9cfea583` | The transfer's destination address is invalid (`address(0)` or the token's own address). |
 | `InvalidApprover(address approver)` | `0x8bc146c4` | The approval's `owner` address is invalid (typically `address(0)`). |
 | `InvalidSpender(address spender)` | `0x4e15efda` | The approval's `spender` address is invalid (typically `address(0)`). |
 | `InvalidAmount()` | `0x2c5211c6` | An amount argument was zero where a non-zero value is required. Not used for ERC-20 amount arguments. |

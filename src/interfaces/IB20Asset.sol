@@ -254,7 +254,8 @@ interface IB20Asset is
     /// @dev Reverts with `AccessControlUnauthorizedAccount` when the caller does not hold `MINT_ROLE`.
     /// @dev Reverts with `LengthMismatch` when `recipients.length != amounts.length`.
     /// @dev Reverts with `EmptyBatch` when either array is empty.
-    /// @dev Reverts with `InvalidReceiver` when any `recipients[i] == address(0)`.
+    /// @dev Reverts with `InvalidReceiver` when any `recipients[i]` is `address(0)` or equals
+    ///      `address(this)`.
     /// @dev Reverts with `PolicyForbids(MINT_RECEIVER_POLICY, ...)` when any recipient is not authorized.
     /// @dev Reverts with `SupplyCapExceeded` when the cumulative mint would exceed the cap.
     ///

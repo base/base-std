@@ -22,7 +22,7 @@ You need all of the following:
 - A B20 token you administer.
 - `DEFAULT_ADMIN_ROLE` on that token, so you can grant roles and attach policies.
 - An account that will call `seizeWithMemo` (the seizer).
-- A non-zero destination that is not the holder (typically a treasury).
+- A non-zero destination that is not the holder and not this token's own address (typically a treasury).
 - `SEIZE` not paused. `pause([SEIZE])` blocks every seize until `unpause([SEIZE])`.
 
 Three independent controls then decide whether a seize can run. In this order, the steps later configure them in the same order.
@@ -269,13 +269,15 @@ These errors follow the order `seizeWithMemo` checks them.
 | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | `ContractPaused(SEIZE)`                                | `SEIZE` is paused.                                                                                                         | Call `unpause` with `PausableFeature.SEIZE`.                                       |
 | `AccessControlUnauthorizedAccount(caller, SEIZE_ROLE)` | The caller does not hold `SEIZE_ROLE`.                                                                                     | Grant `SEIZE_ROLE` to the seizer.                                                  |
-| `InvalidReceiver(to)`                                  | `to` is `address(0)`, or `from == to`.                                                                                     | Use a distinct, non-zero safekeeping address.                                      |
+| `InvalidReceiver(to)`                                  | `to` is `address(0)`, this token's own address, or `from == to`.                                                            | Use a distinct, non-zero safekeeping address that is not this token itself.        |
 | `InvalidSender(from)`                                  | `from` is `address(0)`.                                                                                                    | Pass the holder's address.                                                         |
 | `AccountNotSeizable(from)`                             | `from` is still authorized under `SEIZE_HOLDER_POLICY`. The slot is unset, or the holder is not on the attached blocklist. | Attach a blocklist and add `from`.                                                 |
 | `PolicyForbids(SEIZE_RECEIVER_POLICY, policyId)`       | `to` is not authorized under `SEIZE_RECEIVER_POLICY`.                                                                      | Add `to` to the receiver allowlist, or set the scope back to `0` (`ALWAYS_ALLOW`). |
 | `InsufficientBalance(from, balance, amount)`           | `from` holds less than `amount`.                                                                                           | Seize `balanceOf(from)` or less.                                                   |
 | `PolicyNotFound(policyId)`                             | `updatePolicy` received an ID that is not a sentinel and does not exist in the registry.                                   | Create the policy first, then attach the returned ID.                              |
 | `Unauthorized()`                                       | A non-admin called `updateBlocklist` or `updateAllowlist`.                                                                 | Call as the policy's `policyAdmin`.                                                |
+
+A balance already sitting at this token's address can still be recovered. `seizeWithMemo(address(token), treasury, amount, memo)` is allowed; seizing *to* `address(token)` is not.
 
 
 ```mermaid

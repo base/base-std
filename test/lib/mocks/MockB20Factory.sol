@@ -255,12 +255,12 @@ contract MockB20Factory is IB20Factory {
 
     /// @inheritdoc IB20Factory
     function isB20(address token) external pure returns (bool) {
-        return _isB20Prefix(token);
+        return _hasB20Prefix(token);
     }
 
     /// @inheritdoc IB20Factory
     function isB20Initialized(address token) external view returns (bool) {
-        if (!_isB20Prefix(token)) return false;
+        if (!_hasB20Prefix(token)) return false;
         // Same dedicated slot the factory flips at the end of createToken
         // (MockB20Storage.INITIALIZED_OFFSET). The slot holds nothing
         // else, so any non-zero word means initialized=true.
@@ -300,7 +300,7 @@ contract MockB20Factory is IB20Factory {
     }
 
     /// @dev Returns true iff `token`'s first 10 bytes match the B-20 prefix.
-    function _isB20Prefix(address token) internal pure returns (bool) {
+    function _hasB20Prefix(address token) internal pure returns (bool) {
         return (uint160(token) >> 80) == (uint160(0xB2) << 72);
     }
 
