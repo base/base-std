@@ -9,15 +9,15 @@
 
 Denim rejects a send whose destination is this token's own address. That destination cannot spend the credited tokens, so the send would lock them.
 
-`transfer`, `transferFrom`, their memo variants, `mint`, `mintWithMemo`, `batchMint`, and `seizeWithMemo` revert `InvalidReceiver(to)` when `to` is the token. A holder sending to themselves (`from == to`) still succeeds. An issuer can still recover tokens already credited to the token: `seizeWithMemo` from the token address succeeds.
+`transfer`, `transferFrom`, their memo variants, `mint`, `mintWithMemo`, `batchMint`, and `seizeWithMemo` revert `InvalidReceiver(to)` when `to` is the token. A holder sending to themselves (`from == to`) still succeeds. An issuer can still recover tokens already credited to the B20 token contract: `seizeWithMemo` from the token address succeeds.
 
 ## Motivation
 
-Users sometimes send tokens to the token's own address. Wallet UX makes that address easy to select, and copy or paste mistakes send to it as well.
+It is common for users to mistakenly send tokens to the token address instead of their intended recipient's address. In the case of B20 tokens, this makes the funds inaccessible without intervention from the token admin.
 
 A B20 token is a precompile. It has no holder key and cannot call `transfer` on itself. After a transfer lands at the token address, the sender cannot recover those tokens. Only the issuer can, by calling `seizeWithMemo`.
 
-There is no valid use case for crediting this token to its own address. Denim therefore reverts `InvalidReceiver(to)` on that destination so the accidental send fails instead of locking the funds.
+There is no valid use case for a B20 token address to hold its own tokens. Denim therefore reverts `InvalidReceiver(to)` on that destination so the accidental send fails instead of locking the funds.
 
 ## Background
 
@@ -39,7 +39,7 @@ A shared valid-receiver check runs at the same position as the existing zero-rec
 if (to == address(0) || to == address(this)) revert InvalidReceiver(to);
 ```
 
-Canonical order is unchanged. `address(0)` and `address(this)` are two triggers of the same invalid-receiver step. They cannot both be true for a real destination.
+Canonical order is unchanged. `address(0)` and `address(this)` are two triggers of the same invalid-receiver step.
 
 
 | Function                                | Check order                                                                                                                |
