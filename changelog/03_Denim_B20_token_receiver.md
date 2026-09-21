@@ -59,27 +59,31 @@ A holder transfer to this token reverts:
 
 ```solidity
 vm.prank(alice);
-token.transfer(address(token), amount); // reverts InvalidReceiver(address(token))
+token.transfer({to: address(token), amount: uint256(amount)}); // reverts InvalidReceiver(address(token))
 ```
 
 Mint and seize to the token address revert the same way:
 
 ```solidity
-token.mint(address(token), amount); // reverts InvalidReceiver(address(token))
-token.seizeWithMemo(alice, address(token), amount, memo); // reverts InvalidReceiver(address(token))
+token.mint({to: address(token), amount: uint256(amount)}); // reverts InvalidReceiver(address(token))
+token.seizeWithMemo({
+    from: address(alice), to: address(token), amount: uint256(amount), memo: bytes32(memo)
+}); // reverts InvalidReceiver(address(token))
 ```
 
 A holder sending to themselves still succeeds:
 
 ```solidity
 vm.prank(alice);
-token.transfer(alice, amount); // succeeds; balance and totalSupply unchanged
+token.transfer({to: address(alice), amount: uint256(amount)}); // succeeds; balance and totalSupply unchanged
 ```
 
 Recovery of a pre-activation stuck balance still succeeds:
 
 ```solidity
-token.seizeWithMemo(address(token), treasury, amount, memo); // succeeds
+token.seizeWithMemo({
+    from: address(token), to: address(treasury), amount: uint256(amount), memo: bytes32(memo)
+}); // succeeds
 ```
 
 ## Design Decisions & Alternatives Considered
@@ -116,4 +120,3 @@ Blocking spends from the token address would close the only recovery path for ba
 2. After Denim activation, expect `InvalidReceiver` from a transfer, mint, or seize to `address(token)` that succeeded before Denim.
 3. If a balance is already credited to the token address from before activation, recover it with `seizeWithMemo(address(token), treasury, amount, memo)`. The token must be seizable under `SEIZE_EXEMPT_POLICY`. The caller must hold `SEIZE_ROLE`.
 4. Do not change holder-to-holder self-transfers, approvals, burns, or sends to other B20 tokens. This change does not affect them.
-
