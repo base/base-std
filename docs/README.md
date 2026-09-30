@@ -3,7 +3,8 @@
 New to B20?
 
 1. [B20 Overview](overview.md)
-2. [How B20 Works](architecture.md)
+2. [Integration architecture](integration-architecture.md)
+3. [How B20 Works](architecture.md)
 
 Building something?
 
