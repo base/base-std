@@ -70,106 +70,7 @@ Use the code as an identity check. Call the token through its ABI.
 - Decode calls and logs with `IB20`, plus `IB20Asset` or `IB20Stablecoin`. The code byte is not the interface.
 - Index creation from `B20Created`. The Factory emits it once, after identity is sealed and before `initCalls`.
 
-## 4. State and Events
-
-Views return current state. Events are the log of changes. Some events are a complete record of the change. Some are not. When they are not, query the view.
-
-Token state sits in the token account. Shared list state sits in the Policy Registry account. A balance write on one token is not visible on another. A membership write on a policy is visible to every token that stores that policy ID.
-
-The exhaustive list is in [Events](reference/events.md). The rules below are the ones that change how you index.
-
-### 4.1 Read the view
-
-| What you need | Call | Why the log is not enough on its own |
-| --- | --- | --- |
-| Balance, allowance, total supply | `balanceOf`, `allowance`, `totalSupply` | A full `Transfer` and `Approval` log from creation can rebuild these. A gap cannot. |
-| Role membership | `hasRole` | `RoleGranted` and `RoleRevoked` fire only when membership changes. Idempotent `grantRole` and `revokeRole` emit nothing. A gap, including a missed creation grant, leaves the set wrong. |
-| Paused features | `isPaused`, `pausedFeatures` | `Paused` and `Unpaused` carry the array you passed, not the resulting set. Duplicates and features already in that state are still in the array. |
-| Policy bound to a scope | `policyId` | `PolicyUpdated` carries the old and new IDs when you have the log. After a gap, read the view. An unset scope reads as `0`. |
-| Policy decision | `isAuthorized` | Membership events are not enough once a composite or the invert bit is involved. `isAuthorized` never reverts. |
-| Contract URI | `contractURI` | `ContractURIUpdated` has no arguments. |
-| UI multiplier | `uiMultiplier` | A scheduled update emits `UIMultiplierUpdated` with `effectiveAtTimestamp`. The value in effect is the view. `newUIMultiplier` and `effectiveAt` expose the pending schedule. |
-| Feature activation | `isActivated` | An inactive write reverts `FeatureNotActivated`. The read still works. |
-
-### 4.2 Events you can take as the change
-
-When your log is complete from the relevant start (token creation, or policy creation), these payloads are the change itself:
-
-- `Transfer` and `Approval` follow ERC-20. Mint uses `from = address(0)`. Burn uses `to = address(0)`.
-- `Memo` follows a memo'd transfer, mint, or burn. `Seized` follows `seizeWithMemo`, in addition to `Transfer`.
-- `RoleGranted` and `RoleRevoked` record a real membership change. `RoleAdminChanged` carries the previous and new admin role. `LastAdminRenounced` accompanies the final `RoleRevoked` for `DEFAULT_ADMIN_ROLE`.
-- `PolicyUpdated` carries `oldPolicyId` and `newPolicyId`. A binding at creation can emit it with `oldPolicyId == 0`.
-- `SupplyCapUpdated`, `NameUpdated`, and `SymbolUpdated` carry the new value. `updateName` also emits `EIP712DomainChanged`. `updateSymbol` does not.
-- `AllowlistUpdated` and `BlocklistUpdated` carry the batch and the new membership bit. `CompositePolicyUpdated` carries the full child set after the write.
-- `PolicyAdminStaged` carries the pending admin. `PolicyAdminUpdated` carries the previous and new admin.
-- `B20Created` carries token, variant, name, symbol, and decimals. `variantEventParams` is empty for Asset. For Stablecoin it is the ABI-encoded currency.
-- `FeatureActivated` and `FeatureDeactivated` carry the feature id.
-
-## 5. State Transitions
-
-Each transition is defined by the views a later call sees and the events that fire. Role and pause details are in [Roles and Pause](concepts/roles-and-pause.md). Policy details are in [Policies](concepts/policies.md).
-
-### 5.1 Create a token
-
-`createB20(variant, salt, params, initCalls)` is the only creation path.
-
-On success:
-
-1. The account at the predicted address has code `0xef`.
-2. Name, symbol, decimals, and the variant-specific identity are sealed. The variant does not change later.
-3. The Factory emits `B20Created`.
-4. If `initialAdmin` is not `address(0)`, that account holds `DEFAULT_ADMIN_ROLE` and the token emits `RoleGranted`. `address(0)` skips the grant, and the token has no admin.
-5. `initCalls` run on the new token in the same transaction. They can grant roles, bind policies, or mint. A reverting init call reverts the creation.
-6. `createB20` returns the token address. `isB20Initialized` becomes true. The Factory's access ends with that return.
-
-Pause starts clear. To start paused, put `pause` last in `initCalls`. Pause is enforced during init, so an earlier init call still sees the features as live. `MINT_RECEIVER_POLICY` is also enforced during init. A mint in `initCalls` to an account that policy rejects reverts the creation.
-
-### 5.2 Announce, re-announce, and accept a policy admin
-
-A policy has one admin. Handing it off takes two calls. The first call announces a successor and does not transfer control.
-
-`stageUpdateAdmin(policyId, newAdmin)` is the announcement. The caller is the current admin. After it returns:
-
-- `policyAdmin` is unchanged. That admin can still update membership.
-- `pendingPolicyAdmin` is `newAdmin`.
-- The registry emits `PolicyAdminStaged`.
-
-A second `stageUpdateAdmin` is a re-announcement. It replaces the pending admin. `newAdmin = address(0)` clears the nomination and leaves the current admin in place.
-
-`finalizeUpdateAdmin(policyId)` is the accept. The caller is the staged address. After it returns:
-
-- `policyAdmin` is the caller.
-- `pendingPolicyAdmin` is `address(0)`.
-- Membership updates from the previous admin revert `Unauthorized`.
-- The registry emits `PolicyAdminUpdated`.
-
-If nothing is staged, `finalizeUpdateAdmin` reverts `NoPendingAdmin`. Any other caller reverts `Unauthorized`.
-
-`renounceAdmin` is a different ending. The current admin becomes `address(0)`. Membership and child sets no longer change. `isAuthorized` still answers. No later call assigns a new admin.
-
-Token administration is separate. It is `grantRole` and `revokeRole` on the token, not this two-step. See [Roles and Pause](concepts/roles-and-pause.md).
-
-### 5.3 Pause
-
-`pause(features)` requires `PAUSE_ROLE`. `unpause(features)` requires `UNPAUSE_ROLE`. The two roles are independent, so the account that pauses does not have to be the account that resumes.
-
-The features are `TRANSFER`, `MINT`, `BURN`, and `SEIZE`. Pausing one leaves the others live. `approve` is not pause-gated. A holder `transfer` is not role-gated. It still stops when `TRANSFER` is paused, and it still passes through policy.
-
-After a successful `pause`, `isPaused` is true for each listed feature that was not already paused. The token emits `Paused(updater, features)` with the array you passed. Read `pausedFeatures()` for the set. A later call that uses a paused feature reverts `ContractPaused` and names that one feature.
-
-An empty array reverts `EmptyFeatureSet`. A feature that is already in the requested state does not revert. It is a no-op, and it is still present in the event array.
-
-### 5.4 Policy updates
-
-Two writes are distinct.
-
-`updateAllowlist`, `updateBlocklist`, and `updateComposite` change the Policy Registry. Only the policy admin can call them. The next `isAuthorized` uses the new membership or the new child set. Every token that already stores that policy ID sees the new result, with no transaction on the token. The registry emits `AllowlistUpdated`, `BlocklistUpdated`, or `CompositePolicyUpdated`.
-
-`updatePolicy(scope, newPolicyId)` changes the token. It requires `DEFAULT_ADMIN_ROLE`. It selects which policy ID a scope checks. It does not edit the list. The token emits `PolicyUpdated`. Until you set a scope, `policyId` returns `0` (`ALWAYS_ALLOW`).
-
-Binding a policy ID does not make the token's admin the policy's admin. Anyone can create a policy. Attaching an existing ID reuses that list and leaves its admin unchanged.
-
-## 6. Protocol Evolution
+## 4. Protocol Evolution
 
 Base changes B20 in protocol upgrades. On Base those upgrades are hardforks. For an integrator, a hardfork can introduce a new precompile, or it can change the logic that answers at an address you already call.
 
@@ -180,13 +81,12 @@ What stays stable:
 - A call in a past block keeps the result it had in that block. A node that replays history from genesis reaches the same state as a node that was live for those blocks. An upgrade does not rewrite blocks that already executed.
 - After the upgrade, new calls use the upgraded behavior at the same address. You do not point your integration at a new token address to pick up the upgrade.
 - A call the active protocol cannot serve reverts. There is no fallback to some other behavior.
-- Deactivation does not delete an address. Writes that require the inactive feature revert `FeatureNotActivated`. Reads remain. Deactivating a variant blocks new `createB20` calls for that variant. Existing tokens keep running.
 
 Integrate against the interface of the release you are on. A later hardfork can add selectors at these same addresses. Those selectors are absent until that hardfork.
 
-## 7. Integration Guarantees
+## 5. Integration Guarantees
 
-### 7.1 Contractual
+### 5.1 Contractual
 
 These properties are the external behavior of the interfaces in this repository. You can build on them.
 
@@ -194,14 +94,13 @@ These properties are the external behavior of the interfaces in this repository.
 - `createB20` is the only creation path. The address is determined by `(variant, sender, salt)`.
 - A completed token has code `0xef` and the address shape in [§3.1](#31-what-appears-at-a-token-address). `isB20Initialized` means creation has returned. `isB20` means the prefix matches.
 - Byte `[10]` is fixed after creation. It selects `IB20Asset` or `IB20Stablecoin` in addition to `IB20`.
-- The views in [§4.1](#41-read-the-view) return current state. The events in [§4.2](#42-events-you-can-take-as-the-change) report the changes they name, with the pause and idempotent-role caveats in [§4](#4-state-and-events).
 - A revert restores the state writes of that call.
 - After `createB20` returns, the Factory cannot act on that token.
 - A Policy Registry update is visible to every token that stores that policy ID.
-- Across a hardfork, the addresses in [§2](#2-system-surface) stay put, and historical execution stays put, as in [§6](#6-protocol-evolution).
+- Across a hardfork, the addresses in [§2](#2-system-surface) stay put, and historical execution stays put, as in [§4](#4-protocol-evolution).
 - An inactive feature rejects the writes that require it with `FeatureNotActivated`. It does not remove existing tokens, and it does not disable reads.
 
-### 7.2 Non-contractual
+### 5.2 Non-contractual
 
 These are outside the integration contract.
 
