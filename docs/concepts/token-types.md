@@ -1,6 +1,6 @@
 # Token Types
 
-*What Asset and Stablecoin are, how `createB20` seals the type into the address, and what each type adds on top of `IB20`. Address encoding and node dispatch are in [Architecture](../architecture.md). Roles and policies are shared across types; see [Roles and Pause](roles-and-pause.md) and [Policies](policies.md).*
+*What Asset and Stablecoin are, how `createB20` seals the type into the address, and what each type adds on top of `IB20`. Address shape and how you recognize a live token are in [Identity and code](../integration-architecture.md#3-identity-and-code). Roles and policies are shared across types; see [Roles and Pause](roles-and-pause.md) and [Policies](policies.md).*
 
 ## 1. What a token type is
 
@@ -28,7 +28,7 @@ flowchart TD
 
 General-purpose tokens, including RWAs, and fiat-pegged tokens need different class-defining fields. One combined surface would put a currency code on every Asset and announcements on every Stablecoin. B20 splits the surface: Asset carries configurable decimals, announcements, a scheduled UI multiplier, extra metadata, and batched mint. Stablecoin carries an immutable currency code and a fixed `6` decimal convention.
 
-If those extras were optional flags on one binary, class rules would be runtime checks. A Stablecoin address could then execute Asset selectors. B20 compiles each variant as a separate native implementation. The node reads address byte `[10]` and runs that variant's logic. A Stablecoin address never executes Asset selectors. An Asset address never executes Stablecoin selectors.
+If those extras were optional flags on one binary, class rules would be runtime checks. A Stablecoin address could then execute Asset selectors. B20 keeps the variants separate: byte `[10]` selects which selectors that address accepts. A Stablecoin address never executes Asset selectors. An Asset address never executes Stablecoin selectors.
 
 Wallets, indexers, and issuers still need one Factory, one policy model, and one ERC-20 surface. Duplicating that stack per type would split every integration. Shared infrastructure stays shared: Factory, Policy Registry, Activation Registry, and `IB20`. Callers that only need balances, transfers, roles, or policies use `IB20`. Type-specific calls use `IB20Asset` or `IB20Stablecoin` at the same address.
 
@@ -38,7 +38,7 @@ The issuer chooses the variant only in Factory `createB20(variant, salt, params,
 
 `params` carries identity. Name, symbol, and `initialAdmin` are shared. Asset adds `decimals`. Stablecoin adds `currency`. The blob is ABI-encoded with a leading `version` byte (currently `1`): `B20AssetCreateParams` or `B20StablecoinCreateParams`. Optional `initCalls` run on the new token in the same transaction. Then the Factory drops access. If that variant is not activated (`B20Asset` / `B20Stablecoin`), `createB20` reverts `FeatureNotActivated`. Deactivating a variant blocks new creation. Existing tokens keep running.
 
-After creation, the node reads the variant byte in the address and runs that variant's logic. How the node recognizes the `0xB2` prefix and the `0xef` stub, and how it dispatches on byte `[10]`, is in [Architecture §2](../architecture.md#2-how-a-token-is-created).
+After creation, byte `[10]` is what selects the variant. How you recognize a live token from its `0xB2` prefix and `0xef` code is in [Identity and code](../integration-architecture.md#3-identity-and-code).
 
 ## 4. Asset
 
@@ -111,7 +111,7 @@ After return, address byte `[10]` is `0x00`. `decimals()` is `18`. [`IB20Asset`]
 
 ### 6.3 A later call
 
-A call to the token address does not choose the type again. The node reads byte `[10]` and runs that variant's logic.
+A call to the token address does not choose the type again. Byte `[10]` already selected which selectors that address accepts.
 
 ```mermaid
 flowchart TD

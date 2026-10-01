@@ -4,7 +4,7 @@ B20 is Base's native token standard for issuing and managing programmable assets
 
 This document provides a high-level introduction to B20: what it is, why it exists, the core primitives it exposes, and how those pieces fit together.
 
-For a deeper technical explanation, see [How B20 Works](./architecture.md).
+For the contract a caller can rely on, see [Integration architecture](./integration-architecture.md). For how execution works, see [How B20 works](./architecture.md).
 
 ---
 
@@ -181,9 +181,13 @@ sequenceDiagram
 
 ## Where to Go Next
 
-If you want to understand how B20 works internally:
+If you want the contract a caller can rely on:
 
-→ [B20 Architecture](./architecture.md)
+→ [Integration architecture](./integration-architecture.md)
+
+If you want how execution works:
+
+→ [How B20 works](./architecture.md)
 
 If you are integrating B20:
 
