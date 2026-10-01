@@ -24,11 +24,27 @@ contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
         assertTrue(policyRegistry.isAuthorized(policyId, account));
     }
 
-    /// @notice Verifies isAuthorized returns false for any id whose top byte
-    ///         is outside the PolicyType enum range.
+    /// @notice Verifies isAuthorized on an uncreated UNION id returns false
+    /// @dev An empty child set is an OR over nothing, so the account is denied.
+    function test_isAuthorized_success_uncreatedUnionReturnsFalse(uint56 counter, address account) public view {
+        vm.assume(counter > 1);
+        uint64 policyId = (uint64(uint8(IPolicyRegistry.PolicyType.UNION)) << 56) | uint64(counter);
+        assertFalse(policyRegistry.isAuthorized(policyId, account));
+    }
+
+    /// @notice Verifies isAuthorized on an uncreated INTERSECT id returns true
+    /// @dev An empty child set is an AND over nothing, so the account is authorized.
+    function test_isAuthorized_success_uncreatedIntersectReturnsTrue(uint56 counter, address account) public view {
+        vm.assume(counter > 1);
+        uint64 policyId = (uint64(uint8(IPolicyRegistry.PolicyType.INTERSECT)) << 56) | uint64(counter);
+        assertTrue(policyRegistry.isAuthorized(policyId, account));
+    }
+
+    /// @notice Verifies isAuthorized returns false for an ID whose type byte is outside
+    ///         PolicyType after the invert flag is cleared.
     /// @dev Malformed-ID short-circuit returns false rather than reverting.
     function test_isAuthorized_success_falseForMalformedId(uint64 seed, address account) public view {
-        uint64 policyId = _malformedPolicyId(seed);
+        uint64 policyId = _malformedBasePolicyId(seed);
         assertFalse(policyRegistry.isAuthorized(policyId, account));
     }
 

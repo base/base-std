@@ -193,11 +193,24 @@ abstract contract BaseTest is Test {
     ///         forced above the `PolicyType` enum range. View queries
     ///         short-circuit these to the "absent" value; mutating calls
     ///         reject via `PolicyNotFound`.
+    /// @dev The top byte may have bit 63 set, so clearing the invert flag can
+    ///      leave a well-formed type. Use `_malformedBasePolicyId` when the
+    ///      type byte must stay outside `PolicyType` after that clear.
     function _malformedPolicyId(uint64 seed) internal pure returns (uint64) {
         uint8 maxValidType = uint8(type(IPolicyRegistry.PolicyType).max);
         uint8 invalidRange = type(uint8).max - maxValidType;
         uint8 typeByte = maxValidType + 1 + uint8(seed % invalidRange);
         return (uint64(typeByte) << 56) | uint64(seed & ((1 << 56) - 1));
+    }
+
+    /// @notice Maps a fuzz seed to a malformed policy ID whose type byte is outside
+    ///         `PolicyType` even after the invert flag (bit 63) is cleared.
+    function _malformedBasePolicyId(uint64 seed) internal pure returns (uint64) {
+        uint8 maxValidType = uint8(type(IPolicyRegistry.PolicyType).max);
+        // Type bytes 4..127: outside PolicyType, invert flag clear.
+        uint8 span = 127 - maxValidType;
+        uint8 typeByte = maxValidType + 1 + uint8(seed % span);
+        return (uint64(typeByte) << 56) | (seed & ((uint64(1) << 56) - 1));
     }
 
     // ============================================================
