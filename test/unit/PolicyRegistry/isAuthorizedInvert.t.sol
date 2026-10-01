@@ -28,26 +28,43 @@ contract PolicyRegistryIsAuthorizedInvertTest is PolicyRegistryTest {
     //             FAIL-CLOSED INVARIANT (the point of 2a)
     // ============================================================
 
-    /// @notice Inverting an uncreated (unknown) base denies rather than allowing everyone.
+    /// @notice An uncreated ALLOWLIST denies, and its inverse denies too.
     function test_isAuthorized_success_invertUnknownAllowlistBaseDenies(uint56 counter, address account) public view {
         vm.assume(counter > 1);
         uint64 base = (uint64(uint8(IPolicyRegistry.PolicyType.ALLOWLIST)) << 56) | uint64(counter);
+        assertFalse(policyRegistry.isAuthorized(base, account));
         assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
     }
 
-    /// @notice Inverting an uncreated BLOCKLIST base also denies (fail-closed)
+    /// @notice An uncreated BLOCKLIST authorizes, and its inverse denies.
     function test_isAuthorized_success_invertUnknownBlocklistBaseDenies(uint56 counter, address account) public view {
         vm.assume(counter > 1);
         uint64 base = (uint64(uint8(IPolicyRegistry.PolicyType.BLOCKLIST)) << 56) | uint64(counter);
-        // Sanity: the plain unknown blocklist authorizes (empty-member-set semantics)...
         assertTrue(policyRegistry.isAuthorized(base, account));
-        // ...but its inverse must NOT become allow-everyone; the base does not exist.
         assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
     }
 
-    /// @notice Inverting a malformed base denies.
+    /// @notice An uncreated UNION denies, and its inverse denies too.
+    function test_isAuthorized_success_invertUnknownUnionBaseDenies(uint56 counter, address account) public view {
+        vm.assume(counter > 1);
+        uint64 base = (uint64(uint8(IPolicyRegistry.PolicyType.UNION)) << 56) | uint64(counter);
+        assertFalse(policyRegistry.isAuthorized(base, account));
+        assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
+    }
+
+    /// @notice An uncreated INTERSECT authorizes, and its inverse denies.
+    function test_isAuthorized_success_invertUnknownIntersectBaseDenies(uint56 counter, address account) public view {
+        vm.assume(counter > 1);
+        uint64 base = (uint64(uint8(IPolicyRegistry.PolicyType.INTERSECT)) << 56) | uint64(counter);
+        assertTrue(policyRegistry.isAuthorized(base, account));
+        assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
+    }
+
+    /// @notice A malformed base denies, and inverting it denies too. The type byte stays
+    ///         outside PolicyType after the invert flag is cleared.
     function test_isAuthorized_success_invertMalformedBaseDenies(uint64 seed, address account) public view {
-        uint64 base = _malformedPolicyId(seed) & ~INVERTED_POLICY_BIT;
+        uint64 base = _malformedBasePolicyId(seed);
+        assertFalse(policyRegistry.isAuthorized(base, account));
         assertFalse(policyRegistry.isAuthorized(base | INVERTED_POLICY_BIT, account));
     }
 

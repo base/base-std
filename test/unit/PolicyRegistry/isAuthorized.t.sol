@@ -24,11 +24,11 @@ contract PolicyRegistryIsAuthorizedTest is PolicyRegistryTest {
         assertTrue(policyRegistry.isAuthorized(policyId, account));
     }
 
-    /// @notice Verifies isAuthorized returns false for any id whose top byte
-    ///         is outside the PolicyType enum range.
+    /// @notice Verifies isAuthorized returns false for an ID whose type byte is outside
+    ///         PolicyType after the invert flag is cleared.
     /// @dev Malformed-ID short-circuit returns false rather than reverting.
     function test_isAuthorized_success_falseForMalformedId(uint64 seed, address account) public view {
-        uint64 policyId = _malformedPolicyId(seed);
+        uint64 policyId = _malformedBasePolicyId(seed);
         assertFalse(policyRegistry.isAuthorized(policyId, account));
     }
 

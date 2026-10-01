@@ -224,13 +224,16 @@ interface IPolicyRegistry {
                          AUTHORIZATION QUERIES
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Returns whether `account` is authorized under `policyId`. Never reverts; unknown
-    ///         or malformed IDs collapse to empty-member-set semantics (ALLOWLIST -> false,
-    ///         BLOCKLIST -> true).
+    /// @notice Returns whether `account` is authorized under `policyId`. Never reverts.
     ///
+    /// @dev A malformed ID returns false. The invert flag (bit 63) is cleared before the type
+    ///      check, so an ID is malformed when the remaining top byte is outside `PolicyType`.
+    /// @dev A well-formed but unknown ID is an empty set: ALLOWLIST and UNION return false;
+    ///      BLOCKLIST and INTERSECT return true.
     /// @dev Callers that store policy IDs MUST validate `policyExists(policyId)` at write time.
     /// @dev Invert: `isAuthorized(invertedPolicyId(id), account)` returns the negated
-    ///      result of the base. Applies to every policy type.
+    ///      result of the base when that base exists. Applies to every policy type. An
+    ///      inverted unknown or malformed base returns false.
     ///
     /// @param policyId Policy to query.
     /// @param account  Account to check.
