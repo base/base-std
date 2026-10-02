@@ -88,19 +88,53 @@ PYTHONPATH=script python -m smoke asset policy -k  # a subset, keep-going
 | `FAUCET_URL` / `FAUCET_NETWORK` | no | — | Optional deployer top-up when underfunded. |
 | `FAUCET_AMOUNT` / `FAUCET_MIN_ETHER` | no | `0.05` / `0.02` | Faucet amount and balance floor. |
 
-### Advisory CI against Vibenet
+### Advisory CI against a live network
 
 `.github/workflows/smoke-tests.yml` runs the **full suite** against a live Base network on demand. It
 is **`workflow_dispatch` only** — deliberately not wired to pull requests, merge groups, or a schedule.
-Vibenet is a live chain that is manually deployed per hardfork, so CI can't guarantee which precompile
-set is live; an automated run would flap. The workflow is **advisory and never gates merges**: run it
-by hand (Actions → *Base Std Smoke Tests (Vibenet)* → *Run workflow*) after a hardfork ships. Its only
-input is the RPC endpoint (default `https://rpc.vibes.base.org/`); it always runs every journey (`-k`)
-against the ref you dispatch from — latest is `main`, and to run an older fork you dispatch from the
-matching branch/tag (branch-per-fork; there is no journey picker and no fork/ref selector). It exports
-`RPC_URL` from the input and `DEPLOYER_PK` / `USER2_PK` from repo secrets (`SMOKE_DEPLOYER_PK` /
-`SMOKE_USER2_PK`), then reports per-journey **passed / failed / skipped** plus the chain id in the run
-summary. A journey whose surface the live chain does not yet ship is reported as *skipped*, not failed.
+Live chains are manually deployed per hardfork, so CI can't guarantee which precompile set is live; an
+automated run would flap. The workflow is **advisory and never gates merges**: run it by hand (Actions →
+*Base Std Smoke Tests* → *Run workflow*) after a hardfork ships. Its only input is `network`, the name of
+a GitHub Environment (default `vibenet`); it runs `make smoke-all KEEP_GOING=1` against the ref you
+dispatch from — latest is `main`, and to run an older fork you dispatch from the matching branch/tag
+(branch-per-fork; there is no journey picker and no fork/ref selector). It reports per-journey
+**passed / failed / skipped** plus the network name and chain id in the run summary. A journey whose
+surface the live chain does not yet ship is reported as *skipped*, not failed.
+
+#### Network config lives in GitHub, not in git
+
+Each network is a **GitHub Environment** (Settings → Environments) holding one secret, `SMOKE_CONFIG`,
+a JSON object with everything network-specific. Nothing network-specific or sensitive is committed; the
+workflow unpacks the blob into `RPC_URL` / `DEPLOYER_PK` / `USER2_PK` / `FAUCET_*` and masks every value
+in the logs. The run summary never prints the RPC URL (hosted RPC URLs often embed an API key).
+
+```json
+{
+  "rpc_url": "https://...",
+  "deployer_pk": "0x...",
+  "user2_pk": "0x...",
+  "faucet_url": "https://...",
+  "faucet_network": "..."
+}
+```
+
+`rpc_url`, `deployer_pk` and `user2_pk` are required; `faucet_url` / `faucet_network` are optional (both
+must be set for the deployer top-up, see the table above). A missing/empty secret or a missing required
+field fails the run immediately with a clear error.
+
+**Adding a network**
+
+1. `cast wallet new` twice (deployer + user2) and fund the deployer. **Use throwaway keys that hold only
+   testnet funds for this network — never a key that controls real value.**
+2. Create a GitHub Environment named after the network (e.g. `sepolia`); optionally require reviewers.
+3. Save the JSON above as a secret without putting it in shell history or git, e.g.
+   `gh secret set SMOKE_CONFIG --env sepolia < config.json` (then delete `config.json`), or paste it in
+   the environment's settings page.
+4. Dispatch: `gh workflow run smoke-tests.yml --ref main -f network=sepolia`.
+
+Runs are serialized per network (they share a deployer nonce); different networks run in parallel. A
+mistyped `network` makes GitHub create an empty environment, which the workflow rejects as "No
+SMOKE_CONFIG secret".
 
 ## What it checks
 
