@@ -5,12 +5,59 @@ Each section is a complete summary of that hardfork's changes. For selector-leve
 function selectors, event topics, error codes, and edge-case behavior), see the corresponding entry
 in [`changelog/`](changelog/README.md).
 
+## Denim
+
+### Status
+
+Denim hasn't activated yet. The Beryl and Cobalt surfaces are live on-chain. Every behavior change
+and selector introduced in this section takes effect only once Denim activates.
+
+### Compatibility
+
+Denim doesn't remove or rename any selector, event topic, or error selector, and adds one view
+function. It is **not** additive-only: two B20 changes alter the outcome of existing calls.
+
+- A transfer, mint, or seize whose recipient is the token's own address now reverts
+  `InvalidReceiver(to)` where it previously succeeded.
+- A token with a restrictive `TRANSFER_EXECUTOR_POLICY` now applies that policy to `transfer`,
+  `transferWithMemo`, and self-`transferFrom`, so holders outside the policy can no longer move
+  their own tokens. Tokens that never set the policy are unaffected.
+
+### Summary of changes
+
+| Product | Feature | Change | Details |
+| --- | --- | --- | --- |
+| B20 (Asset and Stablecoin) | Reject the token itself as a credit recipient (**breaking**) | `transfer`, `transferFrom`, their memo variants, `mint`, `mintWithMemo`, `batchMint`, and `seizeWithMemo` revert `InvalidReceiver(to)` when `to` is the token's own address. Self-transfers (`from == to`) still succeed, and `seizeWithMemo` from the token address still recovers balances already stuck there. | [03_Denim_B20_token_receiver](changelog/03_Denim_B20_token_receiver.md) |
+| B20 (Asset and Stablecoin) | Transfer executor policy on every transfer path (**breaking**) | `TRANSFER_EXECUTOR_POLICY` checks `msg.sender` on `transfer`, `transferFrom`, and their memo variants, including when `msg.sender == from`. Previously it ran only on delegated `transferFrom`. No new selectors, events, errors, or storage. | [03_Denim_B20_transfer_executor_enforcement](changelog/03_Denim_B20_transfer_executor_enforcement.md) |
+| PolicyRegistry | NOT / invert policies | Bit 63 of a policy ID becomes the invert bit: `isAuthorized` resolves the base policy and returns the opposite result, failing closed on an unknown base. Works for simple and composite policies and as a composite child. Adds the `invertedPolicyId(uint64)` view helper. | [03_Denim_PolicyRegistry_not_policy](changelog/03_Denim_PolicyRegistry_not_policy.md) |
+
+### Migration guidance
+
+#### B20: wallets, custodians, and indexers
+
+Treat a token's own address as an invalid recipient, the same way you already treat `address(0)`,
+and expect `InvalidReceiver` from sends to it. To recover a balance credited to the token address
+before activation, call `seizeWithMemo(address(token), treasury, amount, memo)`; the token must be
+seizable under `SEIZE_EXEMPT_POLICY` and the caller must hold `SEIZE_ROLE`.
+
+#### B20: issuers with a `TRANSFER_EXECUTOR_POLICY`
+
+If holders should keep initiating their own transfers, add them, or a policy covering them, to the
+executor policy before Denim activates. Otherwise only accounts the policy authorizes, such as a
+transfer agent calling `transferFrom`, can move tokens.
+
+#### PolicyRegistry integrators
+
+Use `invertedPolicyId(policyId)` (or set bit 63) instead of maintaining a mirrored allowlist and
+blocklist. This is optional: existing IDs have bit 63 unset and behave identically. Read views
+(`policyExists`, `policyAdmin`, `pendingPolicyAdmin`, `compositePolicyChildIds`) resolve an
+inverted ID to its base, so keep validating `policyExists(policyId)` at write time.
+
 ## Cobalt
 
 ### Status
 
-Cobalt hasn't activated yet. Only the Beryl surface exists on-chain, so every selector, event, and
-error introduced in this section is undialable until Cobalt activates.
+Cobalt is live on-chain. Every selector, event, and error introduced in this section is callable.
 
 ### Compatibility
 
