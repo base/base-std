@@ -56,20 +56,20 @@ jobs:
 
       - name: Set up smoke runner venv
         shell: bash
-        # setup-python makes python3 == 3.13; make python-check enforces it.
+        # `make smoke-setup` (one-time venv + web3). setup-python makes python3 == 3.13, so point the
+        # Makefile at it; make python-check still enforces 3.13.
         run: make smoke-setup PYTHON=python3
-
-      - name: Build contracts (interface ABIs the harness binds to)
-        shell: bash
-        run: forge build
 
       - name: Run the full Vibenet smoke suite
         id: smoke
         shell: bash
-        # RPC_URL comes from the dispatch input; the two keys are repo secrets (never echoed). `-k`
-        # (keep-going) runs every journey and prints a summary, so one journey's failure/skip never
-        # masks the rest; it always exits 0, so the (advisory) job stays green and the summary below
-        # reports the real per-journey status. continue-on-error still guards against an infra crash.
+        # Same as the local runbook: `make smoke-all KEEP_GOING=1` (which runs `forge build` first to
+        # produce the interface ABIs). The Makefile sources .env when present, but existing env wins,
+        # so CI passes RPC_URL (dispatch input) and the two keys (repo secrets, never echoed) as env
+        # instead of writing a .env to disk. KEEP_GOING runs every journey and prints a summary, so
+        # one journey's failure/skip never masks the rest; it always exits 0, so the (advisory) job
+        # stays green and the summary below reports the real per-journey status. continue-on-error
+        # still guards against an infra crash.
         continue-on-error: true
         env:
           RPC_URL: ${{ inputs.rpc_url }}
@@ -77,8 +77,7 @@ jobs:
           USER2_PK: ${{ secrets.SMOKE_USER2_PK }}
         run: |
           set -o pipefail
-          PYTHONPATH=script script/smoke/.venv/bin/python -m smoke all -k \
-            2>&1 | tee "$RUNNER_TEMP/smoke-output.txt"
+          make smoke-all KEEP_GOING=1 2>&1 | tee "$RUNNER_TEMP/smoke-output.txt"
 
       - name: Summarize smoke results
         if: always()
