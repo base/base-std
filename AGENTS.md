@@ -90,8 +90,11 @@ Deeper reading: `LIVE_PRECOMPILE_TESTING.md` (cross-validation architecture), `d
 
 ### Major vs. minor
 
-Versioning is `vMAJOR.MINOR.PATCH`, decided by the breaking change test below — not by hardfork
-boundaries. Hardforks here are additive by design, so most land as MINOR:
+Versioning is `vMAJOR.MINOR.PATCH-<Hardfork>`, for example `v1.1.0-Cobalt`. The number is decided
+by the breaking change test below — not by hardfork boundaries. `<Hardfork>` is the PascalCase
+codename from `changelog/README.md`'s [Hardfork ordinals](changelog/README.md#hardfork-ordinals): the
+hardfork whose interface the tagged commit carries. Every release tag has the suffix, PATCH included.
+Hardforks here are additive by design, so most land as MINOR:
 
 - **MAJOR**: an actual breaking change. Rare.
 - **MINOR**: a hardfork's frozen interface, once it's additive (the common case) — increments once
@@ -99,7 +102,7 @@ boundaries. Hardforks here are additive by design, so most land as MINOR:
   shifted down by one (`01` Beryl → `1.0`, `02` Cobalt → `1.1`, ...). Also covers any other additive
   change. Freezing happens at tag time, which can be before on-chain activation.
 - **PATCH**: no interface change — tooling, harness, docs, or CI fixes (e.g. `v1.0.1`'s fork-profile
-  pin).
+  pin, tagged `v1.0.1-Beryl`).
 
 If a hardfork's interface does contain a breaking change, that bumps MAJOR instead (resetting
 MINOR/PATCH to `0`).
@@ -123,14 +126,17 @@ day a breaking change actually ships.
 1. Land the frozen interface, its `changelog/<ordinal>_<Hardfork>_*.md` entries, and the
    `CHANGELOG.md` summary on `main`.
 2. Fast-forward `releases/vN.x` to that commit: `git push origin main:releases/vN.x`.
-3. Tag from that branch, draft first: `git tag vN.M.P && git push origin vN.M.P`, then
-   `gh release create vN.M.P --draft --notes-file <notes>` — a draft anchored to a real, pushed tag
-   (GitHub shows a synthetic `untagged-<hash>` URL for drafts; expected, resolves on publish).
-4. Write notes via `--notes-file` and proofread the rendered draft (`gh release view vN.M.P`) before
-   leaving it — title/body follow `v1.0.0`/`v1.0.1`: compatibility statement, one bullet per
-   changelog entry, link the aligned base/base tag if one exists.
+3. Tag from that branch, draft first:
+   `git tag vN.M.P-Hardfork && git push origin vN.M.P-Hardfork`, then
+   `gh release create vN.M.P-Hardfork --draft --notes-file <notes>` — a draft anchored to a real,
+   pushed tag (GitHub shows a synthetic `untagged-<hash>` URL for drafts; expected, resolves on
+   publish).
+4. Write notes via `--notes-file` and proofread the rendered draft
+   (`gh release view vN.M.P-Hardfork`) before leaving it — title/body follow
+   `v1.0.0-Beryl`/`v1.0.1-Beryl`: compatibility statement, one bullet per changelog entry, link the
+   aligned base/base tag if one exists.
 5. Keep at most one open draft per version. If the branch moves before publishing, delete
-   (`gh release delete vN.M.P --yes`) and re-tag rather than leaving a stale draft around.
+   (`gh release delete vN.M.P-Hardfork --yes`) and re-tag rather than leaving a stale draft around.
 
 ## Boundaries
 
