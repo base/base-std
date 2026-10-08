@@ -17,6 +17,7 @@ A collection of Solidity interfaces, libraries, and mock implementations for Bas
 - [**ActivationRegistry**](src/interfaces/IActivationRegistry.sol) — Feature flags controlled by Base team to activate/deactivate features.
 - [**PolicyRegistry**](docs/concepts/policies.md) — Membership sets controlled by custom admins, initially providing allow and block lists for B20 token operations.
 - [**B20**](docs/overview.md) — Standard ERC-20 implementation with extensions for roles, policies, memos, pausing, ERC-2612 permits, and a variant system.
+- [**BaseTime**](src/interfaces/IBaseTime.sol) — Read-only interface for the predeploy exposing the current block timestamp in milliseconds.
 
 ## Documentation
 
@@ -39,13 +40,15 @@ forge install base/base-std
 <pre>
 src
 ├── <a href="./src/StdPrecompiles.sol">StdPrecompiles.sol</a>: Precompile addresses with interface wrapper handles
+├── <a href="./src/StdPredeploys.sol">StdPredeploys.sol</a>: Predeploy addresses with interface wrapper handles
 ├── interfaces
 │   ├── <a href="./src/interfaces/IB20.sol">IB20.sol</a>: Core token standard
 │   ├── <a href="./src/interfaces/IB20Asset.sol">IB20Asset.sol</a>: Asset variant of B20
 │   ├── <a href="./src/interfaces/IB20Stablecoin.sol">IB20Stablecoin.sol</a>: Stablecoin variant of B20
 │   ├── <a href="./src/interfaces/IB20Factory.sol">IB20Factory.sol</a>: B20 factory precompile
 │   ├── <a href="./src/interfaces/IPolicyRegistry.sol">IPolicyRegistry.sol</a>: Policy registry precompile
-│   └── <a href="./src/interfaces/IActivationRegistry.sol">IActivationRegistry.sol</a>: Activation registry precompile
+│   ├── <a href="./src/interfaces/IActivationRegistry.sol">IActivationRegistry.sol</a>: Activation registry precompile
+│   └── <a href="./src/interfaces/IBaseTime.sol">IBaseTime.sol</a>: BaseTime predeploy (millisecond block timestamp)
 └── lib
     ├── <a href="./src/lib/B20Constants.sol">B20Constants.sol</a>: B20 role and policy-type identifier constants
     └── <a href="./src/lib/B20FactoryLib.sol">B20FactoryLib.sol</a>: Pure encoders for B20 factory params and initCalls
@@ -59,6 +62,7 @@ These mock contracts replace the live precompiles in unit tests, allowing tests 
 test/lib/mocks
 ├── <a href="./test/lib/mocks/MockActivationRegistry.sol">MockActivationRegistry.sol</a>: Mock implementation of the activation registry precompile
 ├── <a href="./test/lib/mocks/MockPolicyRegistry.sol">MockPolicyRegistry.sol</a>: Mock implementation of the policy registry precompile
+├── <a href="./test/lib/mocks/MockBaseTime.sol">MockBaseTime.sol</a>: Mock implementation of the BaseTime predeploy
 └── <a href="./test/lib/mocks/MockB20Factory.sol">MockB20Factory.sol</a>: Mock implementation of the B20 factory precompile
 </pre>
 

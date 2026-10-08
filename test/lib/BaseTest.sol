@@ -9,10 +9,12 @@ import {ActivationRegistryFeatureList} from "base-std-test/lib/mocks/ActivationR
 import {MockActivationRegistry} from "base-std-test/lib/mocks/MockActivationRegistry.sol";
 import {MockPolicyRegistry} from "base-std-test/lib/mocks/MockPolicyRegistry.sol";
 import {MockB20Factory} from "base-std-test/lib/mocks/MockB20Factory.sol";
+import {MockBaseTime} from "base-std-test/lib/mocks/MockBaseTime.sol";
 
 import {IActivationRegistry} from "base-std/interfaces/IActivationRegistry.sol";
 import {IPolicyRegistry} from "base-std/interfaces/IPolicyRegistry.sol";
 import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
+import {StdPredeploys} from "base-std/StdPredeploys.sol";
 
 /// @notice Common base for every test contract in this suite.
 ///
@@ -74,6 +76,9 @@ import {StdPrecompiles} from "base-std/StdPrecompiles.sol";
 ///     mutate a single ERC-7201-namespaced `features` map and emit the
 ///     paired events. Only admin (resolved at setUp via
 ///     `activationRegistry.admin()`) may flip features.
+///   - `MockBaseTime` implements the `IBaseTime` read surface over a
+///     slot-0 `uint16`. It is etched at the BaseTime predeploy only when
+///     that address has no code, independently of the precompile probe.
 abstract contract BaseTest is Test {
     // -- Actors --
     address internal admin = makeAddr("admin");
@@ -97,6 +102,12 @@ abstract contract BaseTest is Test {
         vm.label(StdPrecompiles.B20_FACTORY_ADDRESS, "B20Factory");
         vm.label(StdPrecompiles.POLICY_REGISTRY_ADDRESS, "PolicyRegistry");
         vm.label(StdPrecompiles.ACTIVATION_REGISTRY_ADDRESS, "ActivationRegistry");
+        vm.label(StdPredeploys.BASE_TIME_ADDRESS, "BaseTime");
+
+        // BaseTime is EVM bytecode, so a code-size check is reliable here.
+        if (StdPredeploys.BASE_TIME_ADDRESS.code.length == 0) {
+            vm.etch(StdPredeploys.BASE_TIME_ADDRESS, type(MockBaseTime).runtimeCode);
+        }
 
         // Pick the world by detecting whether the live precompiles are
         // present (see contract NatSpec), then announce it so a run is never

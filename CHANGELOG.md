@@ -14,8 +14,10 @@ and selector introduced in this section takes effect only once Denim activates.
 
 ### Compatibility
 
-Denim doesn't remove or rename any selector, event topic, or error selector, and adds one view
-function. It is **not** additive-only: two B20 changes alter the outcome of existing calls.
+Denim doesn't remove or rename any selector, event topic, or error selector. It adds one
+PolicyRegistry view function and the read-only `IBaseTime` interface for the new BaseTime predeploy,
+neither of which changes an existing selector. It is **not** additive-only: two B20 changes alter
+the outcome of existing calls.
 
 - A transfer, mint, or seize whose recipient is the token's own address now reverts
   `InvalidReceiver(to)` where it previously succeeded.
@@ -29,6 +31,7 @@ function. It is **not** additive-only: two B20 changes alter the outcome of exis
 | --- | --- | --- | --- |
 | B20 (Asset and Stablecoin) | Reject the token itself as a credit recipient (**breaking**) | `transfer`, `transferFrom`, their memo variants, `mint`, `mintWithMemo`, `batchMint`, and `seizeWithMemo` revert `InvalidReceiver(to)` when `to` is the token's own address. Self-transfers (`from == to`) still succeed, and `seizeWithMemo` from the token address still recovers balances already stuck there. | [03_Denim_B20_token_receiver](changelog/03_Denim_B20_token_receiver.md) |
 | B20 (Asset and Stablecoin) | Transfer executor policy on every transfer path (**breaking**) | `TRANSFER_EXECUTOR_POLICY` checks `msg.sender` on `transfer`, `transferFrom`, and their memo variants, including when `msg.sender == from`. Previously it ran only on delegated `transferFrom`. No new selectors, events, errors, or storage. | [03_Denim_B20_transfer_executor_enforcement](changelog/03_Denim_B20_transfer_executor_enforcement.md) |
+| BaseTime | Millisecond block timestamp | New predeploy at `0x4200000000000000000000000000000000000030`, exposed as `StdPredeploys.BASE_TIME`. `IBaseTime` provides `timestampMs()` (`block.timestamp * 1000 + timestampMillisPart()`), `timestampMillisPart()`, and `version()`. Read-only; the protocol writes the value each block. | [03_Denim_BaseTime_millisecond_timestamp](changelog/03_Denim_BaseTime_millisecond_timestamp.md) |
 | PolicyRegistry | NOT / invert policies | Bit 63 of a policy ID becomes the invert bit: `isAuthorized` resolves the base policy and returns the opposite result, failing closed on an unknown base. Works for simple and composite policies and as a composite child. Adds the `invertedPolicyId(uint64)` view helper. | [03_Denim_PolicyRegistry_not_policy](changelog/03_Denim_PolicyRegistry_not_policy.md) |
 
 ### Migration guidance
@@ -45,6 +48,12 @@ seizable under `SEIZE_EXEMPT_POLICY` and the caller must hold `SEIZE_ROLE`.
 If holders should keep initiating their own transfers, add them, or a policy covering them, to the
 executor policy before Denim activates. Otherwise only accounts the policy authorizes, such as a
 transfer agent calling `transferFrom`, can move tokens.
+
+#### BaseTime readers
+
+Read `StdPredeploys.BASE_TIME.timestampMs()` for the block timestamp in milliseconds. Until the
+block's `tx[1]` deposit executes (for example, during the `tx[0]` L1-info deposit), it combines the
+current block's seconds with the previous block's millisecond component.
 
 #### PolicyRegistry integrators
 

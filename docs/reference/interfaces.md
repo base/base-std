@@ -10,7 +10,9 @@
 | [`IB20Factory`](../../src/interfaces/IB20Factory.sol) | B20 factory precompile |
 | [`IPolicyRegistry`](../../src/interfaces/IPolicyRegistry.sol) | Policy registry precompile |
 | [`IActivationRegistry`](../../src/interfaces/IActivationRegistry.sol) | Activation registry precompile |
+| [`IBaseTime`](../../src/interfaces/IBaseTime.sol) | BaseTime predeploy (millisecond block timestamp, read-only) |
 | [`IERC8056`](../../src/interfaces/IERC8056.sol) | Scaled UI Amount standard (Asset variant multiplier) |
 | [`IERC165`](../../src/interfaces/IERC165.sol) | Interface detection |
 
-See [`StdPrecompiles.sol`](../../src/StdPrecompiles.sol) for canonical precompile addresses.
+See [`StdPrecompiles.sol`](../../src/StdPrecompiles.sol) for canonical precompile addresses and
+[`StdPredeploys.sol`](../../src/StdPredeploys.sol) for predeploy addresses.
