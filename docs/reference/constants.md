@@ -1,6 +1,6 @@
 # Constants
 
-*Role identifiers, policy-type identifiers, precompile addresses, and other fixed constants. See [`B20Constants`](../../src/lib/B20Constants.sol) and [`StdPrecompiles`](../../src/StdPrecompiles.sol).*
+*Role identifiers, policy-type identifiers, precompile and predeploy addresses, and other fixed constants. See [`B20Constants`](../../src/lib/B20Constants.sol), [`StdPrecompiles`](../../src/StdPrecompiles.sol), and [`StdPredeploys`](../../src/StdPredeploys.sol).*
 
 ## Precompile addresses
 
@@ -11,6 +11,14 @@
 | `B20_FACTORY_ADDRESS` | `0xB20f000000000000000000000000000000000000` | Deploys and looks up B-20 tokens; every asset and stablecoin instance is created through the [`IB20Factory`](../../src/interfaces/IB20Factory.sol) at this address. |
 | `POLICY_REGISTRY_ADDRESS` | `0x8453000000000000000000000000000000000002` | Stores allowlist/blocklist/composite policies and answers `isAuthorized` checks consulted by every policy scope (see [Policies](../concepts/policies.md)). |
 | `ACTIVATION_REGISTRY_ADDRESS` | `0x8453000000000000000000000000000000000001` | Gates whether a B-20 variant or feature is live on a given chain; checked by the factory before it will create that variant. |
+
+## Predeploy addresses
+
+*Fixed addresses of Base's predeploys (EVM bytecode at `0x4200…` addresses). See [`StdPredeploys`](../../src/StdPredeploys.sol).*
+
+| Name | Value | Purpose |
+|---|---|---|
+| `BASE_TIME_ADDRESS` | `0x4200000000000000000000000000000000000030` | Exposes the current block timestamp in milliseconds through [`IBaseTime`](../../src/interfaces/IBaseTime.sol) (`timestampMs`, `timestampMillisPart`); installed at Denim. |
 
 ## Roles
 

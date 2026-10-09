@@ -2,7 +2,8 @@
 
 Solidity interfaces, libraries, and reference mocks for Base's precompiles: **B20** (ERC-20 superset
 with roles, policies, pausing, permits, memos), **PolicyRegistry** (allowlist/blocklist singleton),
-and **ActivationRegistry** (feature flags). The Solidity mocks must mirror the Rust implementations
+and **ActivationRegistry** (feature flags), plus a read-only interface for the **BaseTime** predeploy
+(millisecond block timestamp). The Solidity mocks must mirror the Rust implementations
 in base/base **slot-for-slot** — storage layout parity is the core invariant of this repo.
 
 ## Commands
@@ -52,7 +53,8 @@ cross-validates layout/behavior) → **smoke** (real txs against a live chain).
 
 ```
 src/StdPrecompiles.sol    # canonical precompile addresses + typed handles
-src/interfaces/           # IB20, IB20Asset, IB20Stablecoin, IB20Factory, IPolicyRegistry, IActivationRegistry
+src/StdPredeploys.sol     # canonical predeploy addresses + typed handles (BaseTime)
+src/interfaces/           # IB20, IB20Asset, IB20Stablecoin, IB20Factory, IPolicyRegistry, IActivationRegistry, IBaseTime
 src/lib/                  # B20Constants (role/policy ids), B20FactoryLib (createB20 encoders)
 src/impls/                # reserved for reference impls (currently empty; mocks fill that role)
 test/unit/                # one directory per feature; slot-level assertions
