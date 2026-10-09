@@ -82,7 +82,7 @@ Roles let an issuer assign each privileged operation to a specific account. An a
 
 B20 implements this with [OpenZeppelin AccessControl](https://docs.openzeppelin.com/contracts/5.x/access-control) on the token. Roles are not a separate registry. One `DEFAULT_ADMIN_ROLE` holder grants and revokes the operating roles. A privileged call checks the role first, then the matching pause vector. Holder `transfer` skips the role check; it still hits the `TRANSFER` pause vector and policy.
 
-The full role list and what each role gates is in [Roles](./concepts/roles.md). A role-gated call looks like this:
+The full role list and what each role gates is in [Roles](./concepts/roles-and-pause.md). A role-gated call looks like this:
 
 ```mermaid
 sequenceDiagram
@@ -197,4 +197,4 @@ If you are integrating B20:
 For exact interfaces and protocol definitions:
 
 → [Reference](./reference/)
-→ [Specifications](./specs/)
+→ [Interfaces](./reference/interfaces.md)

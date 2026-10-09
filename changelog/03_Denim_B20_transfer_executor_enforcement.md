@@ -30,7 +30,7 @@ Both gaps let a non-allowlisted holder move tokens by choosing a different entry
 
 ### Policy Registry and transfer-side scopes
 
-The Policy Registry is a singleton precompile that B20 tokens call for pre-operation compliance checks on an address. A B20 token stores a `uint64` policy ID per scope and calls `isAuthorized(policyId, account)` before a gated operation. `isAuthorized` never reverts; a malformed or unknown ID returns `false` (deny). See [Policies](../docs/concepts/policies.md) for the full model.
+The Policy Registry is a singleton precompile that B20 tokens call for pre-operation compliance checks on an address. A B20 token stores a `uint64` policy ID per scope and calls `isAuthorized(policyId, account)` before a gated operation. `isAuthorized` never reverts; a malformed or unknown ID returns `false` (deny). See [Policies](../docs/b20/concepts/policies.md) for the full model.
 
 B20 has three transfer-side scopes, all checked inside the shared `_transfer` function that backs `transfer`, `transferFrom`, and their memo variants:
 

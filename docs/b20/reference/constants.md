@@ -1,28 +1,28 @@
 # Constants
 
-*Role identifiers, policy-type identifiers, precompile and predeploy addresses, and other fixed constants. See [`B20Constants`](../../src/lib/B20Constants.sol), [`StdPrecompiles`](../../src/StdPrecompiles.sol), and [`StdPredeploys`](../../src/StdPredeploys.sol).*
+*Role identifiers, policy-type identifiers, precompile and predeploy addresses, and other fixed constants. See [`B20Constants`](../../../src/lib/B20Constants.sol), [`StdPrecompiles`](../../../src/StdPrecompiles.sol), and [`StdPredeploys`](../../../src/StdPredeploys.sol).*
 
 ## Precompile addresses
 
-*Fixed addresses of Base's singleton precompiles. See [`StdPrecompiles`](../../src/StdPrecompiles.sol).*
+*Fixed addresses of Base's singleton precompiles. See [`StdPrecompiles`](../../../src/StdPrecompiles.sol).*
 
 | Name | Value | Purpose |
 |---|---|---|
-| `B20_FACTORY_ADDRESS` | `0xB20f000000000000000000000000000000000000` | Deploys and looks up B-20 tokens; every asset and stablecoin instance is created through the [`IB20Factory`](../../src/interfaces/IB20Factory.sol) at this address. |
+| `B20_FACTORY_ADDRESS` | `0xB20f000000000000000000000000000000000000` | Deploys and looks up B-20 tokens; every asset and stablecoin instance is created through the [`IB20Factory`](../../../src/interfaces/IB20Factory.sol) at this address. |
 | `POLICY_REGISTRY_ADDRESS` | `0x8453000000000000000000000000000000000002` | Stores allowlist/blocklist/composite policies and answers `isAuthorized` checks consulted by every policy scope (see [Policies](../concepts/policies.md)). |
 | `ACTIVATION_REGISTRY_ADDRESS` | `0x8453000000000000000000000000000000000001` | Gates whether a B-20 variant or feature is live on a given chain; checked by the factory before it will create that variant. |
 
 ## Predeploy addresses
 
-*Fixed addresses of Base's predeploys (EVM bytecode at `0x4200…` addresses). See [`StdPredeploys`](../../src/StdPredeploys.sol).*
+*Fixed addresses of Base's predeploys (EVM bytecode at `0x4200…` addresses). See [`StdPredeploys`](../../../src/StdPredeploys.sol).*
 
 | Name | Value | Purpose |
 |---|---|---|
-| `BASE_TIME_ADDRESS` | `0x4200000000000000000000000000000000000030` | Exposes the current block timestamp in milliseconds through [`IBaseTime`](../../src/interfaces/IBaseTime.sol) (`timestampMs`, `timestampMillisPart`); installed at Denim. |
+| `BASE_TIME_ADDRESS` | `0x4200000000000000000000000000000000000030` | Exposes the current block timestamp in milliseconds through [`IBaseTime`](../../../src/interfaces/IBaseTime.sol) (`timestampMs`, `timestampMillisPart`); installed at Denim. |
 
 ## Roles
 
-*Role identifiers checked via `hasRole`. See [`B20Constants`](../../src/lib/B20Constants.sol) and [`IB20`](../../src/interfaces/IB20.sol). Hex values are `keccak256` of the role name, verified with `cast keccak "<NAME>"` and cross-checked in `chisel`.*
+*Role identifiers checked via `hasRole`. See [`B20Constants`](../../../src/lib/B20Constants.sol) and [`IB20`](../../../src/interfaces/IB20.sol). Hex values are `keccak256` of the role name, verified with `cast keccak "<NAME>"` and cross-checked in `chisel`.*
 
 | Name | Value | Purpose |
 |---|---|---|
@@ -38,7 +38,7 @@
 
 ## Policy types
 
-*Policy scopes consulted by the PolicyRegistry. See [`B20Constants`](../../src/lib/B20Constants.sol) and [Policies](../concepts/policies.md). Hex values are `keccak256` of the policy name, verified with `cast keccak "<NAME>"` and cross-checked in `chisel`.*
+*Policy scopes consulted by the PolicyRegistry. See [`B20Constants`](../../../src/lib/B20Constants.sol) and [Policies](../concepts/policies.md). Hex values are `keccak256` of the policy name, verified with `cast keccak "<NAME>"` and cross-checked in `chisel`.*
 
 | Name | Value | Purpose |
 |---|---|---|
@@ -51,7 +51,7 @@
 
 ## Feature and validation bounds
 
-*Bitmasks and inclusive bounds used for pause features and B20Asset creation validation. See [`B20Constants`](../../src/lib/B20Constants.sol).*
+*Bitmasks and inclusive bounds used for pause features and B20Asset creation validation. See [`B20Constants`](../../../src/lib/B20Constants.sol).*
 
 | Name | Value | Purpose |
 |---|---|---|
@@ -62,7 +62,7 @@
 
 ## Asset-variant precision constants
 
-*Fixed-point constants used by the multiplier/rebasing surface. See [`IB20Asset`](../../src/interfaces/IB20Asset.sol).*
+*Fixed-point constants used by the multiplier/rebasing surface. See [`IB20Asset`](../../../src/interfaces/IB20Asset.sol).*
 
 | Name | Value | Purpose |
 |---|---|---|

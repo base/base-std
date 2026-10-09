@@ -62,10 +62,11 @@ test/regression/          # interface renames/removals guard (B20Renames.t.sol, 
 test/lib/                 # BaseTest.sol, B20Test.sol, mocks/ (reference behavior + storage layout)
 script/smoke/             # Python 3.13 live-node smoketest (web3.py); see script/smoke/README.md
 script/fork/              # node-based live-precompile runner (anvil + patched forge); see script/fork/README.md
-docs/                     # specs: docs/B20/README.md, docs/PolicyRegistry/, docs/ActivationRegistry/
+docs/                     # feature documentation index
+docs/b20/                 # B20 overview, architecture, concepts, guides, and reference
 ```
 
-Deeper reading: `LIVE_PRECOMPILE_TESTING.md` (cross-validation architecture), `docs/B20/README.md` (B20 spec).
+Deeper reading: `LIVE_PRECOMPILE_TESTING.md` (cross-validation architecture), `docs/b20/README.md` (B20 documentation).
 
 ## Code style
 

@@ -34,7 +34,7 @@ The Policy Registry holds the lists. A token stores a policy ID, not the members
 
 The Activation Registry is a Base-operated switch. Issuers and apps read it. When a feature is inactive, writes that require it revert with `FeatureNotActivated`. Reads stay available. Turning a variant off stops new `createB20` calls for that variant. Tokens that already exist keep running.
 
-Constants for these addresses live in [`StdPrecompiles`](../src/StdPrecompiles.sol).
+Constants for these addresses live in [`StdPrecompiles`](../../src/StdPrecompiles.sol).
 
 ## 3. Identity and Code
 
@@ -49,7 +49,7 @@ The address is self-describing:
 - Byte `[10]` is the variant. Asset is `0x00`. Stablecoin is `0x01`.
 - The remaining bytes are derived from `keccak256(sender, salt)`.
 
-Byte `[10]` is the type, and it does not change after `createB20` returns. An Asset address exposes [`IB20`](../src/interfaces/IB20.sol) and [`IB20Asset`](../src/interfaces/IB20Asset.sol). A Stablecoin address exposes `IB20` and [`IB20Stablecoin`](../src/interfaces/IB20Stablecoin.sol). A selector that belongs to the other variant does not run on that address.
+Byte `[10]` is the type, and it does not change after `createB20` returns. An Asset address exposes [`IB20`](../../src/interfaces/IB20.sol) and [`IB20Asset`](../../src/interfaces/IB20Asset.sol). A Stablecoin address exposes `IB20` and [`IB20Stablecoin`](../../src/interfaces/IB20Stablecoin.sol). A selector that belongs to the other variant does not run on that address.
 
 `isB20(address)` reports the `0xB2` prefix only. It can return true for an address the Factory has not created, and it never reverts. `isB20Initialized(address)` is the liveness check. It flips once, when the creating `createB20` returns, and it never reverts. During `initCalls` in that same call, it is still false.
 
