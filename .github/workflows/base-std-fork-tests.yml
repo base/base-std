@@ -11,9 +11,11 @@ concurrency:
 
 env:
   BASE_REF: main
-  # Branch to clone; SHA below is pinned for reproducibility and verified after clone.
-  BASE_ANVIL_BRANCH: base-anvil-fork
-  BASE_ANVIL_SHA: 14a43909528eb7ff4bafab0e5fee9b3b651bcd50
+  # Use the same patched Foundry revision as base/base's hardfork matrix.
+  BASE_ANVIL_SHA: 98e7839c65f64aee9627b69a9b98b79afaeb1fae
+  # The current base-std suite specifies Denim behavior; bare --base defaults to Cobalt.
+  BASE_UPGRADE: denim
+  FOUNDRY_BASE: denim
   CARGO_TERM_COLOR: always
 
 permissions:
@@ -92,16 +94,21 @@ jobs:
           git clone --depth 1 --single-branch --branch "$BASE_REF" \
             https://github.com/base/base.git "$workdir/base"
 
-          git clone --depth 1 --single-branch --branch "$BASE_ANVIL_BRANCH" \
+          git clone --filter=blob:none --no-checkout \
             https://github.com/base/base-anvil.git "$workdir/base-anvil"
+          git -C "$workdir/base-anvil" fetch --depth 1 origin "$BASE_ANVIL_SHA"
+          git -C "$workdir/base-anvil" checkout --detach FETCH_HEAD
 
           actual_sha=$(git -C "$workdir/base-anvil" rev-parse HEAD)
           if [ "$actual_sha" != "$BASE_ANVIL_SHA" ]; then
-            echo "::warning::base-anvil HEAD ($actual_sha) differs from pinned SHA ($BASE_ANVIL_SHA) — update BASE_ANVIL_SHA in the workflow"
+            echo "::error::base-anvil checkout ($actual_sha) does not match pinned SHA ($BASE_ANVIL_SHA)"
+            exit 1
           fi
 
           echo "BASE_DIR=$workdir/base" >> "$GITHUB_ENV"
           echo "BASE_ANVIL_DIR=$workdir/base-anvil" >> "$GITHUB_ENV"
+          echo "BASE_SHA=$(git -C "$workdir/base" rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BASE_STD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Build patched base-anvil binaries
         shell: bash
@@ -138,35 +145,73 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Capture both pipeline statuses before another command overwrites PIPESTATUS.
+          set +e
           ANVIL_BIN="$BASE_ANVIL_DIR/target/release/anvil" \
             FORGE_BIN="$BASE_ANVIL_DIR/target/release/forge" \
             ANVIL_LOG="$RUNNER_TEMP/base-std-anvil.log" \
             make fork-tests 2>&1 | tee "$RUNNER_TEMP/fork-test-output.txt"
-          echo "fork_tests_exit=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          pipeline_status=("${PIPESTATUS[@]}")
+          set -e
+          echo "fork_tests_exit=${pipeline_status[0]}" >> "$GITHUB_OUTPUT"
+          if [ "${pipeline_status[0]}" -ne 0 ]; then
+            exit "${pipeline_status[0]}"
+          fi
+          exit "${pipeline_status[1]}"
         continue-on-error: true
 
       - name: Summarize fork test results
+        id: fork_results
         if: always()
         shell: bash
+        env:
+          FORK_TESTS_EXIT: ${{ steps.fork_tests.outputs.fork_tests_exit }}
+          FORK_TESTS_OUTCOME: ${{ steps.fork_tests.outcome }}
         run: |
           output="$RUNNER_TEMP/fork-test-output.txt"
-          passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || true); passed=${passed:-0}
-          failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || true); failed=${failed:-0}
+          # Forge prints failed tests again at the end; count only the final suite totals.
+          totals=""
+          if [ -f "$output" ]; then
+            totals=$(sed 's/\x1B\[[0-9;]*m//g' "$output" \
+              | sed -nE 's/^Ran [0-9]+ test suites? in .*: ([0-9]+) tests passed, ([0-9]+) failed, ([0-9]+) skipped .*$/\1 \2 \3/p' \
+              | tail -1)
+          fi
+          read -r passed failed skipped <<< "${totals:-0 0 0}"
+          status=failure
+          if [ -z "$totals" ] || [ "$((passed + failed + skipped))" -eq 0 ]; then
+            status=did-not-run
+          elif [ "$FORK_TESTS_EXIT" = "0" ] && [ "$FORK_TESTS_OUTCOME" = "success" ] && [ "$failed" -eq 0 ]; then
+            status=success
+          fi
+          {
+            echo "passed=$passed"
+            echo "failed=$failed"
+            echo "skipped=$skipped"
+            echo "status=$status"
+          } >> "$GITHUB_OUTPUT"
 
           {
             echo "## Fork Test Results"
             echo ""
-            if [ "$failed" -eq 0 ]; then
-              echo "✅ All **${passed}** tests passed — base/base is fully in sync with base-std."
+            echo "- Base upgrade: \`$BASE_UPGRADE\` (Forge: \`$FOUNDRY_BASE\`)"
+            echo "- base/base: \`${BASE_SHA:-unknown}\`"
+            echo "- base-anvil: \`$BASE_ANVIL_SHA\`"
+            echo "- base-std: \`${BASE_STD_SHA:-$GITHUB_SHA}\`"
+            echo "- Test command exit: \`${FORK_TESTS_EXIT:-not available}\`"
+            echo ""
+            if [ "$status" = "did-not-run" ]; then
+              echo "❌ Fork tests did not complete a non-empty suite. Check the workflow logs for build, setup, or execution errors."
+            elif [ "$status" = "success" ]; then
+              echo "✅ **${passed}** passed, **${failed}** failed, **${skipped}** skipped against Denim."
             else
-              echo "⚠️ **${failed}** test(s) failed, **${passed}** passed."
+              echo "⚠️ Fork test run failed: **${passed}** passed, **${failed}** failed, **${skipped}** skipped."
               echo ""
-              echo "These failures indicate divergences where **base/base needs to catch up** to the base-std spec."
+              echo "Failures can indicate a divergence from the Denim spec or a harness error; check the logs."
               echo "base-std PRs are not blocked by this check."
               echo ""
               echo "### Failing tests"
               echo '```'
-              grep '\[FAIL' "$output" | sed 's/\x1B\[[0-9;]*m//g' || true
+              grep '\[FAIL' "$output" | sed 's/\x1B\[[0-9;]*m//g' | sort -u || true
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
@@ -176,20 +221,25 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PASSED: ${{ steps.fork_results.outputs.passed }}
+          FAILED: ${{ steps.fork_results.outputs.failed }}
+          SKIPPED: ${{ steps.fork_results.outputs.skipped }}
+          RESULT_STATUS: ${{ steps.fork_results.outputs.status }}
         run: |
           output="$RUNNER_TEMP/fork-test-output.txt"
-          passed=$(grep -c '\[PASS\]' "$output" 2>/dev/null || true); passed=${passed:-0}
-          failed=$(grep -c '\[FAIL' "$output" 2>/dev/null || true); failed=${failed:-0}
+          passed=${PASSED:-0}
+          failed=${FAILED:-0}
+          skipped=${SKIPPED:-0}
           marker="<!-- fork-test-results -->"
 
-          if [ ! -s "$output" ] || [ "$((passed + failed))" -eq 0 ]; then
+          if [ "${RESULT_STATUS:-did-not-run}" = "did-not-run" ]; then
             body="${marker}
-          ### ❌ Fork tests did not run
-          The build or setup step failed before any tests could execute. Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details."
-          elif [ "$failed" -eq 0 ]; then
+          ### ❌ Fork tests did not complete
+          No completed, non-empty suite was recorded. Check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for build, setup, or execution errors."
+          elif [ "$RESULT_STATUS" = "success" ]; then
             body="${marker}
-          ### ✅ Fork tests: all ${passed} passed
-          base/base is fully in sync with the base-std spec."
+          ### ✅ Fork tests: ${passed} passed, ${failed} failed, ${skipped} skipped
+          The completed Denim suite passed. Skipped tests were not validated."
           else
             # Extract test name and full error for each failure, deduplicated
             failing=$(grep '\[FAIL' "$output" \
@@ -197,9 +247,9 @@ jobs:
               | sed 's/^\[FAIL: \(.*\)\] \(.*\) (runs.*$/- **\2**: `\1`/' \
               | sort -u || true)
             body="${marker}
-          ### ⚠️ Fork tests: ${failed} failed, ${passed} passed
+          ### ⚠️ Fork test run failed: ${passed} passed, ${failed} failed, ${skipped} skipped
 
-          These failures indicate divergences where **base/base needs to catch up** to the base-std spec. This check is advisory and does not block merging.
+          Failures can indicate a divergence from the Denim spec or a harness error; check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). This check is advisory and does not block merging.
 
           <details>
           <summary>Failing tests</summary>
