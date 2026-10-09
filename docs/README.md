@@ -1,19 +1,7 @@
-## Understanding B20
+# Documentation
 
-New to B20?
+Documentation is organized by feature. Each feature has its own directory under `docs/`.
 
-1. [B20 Overview](overview.md)
-2. [Integration architecture](integration-architecture.md)
-3. [How B20 Works](architecture.md)
+- [B20](b20/README.md) — overview, architecture, concepts, guides, and reference for B20 tokens and their supporting precompiles.
 
-Building something?
-
-- [Seize a holder's B20 balance](guides/seizeing-assets.md)
-- [Schedule a stock split](guides/scheduling-stock-splits.md)
-- [Announce a corporate action](guides/announcing-corporate-actions.md)
-- [Restrict who can initiate transfers](guides/restricting-transfer-initiators.md)
-
-Looking for exact technical details?
-
-- [Concepts](concepts/) — the mental model: assets, policies, roles, execution, versioning
-- [Reference](reference/) — interfaces, events, errors, constants
+Add future feature documentation alongside `b20/` (for example, `feature-2/` and `feature-3/`).
