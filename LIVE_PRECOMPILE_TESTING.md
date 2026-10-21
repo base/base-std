@@ -355,6 +355,7 @@ If this returns garbage / fails, the fork's build is broken or out of date.
 | The test runner | `script/fork/` (`make fork-tests`) | Python + web3; forwards forge args through `ARGS` |
 | Forge profile config | `foundry.toml`, `[profile.fork]` | `base = true` enables Rust precompile dispatch |
 | Mode detection / skip-etch | `test/lib/BaseTest.sol` | auto-probes for live precompiles; `LIVE_PRECOMPILES=true` forces live |
+| Mock-only test criteria | `test/lib/BaseTest.sol`, `livePrecompiles` | when a test may open with `vm.skip(livePrecompiles)` |
 | Slot assertions | `test/unit/**/*.t.sol`, `test/lib/mocks/Mock*Storage.sol` | `vm.load`-based slot-layout assertions paired with surface tests |
 | Storage helpers | `test/lib/mocks/MockB20Storage.sol`, `MockPolicyRegistryStorage.sol` | the slot-derivation library every assertion uses |
 | Patched forge + anvil | `~/code/base-anvil/target/.../{forge,anvil}` | built by `cargo build -p forge -p anvil` |

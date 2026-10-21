@@ -90,6 +90,27 @@ abstract contract BaseTest is Test {
     ///         (`base-forge` / base-anvil), false when the Solidity mocks are
     ///         etched (stock `forge`). Set in setUp; read by tests that are
     ///         only meaningful in one world.
+    /// @dev    **Mock-only tests.** A test that can only run against the Solidity
+    ///         mocks opens with `vm.skip(livePrecompiles)` as its first statement,
+    ///         with a comment naming the criterion below that applies. A test is
+    ///         mock-only when it depends on the mock's own storage, in one of these
+    ///         ways:
+    ///           1. It writes storage at a fixed precompile address. Forge rejects
+    ///              `vm.store` there (`cannot use precompile ... as an argument`).
+    ///              B20 token addresses are not precompiles, so `vm.store` on a
+    ///              token runs in both worlds.
+    ///           2. It asserts a mock storage slot that the Rust implementation
+    ///              does not have, such as `MockB20Storage.initializedSlot()`.
+    ///           3. It needs a state that no real sequence of calls can reach and
+    ///              that it can only build by writing mock storage.
+    ///         If the behavior can be checked in both worlds, branch on
+    ///         `livePrecompiles` instead of skipping (see
+    ///         `B20FactoryTest._assertInitialized`). Do not use this guard to wait
+    ///         for a base/base change: gate that test behind an environment flag,
+    ///         like `POLICY_DISPATCH_FIX` in `dispatch_inactive.t.sol`, so its skip
+    ///         stays visible until the change ships. base/base's live-precompile CI
+    ///         counts only these first-statement guards as mock-only and leaves
+    ///         them out of its skipped count.
     bool internal livePrecompiles;
 
     // -- Setup --
