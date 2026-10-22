@@ -186,18 +186,7 @@ SKIP_ACTIVATE=POLICY_REGISTRY make fork-tests \
 The inactive-dispatch tests (`test/unit/PolicyRegistry/dispatch_inactive.t.sol`)
 also normalize the feature to inactive themselves, so they're correct under the
 default run too; `SKIP_ACTIVATE` additionally validates the never-activated
-baseline. One assertion (that an unknown selector is classified *before* the
-activation gate rather than masked by `FeatureNotActivated`) encodes a fix that
-isn't in the Rust impl yet, so it's gated behind `POLICY_DISPATCH_FIX`:
-
-```bash
-SKIP_ACTIVATE=POLICY_REGISTRY POLICY_DISPATCH_FIX=true make fork-tests \
-    ARGS="--match-contract PolicyRegistryDispatchInactive"
-```
-
-Run it that way against a build that carries the dispatch-ordering fix (e.g. via
-the [patch] local-clone override below) to enforce the regression; leave it
-unset against stock builds so the default run stays green.
+baseline.
 
 ## When the precompiles update — the loop
 
