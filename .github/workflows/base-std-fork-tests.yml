@@ -12,7 +12,7 @@ concurrency:
 env:
   BASE_REF: main
   # Use the same patched Foundry revision as base/base's hardfork matrix.
-  BASE_ANVIL_SHA: 98e7839c65f64aee9627b69a9b98b79afaeb1fae
+  BASE_ANVIL_SHA: 541626fd743b1fddc1186f30d8b5f7f3121b227f
   # The current base-std suite specifies Denim behavior; bare --base defaults to Cobalt.
   BASE_UPGRADE: denim
   FOUNDRY_BASE: denim
