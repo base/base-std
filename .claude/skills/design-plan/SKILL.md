@@ -10,6 +10,27 @@ Write one design plan, from one perspective, for the change described in
 `.council/input.md`. The output is `.council/plan.md`. This skill does not compare
 plans, pick a winner, write an ADR or implement the change.
 
+## Tool use
+
+Work in the workspace copy with file tools, and keep the shell for one command only.
+
+- Read files with the read tool (or hashread, whichever is available). Explore with
+  the grep, find and ls tools: the input, the bundled references and the source code.
+- Create and update `.council/plan.md` with the write and edit tools.
+- Use bash for exactly one command, the self-lint, run from the workspace root and
+  written exactly like this:
+
+  ```sh
+  python3 -B .claude/skills/design-plan/references/lint.py .council/plan.md --input .council/input.md
+  ```
+
+  Repeating that same command after fixing the plan is fine.
+- Run no other shell command: no cat, sed, grep, ls, cp, mkdir, git, Python scripts,
+  heredocs, wrappers, variable assignments, pipes, redirects, chained commands or
+  extra flags. Do not use the shell to find the working directory either.
+- Never probe or test the shell, not even with `echo`, `true` or `pwd`. The only bash
+  command in a designer pass is the self-lint command above.
+
 ## Inputs
 
 - **Perspective.** A design lens supplied by the caller (for example "smallest change
@@ -52,7 +73,9 @@ including retired items.
    `transferFrom`, `mint`, `burn`), the Solidity mock and the Rust precompile, and the
    existing tests. Find out what already exists before you add anything; reuse beats
    new surface.
-4. Record which input and code snapshot you read in `inputs_ref`.
+4. Record which input and code snapshot you read in `inputs_ref`, using what the
+   caller supplied or what the files show. Do not run git to find it, and do not
+   invent snapshot data.
 
 ### 2. Choose the design
 
@@ -64,7 +87,8 @@ restrict who calls the precompile.
 
 ### 3. Write `.council/plan.md`
 
-Start from a copy of `references/plan-template.md`.
+Read `references/plan-template.md` and write its structure into `.council/plan.md`
+with the write tool; do not copy it with a shell command.
 
 - Keep the front matter keys, all ten numbered headings, the five `### Changes`
   subheadings, every table header and their order exactly as written.
@@ -116,24 +140,20 @@ Section by section:
 ### 4. Self-lint until clean
 
 The linter runs standalone from this skill's `references/` directory. It needs only
-Python 3 and its sibling `plan_inputs.py`; no package install or extra path setup.
-The general form, with `references/` relative to this skill's directory and the
-placeholders replaced by real paths, is:
+Python 3 and its sibling `plan_inputs.py`; no package install or PYTHONPATH setup.
+Its arguments, for reference only, are
+`python3 references/lint.py <plan> --input <input>`.
+
+During a designer pass, run exactly this command from the workspace root and
+nothing else:
 
 ```sh
-python3 references/lint.py <plan> --input <input>
-```
-
-To keep workspace paths intact, resolve this skill's directory to an absolute path
-(`SKILL_DIR`) and run from the workspace root:
-
-```sh
-python3 "$SKILL_DIR/references/lint.py" .council/plan.md --input .council/input.md
+python3 -B .claude/skills/design-plan/references/lint.py .council/plan.md --input .council/input.md
 ```
 
 - Always pass `--input`, so sources and FLOW/CANT coverage are checked.
 - Exit 0 is lint-clean. Exit 1 lists problems as `§n RULE: message`: fix the plan only,
-  then rerun. Repeat until exit 0.
+  with the edit or write tool, then rerun the same command. Repeat until exit 0.
 - Exit 2, or a Python error, is not lint-clean. Report the problem; do not edit the
   linter and do not claim the plan is clean.
 
