@@ -23,13 +23,17 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# The input parser lives in the harness package; make it importable when this file is
-# run directly from any working directory.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from harness.inputs import InputDocument, InputError, fence_step, load_input  # noqa: E402
+# The input parser ships next to this file as plan_inputs.py when the linter is copied out on its own (a skill's
+# references); inside this repository it comes from the harness package.
+_HERE = Path(__file__).resolve().parent
+if (_HERE / "plan_inputs.py").is_file():
+    sys.path.insert(0, str(_HERE))
+    from plan_inputs import InputDocument, InputError, fence_step, load_input  # noqa: E402
+else:
+    _REPO_ROOT = _HERE.parent
+    if str(_REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(_REPO_ROOT))
+    from harness.inputs import InputDocument, InputError, fence_step, load_input  # noqa: E402
 
 # Upper bound on body words; a plan longer than this is padding, not precision.
 MAX_WORDS = 4000

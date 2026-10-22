@@ -24,6 +24,8 @@ plans, pick a winner, write an ADR or implement the change.
   - `references/plan-template.md`: the exact plan structure.
   - `references/global-invariants.md`: `G-INV-1`, which applies to every plan.
   - `references/lint.py`: the structural linter.
+  - `references/plan_inputs.py`: the input parser the linter imports from its own
+    directory.
 - **The code.** The current contracts, precompile implementation, mocks and tests in
   the target workspace.
 
@@ -113,8 +115,17 @@ Section by section:
 
 ### 4. Self-lint until clean
 
-Resolve this skill's directory to an absolute path (`SKILL_DIR`), then run from the
-workspace root:
+The linter runs standalone from this skill's `references/` directory. It needs only
+Python 3 and its sibling `plan_inputs.py`; no package install or extra path setup.
+The general form, with `references/` relative to this skill's directory and the
+placeholders replaced by real paths, is:
+
+```sh
+python3 references/lint.py <plan> --input <input>
+```
+
+To keep workspace paths intact, resolve this skill's directory to an absolute path
+(`SKILL_DIR`) and run from the workspace root:
 
 ```sh
 python3 "$SKILL_DIR/references/lint.py" .council/plan.md --input .council/input.md
