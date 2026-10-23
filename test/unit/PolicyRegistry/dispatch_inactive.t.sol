@@ -107,10 +107,8 @@ contract PolicyRegistryDispatchInactiveTest is PolicyRegistryTest {
     }
 
     /// @notice An unknown selector is classified, not masked by the activation gate.
-    /// @dev Gated behind `POLICY_DISPATCH_FIX`: stock builds still return `FeatureNotActivated` here
-    ///      until the dispatch-ordering fix is in the pinned impl.
     function test_dispatch_revert_unknownSelectorNotMaskedByActivation(bytes4 selector) public {
-        vm.skip(!(_forkMode() && vm.envOr("POLICY_DISPATCH_FIX", false)));
+        vm.skip(!_forkMode());
         vm.assume(!_isKnownSelector(selector));
         _ensureInactive();
 
