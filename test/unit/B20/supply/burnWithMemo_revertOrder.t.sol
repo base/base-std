@@ -24,6 +24,7 @@ contract B20BurnWithMemoRevertOrderTest is B20Test {
     function test_burnWithMemo_revertOrder(address caller, uint256 amount, bytes32 memo) public {
         _assumeValidCaller(caller);
         vm.assume(caller != admin);
+        vm.assume(caller != address(token)); // `_mint(token, ...)` reverts with InvalidReceiver
         amount = bound(amount, 1, type(uint128).max);
 
         // Activate all three violations: BURN paused, caller has no BURN_ROLE, zero balance.
