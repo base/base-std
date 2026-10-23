@@ -59,7 +59,8 @@ the external runner's), never something a designer does through its shell.
 Only after every pass has finished, show the candidates in one table or parallel
 sections with, for each:
 
-- perspective id and plan path;
+- perspective id, plan id and the path to the full plan, so the architect can open any
+  candidate in full;
 - the approach in one or two sentences;
 - coverage of every FLOW-n and CANT-n, and anything left uncertain;
 - added public surface (functions, storage, errors, events);
@@ -69,17 +70,57 @@ sections with, for each:
 - lint status.
 
 A clean lint run shows structure only, not that the design is correct; say which
-claims you checked against the code. Report failed or incomplete passes as such; do not
-drop them silently or present them as successes.
+claims you checked against the code and which are assumptions. Label failed or
+incomplete passes visibly; do not drop them silently or present them as successes.
+
+You may add a recommendation. Keep it apart from the table, give its reasons and its
+costs, and leave the choice to the architect. `minimal-change` is the baseline for
+comparison, not the automatic winner.
 
 ### 3. The architect decides
 
-The architect picks one candidate or overrides. You may recommend one and say why;
-`minimal-change` is the baseline for comparison, not the automatic winner. If the
-architect's override changes plan content (for example combining ideas from two
-candidates), produce one coherent revised plan and run the self-lint and the content
-review again. An override never waives a requirement, a FLOW-n, a CANT-n or the global
-invariant.
+Ask the architect to do one of the following:
+
+- **select** a named candidate (the recommended one or another);
+- **override** by asking for specific revisions, or for a combination of candidates;
+- **reject** all candidates and say what is missing.
+
+Wait for an explicit answer. Silence, list order, a clean lint run or your
+recommendation is not approval. If no candidate is acceptable, go back to revision
+(new or revised passes) instead of inventing a winner. Never offer a failed, incomplete
+or constraint-violating plan as ready for handoff.
+
+Overrides:
+
+- Selecting a different complete candidate changes the selection only, never that
+  plan's content.
+- An override that changes content produces one complete, coherent revised plan in the
+  plan template, not a patch list or a union of incompatible fragments. Keep
+  traceability, change and test ids, surface counts, breaking and activation metadata,
+  and code-backed claims consistent across the whole plan.
+- A revision is a designer pass: it writes `.council/plan.md` in its own working copy,
+  runs design-plan's exact self-lint until it exits 0, and then the content review. Only
+  the coordinator collects and stores the result.
+- Show the architect what changed and how the trade-offs moved, and get an explicit
+  confirmation of the revised plan.
+- An override never waives a requirement, a FLOW-n, a CANT-n or the global invariant.
+
+### 4. Finalize and hand off
+
+1. Keep every original candidate under `.council/plans/<id>.md` unchanged.
+2. Once the architect has confirmed a lint-clean plan, the coordinator copies that exact
+   plan to `.council/plan.md` in the live workspace with the file tools. Never silently
+   overwrite a different selection that is already there.
+3. In the reply, record the chosen plan id and perspective, the final path, the
+   architect's confirmation, the rationale and trade-offs the architect stated, and,
+   for a revised plan, which candidates it came from. Do not add selection notes to
+   the plan itself, and do not invent reasons the architect did not give.
+4. Hand off to the adr-writer skill (`../adr-writer/SKILL.md`) with explicit inputs:
+   the unchanged `.council/input.md`, the confirmed main-plan path, and the paths of
+   the other complete candidates as alternatives (for a revised plan, keep its source
+   candidates among them). List failed or incomplete passes separately; they are not
+   alternatives.
+5. The council stops here. The adr-writer writes the Summary and the ADR.
 
 ## Eval mode (no user, run by a script)
 
@@ -97,5 +138,9 @@ the plans and picks the plan. Inside an assigned pass:
 - [ ] Every perspective in `references/perspectives.md` ran, including `minimal-change`.
 - [ ] Each pass had a fresh context, an isolated copy and identical inputs.
 - [ ] Every candidate is lint-clean, or its failure is reported.
-- [ ] Live mode: the comparison came after all passes and the architect made the call.
+- [ ] Live mode: the comparison came after all passes, and the architect explicitly
+      selected, overrode or rejected; no approval means no handoff.
+- [ ] Live mode: any revised plan was lint-clean, reviewed again and confirmed.
+- [ ] Live mode: original candidates are preserved, and the handoff names one main
+      plan and the other complete candidates.
 - [ ] Eval mode: no questions, no nested council, no selection inside a pass.
